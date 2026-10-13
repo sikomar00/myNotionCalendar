@@ -1,4 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">노션 월간</string>
+
+    <string name="settings_title">설정</string>
+    <string name="settings_back">뒤로</string>
+    <string name="settings_section_connection">노션 연결</string>
+    <string name="settings_token_label">내부 연결 토큰</string>
+    <string name="settings_token_hint">노션 개발자 포털 → 연결 → Configuration 탭의 토큰을 붙여넣으세요.</string>
+    <string name="settings_token_saved">토큰이 암호화되어 저장되어 있습니다.</string>
+    <string name="settings_token_none">저장된 토큰이 없습니다.</string>
+    <string name="settings_save_and_test">저장하고 연결 테스트</string>
+    <string name="settings_test">연결 테스트</string>
+    <string name="settings_testing">확인 중…</string>
+    <string name="settings_connected">연결됨: %1$s</string>
+    <string name="settings_connected_unnamed">연결됨</string>
+    <string name="settings_section_databases">일정 DB</string>
+    <string name="settings_add_database">DB 추가</string>
+    <string name="settings_no_databases">등록된 DB가 없습니다.</string>
+    <string name="settings_delete_database">%1$s 등록 삭제</string>
+    <string name="settings_delete_confirm_title">DB 등록을 삭제할까요?</string>
+    <string name="settings_delete_confirm_body">이 앱에 저장된 %1$s 일정만 지웁니다. 노션 원본은 바뀌지 않습니다.</string>
+    <string name="settings_delete">삭제</string>
+    <string name="settings_cancel">취소</string>
+    <string name="settings_section_general">일반</string>
+    <string name="settings_week_start">주 시작 요일</string>
+    <string name="settings_sunday">일요일</string>
+    <string name="settings_monday">월요일</string>
+    <string name="settings_hide_done">완료 항목 숨기기</string>
+    <string name="settings_hide_done_off">끄면 취소선으로 표시합니다.</string>
+
+    <string name="error_unauthorized">토큰이 올바르지 않거나 연결이 삭제되었습니다. 토큰을 다시 확인하세요.</string>
+    <string name="error_not_shared">DB를 찾을 수 없습니다. 노션에서 DB 페이지의 ••• → 연결 추가로 이 연결을 추가했는지 확인하세요.</string>
+    <string name="error_network">인터넷에 연결할 수 없습니다.</string>
+    <string name="error_rate_limited">요청이 많아 잠시 막혔습니다. 잠시 후 다시 시도하세요.</string>
+    <string name="error_validation">노션이 요청을 거부했습니다(%1$s).</string>
+    <string name="error_server">노션 서버 오류입니다. 잠시 후 다시 시도하세요.</string>
+    <string name="error_invalid_link">노션 DB 링크에서 ID를 찾지 못했습니다.</string>
+
+    <string name="add_db_title">DB 추가</string>
+    <string name="add_db_link_label">DB 링크</string>
+    <string name="add_db_link_hint">노션에서 DB 페이지의 ••• → 링크 복사</string>
+    <string name="add_db_inspect">조회</string>
+    <string name="add_db_data_source">데이터 소스</string>
+    <string name="add_db_title_prop">제목</string>
+    <string name="add_db_date_prop">날짜</string>
+    <string name="add_db_done_prop">완료 (체크박스·상태)</string>
+    <string name="add_db_color_prop">색 기준 (선택·상태)</string>
+    <string name="add_db_sort_prop">하루 안 정렬 (선택)</string>
+    <string name="add_db_none">사용 안 함</string>
+    <string name="add_db_color">DB 색</string>
+    <string name="add_db_register">등록</string>
+    <string name="add_db_no_date">이 DB에는 날짜 속성이 없어 달력에 표시할 수 없습니다.</string>
+    <string name="add_db_preset_note">추천 값은 속성 이름으로 고른 기본값입니다. 필요하면 바꾸세요.</string>
 </resources>

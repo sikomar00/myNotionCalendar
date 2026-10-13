@@ -9,8 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "com.ysdoing.notioncal"
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "0.1.0"
     }
 
     buildTypes {
@@ -34,6 +34,12 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.hilt.work)
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.compose.material.icons.core)
 
     testImplementation(libs.junit4)
 }

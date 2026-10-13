@@ -1,0 +1,30 @@
+{
+  "object": "data_source",
+  "id": "aaaaaaaa-0000-4000-8000-000000000001",
+  "title": [{ "type": "text", "plain_text": "Calendar" }],
+  "properties": {
+    "Name": { "id": "title", "name": "Name", "type": "title", "title": {} },
+    "Date": { "id": "dAtE", "name": "Date", "type": "date", "date": {} },
+    "완료": { "id": "d%3Fne", "name": "완료", "type": "checkbox", "checkbox": {} },
+    "Ctgr": {
+      "id": "cTgR", "name": "Ctgr", "type": "select",
+      "select": { "options": [
+        { "id": "opt-event", "name": "Event", "color": "yellow" },
+        { "id": "opt-learn", "name": "Learn", "color": "blue" },
+        { "id": "opt-habit", "name": "Habit", "color": "red" }
+      ] }
+    },
+    "Time": {
+      "id": "tImE", "name": "Time", "type": "select",
+      "select": { "options": [
+        { "id": "opt-dawn", "name": "새벽", "color": "blue" },
+        { "id": "opt-am", "name": "오전", "color": "yellow" },
+        { "id": "opt-pm", "name": "오후", "color": "green" },
+        { "id": "opt-eve", "name": "저녁", "color": "orange" },
+        { "id": "opt-night", "name": "밤", "color": "purple" }
+      ] }
+    },
+    "Dday": { "id": "dDaY", "name": "Dday", "type": "formula", "formula": { "expression": "" } },
+    "toTMR": { "id": "bTtN", "name": "toTMR", "type": "button", "button": {} }
+  }
+}

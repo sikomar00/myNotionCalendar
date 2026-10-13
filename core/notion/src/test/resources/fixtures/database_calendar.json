@@ -1,0 +1,9 @@
+{
+  "object": "database",
+  "id": "11111111-2222-4333-8444-555555555555",
+  "title": [{ "type": "text", "plain_text": "📅 Calendar" }],
+  "in_trash": false,
+  "data_sources": [
+    { "id": "aaaaaaaa-0000-4000-8000-000000000001", "name": "Calendar" }
+  ]
+}

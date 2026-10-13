@@ -1,0 +1,289 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "41d6e2458aa8f39f16c333dd22fdbaca",
+    "entities": [
+      {
+        "tableName": "data_sources",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dataSourceId` TEXT NOT NULL, `databaseId` TEXT NOT NULL, `name` TEXT NOT NULL, `colorHex` TEXT NOT NULL, `titlePropId` TEXT NOT NULL, `datePropId` TEXT NOT NULL, `donePropId` TEXT, `doneType` TEXT, `doneOption` TEXT, `undoneOption` TEXT, `colorPropId` TEXT, `sortPropId` TEXT, `enabled` INTEGER NOT NULL, `lastSyncAt` INTEGER, `lastFullSyncAt` INTEGER, `position` INTEGER NOT NULL, PRIMARY KEY(`dataSourceId`))",
+        "fields": [
+          {
+            "fieldPath": "dataSourceId",
+            "columnName": "dataSourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "databaseId",
+            "columnName": "databaseId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorHex",
+            "columnName": "colorHex",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "titlePropId",
+            "columnName": "titlePropId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "datePropId",
+            "columnName": "datePropId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "donePropId",
+            "columnName": "donePropId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "doneType",
+            "columnName": "doneType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "doneOption",
+            "columnName": "doneOption",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "undoneOption",
+            "columnName": "undoneOption",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "colorPropId",
+            "columnName": "colorPropId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sortPropId",
+            "columnName": "sortPropId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncAt",
+            "columnName": "lastSyncAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastFullSyncAt",
+            "columnName": "lastFullSyncAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "dataSourceId"
+          ]
+        }
+      },
+      {
+        "tableName": "events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`pageId` TEXT NOT NULL, `dataSourceId` TEXT NOT NULL, `title` TEXT NOT NULL, `startDate` TEXT NOT NULL, `endDate` TEXT, `startTime` INTEGER, `endTime` INTEGER, `isAllDay` INTEGER NOT NULL, `done` INTEGER NOT NULL, `colorKey` TEXT, `sortKey` INTEGER, `url` TEXT NOT NULL, `lastEditedTime` INTEGER NOT NULL, PRIMARY KEY(`pageId`))",
+        "fields": [
+          {
+            "fieldPath": "pageId",
+            "columnName": "pageId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dataSourceId",
+            "columnName": "dataSourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDate",
+            "columnName": "startDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDate",
+            "columnName": "endDate",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "startTime",
+            "columnName": "startTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isAllDay",
+            "columnName": "isAllDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "done",
+            "columnName": "done",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "colorKey",
+            "columnName": "colorKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sortKey",
+            "columnName": "sortKey",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastEditedTime",
+            "columnName": "lastEditedTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "pageId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_events_startDate",
+            "unique": false,
+            "columnNames": [
+              "startDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_events_startDate` ON `${TABLE_NAME}` (`startDate`)"
+          },
+          {
+            "name": "index_events_dataSourceId_startDate",
+            "unique": false,
+            "columnNames": [
+              "dataSourceId",
+              "startDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_events_dataSourceId_startDate` ON `${TABLE_NAME}` (`dataSourceId`, `startDate`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_log",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `at` INTEGER NOT NULL, `trigger` TEXT NOT NULL, `result` TEXT NOT NULL, `durationMs` INTEGER NOT NULL, `pulled` INTEGER NOT NULL, `pushed` INTEGER NOT NULL, `error` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "at",
+            "columnName": "at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trigger",
+            "columnName": "trigger",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "result",
+            "columnName": "result",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pulled",
+            "columnName": "pulled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pushed",
+            "columnName": "pushed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_log_at",
+            "unique": false,
+            "columnNames": [
+              "at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_log_at` ON `${TABLE_NAME}` (`at`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '41d6e2458aa8f39f16c333dd22fdbaca')"
+    ]
+  }
+}

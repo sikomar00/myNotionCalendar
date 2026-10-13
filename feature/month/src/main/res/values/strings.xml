@@ -1,4 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="month_placeholder">월 보기 준비 중</string>
+    <string name="month_title">%1$d년 %2$d월</string>
+    <string name="month_today">오늘</string>
+    <string name="month_settings">설정</string>
+    <string name="month_pick_title">연·월 선택</string>
+    <string name="month_pick_prev_year">이전 해</string>
+    <string name="month_pick_next_year">다음 해</string>
+    <string name="month_pick_year">%1$d년</string>
+    <string name="month_pick_month">%1$d월</string>
+    <string name="month_cancel">취소</string>
+    <string name="month_more">+%1$d</string>
+    <string name="month_day_a11y">%1$d월 %2$d일, 일정 %3$d개</string>
+    <string name="month_last_sync">마지막 동기화 %1$s</string>
+    <string name="month_never_synced">아직 동기화하지 않음</string>
+    <string name="month_syncing">동기화 중…</string>
+    <string name="month_banner_auth">노션 토큰이 유효하지 않습니다. 화면의 일정은 마지막으로 받은 내용입니다.</string>
+    <string name="month_banner_not_shared">일부 DB에 연결이 추가되지 않았습니다. 노션에서 DB의 ••• → 연결 추가를 확인하세요.</string>
+    <string name="month_banner_action">설정 열기</string>
+    <string name="month_onboarding_title">노션 DB를 연결하세요</string>
+    <string name="month_onboarding_body">설정에서 내부 연결 토큰을 입력하고 일정 DB 링크를 등록하면 이 달력에 표시됩니다.</string>
+    <string name="day_sheet_title">%1$d월 %2$d일 (%3$s)</string>
+    <string name="day_sheet_empty">일정 없음</string>
+    <string name="day_sheet_all_day">종일</string>
+    <string name="day_sheet_done">완료</string>
+    <string name="day_sheet_read_only">체크·편집·추가는 다음 업데이트에서 지원합니다.</string>
 </resources>

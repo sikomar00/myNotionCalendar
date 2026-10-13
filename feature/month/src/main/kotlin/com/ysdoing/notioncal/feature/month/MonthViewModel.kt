@@ -1,0 +1,85 @@
+package com.ysdoing.notioncal.feature.month
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.AppSettings
+import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.DataSourceRepository
+import com.ysdoing.notioncal.core.data.EventRepository
+import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.data.SyncRequester
+import com.ysdoing.notioncal.core.data.SyncStatusRepository
+import com.ysdoing.notioncal.core.data.SyncTrigger
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import java.time.Clock
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import javax.inject.Inject
+
+/** 상단 상태줄·배너(PF-05 최소 형태). */
+data class SyncHeader(
+    val syncing: Boolean = false,
+    val lastSuccessAt: Long? = null,
+    /** 마지막 동기화 오류 종류 이름(NotionError 클래스 이름). */
+    val lastError: String? = null,
+    val hasSources: Boolean = true,
+)
+
+@HiltViewModel
+class MonthViewModel @Inject constructor(
+    private val eventRepository: EventRepository,
+    settingsRepository: SettingsRepository,
+    private val syncRequester: SyncRequester,
+    syncStatus: SyncStatusRepository,
+    dataSources: DataSourceRepository,
+    private val clock: Clock,
+) : ViewModel() {
+
+    private val _today = MutableStateFlow(today())
+
+    /** 앱이 다시 보일 때마다 다시 계산한다(PRD §7-4, 자정을 넘겨 열어 둔 경우). */
+    val today: StateFlow<LocalDate> = _today.asStateFlow()
+
+    val settings: StateFlow<AppSettings?> = settingsRepository.settings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    val header: StateFlow<SyncHeader> = combine(
+        syncRequester.isSyncing,
+        syncStatus.latest,
+        syncStatus.latestSuccess,
+        dataSources.observeAll(),
+    ) { syncing, latest, success, sources ->
+        SyncHeader(
+            syncing = syncing,
+            lastSuccessAt = success?.at,
+            lastError = latest?.takeIf { it.result != "OK" }?.error,
+            hasSources = sources.isNotEmpty(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
+
+    private val monthFlows = HashMap<Pair<YearMonth, DayOfWeek>, StateFlow<List<CalendarEvent>?>>()
+
+    /** 그리드 42일 범위의 일정. Room만 읽으므로 오프라인·인증 오류와 무관하게 즉시 나온다(PF-02). */
+    fun eventsFor(month: YearMonth, weekStart: DayOfWeek): StateFlow<List<CalendarEvent>?> =
+        monthFlows.getOrPut(month to weekStart) {
+            val from = gridStart(month, weekStart)
+            eventRepository.observeRange(from, from.plusDays(GRID_DAYS - 1))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        }
+
+    fun onResume() {
+        _today.value = today()
+    }
+
+    fun refresh() = syncRequester.request(SyncTrigger.PULL_TO_REFRESH)
+
+    private fun today(): LocalDate = LocalDate.now(clock.withZone(APP_ZONE))
+}

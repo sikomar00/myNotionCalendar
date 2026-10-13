@@ -1,0 +1,33 @@
+{
+  "object": "data_source",
+  "id": "bbbbbbbb-0000-4000-8000-000000000002",
+  "title": [{ "type": "text", "plain_text": "일정 · 작업" }],
+  "properties": {
+    "이름": { "id": "title", "name": "이름", "type": "title", "title": {} },
+    "날짜": { "id": "nAlJ", "name": "날짜", "type": "date", "date": {} },
+    "상태": {
+      "id": "sTaT", "name": "상태", "type": "status",
+      "status": {
+        "options": [
+          { "id": "opt-todo", "name": "시작 전", "color": "gray" },
+          { "id": "opt-urgent", "name": "긴급", "color": "red" },
+          { "id": "opt-doing", "name": "진행 중", "color": "green" },
+          { "id": "opt-done", "name": "Done", "color": "purple" }
+        ],
+        "groups": [
+          { "id": "g-todo", "name": "To-do", "color": "gray", "option_ids": ["opt-todo"] },
+          { "id": "g-progress", "name": "In progress", "color": "blue", "option_ids": ["opt-urgent", "opt-doing"] },
+          { "id": "g-complete", "name": "Complete", "color": "green", "option_ids": ["opt-done"] }
+        ]
+      }
+    },
+    "단계": {
+      "id": "dAnG", "name": "단계", "type": "select",
+      "select": { "options": [
+        { "id": "opt-plan", "name": "기획", "color": "purple" },
+        { "id": "opt-data", "name": "데이터·모델", "color": "orange" }
+      ] }
+    },
+    "담당자": { "id": "pEoP", "name": "담당자", "type": "people", "people": {} }
+  }
+}
