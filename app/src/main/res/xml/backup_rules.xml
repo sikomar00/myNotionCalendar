@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SEC-03: Android 11 이하용 규칙. minSdk 31이라 실제로는 data_extraction_rules가 쓰이지만 lint 요구로 둔다. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/secrets.preferences_pb" />
+</full-backup-content>

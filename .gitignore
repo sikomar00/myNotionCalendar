@@ -1,0 +1,30 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# IDE
+.idea/
+*.iml
+.kotlin/
+
+# 서명 키 (별도 백업)
+*.jks
+*.keystore
+keystore.properties
+
+# 리뷰 수집 스크립트 결과
+out/
+
+# 크래시 수집 설정 (토큰·DSN)
+google-services.json
+sentry.properties
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 임시 아이콘: 달력 모양. 앱 아이콘은 PRD §15에서 확정한다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,38h40a4,4 0,0 1,4 4v30a4,4 0,0 1,-4 4h-40a4,4 0,0 1,-4 -4v-30a4,4 0,0 1,4 -4z" />
+    <path
+        android:fillColor="#37352F"
+        android:pathData="M30,42a4,4 0,0 1,4 -4h40a4,4 0,0 1,4 4v6h-48z" />
+    <path
+        android:fillColor="#37352F"
+        android:pathData="M38,54h6v6h-6zM51,54h6v6h-6zM64,54h6v6h-6zM38,64h6v6h-6zM51,64h6v6h-6z" />
+    <path
+        android:fillColor="#EB5757"
+        android:pathData="M64,64h6v6h-6z" />
+</vector>
