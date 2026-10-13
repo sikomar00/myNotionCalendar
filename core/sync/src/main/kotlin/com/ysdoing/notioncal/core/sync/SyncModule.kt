@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.sync
 
+import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.SecretStore
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.notion.TokenProvider
@@ -21,4 +22,7 @@ object SyncModule {
 
     @Provides
     fun provideSyncRequester(scheduler: SyncScheduler): SyncRequester = scheduler
+
+    @Provides
+    fun provideOutboxRequester(scheduler: SyncScheduler): OutboxRequester = OutboxRequester { scheduler.requestOutbox() }
 }

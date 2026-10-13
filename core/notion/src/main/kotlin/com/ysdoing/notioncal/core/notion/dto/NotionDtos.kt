@@ -77,6 +77,7 @@ data class DataSourceDto(
 data class PageDto(
     val id: String,
     val url: String = "",
+    @SerialName("created_time") val createdTime: String? = null,
     @SerialName("last_edited_time") val lastEditedTime: String,
     @SerialName("in_trash") val inTrash: Boolean = false,
     val properties: JsonObject = JsonObject(emptyMap()),
@@ -100,6 +101,26 @@ data class QueryRequestDto(
     val filter: JsonObject? = null,
     @SerialName("start_cursor") val startCursor: String? = null,
     @SerialName("page_size") val pageSize: Int = 100,
+)
+
+@Serializable
+data class ParentDto(
+    val type: String = "data_source_id",
+    @SerialName("data_source_id") val dataSourceId: String,
+)
+
+/** POST v1/pages. template을 보내지 않으면 노션이 템플릿을 적용하지 않는다(기본 none). */
+@Serializable
+data class CreatePageDto(
+    val parent: ParentDto,
+    val properties: JsonObject,
+)
+
+/** PATCH v1/pages/{id}. null인 필드는 보내지 않는다(NotionJson.explicitNulls = false). */
+@Serializable
+data class UpdatePageDto(
+    val properties: JsonObject? = null,
+    @SerialName("in_trash") val inTrash: Boolean? = null,
 )
 
 @Serializable

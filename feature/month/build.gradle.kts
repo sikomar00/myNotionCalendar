@@ -17,6 +17,8 @@ roborazzi {
 dependencies {
     // 화면 모듈은 :core:data(Room)만 읽는다. :core:notion·:core:sync 에 의존하지 않는다(PRD §7).
     implementation(project(":core:data"))
+    // 날짜 시트(MV-04)는 위젯 퀵 시트와 같은 화면을 쓴다.
+    implementation(project(":feature:quicksheet"))
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)

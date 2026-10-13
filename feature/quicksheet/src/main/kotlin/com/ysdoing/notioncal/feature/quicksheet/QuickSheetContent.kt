@@ -1,0 +1,107 @@
+package com.ysdoing.notioncal.feature.quicksheet
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.LocalDate
+
+/** 퀵 시트가 처음 보여줄 화면. */
+sealed interface QuickSheetStart {
+    /** WI-01 날짜 탭: 그날 목록 + 추가 입력칸. */
+    data class Day(val date: LocalDate) : QuickSheetStart
+
+    /** WI-02 + 버튼: 추가 입력칸만. */
+    data class Add(val date: LocalDate) : QuickSheetStart
+
+    /** WI-05 일정 탭: 편집. */
+    data class Edit(val pageId: String) : QuickSheetStart
+}
+
+/**
+ * 퀵 시트 본문. 위젯에서 여는 반투명 Activity와 앱의 날짜 시트(MV-04)가 같이 쓴다.
+ * [onFinished]: 추가·편집·삭제를 마친 뒤(추가 모드·편집 모드에서 시트를 닫을 때) 부른다.
+ */
+@Composable
+fun QuickSheetContent(
+    start: QuickSheetStart,
+    viewModel: QuickSheetViewModel,
+    onFinished: () -> Unit,
+    modifier: Modifier = Modifier,
+    autoFocus: Boolean = true,
+) {
+    // 날짜 모드에서 일정을 누르면 같은 시트 안에서 편집으로 넘어가고, 뒤로 가면 목록으로 돌아온다.
+    var editing by rememberSaveable { mutableStateOf((start as? QuickSheetStart.Edit)?.pageId) }
+    val sources by viewModel.sources.collectAsStateWithLifecycle()
+    val defaultSource by viewModel.defaultSourceId.collectAsStateWithLifecycle()
+
+    Column(modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val pageId = editing
+        if (pageId != null) {
+            val item by remember(pageId) { viewModel.observeEvent(pageId) }.collectAsState(null)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (start !is QuickSheetStart.Edit) {
+                    IconButton(onClick = { editing = null }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qs_back))
+                    }
+                }
+                Text(stringResource(R.string.qs_edit_title), style = MaterialTheme.typography.titleLarge)
+            }
+            val current = item
+            if (current != null) {
+                val back = { if (start is QuickSheetStart.Edit) onFinished() else editing = null }
+                EventEditorForm(
+                    item = current,
+                    onSave = { change -> viewModel.save(pageId, change, onSaved = back) },
+                    onDelete = { viewModel.trash(pageId, onTrashed = back) },
+                )
+            }
+            return@Column
+        }
+        when (start) {
+            is QuickSheetStart.Add -> {
+                Text(stringResource(R.string.qs_add_title), style = MaterialTheme.typography.titleLarge)
+                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { title, date, time, ds ->
+                    viewModel.add(title, date, time, ds, onAdded = onFinished)
+                })
+            }
+            is QuickSheetStart.Day -> {
+                LaunchedEffect(start.date) { viewModel.showDay(start.date) }
+                val events by viewModel.dayEvents.collectAsStateWithLifecycle()
+                Text(dayTitle(start.date), style = MaterialTheme.typography.titleLarge)
+                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { title, date, time, ds ->
+                    viewModel.add(title, date, time, ds)
+                })
+                HorizontalDivider()
+                DayList(
+                    events = events,
+                    onToggle = { event, done -> viewModel.setDone(event.pageId, done) },
+                    onOpen = { editing = it.pageId },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            is QuickSheetStart.Edit -> Unit // 위에서 처리
+        }
+    }
+}

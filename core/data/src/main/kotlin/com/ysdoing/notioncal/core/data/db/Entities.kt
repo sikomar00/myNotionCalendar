@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.Index
@@ -30,6 +31,8 @@ data class DataSourceEntity(
     /** 전체 범위 대조(삭제 감지) 시각(epoch ms). */
     val lastFullSyncAt: Long? = null,
     val position: Int = 0,
+    /** 색 기준 select 옵션 목록(JSON: [{id,name,color}]). 동기화 때 스키마로 갱신한다(편집 시트용, v3). */
+    val colorOptions: String? = null,
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
@@ -55,6 +58,10 @@ data class EventEntity(
     val sortKey: Int?,
     val url: String,
     val lastEditedTime: Long,
+    /** 색 기준 select에서 고른 옵션 ID(편집 시트용, v3). */
+    val colorOptionId: String? = null,
+    /** 아직 노션에 보내지 않은 쓰기 작업 수(v3). 0보다 크면 읽기 동기화가 덮어쓰거나 지우지 않는다. */
+    @ColumnInfo(defaultValue = "0") val pendingOps: Int = 0,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */

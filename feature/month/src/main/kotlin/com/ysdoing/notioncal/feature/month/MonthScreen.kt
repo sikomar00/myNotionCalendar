@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +111,7 @@ fun MonthRoute(
         Column(Modifier.padding(padding).fillMaxSize()) {
             SyncStatusLine(header)
             Banner(header, onOpenSettings)
+            WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
             PullToRefreshBox(
                 isRefreshing = header.syncing,
                 onRefresh = viewModel::refresh,
@@ -150,14 +152,7 @@ fun MonthRoute(
             onDismiss = { picking = false },
         )
     }
-    selectedDay?.let { day ->
-        val month = YearMonth.from(day)
-        val weekStart = settings?.weekStart ?: DayOfWeek.SUNDAY
-        val flow = remember(month, weekStart) { viewModel.eventsFor(month, weekStart) }
-        val events by flow.collectAsStateWithLifecycle()
-        val hideDone = settings?.hideDone ?: false
-        DaySheet(day, events.orEmpty().filter { !hideDone || !it.done }, onDismiss = { selectedDay = null })
-    }
+    selectedDay?.let { day -> DaySheet(day, onDismiss = { selectedDay = null }) }
 }
 
 private val syncTimeFormat = DateTimeFormatter.ofPattern("M/d HH:mm")
@@ -172,12 +167,60 @@ private fun SyncStatusLine(header: SyncHeader) {
         )
         else -> stringResource(R.string.month_never_synced)
     }
+    val pending = if (header.pendingWrites > 0) stringResource(R.string.month_pending_writes, header.pendingWrites) else null
     Text(
-        text,
+        listOfNotNull(text, pending).joinToString(" · "),
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/** NS-05: 노션 반영 실패(되돌림)·충돌(노션 값 우선) 알림. 확인을 누르면 내용을 보여주고 읽음 처리한다. */
+@Composable
+private fun WriteIssuesBanner(header: SyncHeader, onAcknowledge: () -> Unit) {
+    val issues = header.writeIssues
+    if (issues.isEmpty()) return
+    var open by rememberSaveable { mutableStateOf(false) }
+    val rejected = issues.count { it.kind == "REJECTED" }
+    val conflicts = issues.size - rejected
+    Card(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(
+                stringResource(R.string.month_write_issues, rejected, conflicts),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            TextButton(onClick = { open = true }) { Text(stringResource(R.string.month_write_issues_show)) }
+        }
+    }
+    if (open) {
+        AlertDialog(
+            onDismissRequest = { open = false },
+            title = { Text(stringResource(R.string.month_write_issues_title)) },
+            text = {
+                Column {
+                    issues.take(20).forEach { issue ->
+                        val what = when (issue.kind) {
+                            "REJECTED" -> stringResource(R.string.month_issue_rejected)
+                            "REMOTE_DELETED" -> stringResource(R.string.month_issue_remote_deleted)
+                            else -> stringResource(R.string.month_issue_conflict, issue.localValue.orEmpty(), issue.remoteValue.orEmpty())
+                        }
+                        Text("• ${issue.title.ifBlank { "(제목 없음)" }}: $what", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onAcknowledge()
+                    open = false
+                }) { Text(stringResource(R.string.month_write_issues_ack)) }
+            },
+        )
+    }
 }
 
 /** PF-05: 인증·공유 오류여도 화면 내용은 그대로 두고 안내만 띄운다. 로그인 화면으로 강제 이동하지 않는다. */

@@ -27,6 +27,27 @@ object QueryFilters {
         putJsonObject("last_edited_time") { put("on_or_after", DateCodec.filterInstant(since)) }
     }
 
+    /** §8.5-8 생성 중복 확인: 같은 제목이면서 [since] 이후에 만들어진 페이지. */
+    fun createdWithTitle(titlePropId: String, title: String, since: Instant): JsonObject = buildJsonObject {
+        put(
+            "and",
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("property", titlePropId)
+                        putJsonObject("title") { put("equals", title) }
+                    },
+                )
+                add(
+                    buildJsonObject {
+                        put("timestamp", "created_time")
+                        putJsonObject("created_time") { put("on_or_after", DateCodec.filterInstant(since)) }
+                    },
+                )
+            },
+        )
+    }
+
     private fun dateCondition(propId: String, op: String, value: String): JsonObject = buildJsonObject {
         put("property", propId)
         putJsonObject("date") { put(op, value) }

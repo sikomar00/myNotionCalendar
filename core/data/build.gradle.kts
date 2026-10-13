@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.notioncal.android.library)
     alias(libs.plugins.notioncal.hilt)
     alias(libs.plugins.room)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -20,6 +21,7 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
     implementation(libs.tink.android)
+    api(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlinx.coroutines.test)

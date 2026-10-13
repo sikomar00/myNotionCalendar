@@ -28,6 +28,10 @@
     <string name="settings_monday">월요일</string>
     <string name="settings_hide_done">완료 항목 숨기기</string>
     <string name="settings_hide_done_off">끄면 취소선으로 표시합니다.</string>
+    <string name="settings_sync_interval">노션 자동 동기화 주기</string>
+    <string name="settings_minutes">%1$d분</string>
+    <string name="settings_sync_interval_note">앱을 열거나 위젯의 ↻를 누르면 바로 동기화합니다. 절전 상태에서는 주기 동기화가 늦어질 수 있습니다.</string>
+    <string name="settings_default_database">일정 추가 기본 DB</string>
 
     <string name="error_unauthorized">토큰이 올바르지 않거나 연결이 삭제되었습니다. 토큰을 다시 확인하세요.</string>
     <string name="error_not_shared">DB를 찾을 수 없습니다. 노션에서 DB 페이지의 ••• → 연결 추가로 이 연결을 추가했는지 확인하세요.</string>

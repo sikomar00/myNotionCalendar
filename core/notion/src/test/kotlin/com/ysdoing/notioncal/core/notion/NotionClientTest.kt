@@ -6,6 +6,10 @@ import com.ysdoing.notioncal.core.notion.mapping.QueryFilters
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -151,5 +155,47 @@ class NotionClientTest {
         server.enqueue(ok("""{"not":"a data source"}"""))
         val e = runCatching { client.dataSource("ds") }.exceptionOrNull() as NotionException
         assertEquals(NotionError.Server(null), e.error)
+    }
+
+    @Test
+    fun createPageSendsDataSourceParentWithoutTemplate() = runTest {
+        server.enqueue(ok("""{"id":"new-page","url":"https://www.notion.so/new","last_edited_time":"2026-10-13T03:00:00.000Z","properties":{}}"""))
+        val props = buildJsonObject { putJsonObject("title") { put("title", buildJsonArray { }) } }
+        val page = client.createPage("ds-1", props)
+
+        assertEquals("new-page", page.id)
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/v1/pages", request.url.encodedPath)
+        val body = Json.parseToJsonElement(request.body!!.utf8()).jsonObject
+        assertEquals("data_source_id", body["parent"]!!.jsonObject["type"]!!.jsonPrimitive.content)
+        assertEquals("ds-1", body["parent"]!!.jsonObject["data_source_id"]!!.jsonPrimitive.content)
+        assertNull("템플릿을 보내지 않는다(기본 none)", body["template"])
+        assertTrue(body["properties"]!!.jsonObject.containsKey("title"))
+    }
+
+    @Test
+    fun updateAndTrashUsePatch() = runTest {
+        val page = """{"id":"p1","last_edited_time":"2026-10-13T03:00:00.000Z","properties":{}}"""
+        server.enqueue(ok(page))
+        server.enqueue(ok(page))
+        client.updatePage("p1", buildJsonObject { putJsonObject("d") { put("checkbox", true) } })
+        client.trashPage("p1")
+
+        val update = server.takeRequest()
+        assertEquals("PATCH", update.method)
+        assertEquals("/v1/pages/p1", update.url.encodedPath)
+        val updateBody = Json.parseToJsonElement(update.body!!.utf8()).jsonObject
+        assertNull("수정 요청에 in_trash를 넣지 않는다", updateBody["in_trash"])
+
+        val trash = Json.parseToJsonElement(server.takeRequest().body!!.utf8()).jsonObject
+        assertEquals("true", trash["in_trash"]!!.jsonPrimitive.content)
+        assertNull(trash["properties"])
+    }
+
+    @Test
+    fun trashingMissingPageIsNotAnError() = runTest {
+        server.enqueue(error(404, "object_not_found"))
+        assertNull(client.trashPage("gone"))
     }
 }

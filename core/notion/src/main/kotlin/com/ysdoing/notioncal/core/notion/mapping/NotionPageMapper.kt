@@ -38,6 +38,8 @@ data class RemoteEvent(
     val colorKey: String?,
     /** 정렬용 select 옵션 순서. null이면 맨 뒤. */
     val sortKey: Int?,
+    /** 색 기준 select에서 고른 옵션 ID. */
+    val colorOptionId: String? = null,
     val url: String,
     val lastEditedTime: Instant,
 )
@@ -81,7 +83,8 @@ class NotionPageMapper(
             DoneType.STATUS -> prop(mapping.donePropId)?.obj("status")?.str("id") in completeStatusOptionIds
             null -> false
         }
-        val color = prop(mapping.colorPropId)?.let { it.obj("select") ?: it.obj("status") }?.str("color")
+        val colorValue = prop(mapping.colorPropId)?.let { it.obj("select") ?: it.obj("status") }
+        val color = colorValue?.str("color")
         val sortKey = prop(mapping.sortPropId)?.obj("select")?.str("id")?.let { sortOrder[it] }
 
         return MappedPage(
@@ -97,6 +100,7 @@ class NotionPageMapper(
                 done = done,
                 colorKey = color?.takeIf { it != "default" },
                 sortKey = sortKey,
+                colorOptionId = colorValue?.str("id"),
                 url = page.url,
                 lastEditedTime = Instant.parse(page.lastEditedTime),
             ),

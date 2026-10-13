@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          위젯 위에 뜨는 반투명 퀵 시트(WI-01·02·05). 같은 앱의 PendingIntent로만 열므로 exported=false.
+          taskAffinity를 비워 앱의 월 화면 작업과 섞이지 않게 하고, 최근 앱 목록에도 남기지 않는다.
+        -->
+        <activity
+            android:name=".QuickSheetActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotionCal.QuickSheet"
+            android:windowSoftInputMode="stateVisible|adjustResize">
+            <intent-filter>
+                <action android:name="com.ysdoing.notioncal.action.QUICK_SHEET" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

@@ -51,6 +51,7 @@ class MigrationTest {
 
         // 마이그레이션 SQL과 결과 스키마가 내보낸 2.json과 일치하는지 검증한다.
         helper.runMigrationsAndValidate(2).close()
+        helper.runMigrationsAndValidate(3).close()
 
         val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath)
             .allowMainThreadQueries()
@@ -64,6 +65,43 @@ class MigrationTest {
             assertEquals(WidgetConfig(7), widgets.get(7)) // 저장 전에는 기본값
             widgets.shiftMonth(7, -1)
             assertEquals(-1, widgets.get(7).monthOffset)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun v2ToV3KeepsWidgetConfigAndAddsOutbox() = runTest {
+        helper.createDatabase(2).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', NULL, NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, 0)""",
+            )
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, NULL, NULL, '', 0)""",
+            )
+            db.execSQL(
+                """INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale,
+                   maxPerCell, lineSpacing, hideDone, showPhoneCal)
+                   VALUES (7, 2, '', 'DARK', 80, 120, 0, 'NORMAL', 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(3).close()
+
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val event = db.eventDao().get("p1")!!
+            assertEquals(0, event.pendingOps)
+            assertEquals(null, event.colorOptionId)
+            assertEquals(WidgetTheme.DARK, WidgetConfigRepository(db.widgetConfigDao()).get(7).theme)
+            assertEquals(2, WidgetConfigRepository(db.widgetConfigDao()).get(7).monthOffset)
+            assertEquals(emptyList<Any>(), db.outboxDao().all())
         } finally {
             db.close()
         }

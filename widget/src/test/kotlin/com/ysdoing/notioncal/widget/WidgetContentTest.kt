@@ -35,6 +35,8 @@ class WidgetContentTest {
         onNode(hasTestTag("prev")).assertExists()
         onNode(hasTestTag("next")).assertExists()
         onNode(hasTestTag("today")).assertExists()
+        onNode(hasTestTag("add")).assertExists()
+        onNode(hasTestTag("refresh")).assertExists()
         // 날짜 칸 42개 모두 앱을 여는 클릭 동작이 붙어 있다(Spacer는 클릭이 안 붙어 Box로 바꿈).
         onAllNodes(hasTestTag("day")).assertCountEquals(42)
         onAllNodes(hasTestTag("day")).assertAll(hasClickAction())

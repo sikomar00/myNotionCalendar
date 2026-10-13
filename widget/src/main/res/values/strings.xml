@@ -7,6 +7,8 @@
     <string name="widget_prev">이전 달</string>
     <string name="widget_next">다음 달</string>
     <string name="widget_today">오늘</string>
+    <string name="widget_add">일정 추가</string>
+    <string name="widget_refresh">노션과 동기화</string>
     <string name="widget_more">+%1$d</string>
 
     <string name="widget_config_title">위젯 설정</string>

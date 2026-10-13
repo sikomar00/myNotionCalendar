@@ -1,10 +1,13 @@
 package com.ysdoing.notioncal.core.notion
 
+import com.ysdoing.notioncal.core.notion.dto.CreatePageDto
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.DatabaseDto
 import com.ysdoing.notioncal.core.notion.dto.ErrorDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
+import com.ysdoing.notioncal.core.notion.dto.ParentDto
 import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
+import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -26,12 +29,23 @@ interface NotionReader {
     suspend fun pageOrNull(pageId: String): PageDto?
 }
 
+/** 아웃박스 처리기가 쓰는 쓰기 호출(NS-04). 테스트에서는 메모리 구현으로 바꾼다. */
+interface NotionWriter {
+    /** 템플릿 없이 만든다. */
+    suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto
+
+    suspend fun updatePage(pageId: String, properties: JsonObject): PageDto
+
+    /** 휴지통 이동(삭제는 이것만 한다). 이미 없으면(404) null. */
+    suspend fun trashPage(pageId: String): PageDto?
+}
+
 /** [NotionApi] 호출을 감싸 실패를 [NotionException]으로 바꾼다. */
 @Singleton
 class NotionClient @Inject constructor(
     private val api: NotionApi,
     private val json: Json,
-) : NotionReader {
+) : NotionReader, NotionWriter {
     suspend fun me(): UserDto = call { api.me() }
 
     suspend fun database(databaseId: String): DatabaseDto = call { api.database(databaseId) }
@@ -40,6 +54,18 @@ class NotionClient @Inject constructor(
 
     override suspend fun pageOrNull(pageId: String): PageDto? = try {
         call { api.page(pageId) }
+    } catch (e: NotionException) {
+        if (e.error == NotionError.NotShared) null else throw e
+    }
+
+    override suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto =
+        call { api.createPage(CreatePageDto(ParentDto(dataSourceId = dataSourceId), properties)) }
+
+    override suspend fun updatePage(pageId: String, properties: JsonObject): PageDto =
+        call { api.updatePage(pageId, UpdatePageDto(properties = properties)) }
+
+    override suspend fun trashPage(pageId: String): PageDto? = try {
+        call { api.updatePage(pageId, UpdatePageDto(inTrash = true)) }
     } catch (e: NotionException) {
         if (e.error == NotionError.NotShared) null else throw e
     }

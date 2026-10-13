@@ -1,7 +1,9 @@
 package com.ysdoing.notioncal.core.sync
 
 import androidx.room.withTransaction
+import com.ysdoing.notioncal.core.data.ColorOption
 import com.ysdoing.notioncal.core.data.IoDispatcher
+import com.ysdoing.notioncal.core.data.OutboxJson
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
@@ -11,6 +13,7 @@ import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionReader
+import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.mapping.DateCodec
 import com.ysdoing.notioncal.core.notion.mapping.DoneType
 import com.ysdoing.notioncal.core.notion.mapping.MappedPage
@@ -19,6 +22,7 @@ import com.ysdoing.notioncal.core.notion.mapping.PropertyMapping
 import com.ysdoing.notioncal.core.notion.mapping.QueryFilters
 import com.ysdoing.notioncal.core.notion.mapping.RemoteEvent
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -96,7 +100,10 @@ class NotionSyncEngine @Inject constructor(
     private suspend fun syncSource(source: DataSourceEntity, trigger: SyncTrigger): Int {
         val now = clock.instant()
         val today = now.atZone(DateCodec.SEOUL).toLocalDate()
-        val mapper = NotionPageMapper(source.toMapping(), reader.dataSource(source.dataSourceId))
+        val schema = reader.dataSource(source.dataSourceId)
+        val mapper = NotionPageMapper(source.toMapping(), schema)
+        // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
+        sources.setColorOptions(source.dataSourceId, colorOptionsJson(schema, source.colorPropId))
         var pulled = 0
 
         val lastFull = source.lastFullSyncAt
@@ -136,7 +143,12 @@ class NotionSyncEngine @Inject constructor(
         return mapped.size + rechecked.size
     }
 
-    private suspend fun apply(source: DataSourceEntity, pages: List<MappedPage>) {
+    private suspend fun apply(source: DataSourceEntity, incoming: List<MappedPage>) {
+        if (incoming.isEmpty()) return
+        // 아직 노션에 보내지 않은 쓰기가 있는 페이지는 건드리지 않는다. 내 변경이 서버 값으로 되돌아가거나
+        // 휴지통 대기 중인 일정이 다시 나타나는 것을 막는다(전송이 끝나면 응답으로 맞춰진다).
+        val pending = db.outboxDao().pageIds().toHashSet()
+        val pages = incoming.filterNot { it.pageId in pending }
         if (pages.isEmpty()) return
         val (present, gone) = pages.partition { it.event != null }
         db.withTransaction {
@@ -184,4 +196,12 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     sortKey = sortKey,
     url = url,
     lastEditedTime = lastEditedTime.toEpochMilli(),
+    colorOptionId = colorOptionId,
 )
+
+/** 색 기준 속성(select·status)의 옵션 목록 JSON. 속성이 없으면 null. */
+internal fun colorOptionsJson(schema: DataSourceDto, colorPropId: String?): String? {
+    val prop = schema.properties.values.firstOrNull { it.id == colorPropId } ?: return null
+    val options = (prop.select?.options ?: prop.status?.options).orEmpty().map { ColorOption(it.id, it.name, it.color) }
+    return OutboxJson.encodeToString(ListSerializer(ColorOption.serializer()), options)
+}

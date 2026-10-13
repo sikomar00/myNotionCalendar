@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qs_day_title">%1$d월 %2$d일 (%3$s)</string>
+    <string name="qs_add_title">일정 추가</string>
+    <string name="qs_edit_title">일정 편집</string>
+    <string name="qs_title_hint">제목</string>
+    <string name="qs_add">추가</string>
+    <string name="qs_save">저장</string>
+    <string name="qs_cancel">취소</string>
+    <string name="qs_back">목록으로</string>
+    <string name="qs_empty">일정 없음</string>
+    <string name="qs_all_day">종일</string>
+    <string name="qs_time">시간 지정</string>
+    <string name="qs_done">완료</string>
+    <string name="qs_open_in_notion">노션에서 열기</string>
+    <string name="qs_delete">삭제</string>
+    <string name="qs_delete_confirm_title">휴지통으로 보낼까요?</string>
+    <string name="qs_delete_confirm_body">노션의 휴지통으로 이동합니다. 노션에서 복원할 수 있습니다.</string>
+    <string name="qs_pending">전송 대기</string>
+    <string name="qs_no_database">노션 DB를 먼저 등록하세요(앱 → 설정).</string>
+    <string name="qs_toggle_done">%1$s 완료 표시</string>
+</resources>

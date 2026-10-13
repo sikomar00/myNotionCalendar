@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.notioncal.android.library)
     alias(libs.plugins.notioncal.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {

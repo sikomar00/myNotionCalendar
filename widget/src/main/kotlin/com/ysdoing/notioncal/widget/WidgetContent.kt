@@ -11,6 +11,7 @@ import androidx.core.net.toUri
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
@@ -131,25 +132,29 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                 maxLines = 1,
             )
         }
-        NavButton("‹", context.getString(R.string.widget_prev), "prev", -1, metrics, palette)
+        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
+        HeaderButton("+", context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
+        // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 작음은 폭이 좁아 뺀다.
+        if (!small) HeaderButton("↻", context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
+        HeaderButton("‹", context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
         if (!small) {
-            NavButton(context.getString(R.string.widget_today), context.getString(R.string.widget_today), "today", 0, metrics, palette)
+            HeaderButton(context.getString(R.string.widget_today), context.getString(R.string.widget_today), "today", navAction(0), metrics, palette)
         }
-        NavButton("›", context.getString(R.string.widget_next), "next", +1, metrics, palette)
+        HeaderButton("›", context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
     }
 }
 
 private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
-/** WI-04: 이전(-1)·오늘(0)·다음(+1). */
+/** 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). 큰 크기가 아니면 여백을 줄여 한 줄에 들어가게 한다. */
 @Composable
-private fun NavButton(label: String, description: String, tag: String, delta: Int, metrics: WidgetMetrics, palette: WidgetPalette) {
+private fun HeaderButton(label: String, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
     val small = metrics.mode == WidgetMode.SMALL
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
-            .padding(horizontal = if (small) 5.dp else 8.dp)
-            .clickable(navAction(delta))
+            .padding(horizontal = if (metrics.mode == WidgetMode.LARGE) 8.dp else 5.dp)
+            .clickable(action)
             .semantics {
                 contentDescription = description
                 testTag = tag
@@ -218,7 +223,8 @@ private fun WeekRow(
                     GlanceModifier
                         .width(metrics.cellWidth)
                         .fillMaxHeight()
-                        .clickable(actionStartActivity(openDateIntent(context, date)))
+                        // WI-01: 그날 퀵 시트(목록·체크·추가)가 홈 화면 위에 뜬다.
+                        .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
                         .semantics {
                             contentDescription = "${date.monthValue}월 ${date.dayOfMonth}일, 일정 ${count}개"
                             testTag = "day"
@@ -372,16 +378,17 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
     }
 }
 
-/** 날짜마다 다른 data URI를 붙여 PendingIntent가 서로 덮어쓰지 않게 한다. */
-internal fun openDateIntent(context: Context, date: LocalDate): Intent {
-    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-        ?: Intent(Intent.ACTION_MAIN).setPackage(context.packageName)
-    return launch.apply {
-        data = "notioncal://day/$date".toUri()
-        putExtra(AppIntents.EXTRA_DATE, date.toString())
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-    }
-}
+/**
+ * 퀵 시트 인텐트. :widget은 :feature:quicksheet에 의존할 수 없어 action 문자열로 연다.
+ * 모드·날짜마다 다른 data URI를 붙여 PendingIntent가 서로 덮어쓰지 않게 한다.
+ */
+internal fun quickSheetIntent(context: Context, mode: String, date: LocalDate): Intent =
+    Intent(AppIntents.ACTION_QUICK_SHEET)
+        .setPackage(context.packageName)
+        .setData("notioncal://$mode/$date".toUri())
+        .putExtra(AppIntents.EXTRA_MODE, mode)
+        .putExtra(AppIntents.EXTRA_DATE, date.toString())
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /** 위젯 색. SYSTEM은 기기 다크 모드를 따르고, 배경에만 불투명도를 적용한다(WG-04). */
 class WidgetPalette private constructor(

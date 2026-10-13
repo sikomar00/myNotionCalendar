@@ -78,4 +78,14 @@ class SettingsViewModel @Inject constructor(
     fun setHideDone(hide: Boolean) {
         viewModelScope.launch { settingsRepository.setHideDone(hide) }
     }
+
+    /** NS-06 주기 동기화 간격. 바뀌면 PeriodicSync가 작업을 다시 예약한다. */
+    fun setSyncInterval(minutes: Int) {
+        viewModelScope.launch { settingsRepository.setSyncInterval(minutes) }
+    }
+
+    /** WI-02 퀵 추가 기본 DB. */
+    fun setDefaultDataSource(id: String) {
+        viewModelScope.launch { settingsRepository.setDefaultDataSource(id) }
+    }
 }

@@ -27,14 +27,32 @@ interface EventDao {
     @Query("DELETE FROM events WHERE pageId IN (:pageIds)")
     suspend fun delete(pageIds: List<String>)
 
-    /** 삭제 감지용: 해당 DB에서 [from]~[to]와 겹치는 로컬 일정 ID. */
+    /** 삭제 감지용: 해당 DB에서 [from]~[to]와 겹치는 로컬 일정 ID. 아직 보내지 않은 쓰기가 있는 일정은 뺀다. */
     @Query(
         """
         SELECT pageId FROM events
         WHERE dataSourceId = :dataSourceId AND startDate <= :to AND COALESCE(endDate, startDate) >= :from
+          AND pendingOps = 0
         """,
     )
     suspend fun pageIdsInRange(dataSourceId: String, from: LocalDate, to: LocalDate): List<String>
+
+    @Query("SELECT * FROM events WHERE pageId = :pageId")
+    suspend fun get(pageId: String): EventEntity?
+
+    @Query("SELECT * FROM events WHERE pageId = :pageId")
+    fun observe(pageId: String): Flow<EventEntity?>
+
+    /** 아직 노션에 보내지 않은 쓰기가 있는 일정 ID(읽기 동기화가 건너뛴다). */
+    @Query("SELECT pageId FROM events WHERE pendingOps > 0")
+    suspend fun pendingPageIds(): List<String>
+
+    @Query("UPDATE events SET pendingOps = :count WHERE pageId = :pageId")
+    suspend fun setPending(pageId: String, count: Int)
+
+    /** 생성 응답을 받으면 임시 ID를 실제 page_id로 바꾼다(§8.5-5). */
+    @Query("UPDATE events SET pageId = :newId WHERE pageId = :oldId")
+    suspend fun renamePage(oldId: String, newId: String)
 
     @Query("DELETE FROM events WHERE dataSourceId = :dataSourceId")
     suspend fun deleteForSource(dataSourceId: String)
@@ -65,6 +83,9 @@ interface DataSourceDao {
 
     @Query("UPDATE data_sources SET lastFullSyncAt = :at WHERE dataSourceId = :id")
     suspend fun setLastFullSyncAt(id: String, at: Long)
+
+    @Query("UPDATE data_sources SET colorOptions = :json WHERE dataSourceId = :id")
+    suspend fun setColorOptions(id: String, json: String?)
 
     @Query("DELETE FROM data_sources WHERE dataSourceId = :id")
     suspend fun deleteRow(id: String)

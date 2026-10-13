@@ -26,6 +26,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
+import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.sync.ConnectionResult
@@ -117,6 +119,34 @@ fun SettingsRoute(onBack: () -> Unit, onAddDatabase: () -> Unit, viewModel: Sett
                     )
                 }
                 Switch(checked = settings.hideDone, onCheckedChange = viewModel::setHideDone)
+            }
+
+            Text(stringResource(R.string.settings_sync_interval))
+            SingleChoiceSegmentedButtonRow {
+                AppSettings.SYNC_INTERVALS.forEachIndexed { index, minutes ->
+                    SegmentedButton(
+                        selected = settings.syncIntervalMinutes == minutes,
+                        onClick = { viewModel.setSyncInterval(minutes) },
+                        shape = SegmentedButtonDefaults.itemShape(index, AppSettings.SYNC_INTERVALS.size),
+                    ) { Text(stringResource(R.string.settings_minutes, minutes)) }
+                }
+            }
+            Text(
+                stringResource(R.string.settings_sync_interval_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            val enabled = sources.filter { it.enabled }
+            if (enabled.size > 1) {
+                Text(stringResource(R.string.settings_default_database))
+                val current = settings.defaultDataSourceId?.takeIf { id -> enabled.any { it.dataSourceId == id } } ?: enabled.first().dataSourceId
+                enabled.forEach { source ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = source.dataSourceId == current, onClick = { viewModel.setDefaultDataSource(source.dataSourceId) })
+                        Text(source.name)
+                    }
+                }
             }
         }
     }

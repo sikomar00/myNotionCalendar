@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.ConflictRepository
 import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.EventRepository
 import com.ysdoing.notioncal.core.data.SettingsRepository
@@ -12,6 +13,7 @@ import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
+import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.calendar.gridStart
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -33,6 +36,10 @@ data class SyncHeader(
     /** 마지막 동기화 오류 종류 이름(NotionError 클래스 이름). */
     val lastError: String? = null,
     val hasSources: Boolean = true,
+    /** 아직 노션에 보내지 않은 쓰기 수(NS-04). */
+    val pendingWrites: Int = 0,
+    /** 확인하지 않은 충돌·반영 실패(NS-05). */
+    val writeIssues: List<ConflictEntity> = emptyList(),
 )
 
 @HiltViewModel
@@ -42,6 +49,7 @@ class MonthViewModel @Inject constructor(
     private val syncRequester: SyncRequester,
     syncStatus: SyncStatusRepository,
     dataSources: DataSourceRepository,
+    private val conflicts: ConflictRepository,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -53,17 +61,22 @@ class MonthViewModel @Inject constructor(
     val settings: StateFlow<AppSettings?> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    private val writeState = combine(conflicts.pendingCount, conflicts.unseen) { pending, issues -> pending to issues }
+
     val header: StateFlow<SyncHeader> = combine(
         syncRequester.isSyncing,
         syncStatus.latest,
         syncStatus.latestSuccess,
         dataSources.observeAll(),
-    ) { syncing, latest, success, sources ->
+        writeState,
+    ) { syncing, latest, success, sources, (pending, issues) ->
         SyncHeader(
             syncing = syncing,
             lastSuccessAt = success?.at,
             lastError = latest?.takeIf { it.result != "OK" }?.error,
             hasSources = sources.isNotEmpty(),
+            pendingWrites = pending,
+            writeIssues = issues,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
 
@@ -82,6 +95,10 @@ class MonthViewModel @Inject constructor(
     }
 
     fun refresh() = syncRequester.request(SyncTrigger.PULL_TO_REFRESH)
+
+    fun acknowledgeConflicts() {
+        viewModelScope.launch { conflicts.markAllSeen() }
+    }
 
     private fun today(): LocalDate = LocalDate.now(clock.withZone(APP_ZONE))
 }

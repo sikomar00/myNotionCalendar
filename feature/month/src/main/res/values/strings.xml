@@ -19,9 +19,12 @@
     <string name="month_banner_action">설정 열기</string>
     <string name="month_onboarding_title">노션 DB를 연결하세요</string>
     <string name="month_onboarding_body">설정에서 내부 연결 토큰을 입력하고 일정 DB 링크를 등록하면 이 달력에 표시됩니다.</string>
-    <string name="day_sheet_title">%1$d월 %2$d일 (%3$s)</string>
-    <string name="day_sheet_empty">일정 없음</string>
-    <string name="day_sheet_all_day">종일</string>
-    <string name="day_sheet_done">완료</string>
-    <string name="day_sheet_read_only">체크·편집·추가는 다음 업데이트에서 지원합니다.</string>
+    <string name="month_pending_writes">전송 대기 %1$d건</string>
+    <string name="month_write_issues">노션 반영 실패 %1$d건 · 충돌 %2$d건</string>
+    <string name="month_write_issues_show">내용 보기</string>
+    <string name="month_write_issues_title">노션 반영 결과</string>
+    <string name="month_write_issues_ack">모두 확인</string>
+    <string name="month_issue_rejected">노션이 거부해 변경을 되돌렸습니다</string>
+    <string name="month_issue_remote_deleted">노션에서 삭제되어 내 변경을 버렸습니다</string>
+    <string name="month_issue_conflict">양쪽에서 바뀌어 노션 값을 남겼습니다(내 값: %1$s → 노션: %2$s)</string>
 </resources>

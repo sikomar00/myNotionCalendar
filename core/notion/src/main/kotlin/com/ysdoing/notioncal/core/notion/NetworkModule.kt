@@ -31,6 +31,9 @@ object NetworkModule {
     fun provideNotionReader(client: NotionClient): NotionReader = client
 
     @Provides
+    fun provideNotionWriter(client: NotionClient): NotionWriter = client
+
+    @Provides
     @Singleton
     fun provideNotionApi(tokenProvider: TokenProvider, json: Json): NotionApi =
         createNotionApi(NotionApiConfig.BASE_URL.toHttpUrl(), tokenProvider, json)
