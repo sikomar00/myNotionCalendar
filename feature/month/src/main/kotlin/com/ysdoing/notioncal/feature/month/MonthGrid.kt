@@ -40,11 +40,13 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.NotionColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
@@ -219,14 +221,23 @@ private fun EventChip(placed: PlacedEvent, modifier: Modifier = Modifier) {
             bottomEnd = if (placed.continuesAfter) 0.dp else 3.dp,
         )
         Box(modifier.clip(shape).background(color.copy(alpha = 0.28f)), contentAlignment = Alignment.CenterStart) {
-            ChipText(event.title, decoration, textStyle.padding(horizontal = 3.dp))
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle.padding(horizontal = 3.dp))
         }
     } else {
         Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start) {
             Box(Modifier.padding(start = 2.dp, end = 2.dp).size(5.dp).clip(CircleShape).background(color))
-            ChipText(event.title, decoration, textStyle)
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle)
         }
     }
+}
+
+private val chipTimeFormat = DateTimeFormatter.ofPattern("H:mm")
+
+/** 시간 일정은 시작 시각을 앞에 붙인다(예: "9:00 회의"). 이전 주에서 이어진 막대에는 붙이지 않는다. */
+internal fun chipLabel(event: CalendarEvent, continuesBefore: Boolean): String {
+    val start = event.startTime
+    if (event.isAllDay || start == null || continuesBefore) return event.title
+    return "${start.atZone(APP_ZONE).format(chipTimeFormat)} ${event.title}"
 }
 
 @Composable
