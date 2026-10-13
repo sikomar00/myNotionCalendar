@@ -22,6 +22,7 @@ data class AppSettings(
 @Singleton
 class SettingsRepository @Inject constructor(
     @SettingsStore private val dataStore: DataStore<Preferences>,
+    private val widgetRefresher: WidgetRefresher,
 ) {
     val settings: Flow<AppSettings> = dataStore.data
         .map { prefs ->
@@ -34,10 +35,12 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setWeekStart(day: DayOfWeek) {
         dataStore.edit { it[WEEK_START] = day.name }
+        widgetRefresher.requestUpdate()
     }
 
     suspend fun setHideDone(hide: Boolean) {
         dataStore.edit { it[HIDE_DONE] = hide }
+        widgetRefresher.requestUpdate()
     }
 
     private companion object {

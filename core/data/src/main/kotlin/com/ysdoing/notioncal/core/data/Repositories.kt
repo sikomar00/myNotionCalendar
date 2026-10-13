@@ -61,15 +61,22 @@ class DataSourceRepository @Inject constructor(
     private val db: NotionCalDatabase,
     private val dataSourceDao: DataSourceDao,
     private val eventDao: EventDao,
+    private val widgetRefresher: WidgetRefresher,
 ) {
     fun observeAll(): Flow<List<DataSourceEntity>> = dataSourceDao.observeAll()
 
-    suspend fun setEnabled(id: String, enabled: Boolean) = dataSourceDao.setEnabled(id, enabled)
+    suspend fun setEnabled(id: String, enabled: Boolean) {
+        dataSourceDao.setEnabled(id, enabled)
+        widgetRefresher.requestUpdate()
+    }
 
     /** 등록을 지우면 그 DB의 로컬 일정도 지운다. 노션 원본은 건드리지 않는다. */
-    suspend fun delete(id: String) = db.withTransaction {
-        eventDao.deleteForSource(id)
-        dataSourceDao.deleteRow(id)
+    suspend fun delete(id: String) {
+        db.withTransaction {
+            eventDao.deleteForSource(id)
+            dataSourceDao.deleteRow(id)
+        }
+        widgetRefresher.requestUpdate()
     }
 }
 

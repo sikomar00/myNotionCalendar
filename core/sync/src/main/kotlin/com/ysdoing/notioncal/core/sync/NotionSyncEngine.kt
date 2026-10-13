@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.sync
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.EventEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
@@ -47,6 +48,7 @@ class NotionSyncEngine @Inject constructor(
     private val db: NotionCalDatabase,
     private val clock: Clock,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val widgetRefresher: WidgetRefresher,
 ) {
     private val mutex = Mutex()
     private val sources get() = db.dataSourceDao()
@@ -141,6 +143,8 @@ class NotionSyncEngine @Inject constructor(
             if (present.isNotEmpty()) events.upsert(present.map { it.event!!.toEntity(source.dataSourceId) })
             if (gone.isNotEmpty()) events.delete(gone.map { it.pageId })
         }
+        // WG-05: 바뀐 내용이 있으면 위젯을 갱신한다(구현이 짧은 시간의 요청을 묶는다).
+        widgetRefresher.requestUpdate()
     }
 
     companion object {

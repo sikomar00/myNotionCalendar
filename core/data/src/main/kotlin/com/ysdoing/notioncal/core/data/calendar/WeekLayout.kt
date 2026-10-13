@@ -1,4 +1,4 @@
-package com.ysdoing.notioncal.feature.month
+package com.ysdoing.notioncal.core.data.calendar
 
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import java.time.LocalDate

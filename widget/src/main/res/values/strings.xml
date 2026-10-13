@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">노션 월간 달력</string>
+    <string name="widget_description">노션 일정을 월 단위로 보여줍니다</string>
+    <string name="widget_month_title">%1$d년 %2$d월</string>
+    <string name="widget_month_short">%1$d월</string>
+    <string name="widget_prev">이전 달</string>
+    <string name="widget_next">다음 달</string>
+    <string name="widget_today">오늘</string>
+    <string name="widget_more">+%1$d</string>
+
+    <string name="widget_config_title">위젯 설정</string>
+    <string name="widget_config_preview">미리보기</string>
+    <string name="widget_config_sources">표시할 DB</string>
+    <string name="widget_config_sources_all">앱에서 켠 DB 전체</string>
+    <string name="widget_config_theme">테마</string>
+    <string name="widget_config_theme_system">시스템</string>
+    <string name="widget_config_theme_light">라이트</string>
+    <string name="widget_config_theme_dark">다크</string>
+    <string name="widget_config_opacity">배경 불투명도 %1$d%%</string>
+    <string name="widget_config_font">글자 크기 %1$d%%</string>
+    <string name="widget_config_lanes">칸당 일정 줄 수</string>
+    <string name="widget_config_lanes_auto">자동</string>
+    <string name="widget_config_spacing">줄 간격</string>
+    <string name="widget_config_spacing_compact">좁게</string>
+    <string name="widget_config_spacing_normal">보통</string>
+    <string name="widget_config_spacing_wide">넓게</string>
+    <string name="widget_config_hide_done">완료 항목 숨기기</string>
+    <string name="widget_config_save">저장</string>
+</resources>

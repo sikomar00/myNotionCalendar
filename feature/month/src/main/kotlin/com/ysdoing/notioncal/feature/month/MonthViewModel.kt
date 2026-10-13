@@ -11,6 +11,8 @@ import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
+import com.ysdoing.notioncal.core.data.calendar.gridStart
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

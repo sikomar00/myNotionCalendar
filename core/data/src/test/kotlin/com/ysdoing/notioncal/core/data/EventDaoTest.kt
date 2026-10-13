@@ -91,7 +91,7 @@ class EventDaoTest {
             listOf("a"),
             db.eventDao().pageIdsInRange("ds", LocalDate.parse("2026-10-01"), LocalDate.parse("2026-10-31")),
         )
-        DataSourceRepository(db, db.dataSourceDao(), db.eventDao()).delete("ds")
+        DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None).delete("ds")
         assertEquals(emptyList<String>(), db.eventDao().pageIdsInRange("ds", LocalDate.of(1900, 1, 1), LocalDate.of(2999, 12, 31)))
     }
 }

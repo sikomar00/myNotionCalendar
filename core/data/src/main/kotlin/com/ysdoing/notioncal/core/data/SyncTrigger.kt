@@ -22,3 +22,8 @@ interface SyncRequester {
 
 /** PRD §4 기준 시간대. 날짜 계산·표시는 이 값으로 한다. */
 val APP_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Seoul")
+
+/** 위젯 → 앱 진입 약속. 앱은 이 extra(yyyy-MM-dd)를 받으면 그 날짜의 달로 이동하고 날짜 시트를 연다. */
+object AppIntents {
+    const val EXTRA_DATE = "com.ysdoing.notioncal.extra.DATE"
+}

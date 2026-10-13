@@ -13,6 +13,9 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
             // 라이브러리 lint도 앱과 같은 타깃으로 검사한다.
             lint.targetSdk = TARGET_SDK
             testOptions.targetSdk = TARGET_SDK
+            // Room 스키마(schemas/)가 있으면 단위 테스트 assets에 넣어 Robolectric MigrationTestHelper가 읽게 한다(PF-09).
+            val schemas = file("schemas")
+            if (schemas.isDirectory) sourceSets.getByName("test").assets.directories.add(schemas.path)
         }
     }
 }

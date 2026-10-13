@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WS-01: 기본 4×4, 최소 2×2, 최대 제한 없음, 가로·세로 크기 조절.
+  WG-04: configuration_optional이라 설정 없이 바로 놓을 수 있고, reconfigurable이라 길게 눌러 다시 설정할 수 있다.
+  updatePeriodMillis=0: 주기 갱신은 쓰지 않는다(데이터 변경·자정 알람이 갱신을 요청).
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.ysdoing.notioncal.widget.WidgetConfigActivity"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="250dp"
+    android:minHeight="250dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:previewLayout="@layout/widget_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

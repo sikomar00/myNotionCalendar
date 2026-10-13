@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +52,12 @@ private const val CENTER_PAGE = PAGE_COUNT / 2
 /** 앱 첫 화면(MV-01~05). Room만 읽고, 동기화는 [MonthViewModel.refresh]로 요청만 한다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MonthRoute(onOpenSettings: () -> Unit, viewModel: MonthViewModel = hiltViewModel()) {
+fun MonthRoute(
+    onOpenSettings: () -> Unit,
+    openDate: LocalDate? = null,
+    onOpenDateHandled: () -> Unit = {},
+    viewModel: MonthViewModel = hiltViewModel(),
+) {
     val today by viewModel.today.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val header by viewModel.header.collectAsStateWithLifecycle()
@@ -69,6 +75,14 @@ fun MonthRoute(onOpenSettings: () -> Unit, viewModel: MonthViewModel = hiltViewM
     var selectedDay by rememberSaveable { mutableStateOf<LocalDate?>(null) }
 
     fun pageOf(month: YearMonth) = CENTER_PAGE + (month.year - baseMonth.year) * 12 + (month.monthValue - baseMonth.monthValue)
+
+    // 위젯에서 날짜를 눌러 들어오면 그 달로 이동하고 날짜 시트를 연다.
+    LaunchedEffect(openDate) {
+        val date = openDate ?: return@LaunchedEffect
+        pager.scrollToPage(pageOf(YearMonth.from(date)).coerceIn(0, PAGE_COUNT - 1))
+        selectedDay = date
+        onOpenDateHandled()
+    }
 
     Scaffold(
         topBar = {

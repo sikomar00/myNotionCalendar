@@ -1,0 +1,255 @@
+package com.ysdoing.notioncal.widget
+
+import android.appwidget.AppWidgetManager
+import android.content.Intent
+import android.os.Bundle
+import android.widget.FrameLayout
+import android.widget.RemoteViews
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceRemoteViews
+import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.AppSettings
+import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.LineSpacing
+import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.WidgetTheme
+import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import java.time.LocalDate
+import kotlin.math.roundToInt
+
+/**
+ * WG-04 위젯별 설정. 위젯을 처음 놓을 때와 길게 눌러 다시 설정할 때 열린다.
+ * 미리보기는 위젯과 같은 [WidgetContent]를 RemoteViews로 만들어 보여준다(실제 위젯과 같은 모양).
+ */
+class WidgetConfigActivity : ComponentActivity() {
+    private val appWidgetId by lazy {
+        intent?.extras?.getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            ?: AppWidgetManager.INVALID_APPWIDGET_ID
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        // 저장하지 않고 나가면 취소로 처리한다(런처 규칙).
+        setResult(RESULT_CANCELED, resultIntent())
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+            finish()
+            return
+        }
+        val deps = WidgetDependencies.from(this)
+        val previewSize = widgetSize()
+        setContent {
+            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+                Surface(Modifier.fillMaxSize()) {
+                    ConfigScreen(deps, previewSize, onSaved = ::finishSaved)
+                }
+            }
+        }
+    }
+
+    private fun finishSaved() {
+        setResult(RESULT_OK, resultIntent())
+        finish()
+    }
+
+    private fun resultIntent() = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+
+    /** 런처가 알려준 현재 위젯 크기(세로 방향 기준). 처음 놓을 때 값이 없으면 4×4 근사값. */
+    private fun widgetSize(): DpSize {
+        val options = AppWidgetManager.getInstance(this).getAppWidgetOptions(appWidgetId)
+        val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 330
+        val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 380
+        return DpSize(width.dp, height.dp)
+    }
+
+    @Composable
+    private fun ConfigScreen(deps: WidgetDependencies, previewSize: DpSize, onSaved: () -> Unit) {
+        val scope = rememberCoroutineScope()
+        var loaded by remember { mutableStateOf<Loaded?>(null) }
+        var config by remember { mutableStateOf(WidgetConfig(appWidgetId)) }
+        LaunchedEffect(Unit) {
+            val saved = deps.widgetConfigs().get(appWidgetId)
+            val settings = deps.settings().settings.first()
+            val month = NotionCalWidget.monthFor(saved)
+            val events = deps.events().observeRange(
+                NotionCalWidget.gridFrom(month, settings.weekStart),
+                NotionCalWidget.gridTo(month, settings.weekStart),
+            ).first()
+            config = saved
+            loaded = Loaded(settings, events, deps.dataSources().observeAll().first())
+        }
+        val data = loaded ?: return
+
+        Column(
+            Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(stringResource(R.string.widget_config_title), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge)
+            Preview(data, config, previewSize)
+
+            Section(stringResource(R.string.widget_config_sources))
+            SourcePicker(data.sources, config.dataSourceIds) { config = config.copy(dataSourceIds = it) }
+
+            Section(stringResource(R.string.widget_config_theme))
+            Choice(
+                listOf(
+                    WidgetTheme.SYSTEM to R.string.widget_config_theme_system,
+                    WidgetTheme.LIGHT to R.string.widget_config_theme_light,
+                    WidgetTheme.DARK to R.string.widget_config_theme_dark,
+                ),
+                config.theme,
+            ) { config = config.copy(theme = it) }
+
+            Section(stringResource(R.string.widget_config_opacity, config.opacity))
+            Slider(
+                value = config.opacity.toFloat(),
+                onValueChange = { config = config.copy(opacity = (it / 10).roundToInt() * 10) },
+                valueRange = 0f..100f,
+                steps = 9,
+            )
+
+            Section(stringResource(R.string.widget_config_font, config.fontScale))
+            Slider(
+                value = config.fontScale.toFloat(),
+                onValueChange = { config = config.copy(fontScale = (it / 10).roundToInt() * 10) },
+                valueRange = WidgetConfig.FONT_SCALE_RANGE.first.toFloat()..WidgetConfig.FONT_SCALE_RANGE.last.toFloat(),
+                steps = (WidgetConfig.FONT_SCALE_RANGE.last - WidgetConfig.FONT_SCALE_RANGE.first) / 10 - 1,
+            )
+
+            Section(stringResource(R.string.widget_config_lanes))
+            Choice(
+                WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
+                config.maxPerCell,
+            ) { config = config.copy(maxPerCell = it) }
+
+            Section(stringResource(R.string.widget_config_spacing))
+            Choice(
+                listOf(
+                    LineSpacing.COMPACT to R.string.widget_config_spacing_compact,
+                    LineSpacing.NORMAL to R.string.widget_config_spacing_normal,
+                    LineSpacing.WIDE to R.string.widget_config_spacing_wide,
+                ),
+                config.lineSpacing,
+            ) { config = config.copy(lineSpacing = it) }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
+                Switch(checked = config.hideDone, onCheckedChange = { config = config.copy(hideDone = it) })
+            }
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        deps.widgetConfigs().save(config)
+                        val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
+                        NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
+                        onSaved()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.widget_config_save)) }
+        }
+    }
+
+    private data class Loaded(val settings: AppSettings, val events: List<CalendarEvent>, val sources: List<DataSourceEntity>)
+
+    @OptIn(ExperimentalGlanceRemoteViewsApi::class)
+    @Composable
+    private fun Preview(data: Loaded, config: WidgetConfig, size: DpSize) {
+        var views by remember { mutableStateOf<RemoteViews?>(null) }
+        LaunchedEffect(config) {
+            val today = LocalDate.now(APP_ZONE)
+            val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
+            views = GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+        }
+        AndroidView(
+            factory = { FrameLayout(it) },
+            update = { frame ->
+                views?.let { remote ->
+                    frame.removeAllViews()
+                    frame.addView(remote.apply(frame.context, frame))
+                }
+            },
+            modifier = Modifier.width(size.width).height(size.height),
+        )
+    }
+
+    @Composable
+    private fun Section(title: String) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+    }
+
+    @Composable
+    private fun SourcePicker(sources: List<DataSourceEntity>, selected: Set<String>, onChange: (Set<String>) -> Unit) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = selected.isEmpty(), onCheckedChange = { if (it) onChange(emptySet()) })
+            Text(stringResource(R.string.widget_config_sources_all))
+        }
+        sources.forEach { source ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = source.dataSourceId in selected,
+                    onCheckedChange = { checked ->
+                        onChange(if (checked) selected + source.dataSourceId else selected - source.dataSourceId)
+                    },
+                )
+                Text(source.name)
+            }
+        }
+    }
+
+    @Composable
+    private fun <T> Choice(options: List<Pair<T, Int?>>, selected: T, onSelect: (T) -> Unit) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { (value, label) ->
+                FilterChip(
+                    selected = value == selected,
+                    onClick = { onSelect(value) },
+                    label = { Text(label?.let { stringResource(it) } ?: value.toString()) },
+                )
+            }
+        }
+    }
+}

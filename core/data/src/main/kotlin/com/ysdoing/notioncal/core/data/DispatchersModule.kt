@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.data.db.DataSourceDao
 import com.ysdoing.notioncal.core.data.db.EventDao
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.SyncLogDao
+import com.ysdoing.notioncal.core.data.db.WidgetConfigDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -62,6 +63,9 @@ object DataModule {
 
     @Provides
     fun provideSyncLogDao(db: NotionCalDatabase): SyncLogDao = db.syncLogDao()
+
+    @Provides
+    fun provideWidgetConfigDao(db: NotionCalDatabase): WidgetConfigDao = db.widgetConfigDao()
 
     @Provides
     @Singleton

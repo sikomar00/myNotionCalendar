@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.notion.NotionError
@@ -43,7 +44,11 @@ class NotionSyncEngineTest {
     private val remote = FakeNotion()
     private var now = Instant.parse("2026-10-13T03:00:00Z") // 서울 12:00
 
-    private fun engine() = NotionSyncEngine(remote, db, Clock.fixed(now, ZoneOffset.UTC), UnconfinedTestDispatcher())
+    private var widgetRefreshes = 0
+
+    private fun engine() = NotionSyncEngine(
+        remote, db, Clock.fixed(now, ZoneOffset.UTC), UnconfinedTestDispatcher(), WidgetRefresher { widgetRefreshes++ },
+    )
 
     @Before
     fun setUp() {
@@ -84,6 +89,8 @@ class NotionSyncEngineTest {
         // 범위 조회는 8/1에서 31일 앞당긴 날짜부터, +09:00 오프셋으로 요청한다.
         assertEquals("2026-07-01T00:00:00+09:00", remote.lastRangeFrom)
         assertEquals("OK", db.syncLogDao().observeLatest().first()!!.result)
+        // WG-05: 받은 내용이 있으면 위젯 갱신을 요청한다.
+        assertTrue(widgetRefreshes > 0)
     }
 
     @Test
@@ -129,7 +136,9 @@ class NotionSyncEngineTest {
         engine().sync(SyncTrigger.APP_OPEN)
 
         remote.failWith = NotionError.Unauthorized
+        widgetRefreshes = 0
         val outcome = engine().sync(SyncTrigger.PULL_TO_REFRESH)
+        assertEquals("바뀐 것이 없으면 위젯 갱신 요청도 없다", 0, widgetRefreshes)
 
         assertEquals(NotionError.Unauthorized, outcome.error)
         assertEquals(mapOf("a" to "캐시"), local())
