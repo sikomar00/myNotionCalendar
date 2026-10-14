@@ -199,10 +199,15 @@ class HolidayScheduler @Inject constructor(
         )
     }
 
-    /** 공휴일 표시가 켜져 있고 마지막으로 읽은 지 하루가 지났으면 다시 읽는다. */
+    /** 앱 설정에서 캘린더 권한을 거둬 갔으면 공휴일 표시를 끈다(저장된 공휴일을 계속 보이지 않게). 앱이 보일 때마다 부른다. */
+    suspend fun dropIfPermissionRevoked() {
+        if (settings.settings.first().showHolidays && !HolidaySync.hasPermission(context)) settings.setShowHolidays(false)
+    }
+
+    /** 공휴일 표시가 켜져 있고 권한이 있으며 마지막으로 읽은 지 하루가 지났으면 다시 읽는다. */
     suspend fun requestIfStale() {
         val current = settings.settings.first()
-        if (!current.showHolidays) return
+        if (!current.showHolidays || !HolidaySync.hasPermission(context)) return
         if (Duration.ofMillis(clock.millis() - current.holidaysRefreshedAt) < REFRESH_INTERVAL) return
         requestNow()
     }

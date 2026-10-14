@@ -17,6 +17,8 @@ object StrictModeSetup {
         "android.graphics.Typeface.setFlipFonts", // 삼성 글꼴 스타일 적용(Application.onCreate 기본 구현)
         "android.app.IdsController.", // 삼성 화면 재개 시 SharedPreferences 접근
         "com.samsung.android.rune.InputRune.", // 삼성 키 입력 처리 초기화 시 파일 확인
+        // 삼성 시스템 서버의 앱 실행 검사(ASKS). 권한 창 등 startActivity 바인더 호출에 서버 쪽 디스크 읽기가 붙어 온다(2026-10-14 S25 확인).
+        "com.android.server.asks.",
     )
 
     private val direct = Executor { it.run() }
