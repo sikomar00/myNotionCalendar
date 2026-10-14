@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
+import com.ysdoing.notioncal.core.data.reminders.ReminderRules
 import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +44,12 @@ data class AppSettings(
     val showHolidays: Boolean = false,
     /** EX-02 공휴일을 마지막으로 읽어 온 시각(epoch ms). 앱 열기 때 하루 한 번 다시 읽는다. */
     val holidaysRefreshedAt: Long = 0,
+    /** EX-01 알림 켬(알림 권한을 받으면 켠다). */
+    val remindersEnabled: Boolean = false,
+    /** EX-01 알림 규칙(전체 공통). */
+    val reminderRules: ReminderRules = ReminderRules(),
+    /** EX-01 마지막으로 처리한 알림 시각(epoch ms). 이 시각 이후 알림만 보낸다. */
+    val remindersHandledUntil: Long = 0,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -69,6 +76,15 @@ class SettingsRepository @Inject constructor(
                 dynamicColor = prefs[DYNAMIC_COLOR] ?: true,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
+                remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
+                reminderRules = ReminderRules(
+                    timedMinutes = prefs[TIMED_REMINDERS]?.let { saved ->
+                        ReminderRules.normalize(saved.split(',').mapNotNull { it.trim().toIntOrNull() })
+                    } ?: listOf(ReminderRules.DEFAULT_TIMED_MINUTES),
+                    allDayMinuteOfDay = (prefs[ALL_DAY_REMINDER_MINUTE] ?: ReminderRules.DEFAULT_ALL_DAY_MINUTE).coerceIn(0, 24 * 60 - 1),
+                    allDayDayBefore = prefs[ALL_DAY_REMINDER_DAY_BEFORE] ?: false,
+                ),
+                remindersHandledUntil = prefs[REMINDERS_HANDLED_UNTIL] ?: 0,
                 hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
@@ -127,6 +143,26 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[HOLIDAYS_REFRESHED_AT] = at }
     }
 
+    /** EX-01 알림 켜기·끄기. 켤 때 [now]부터 처리한 것으로 둬서 지난 알림을 몰아 보내지 않는다. */
+    suspend fun setRemindersEnabled(enabled: Boolean, now: Long) {
+        dataStore.edit {
+            if (enabled && it[REMINDERS_ENABLED] != true) it[REMINDERS_HANDLED_UNTIL] = now
+            it[REMINDERS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setReminderRules(rules: ReminderRules) {
+        dataStore.edit {
+            it[TIMED_REMINDERS] = ReminderRules.normalize(rules.timedMinutes).joinToString(",")
+            it[ALL_DAY_REMINDER_MINUTE] = rules.allDayMinuteOfDay.coerceIn(0, 24 * 60 - 1)
+            it[ALL_DAY_REMINDER_DAY_BEFORE] = rules.allDayDayBefore
+        }
+    }
+
+    suspend fun setRemindersHandledUntil(at: Long) {
+        dataStore.edit { it[REMINDERS_HANDLED_UNTIL] = at }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -140,5 +176,10 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
+        val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
+        val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
+        val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")
+        val ALL_DAY_REMINDER_DAY_BEFORE = booleanPreferencesKey("all_day_reminder_day_before")
+        val REMINDERS_HANDLED_UNTIL = longPreferencesKey("reminders_handled_until")
     }
 }
