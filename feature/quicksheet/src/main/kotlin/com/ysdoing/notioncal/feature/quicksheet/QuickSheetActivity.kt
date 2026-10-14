@@ -8,7 +8,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,11 +15,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
+import com.ysdoing.notioncal.core.data.SettingsRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import java.time.LocalDate
 
@@ -37,13 +38,17 @@ import java.time.LocalDate
  */
 @AndroidEntryPoint
 class QuickSheetActivity : ComponentActivity() {
+    @Inject
+    lateinit var settings: SettingsRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val openedAt = SystemClock.elapsedRealtime()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val start = startFrom(intent.getStringExtra(AppIntents.EXTRA_MODE), intent.getStringExtra(AppIntents.EXTRA_DATE), intent.getStringExtra(AppIntents.EXTRA_PAGE_ID))
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(true)
+            NotionCalTheme(dynamicColor) {
                 Box(
                     Modifier
                         .fillMaxSize()

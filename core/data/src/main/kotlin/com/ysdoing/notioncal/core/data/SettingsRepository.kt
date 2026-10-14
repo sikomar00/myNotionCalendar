@@ -36,6 +36,8 @@ data class AppSettings(
     val hiddenSourceIds: Set<String> = emptySet(),
     /** MV-09 앱에서만 숨길 색 기준 값("dsId/optionId"). */
     val hiddenOptionKeys: Set<String> = emptySet(),
+    /** S25-10 Material You(배경화면 색) 사용. 기본 켬. */
+    val dynamicColor: Boolean = true,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -59,6 +61,7 @@ class SettingsRepository @Inject constructor(
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
+                dynamicColor = prefs[DYNAMIC_COLOR] ?: true,
                 hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
@@ -104,6 +107,10 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun setDynamicColor(enabled: Boolean) {
+        dataStore.edit { it[DYNAMIC_COLOR] = enabled }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -114,5 +121,6 @@ class SettingsRepository @Inject constructor(
         val ZOOM_PERCENT = intPreferencesKey("zoom_percent")
         val HIDDEN_SOURCES = stringSetPreferencesKey("hidden_source_ids")
         val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
     }
 }

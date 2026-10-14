@@ -138,6 +138,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     WidgetTheme.SYSTEM to R.string.widget_config_theme_system,
                     WidgetTheme.LIGHT to R.string.widget_config_theme_light,
                     WidgetTheme.DARK to R.string.widget_config_theme_dark,
+                    WidgetTheme.MATERIAL_YOU to R.string.widget_config_theme_material_you,
                 ),
                 config.theme,
             ) { config = config.copy(theme = it) }

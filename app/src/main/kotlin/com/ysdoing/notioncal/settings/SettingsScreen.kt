@@ -136,6 +136,17 @@ fun SettingsRoute(
                 }
                 Switch(checked = settings.hideDone, onCheckedChange = viewModel::setHideDone)
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_dynamic_color))
+                    Text(
+                        stringResource(R.string.settings_dynamic_color_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = settings.dynamicColor, onCheckedChange = viewModel::setDynamicColor)
+            }
 
             Text(stringResource(R.string.settings_sync_interval))
             SingleChoiceSegmentedButtonRow {

@@ -2,6 +2,7 @@ package com.ysdoing.notioncal
 
 import android.app.Application
 import android.content.ComponentCallbacks
+import android.content.Context
 import android.content.res.Configuration as ResConfiguration
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
@@ -47,7 +48,7 @@ class NotionCalApp : Application(), Configuration.Provider {
             )
         }
         periodicSync.start(appScope) // NS-06 주기 동기화
-        registerComponentCallbacks(WidgetConfigWatcher(resources.configuration, widgetRefresher))
+        registerComponentCallbacks(WidgetConfigWatcher(this, resources.configuration, widgetRefresher))
     }
 
     private companion object {
@@ -58,19 +59,31 @@ class NotionCalApp : Application(), Configuration.Provider {
 /**
  * S25-06: 위젯 줄 높이는 그릴 때의 기기 글꼴 크기·화면 밀도로 계산한다(WidgetMetrics). 설정에서 이 값을 바꾸면
  * 런처는 글자만 새 배율로 다시 그려 예전 줄 높이에 잘리므로, 바뀌는 즉시 위젯을 다시 그린다.
+ * WS-04: 다크 모드·배경화면 색(Material You 위젯 테마)이 바뀌어도 다시 그린다.
  * 프로세스가 없을 때 바뀐 경우는 다음 위젯 갱신(동기화·자정·조작) 때 맞춰진다.
  */
 private class WidgetConfigWatcher(
+    private val context: Context,
     initial: ResConfiguration,
     private val widgetRefresher: WidgetRefresher,
 ) : ComponentCallbacks {
     private var fontScale = initial.fontScale
     private var densityDpi = initial.densityDpi
+    private var night = initial.uiMode and ResConfiguration.UI_MODE_NIGHT_MASK
+
+    // WS-04: Material You 위젯은 배경화면 색을 그릴 때 읽어 굳히므로, 배경화면 색이 바뀌면 다시 그려야 한다.
+    private var wallpaperAccent = accent()
+
+    private fun accent() = context.getColor(android.R.color.system_accent1_600)
 
     override fun onConfigurationChanged(newConfig: ResConfiguration) {
-        if (newConfig.fontScale != fontScale || newConfig.densityDpi != densityDpi) {
+        val newNight = newConfig.uiMode and ResConfiguration.UI_MODE_NIGHT_MASK
+        val newAccent = accent()
+        if (newConfig.fontScale != fontScale || newConfig.densityDpi != densityDpi || newNight != night || newAccent != wallpaperAccent) {
             fontScale = newConfig.fontScale
             densityDpi = newConfig.densityDpi
+            night = newNight
+            wallpaperAccent = newAccent
             widgetRefresher.requestUpdate()
         }
     }

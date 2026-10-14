@@ -5,22 +5,22 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.AppIntents
+import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.feature.quicksheet.NotionCalTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
@@ -32,6 +32,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var health: AppHealth
+
+    @Inject
+    lateinit var settings: SettingsRepository
 
     /** null: 실행 표지를 확인하는 중(수 ms), true: 안전 모드로 시작(PF-10), false: 정상 시작. */
     private var safeMode by mutableStateOf<Boolean?>(null)
@@ -49,7 +52,9 @@ class MainActivity : ComponentActivity() {
         if (firstLaunch) lifecycleScope.launch { safeMode = health.onLaunchStarted() } else safeMode = false
         setContent {
             val failure by health.failure.collectAsStateWithLifecycle()
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
+            // 설정을 읽기 전에는 기본값(Material You 켬)으로 그린다.
+            val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(true)
+            NotionCalTheme(dynamicColor) {
                 val safe = safeMode
                 if (safe != null) {
                     NotionCalNavHost(

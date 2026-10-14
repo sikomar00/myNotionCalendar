@@ -75,7 +75,7 @@ fun WidgetContent(
 ) {
     val context = LocalContext.current
     val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale)
-    val palette = WidgetPalette.of(state.config.theme, state.config.opacity)
+    val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val start = gridStart(state.month, state.weekStart)
 
     Column(
@@ -393,7 +393,7 @@ internal fun quickSheetIntent(context: Context, mode: String, date: LocalDate): 
         .putExtra(AppIntents.EXTRA_DATE, date.toString())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
-/** 위젯 색. SYSTEM은 기기 다크 모드를 따르고, 배경에만 불투명도를 적용한다(WG-04). */
+/** 위젯 색. SYSTEM·MATERIAL_YOU는 기기 다크 모드를 따르고, 배경에만 불투명도를 적용한다(WG-04·WS-04). */
 class WidgetPalette private constructor(
     val background: ColorProvider,
     val text: ColorProvider,
@@ -431,15 +431,38 @@ class WidgetPalette private constructor(
         private val SUNDAY = Color(0xFFE03E3E)
         private val SATURDAY = Color(0xFF2F80ED)
 
-        fun of(theme: WidgetTheme, opacity: Int): WidgetPalette {
+        /**
+         * Material You 색은 그릴 때마다 시스템 색 자원(android.R.color.system_*)에서 읽는다. 배경화면이 바뀌면
+         * 시스템이 위젯 호스트를 다시 그리게 하고, 앱도 설정 변경 때 위젯 갱신을 요청한다(NotionCalApp).
+         */
+        private fun materialYou(context: Context, dark: Boolean): Scheme {
+            fun c(id: Int) = Color(context.getColor(id))
+            return if (dark) {
+                Scheme(
+                    c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral2_200),
+                    c(android.R.color.system_neutral2_500), c(android.R.color.system_neutral2_800), c(android.R.color.system_accent1_200),
+                )
+            } else {
+                Scheme(
+                    c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral2_700),
+                    c(android.R.color.system_neutral2_400), c(android.R.color.system_neutral2_100), c(android.R.color.system_accent1_600),
+                )
+            }
+        }
+
+        fun of(theme: WidgetTheme, opacity: Int, context: Context): WidgetPalette {
             val alpha = opacity.coerceIn(0, 100) / 100f
+            val (lightScheme, darkScheme) = when (theme) {
+                WidgetTheme.MATERIAL_YOU -> materialYou(context, dark = false) to materialYou(context, dark = true)
+                else -> LIGHT to DARK
+            }
             fun pick(select: (Scheme) -> Color, bg: Boolean = false): ColorProvider {
-                val light = select(LIGHT).let { if (bg) it.copy(alpha = alpha) else it }
-                val dark = select(DARK).let { if (bg) it.copy(alpha = alpha) else it }
+                val light = select(lightScheme).let { if (bg) it.copy(alpha = alpha) else it }
+                val dark = select(darkScheme).let { if (bg) it.copy(alpha = alpha) else it }
                 return when (theme) {
                     WidgetTheme.LIGHT -> ColorProvider(light)
                     WidgetTheme.DARK -> ColorProvider(dark)
-                    WidgetTheme.SYSTEM -> DayNightColor(day = light, night = dark)
+                    WidgetTheme.SYSTEM, WidgetTheme.MATERIAL_YOU -> DayNightColor(day = light, night = dark)
                 }
             }
             return WidgetPalette(
@@ -450,7 +473,7 @@ class WidgetPalette private constructor(
                 divider = pick({ it.divider }),
                 accent = pick({ it.accent }),
                 todayBackground = pick({ it.accent }),
-                todayText = ColorProvider(Color.White),
+                todayText = if (theme == WidgetTheme.MATERIAL_YOU) pick({ it.background }) else ColorProvider(Color.White),
                 sunday = ColorProvider(SUNDAY),
                 saturday = ColorProvider(SATURDAY),
             )

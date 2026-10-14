@@ -84,6 +84,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setHideDone(hide) }
     }
 
+    /** S25-10 Material You 색 켜기·끄기. */
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setDynamicColor(enabled) }
+    }
+
     /** NS-06 주기 동기화 간격. 바뀌면 PeriodicSync가 작업을 다시 예약한다. */
     fun setSyncInterval(minutes: Int) {
         viewModelScope.launch { settingsRepository.setSyncInterval(minutes) }

@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class WidgetTheme { SYSTEM, LIGHT, DARK }
+/** 위젯 테마(WS-04). MATERIAL_YOU는 배경화면 색을 쓰고 다크 모드를 따른다(S25-10). */
+enum class WidgetTheme { SYSTEM, LIGHT, DARK, MATERIAL_YOU }
 
 enum class LineSpacing { COMPACT, NORMAL, WIDE }
 

@@ -61,12 +61,19 @@ class WidgetRemoteViewsTest {
             WidgetConfig(1, fontScale = 70),
             WidgetConfig(1, fontScale = 150, maxPerCell = 6),
             WidgetConfig(1, theme = WidgetTheme.DARK, opacity = 0),
+            WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU, opacity = 60),
         )
         for (size in listOf(small, medium, large, huge, DpSize(180.dp, 400.dp), DpSize(400.dp, 180.dp))) {
             for (config in configs) {
                 renderView(size, WidgetSamples.state(WidgetSamples.dense, config))
             }
         }
+    }
+
+    @Test
+    fun screenshotMaterialYou() = runTest {
+        renderView(large, WidgetSamples.state(config = WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU)))
+            .captureRoboImage("src/test/screenshots/widget_material_you.png")
     }
 
     @Test
