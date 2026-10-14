@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.quickinput.QuickInputParser
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.EditableEvent
 import com.ysdoing.notioncal.core.data.EventChange
@@ -91,13 +92,18 @@ fun AddForm(
     initialDate: LocalDate,
     sources: List<DataSourceEntity>,
     defaultSourceId: String?,
-    onAdd: (title: String, date: LocalDate, time: TimeRange?, dataSourceId: String) -> Unit,
+    onAdd: (NewEvent) -> Unit,
     modifier: Modifier = Modifier,
     autoFocus: Boolean = true,
+    /** WI-07 '내일'·'다음 주 월요일'의 기준일. */
+    today: LocalDate = LocalDate.now(APP_ZONE),
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var date by rememberSaveable(initialDate) { mutableStateOf(initialDate) }
     var time by rememberSaveable(stateSaver = TimeRangeSaver) { mutableStateOf<TimeRange?>(null) }
+    // 칩을 직접 바꾸면 그 값이 빠른 입력 해석보다 앞선다.
+    var dateTouched by rememberSaveable(initialDate) { mutableStateOf(false) }
+    var timeTouched by rememberSaveable { mutableStateOf(false) }
     var sourceId by rememberSaveable(defaultSourceId) { mutableStateOf(defaultSourceId) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -114,11 +120,19 @@ fun AddForm(
         Text(stringResource(R.string.qs_no_database), modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.error)
         return
     }
+    // WI-07: '내일 3시 회의' → 날짜·시간은 칩으로, 남은 글자는 제목으로.
+    val parsed = remember(title, today) { QuickInputParser.parse(title, today) }
+    val shownDate = parsed.date?.takeUnless { dateTouched } ?: date
+    val shownEnd = parsed.endDate?.takeUnless { dateTouched }
+    val shownTime = parsed.start?.takeUnless { timeTouched }?.let { s -> TimeRange(s, parsed.end ?: s.plusHours(1)) } ?: time
     val submit = {
         val target = sourceId ?: sources.first().dataSourceId
         if (title.isNotBlank()) {
-            onAdd(title, date, time, target)
+            val cleanTitle = parsed.title.takeIf { parsed.hasSchedule && it.isNotBlank() } ?: title.trim()
+            onAdd(NewEvent(cleanTitle, shownDate, shownTime, target, shownEnd))
             title = ""
+            dateTouched = false
+            timeTouched = false
         }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -134,9 +148,22 @@ fun AddForm(
             )
             Button(onClick = submit, enabled = title.isNotBlank()) { Text(stringResource(R.string.qs_add)) }
         }
+        if (parsed.hasSchedule && parsed.title.isNotBlank()) {
+            Text(
+                stringResource(R.string.qs_parsed_title, parsed.title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            DateChip(date) { date = it }
-            TimeChip(time) { time = it }
+            DateChip(shownDate, shownEnd) {
+                date = it
+                dateTouched = true
+            }
+            TimeChip(shownTime) {
+                time = it
+                timeTouched = true
+            }
             if (sources.size > 1) {
                 sources.forEach { s ->
                     FilterChip(selected = s.dataSourceId == (sourceId ?: sources.first().dataSourceId), onClick = { sourceId = s.dataSourceId }, label = {
@@ -302,9 +329,10 @@ fun EventEditorForm(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateChip(date: LocalDate, onPick: (LocalDate) -> Unit) {
+private fun DateChip(date: LocalDate, endDate: LocalDate? = null, onPick: (LocalDate) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    AssistChip(onClick = { open = true }, label = { Text(date.format(dateFormat)) })
+    val label = endDate?.let { "${date.format(dateFormat)} – ${it.format(dateFormat)}" } ?: date.format(dateFormat)
+    AssistChip(onClick = { open = true }, label = { Text(label) })
     if (open) {
         // DatePicker는 UTC 자정 기준 epoch ms를 쓴다(기기 시간대와 무관하게 날짜가 밀리지 않게, NS-07).
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())

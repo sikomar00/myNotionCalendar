@@ -57,12 +57,48 @@ class QuickSheetUiTest {
         var added: List<Any?>? = null
         compose.setContent {
             MaterialTheme {
-                AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { t, d, time, ds -> added = listOf(t, d, time, ds) })
+                AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { added = listOf(it.title, it.date, it.time, it.dataSourceId) })
             }
         }
         compose.onNodeWithText("제목").performTextInput("영어 스터디")
         compose.onNodeWithText("추가").performClick()
         assertEquals(listOf("영어 스터디", day, null, "ds"), added)
+    }
+
+    @Test
+    fun quickInputFillsDateTimeAndTitle() {
+        // WI-07: '내일 3시 회의' → 다음 날 15:00~16:00, 제목은 '회의'.
+        var added: NewEvent? = null
+        compose.setContent {
+            MaterialTheme { AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { added = it }, today = day) }
+        }
+        compose.onNodeWithText("제목").performTextInput("내일 3시 회의")
+        compose.onNodeWithText("제목: 회의").assertExists() // 해석 미리보기
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(NewEvent("회의", day.plusDays(1), TimeRange(LocalTime.of(15, 0), LocalTime.of(16, 0)), "ds"), added)
+    }
+
+    @Test
+    fun quickInputRangeBecomesMultiDayEvent() {
+        var added: NewEvent? = null
+        compose.setContent {
+            MaterialTheme { AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { added = it }, today = day) }
+        }
+        compose.onNodeWithText("제목").performTextInput("20일~22일 출장")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(NewEvent("출장", LocalDate.of(2026, 10, 20), null, "ds", endDate = LocalDate.of(2026, 10, 22)), added)
+        assertEquals("2026-10-22", dateValueOf(added!!.date, null, added!!.endDate).endDate)
+    }
+
+    @Test
+    fun plainTitleKeepsChosenDay() {
+        var added: NewEvent? = null
+        compose.setContent {
+            MaterialTheme { AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { added = it }, today = day) }
+        }
+        compose.onNodeWithText("제목").performTextInput("장보기")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(NewEvent("장보기", day, null, "ds"), added)
     }
 
     @Test
@@ -106,7 +142,7 @@ class QuickSheetUiTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent {
             MaterialTheme {
-                AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { t, d, time, ds -> added = listOf(t, d, time, ds) })
+                AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { added = listOf(it.title, it.date, it.time, it.dataSourceId) })
             }
         }
         compose.onNodeWithText("제목").performTextInput("영어 스터디")
@@ -161,7 +197,7 @@ class QuickSheetUiTest {
             MaterialTheme {
                 Surface {
                     Column {
-                        AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { _, _, _, _ -> })
+                        AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = {})
                         DayList(
                             listOf(event("p1", "영어 스터디"), event("p2", "회의", time = "2026-10-13T01:00:00Z"), event("p3", "운동", done = true)),
                             onToggle = { _, _ -> },

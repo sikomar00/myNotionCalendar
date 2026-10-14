@@ -32,11 +32,21 @@ import javax.inject.Inject
 /** 시간 입력(시작·종료). 종일 일정이면 null. */
 data class TimeRange(val start: LocalTime, val end: LocalTime)
 
+/** 추가할 일정 하나(WI-02·WI-07). [endDate]는 기간 일정의 마지막 날(포함). */
+data class NewEvent(
+    val title: String,
+    val date: LocalDate,
+    val time: TimeRange?,
+    val dataSourceId: String,
+    val endDate: LocalDate? = null,
+)
+
 /** 날짜 + 선택적 시간을 저장용 값으로 바꾼다. 시간은 Asia/Seoul 기준(NS-07). */
-fun dateValueOf(date: LocalDate, time: TimeRange?): DateValue {
-    if (time == null) return DateValue.allDay(date)
+fun dateValueOf(date: LocalDate, time: TimeRange?, endDate: LocalDate? = null): DateValue {
+    val lastDay = endDate?.takeIf { it.isAfter(date) }
+    if (time == null) return DateValue.allDay(date, lastDay)
     val start = date.atTime(time.start).atZone(APP_ZONE).toInstant()
-    var end = date.atTime(time.end).atZone(APP_ZONE).toInstant()
+    var end = (lastDay ?: date).atTime(time.end).atZone(APP_ZONE).toInstant()
     if (!end.isAfter(start)) end = start.plusSeconds(3600)
     return DateValue(date.toString(), startTime = start.toEpochMilli(), endTime = end.toEpochMilli())
 }
@@ -78,10 +88,10 @@ class QuickSheetViewModel @Inject constructor(
     fun observeEvent(pageId: String): Flow<EditableEvent?> = editable.observe(pageId)
 
     /** WI-02 */
-    fun add(title: String, day: LocalDate, time: TimeRange?, dataSourceId: String, onAdded: () -> Unit = {}) {
-        if (title.isBlank()) return
+    fun add(event: NewEvent, onAdded: () -> Unit = {}) {
+        if (event.title.isBlank()) return
         viewModelScope.launch {
-            writer.create(dataSourceId, title, dateValueOf(day, time))
+            writer.create(event.dataSourceId, event.title, dateValueOf(event.date, event.time, event.endDate))
             onAdded()
         }
     }

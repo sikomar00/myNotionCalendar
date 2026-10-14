@@ -82,17 +82,13 @@ fun QuickSheetContent(
         when (start) {
             is QuickSheetStart.Add -> {
                 Text(stringResource(R.string.qs_add_title), style = MaterialTheme.typography.titleLarge)
-                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { title, date, time, ds ->
-                    viewModel.add(title, date, time, ds, onAdded = onFinished)
-                })
+                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it, onAdded = onFinished) })
             }
             is QuickSheetStart.Day -> {
                 LaunchedEffect(start.date) { viewModel.showDay(start.date) }
                 val events by viewModel.dayEvents.collectAsStateWithLifecycle()
                 Text(dayTitle(start.date), style = MaterialTheme.typography.titleLarge)
-                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { title, date, time, ds ->
-                    viewModel.add(title, date, time, ds)
-                })
+                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) })
                 HorizontalDivider()
                 DayList(
                     events = events,
