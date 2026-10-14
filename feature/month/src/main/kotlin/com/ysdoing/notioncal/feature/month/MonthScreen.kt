@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.month
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.calendar.CalendarFocus
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
@@ -101,6 +103,8 @@ fun MonthRoute(
     openDate: LocalDate? = null,
     /** MV-10 검색 화면 열기. */
     onOpenSearch: () -> Unit = {},
+    /** NS-09 매핑을 다시 고르는 화면 열기(databaseId, dataSourceId). */
+    onReconnect: (String, String) -> Unit = { _, _ -> },
     onOpenDateHandled: () -> Unit = {},
     /** 상태줄 아래 추가 안내(앱이 절전 안내 카드를 넣는다, S25-03). */
     topBanner: @Composable () -> Unit = {},
@@ -180,6 +184,7 @@ fun MonthRoute(
             SyncStatusLine(header)
             Banner(header, onOpenSettings)
             WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
+            SchemaBanner(header.schemaAlerts, onReconnect = onReconnect, onAcknowledge = viewModel::acknowledgeSchema)
             topBanner()
             PullToRefreshBox(
                 isRefreshing = header.syncing,
@@ -451,6 +456,58 @@ private fun WriteIssuesBanner(header: SyncHeader, onAcknowledge: () -> Unit) {
                 }) { Text(stringResource(R.string.month_write_issues_ack)) }
             },
         )
+    }
+}
+
+/**
+ * NS-09: 노션에서 매핑한 속성이 사라지거나 바뀌었을 때. 제목·날짜가 없으면 그 DB는 동기화를 멈추고(캐시는 그대로)
+ * '다시 연결'로 매핑을 다시 고르게 한다. 이름만 바뀐 경우는 동작이 그대로라 알림만 한다.
+ */
+@Composable
+private fun SchemaBanner(alerts: List<SchemaAlert>, onReconnect: (String, String) -> Unit, onAcknowledge: (String) -> Unit) {
+    alerts.forEach { alert ->
+        val blocked = alert.issues.any { it.blocksSync }
+        Card(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (blocked) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
+            ),
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                alert.issues.forEach { issue ->
+                    Text(schemaMessage(alert.name, issue), style = MaterialTheme.typography.bodyMedium)
+                }
+                Row {
+                    if (alert.issues.any { it.kind != SchemaIssue.RENAMED }) {
+                        TextButton(onClick = { onReconnect(alert.databaseId, alert.dataSourceId) }) {
+                            Text(stringResource(R.string.schema_reconnect))
+                        }
+                    }
+                    TextButton(onClick = { onAcknowledge(alert.dataSourceId) }) { Text(stringResource(R.string.schema_ack)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun schemaMessage(dbName: String, issue: SchemaIssue): String {
+    val role = stringResource(
+        when (issue.role) {
+            SchemaIssue.TITLE -> R.string.schema_role_title
+            SchemaIssue.DATE -> R.string.schema_role_date
+            SchemaIssue.DONE -> R.string.schema_role_done
+            SchemaIssue.COLOR -> R.string.schema_role_color
+            else -> R.string.schema_role_sort
+        },
+    )
+    val prop = issue.oldName?.let { "'$it'" } ?: role
+    return when {
+        issue.kind == SchemaIssue.RENAMED -> stringResource(R.string.schema_renamed, dbName, issue.oldName.orEmpty(), issue.newName.orEmpty())
+        issue.blocksSync && issue.kind == SchemaIssue.MISSING -> stringResource(R.string.schema_missing_required, dbName, role, prop)
+        issue.blocksSync -> stringResource(R.string.schema_type_required, dbName, role, prop)
+        issue.kind == SchemaIssue.MISSING -> stringResource(R.string.schema_missing_optional, dbName, role, prop)
+        else -> stringResource(R.string.schema_type_optional, dbName, role, prop)
     }
 }
 

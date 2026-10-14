@@ -11,6 +11,7 @@ import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventRepository
 import com.ysdoing.notioncal.core.data.EventWriter
+import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
@@ -55,6 +56,16 @@ data class SyncHeader(
     val pendingWrites: Int = 0,
     /** 확인하지 않은 충돌·반영 실패(NS-05). */
     val writeIssues: List<ConflictEntity> = emptyList(),
+    /** NS-09 확인하지 않은 스키마 변경(DB별). */
+    val schemaAlerts: List<SchemaAlert> = emptyList(),
+)
+
+/** NS-09 한 DB의 스키마 변경 알림. [databaseId]·[dataSourceId]로 '다시 연결' 화면을 연다. */
+data class SchemaAlert(
+    val dataSourceId: String,
+    val databaseId: String,
+    val name: String,
+    val issues: List<SchemaIssue>,
 )
 
 /** MV-09 필터 시트의 DB 한 줄. [options]는 색 기준 select 값(색 속성이 없으면 비어 있다). */
@@ -72,7 +83,7 @@ class MonthViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val syncRequester: SyncRequester,
     syncStatus: SyncStatusRepository,
-    dataSources: DataSourceRepository,
+    private val dataSourceRepository: DataSourceRepository,
     private val conflicts: ConflictRepository,
     private val health: AppHealth,
     private val writer: EventWriter,
@@ -90,7 +101,7 @@ class MonthViewModel @Inject constructor(
     private val filter = settingsRepository.settings.map { it.filter }.distinctUntilChanged()
 
     /** MV-09 필터 시트에 보일 켜 둔 DB와 색 기준 값. */
-    val filterSources: StateFlow<List<FilterSource>> = dataSources.observeAll()
+    val filterSources: StateFlow<List<FilterSource>> = dataSourceRepository.observeAll()
         .map { sources ->
             sources.filter { it.enabled }.map { source ->
                 FilterSource(
@@ -115,7 +126,7 @@ class MonthViewModel @Inject constructor(
         syncRequester.isSyncing,
         syncStatus.latest,
         syncStatus.latestSuccess,
-        dataSources.observeAll(),
+        dataSourceRepository.observeAll(),
         writeState,
     ) { syncing, latest, success, sources, (pending, issues) ->
         SyncHeader(
@@ -125,8 +136,12 @@ class MonthViewModel @Inject constructor(
             hasSources = sources.isNotEmpty(),
             pendingWrites = pending,
             writeIssues = issues,
+            schemaAlerts = sources.mapNotNull { source ->
+                SchemaIssue.parse(source.schemaIssues).filterNot { it.acknowledged }.takeIf { it.isNotEmpty() }
+                    ?.let { SchemaAlert(source.dataSourceId, source.databaseId, source.name, it) }
+            },
         )
-    }.catch { error ->
+    }.flowOn(Dispatchers.Default).catch { error ->
         // DB를 열지 못하면 앱이 죽는 대신 진단 화면으로 간다(PF-10).
         health.report(error)
         emit(SyncHeader())
@@ -158,6 +173,11 @@ class MonthViewModel @Inject constructor(
     /** MV-08 확대를 마친 배율을 저장한다(재실행 후에도 유지). */
     fun saveZoom(percent: Float) {
         viewModelScope.launch { settingsRepository.setZoomPercent(CalendarZoom.clamp(percent).roundToInt()) }
+    }
+
+    /** NS-09 스키마 알림 확인. */
+    fun acknowledgeSchema(dataSourceId: String) {
+        viewModelScope.launch { dataSourceRepository.acknowledgeSchemaIssues(dataSourceId) }
     }
 
     /** MV-09 필터 저장. */

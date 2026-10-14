@@ -123,8 +123,8 @@ interface DataSourceDao {
     @Query("UPDATE data_sources SET mappedPropNames = :names, schemaIssues = :issues WHERE dataSourceId = :id")
     suspend fun setSchemaState(id: String, names: String?, issues: String?)
 
-    @Query("UPDATE data_sources SET schemaIssues = NULL WHERE dataSourceId = :id")
-    suspend fun clearSchemaIssues(id: String)
+    @Query("UPDATE data_sources SET schemaIssues = :issues WHERE dataSourceId = :id")
+    suspend fun setSchemaIssues(id: String, issues: String?)
 
     @Query("DELETE FROM data_sources WHERE dataSourceId = :id")
     suspend fun deleteRow(id: String)

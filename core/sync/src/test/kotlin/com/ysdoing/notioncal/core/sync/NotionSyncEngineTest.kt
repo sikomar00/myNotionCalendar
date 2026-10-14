@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.sync
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
@@ -70,6 +71,52 @@ class NotionSyncEngineTest {
 
     private suspend fun local(): Map<String, String> =
         db.eventDao().observeRange(LocalDate.of(1900, 1, 1), LocalDate.of(2999, 12, 31)).first().associate { it.event.pageId to it.event.title }
+
+    private fun schemaOf(props: String) = NotionJson.decodeFromString(DataSourceDto.serializer(), """{"id":"ds","properties":{$props}}""")
+
+    /** NS-09: 날짜 속성이 사라져도 앱은 죽지 않고 캐시를 그대로 두며, 알림(사라짐·이름 바뀜)을 남긴다. */
+    @Test
+    fun missingDatePropertyKeepsCacheAndRecordsIssues() = runTest {
+        register()
+        remote.put("a", "영어 스터디", "2026-10-13")
+        engine().sync(SyncTrigger.APP_OPEN)
+        val firstSyncAt = db.dataSourceDao().get(DS)!!.lastSyncAt
+
+        remote.schema = schemaOf(
+            """"제목":{"id":"title","name":"제목","type":"title"},"완료":{"id":"dOnE","name":"완료","type":"checkbox"}""",
+        )
+        now = now.plusSeconds(600)
+        val outcome = engine().sync(SyncTrigger.APP_OPEN)
+
+        assertNull(outcome.error)
+        assertEquals(mapOf("a" to "영어 스터디"), local())
+        val source = db.dataSourceDao().get(DS)!!
+        assertEquals("동기화를 건너뛰어 기준 시각이 그대로다", firstSyncAt, source.lastSyncAt)
+        val issues = SchemaIssue.parse(source.schemaIssues)
+        assertTrue(issues.contains(SchemaIssue(SchemaIssue.DATE, SchemaIssue.MISSING, oldName = "Date")))
+        assertTrue(issues.contains(SchemaIssue(SchemaIssue.TITLE, SchemaIssue.RENAMED, "Name", "제목")))
+        assertTrue(issues.any { it.blocksSync })
+    }
+
+    /** NS-09: 완료 속성만 사라지면 그 값 없이 나머지는 동기화한다. 같은 알림은 한 번 확인하면 다시 띄우지 않는다. */
+    @Test
+    fun missingOptionalPropertyStillSyncs() = runTest {
+        register()
+        remote.schema = schemaOf(
+            """"Name":{"id":"title","name":"Name","type":"title"},"Date":{"id":"dAtE","name":"Date","type":"date"}""",
+        )
+        remote.put("a", "영어 스터디", "2026-10-13")
+        engine().sync(SyncTrigger.APP_OPEN)
+
+        assertEquals(mapOf("a" to "영어 스터디"), local())
+        val issues = SchemaIssue.parse(db.dataSourceDao().get(DS)!!.schemaIssues)
+        assertEquals(listOf(SchemaIssue(SchemaIssue.DONE, SchemaIssue.MISSING)), issues)
+
+        db.dataSourceDao().setSchemaIssues(DS, SchemaIssue.encode(SchemaIssue.acknowledge(issues)))
+        now = now.plusSeconds(600)
+        engine().sync(SyncTrigger.APP_OPEN)
+        assertTrue(SchemaIssue.parse(db.dataSourceDao().get(DS)!!.schemaIssues).all { it.acknowledged })
+    }
 
     @Test
     fun firstSyncPullsRangeAndSkipsPagesWithoutDate() = runTest {
@@ -185,7 +232,8 @@ private class FakeNotion : NotionReader {
     var lastRangeFrom: String? = null
     var lastEditedSince: String? = null
 
-    private val schema = NotionJson.decodeFromString(
+    /** NS-09 테스트가 속성을 지우거나 이름을 바꿀 수 있게 바꿀 수 있다. */
+    var schema: DataSourceDto = NotionJson.decodeFromString(
         DataSourceDto.serializer(),
         """{"id":"ds","properties":{
             "Name":{"id":"title","name":"Name","type":"title"},

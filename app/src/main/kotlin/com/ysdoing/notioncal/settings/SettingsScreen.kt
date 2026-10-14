@@ -66,6 +66,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.filled.Warning
+import com.ysdoing.notioncal.core.data.SchemaIssue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -301,6 +303,14 @@ private fun SourceRow(
             Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
         }
         Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
+        if (SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }) {
+            Icon(
+                Icons.Filled.Warning,
+                contentDescription = stringResource(R.string.settings_schema_warning),
+                tint = MaterialTheme.colorScheme.error,
+            )
+        }
         TextButton(onClick = onChooseProps) { Text(stringResource(R.string.settings_extra_props)) }
         Switch(checked = source.enabled, onCheckedChange = onToggle)
         IconButton(onClick = onDelete) {

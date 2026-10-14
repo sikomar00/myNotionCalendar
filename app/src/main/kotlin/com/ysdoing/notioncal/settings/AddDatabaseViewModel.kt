@@ -40,7 +40,13 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
         viewModelScope.launch {
             when (val result = connection.inspect(link, dataSourceId)) {
                 is InspectResult.Ok -> _ui.update {
-                    it.copy(loading = false, inspection = result.inspection, choice = result.inspection.suggestion)
+                    // 이미 등록한 DB(다시 연결)면 그 색을 유지한다.
+                    it.copy(
+                        loading = false,
+                        inspection = result.inspection,
+                        choice = result.inspection.suggestion,
+                        colorHex = result.inspection.existingColorHex ?: it.colorHex,
+                    )
                 }
                 InspectResult.InvalidLink -> _ui.update { it.copy(loading = false, invalidLink = true, inspection = null) }
                 is InspectResult.Failed -> _ui.update { it.copy(loading = false, error = result.error, inspection = null) }

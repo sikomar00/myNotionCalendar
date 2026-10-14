@@ -123,6 +123,12 @@ class DataSourceRepository @Inject constructor(
     }
 
     /** EX-07: 편집 화면에 보여 줄 속성을 고른다. 값은 동기화 때 이미 받아 두므로 다시 받지 않는다. */
+    /** NS-09 배너 '확인': 이 DB의 스키마 알림을 확인 처리한다. */
+    suspend fun acknowledgeSchemaIssues(id: String) {
+        val source = dataSourceDao.get(id) ?: return
+        dataSourceDao.setSchemaIssues(id, SchemaIssue.encode(SchemaIssue.acknowledge(SchemaIssue.parse(source.schemaIssues))))
+    }
+
     /** EX-03 DB 색과 색 기준을 바꾸고 위젯을 다시 그린다. */
     suspend fun setColorStyle(id: String, colorHex: String, useOptionColors: Boolean) {
         dataSourceDao.setColorStyle(id, colorHex, useOptionColors)

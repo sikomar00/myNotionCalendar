@@ -54,4 +54,16 @@
     <string name="search_empty_query">찾을 일정 제목을 입력하세요.</string>
     <string name="search_no_result">찾는 일정이 없습니다.</string>
     <string name="search_untitled">(제목 없음)</string>
+    <string name="schema_reconnect">다시 연결</string>
+    <string name="schema_ack">확인</string>
+    <string name="schema_role_title">제목</string>
+    <string name="schema_role_date">날짜</string>
+    <string name="schema_role_done">완료</string>
+    <string name="schema_role_color">색 기준</string>
+    <string name="schema_role_sort">정렬</string>
+    <string name="schema_missing_required">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 이 DB는 동기화를 멈췄어요. 저장된 일정은 그대로 보입니다.</string>
+    <string name="schema_type_required">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 이 DB는 동기화를 멈췄어요. 저장된 일정은 그대로 보입니다.</string>
+    <string name="schema_missing_optional">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 그 값 없이 동기화해요.</string>
+    <string name="schema_type_optional">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 그 값 없이 동기화해요.</string>
+    <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었어요. 동기화는 그대로 됩니다.</string>
 </resources>

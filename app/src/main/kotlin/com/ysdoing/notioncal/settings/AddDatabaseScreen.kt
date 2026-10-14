@@ -57,9 +57,18 @@ import com.ysdoing.notioncal.core.sync.PropertyOption
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddDatabaseRoute(onDone: () -> Unit, viewModel: AddDatabaseViewModel = hiltViewModel()) {
+fun AddDatabaseRoute(
+    onDone: () -> Unit,
+    /** NS-09 다시 연결: (databaseId, dataSourceId). 링크를 채우고 바로 조회한다. */
+    reconnect: Pair<String, String>? = null,
+    viewModel: AddDatabaseViewModel = hiltViewModel(),
+) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
-    var link by rememberSaveable { mutableStateOf("") }
+    var link by rememberSaveable { mutableStateOf(reconnect?.first.orEmpty()) }
+    LaunchedEffect(reconnect) {
+        val (db, ds) = reconnect ?: return@LaunchedEffect
+        if (ui.inspection == null && !ui.loading) viewModel.inspect(db, ds)
+    }
     LaunchedEffect(ui.registered) { if (ui.registered) onDone() }
 
     Scaffold(

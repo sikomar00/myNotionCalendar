@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.sync
 
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.ColorOption
+import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.encodeExtraValues
 import com.ysdoing.notioncal.core.data.encodePropCatalog
 import com.ysdoing.notioncal.core.data.IoDispatcher
@@ -105,7 +106,12 @@ class NotionSyncEngine @Inject constructor(
         val now = clock.instant()
         val today = now.atZone(DateCodec.SEOUL).toLocalDate()
         val schema = reader.dataSource(source.dataSourceId)
-        val mapper = NotionPageMapper(source.toMapping(), schema)
+        // NS-09: 매핑한 속성이 사라지거나 바뀌었는지 먼저 본다. 앱은 죽지 않고 알림을 남긴다.
+        val report = SchemaCheck.check(source, schema, SchemaIssue.parseNames(source.mappedPropNames))
+        val issues = SchemaIssue.merge(SchemaIssue.parse(source.schemaIssues), report.issues)
+        sources.setSchemaState(source.dataSourceId, SchemaIssue.encodeNames(report.names), SchemaIssue.encode(issues))
+        if (report.blocksSync) return 0 // 제목·날짜가 없으면 조회할 수 없다. 캐시는 그대로 둔다.
+        val mapper = NotionPageMapper(source.toMapping(report.droppedRoles), schema)
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
         sources.setColorOptions(source.dataSourceId, colorOptionsJson(schema, source.colorPropId))
         // EX-07: 보기·편집할 수 있는 속성 목록. 처음 받는 DB(앱 업데이트 직후 포함)는 기존 일정에도 값을 채우려고 전체 조회한다.
@@ -180,13 +186,14 @@ class NotionSyncEngine @Inject constructor(
     }
 }
 
-internal fun DataSourceEntity.toMapping() = PropertyMapping(
+/** [dropped]: 스키마에서 사라져 이번 동기화에서 뺄 선택 역할(NS-09). */
+internal fun DataSourceEntity.toMapping(dropped: Set<String> = emptySet()) = PropertyMapping(
     titlePropId = titlePropId,
     datePropId = datePropId,
-    donePropId = donePropId,
-    doneType = doneType?.let { runCatching { DoneType.valueOf(it) }.getOrNull() },
-    colorPropId = colorPropId,
-    sortPropId = sortPropId,
+    donePropId = donePropId.takeUnless { SchemaIssue.DONE in dropped },
+    doneType = doneType?.let { runCatching { DoneType.valueOf(it) }.getOrNull() }.takeUnless { SchemaIssue.DONE in dropped },
+    colorPropId = colorPropId.takeUnless { SchemaIssue.COLOR in dropped },
+    sortPropId = sortPropId.takeUnless { SchemaIssue.SORT in dropped },
 )
 
 internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(

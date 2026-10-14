@@ -30,6 +30,8 @@ data class DatabaseInspection(
     val schema: DataSourceDto,
     val candidates: MappingCandidates,
     val suggestion: MappingChoice?,
+    /** 이미 등록한 DB면 그 색(다시 연결 때 색을 유지, NS-09). */
+    val existingColorHex: String? = null,
 )
 
 sealed interface InspectResult {
@@ -75,6 +77,8 @@ class ConnectionService @Inject constructor(
             val name = database.title.joinToString("") { it.plainText }.ifBlank {
                 schema.title.joinToString("") { it.plainText }
             }
+            val existing = dataSourceDao.get(dataSourceId)
+            val suggested = MappingSuggester.suggest(schema)
             InspectResult.Ok(
                 DatabaseInspection(
                     databaseId = database.id,
@@ -83,7 +87,8 @@ class ConnectionService @Inject constructor(
                     name = name,
                     schema = schema,
                     candidates = MappingSuggester.candidates(schema),
-                    suggestion = MappingSuggester.suggest(schema),
+                    suggestion = existing?.let { keepValidMapping(it, schema, suggested) } ?: suggested,
+                    existingColorHex = existing?.colorHex,
                 ),
             )
         } catch (e: NotionException) {
@@ -129,4 +134,22 @@ class ConnectionService @Inject constructor(
         )
         scheduler.request(SyncTrigger.APP_OPEN, inspection.dataSourceId)
     }
+}
+
+/**
+ * 다시 연결(NS-09): 지금 매핑 중 스키마에 남아 있는 속성은 그대로 두고, 사라진 것만 추천값으로 채운다.
+ * 제목·날짜를 채울 수 없으면 추천값 전체를 쓴다.
+ */
+internal fun keepValidMapping(existing: DataSourceEntity, schema: DataSourceDto, suggested: MappingChoice?): MappingChoice? {
+    val ids = schema.properties.values.map { it.id }.toSet()
+    fun keep(id: String?) = id?.takeIf { it in ids }
+    val title = keep(existing.titlePropId) ?: suggested?.titlePropId ?: return suggested
+    val date = keep(existing.datePropId) ?: suggested?.datePropId ?: return suggested
+    return MappingChoice(
+        titlePropId = title,
+        datePropId = date,
+        donePropId = keep(existing.donePropId),
+        colorPropId = keep(existing.colorPropId),
+        sortPropId = keep(existing.sortPropId),
+    )
 }

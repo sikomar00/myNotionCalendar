@@ -22,6 +22,10 @@ private object Routes {
     const val MONTH = "month"
     const val SETTINGS = "settings"
     const val ADD_DATABASE = "settings/add"
+
+    /** NS-09 다시 연결: 그 DB의 링크(ID)와 data source를 미리 채운다. */
+    const val RECONNECT = "settings/add/{db}/{ds}"
+    fun reconnect(databaseId: String, dataSourceId: String) = "settings/add/$databaseId/$dataSourceId"
     const val DIAGNOSTICS = "diagnostics"
     const val SEARCH = "search"
 }
@@ -58,6 +62,7 @@ fun NotionCalNavHost(
                     if (openDate != null) onOpenDateHandled() else searchDate = null
                 },
                 onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
+                onReconnect = { db, ds -> nav.navigate(Routes.reconnect(db, ds)) { launchSingleTop = true } },
                 topBanner = { BatteryGuideCard() },
             )
         }
@@ -79,6 +84,11 @@ fun NotionCalNavHost(
         }
         composable(Routes.ADD_DATABASE) {
             AddDatabaseRoute(onDone = { nav.popBackStack() })
+        }
+        composable(Routes.RECONNECT) { entry ->
+            val db = entry.arguments?.getString("db")
+            val ds = entry.arguments?.getString("ds")
+            AddDatabaseRoute(onDone = { nav.popBackStack() }, reconnect = if (db != null && ds != null) db to ds else null)
         }
         composable(Routes.DIAGNOSTICS) {
             val canGoBack = nav.previousBackStackEntry != null
