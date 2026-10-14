@@ -2,6 +2,8 @@ package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
@@ -50,13 +53,19 @@ fun QuickSheetContent(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier,
     autoFocus: Boolean = true,
+    /** 스크롤 내용 맨 아래 여백(시트가 내비게이션 바와 겹칠 때). */
+    bottomInset: Dp = 0.dp,
 ) {
     // 날짜 모드에서 일정을 누르면 같은 시트 안에서 편집으로 넘어가고, 뒤로 가면 목록으로 돌아온다.
     var editing by rememberSaveable { mutableStateOf((start as? QuickSheetStart.Edit)?.pageId) }
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val defaultSource by viewModel.defaultSourceId.collectAsStateWithLifecycle()
 
-    Column(modifier.padding(horizontal = 20.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    // 일정이 많은 날·속성 편집기가 많은 일정도 끝까지 보이게 시트 안에서 스크롤한다.
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 16.dp + bottomInset),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         val pageId = editing
         if (pageId != null) {
             val item by remember(pageId) { viewModel.observeEvent(pageId) }.collectAsState(null)
