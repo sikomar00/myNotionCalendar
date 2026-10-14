@@ -104,6 +104,18 @@ class QuickSheetUiTest {
         assertEquals(NewEvent("장보기", day, null, "ds"), added)
     }
 
+    /** 제목에 노션 언급(@)이 있으면 경고하고, 제목을 건드리지 않고 저장하면 제목은 보내지 않는다(언급 유지). */
+    @Test
+    fun mentionTitleWarnsAndIsKeptWhenUntouched() {
+        var saved: EventChange? = null
+        val item = EditableEvent(event("p1", "@공유 안 된 페이지 DS6PJS"), null, emptyList(), "Calendar", titleHasMention = true)
+        compose.setContent { MaterialTheme { EventEditorForm(item, onSave = { saved = it }, onDelete = {}) } }
+        compose.onNodeWithText("노션 페이지 언급(@)이 든 제목입니다. 제목을 바꾸면 언급이 일반 글자로 바뀝니다.").assertExists()
+        compose.onNodeWithText("완료").performClick()
+        compose.onNodeWithText("저장").performClick()
+        assertEquals(EventChange(done = true), saved)
+    }
+
     @Test
     fun editorSendsOnlyChangedFields() {
         var saved: EventChange? = null
