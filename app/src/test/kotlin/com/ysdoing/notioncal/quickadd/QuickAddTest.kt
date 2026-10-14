@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.quickadd
 
+import android.app.Application
 import android.content.Context
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.test.core.app.ApplicationProvider
@@ -12,10 +13,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.time.LocalDate
 
-/** EX-06: 타일·앱 단축키가 같은 '오늘 추가' 인텐트를 쓰고, 단축키가 등록된다. */
+/**
+ * EX-06: 타일·앱 단축키가 같은 '오늘 추가' 인텐트를 쓰고, 단축키가 등록된다.
+ * NotionCalApp이 시작하며 백그라운드로 단축키를 등록해 테스트와 경합하므로 기본 Application으로 돌린다.
+ */
 @RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
 class QuickAddTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
