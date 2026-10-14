@@ -21,6 +21,10 @@ private val chipTimeFormat = DateTimeFormatter.ofPattern("H:mm")
 /** 시간 일정은 시작 시각을 앞에 붙인다(예: "9:00 회의"). 이전 주에서 이어진 막대에는 붙이지 않는다. */
 fun chipLabel(event: CalendarEvent, continuesBefore: Boolean): String {
     val start = event.startTime
-    if (event.isAllDay || start == null || continuesBefore) return event.title
-    return "${start.atZone(APP_ZONE).format(chipTimeFormat)} ${event.title}"
+    val label = if (event.isAllDay || start == null || continuesBefore) event.title else "${start.atZone(APP_ZONE).format(chipTimeFormat)} ${event.title}"
+    // A11Y-03: 완료는 취소선에 더해 체크 표시를 붙인다(색·흐림만으로 구분하지 않음).
+    return if (event.done) "$DONE_MARK$label" else label
 }
+
+/** 완료 일정 앞에 붙이는 표시(A11Y-03). */
+const val DONE_MARK = "✓"

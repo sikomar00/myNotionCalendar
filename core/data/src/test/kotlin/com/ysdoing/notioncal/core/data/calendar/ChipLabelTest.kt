@@ -37,4 +37,11 @@ class ChipLabelTest {
     fun continuedBarOmitsTime() {
         assertEquals("회의", chipLabel(event("2026-10-12T23:30:00Z"), continuesBefore = true))
     }
+
+    /** A11Y-03: 완료는 체크 표시를 앞에 붙인다(색·흐림만으로 구분하지 않음). */
+    @Test
+    fun doneGetsCheckMark() {
+        assertEquals("✓8:30 회의", chipLabel(event("2026-10-12T23:30:00Z").copy(done = true), continuesBefore = false))
+        assertEquals("✓회의", chipLabel(event(null).copy(done = true), continuesBefore = true))
+    }
 }

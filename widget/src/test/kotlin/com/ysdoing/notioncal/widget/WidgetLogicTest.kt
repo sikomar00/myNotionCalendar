@@ -175,4 +175,14 @@ class WidgetLogicTest {
         assertEquals(WidgetMode.SMALL, WidgetMetrics.of(DpSize(250.dp, 250.dp), WidgetConfig(1), 1f).mode)
         assertEquals(WidgetMode.SMALL, WidgetMetrics.of(mediumSize, WidgetConfig(1, fontScale = 150), 2f).mode)
     }
+
+    /** A11Y-02: 큼은 머리줄(머리 버튼 높이)이 48dp 이상, 중간·큼 버튼 폭은 48dp(WidgetContent.HEADER_BUTTON_WIDTH). */
+    @Test
+    fun largeHeaderIsTouchSized() {
+        for (font in listOf(0.8f, 1f, 2f)) {
+            val m = WidgetMetrics.of(DpSize(380.dp, 420.dp), WidgetConfig(1), font)
+            assertEquals(WidgetMode.LARGE, m.mode)
+            assertTrue("글꼴 $font", m.headerHeight.value >= 48f)
+        }
+    }
 }

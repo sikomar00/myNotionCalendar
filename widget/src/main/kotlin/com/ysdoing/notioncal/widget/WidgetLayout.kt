@@ -50,6 +50,9 @@ data class WidgetMetrics(
     companion object {
         val PADDING = 6.dp
         private val HEADER_HEIGHT = 34.dp
+
+        /** A11Y-02: 큼은 머리 버튼이 48×48dp가 되도록 머리줄을 48dp로. */
+        private val LARGE_HEADER_HEIGHT = 48.dp
         private val WEEKDAY_HEIGHT = 16.dp
         private val SMALL_HEADER_HEIGHT = 24.dp
         private val SMALL_WEEKDAY_HEIGHT = 11.dp
@@ -105,7 +108,7 @@ data class WidgetMetrics(
             // 큰·중간: 글자에 맞춰 머리줄·요일 줄을 키운다. 작음(2×2, 4×2): 높이가 모자라 줄은 고정하고 글자를 줄인다.
             val headerFont = if (small) minOf(13f, (SMALL_HEADER_HEIGHT - 4.dp).value / LINE / textScale) else 15f
             val weekdayFont = if (small) minOf(8f, SMALL_WEEKDAY_HEIGHT.value / WEEKDAY_LINE / textScale) else 10f
-            val header = if (small) SMALL_HEADER_HEIGHT else maxOf(HEADER_HEIGHT, lineHeight(headerFont) + 4.dp)
+            val header = if (small) SMALL_HEADER_HEIGHT else maxOf(if (mode == WidgetMode.LARGE) LARGE_HEADER_HEIGHT else HEADER_HEIGHT, lineHeight(headerFont) + 4.dp)
             val weekday = if (small) SMALL_WEEKDAY_HEIGHT else maxOf(WEEKDAY_HEIGHT, lineHeight(weekdayFont, TEXT_BOX))
             val contentWidth = size.width - PADDING * 2
             val weekHeight = (size.height - PADDING * 2 - header - weekday) / 6

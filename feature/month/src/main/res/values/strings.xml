@@ -66,4 +66,5 @@
     <string name="schema_missing_optional">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 그 값 없이 동기화해요.</string>
     <string name="schema_type_optional">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 그 값 없이 동기화해요.</string>
     <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었어요. 동기화는 그대로 됩니다.</string>
+    <string name="a11y_done">완료됨</string>
 </resources>

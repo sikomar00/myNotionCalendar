@@ -54,6 +54,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import com.ysdoing.notioncal.core.data.calendar.DONE_MARK
+import androidx.compose.ui.semantics.stateDescription
 
 private val GUTTER = 40.dp
 private const val TOP_LANES = 3
@@ -238,6 +240,7 @@ private fun AllDayLane(start: LocalDate, days: Int, events: List<CalendarEvent>,
 
 @Composable
 private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: () -> Unit) {
+    val doneLabel = stringResource(R.string.a11y_done)
     val color = Color(NotionColors.argb(event.colorHex))
     val time = event.startTime?.atZone(APP_ZONE)?.format(timeFormat).orEmpty()
     Column(
@@ -245,11 +248,12 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
             .clip(RoundedCornerShape(4.dp))
             .background(color.copy(alpha = if (event.done) 0.35f else 0.85f))
             .clickable(onClick = onClick)
+            .semantics { if (event.done) stateDescription = doneLabel }
             .padding(horizontal = 3.dp, vertical = 1.dp),
         verticalArrangement = Arrangement.Top,
     ) {
         Text(
-            event.title,
+            if (event.done) "$DONE_MARK${event.title}" else event.title,
             fontSize = 10.sp,
             lineHeight = 12.sp,
             fontWeight = FontWeight.Medium,

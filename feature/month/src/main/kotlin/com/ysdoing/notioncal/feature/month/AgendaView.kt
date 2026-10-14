@@ -50,6 +50,10 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import com.ysdoing.notioncal.core.data.calendar.DONE_MARK
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.heightIn
 
 private val agendaTime = DateTimeFormatter.ofPattern("H:mm")
 
@@ -132,7 +136,8 @@ private fun AgendaDayRow(
     val accent = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
         Column(
-            Modifier.width(56.dp).clickable { onDayClick(day.date) }.padding(top = 2.dp),
+            // A11Y-02: 날짜 머리도 누르는 버튼이라 48dp 이상.
+            Modifier.width(56.dp).heightIn(min = 48.dp).clickable { onDayClick(day.date) }.padding(top = 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -169,11 +174,22 @@ private fun AgendaEventRow(event: CalendarEvent, continues: Boolean, onEventClic
         event.startTime == null -> stringResource(R.string.timegrid_all_day)
         else -> listOfNotNull(event.startTime, event.endTime).joinToString("–") { it.atZone(APP_ZONE).format(agendaTime) }
     }
+    val doneLabel = stringResource(R.string.a11y_done)
     Row(
-        Modifier.fillMaxWidth().clickable { onEventClick(event) }.padding(vertical = 6.dp),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp) // A11Y-02
+            .clickable { onEventClick(event) }
+            .semantics { if (event.done) stateDescription = doneLabel }
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        // A11Y-03: 완료는 색 점 대신 체크(같은 색) + 취소선.
+        if (event.done) {
+            Text(DONE_MARK, color = color, fontSize = scaled(12.sp, textScale), modifier = Modifier.width(8.dp))
+        } else {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(color))
+        }
         Text(
             event.title,
             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).alpha(if (event.done) 0.55f else 1f),

@@ -20,6 +20,7 @@
     <string name="agenda_widget_continues">이어짐</string>
     <string name="agenda_widget_untitled">(제목 없음)</string>
     <string name="agenda_widget_done">완료됨</string>
+    <string name="widget_open_app">앱 열기</string>
     <string name="widget_last_sync">마지막 동기화 %1$s</string>
     <string name="widget_sync_error">동기화 오류. 눌러서 앱 열기</string>
     <string name="widget_more">+%1$d</string>

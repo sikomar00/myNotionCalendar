@@ -70,6 +70,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
+import com.ysdoing.notioncal.core.data.calendar.DONE_MARK
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 
 /** 검색어와 그 결과. 입력이 바뀐 직후 이전 결과를 새 검색어의 결과로 오해하지 않게 함께 둔다. */
 data class SearchResults(val query: String, val events: List<CalendarEvent>)
@@ -192,11 +195,22 @@ private fun SearchRow(event: CalendarEvent, onPick: (CalendarEvent) -> Unit) {
         if (event.isMultiDay) append(" – ").append(event.lastDate.format(searchDate))
         event.startTime?.let { append(" ").append(it.atZone(APP_ZONE).format(searchTime)) }
     }
+    val doneLabel = stringResource(R.string.a11y_done)
+    val color = Color(NotionColors.argb(event.colorHex))
     Row(
-        Modifier.fillMaxWidth().clickable { onPick(event) }.padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable { onPick(event) }
+            .semantics { if (event.done) stateDescription = doneLabel }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spacer(Modifier.size(10.dp).clip(CircleShape).background(Color(NotionColors.argb(event.colorHex))))
+        // A11Y-03: 완료는 색 점 대신 체크.
+        if (event.done) {
+            Text(DONE_MARK, color = color, modifier = Modifier.width(10.dp))
+        } else {
+            Spacer(Modifier.size(10.dp).clip(CircleShape).background(color))
+        }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).alpha(if (event.done) 0.55f else 1f)) {
             Text(

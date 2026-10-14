@@ -154,13 +154,19 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                 }
             }
         } else {
-            // 제목과 동기화 상태를 누르면 앱이 열린다(오류 안내는 앱 배너가 맡는다).
+            // 제목을 누르면: 다른 달을 보고 있으면 오늘로, 이번 달이면 앱 열기(오류 안내는 앱 배너가 맡는다).
+            // A11Y-02: 머리 버튼을 48dp로 넓히느라 따로 있던 "오늘" 버튼은 제목이 맡는다.
+            val atToday = state.config.monthOffset == 0
             Row(
                 modifier = GlanceModifier
                     .defaultWeight()
                     .height(metrics.headerHeight)
                     .padding(start = 4.dp)
-                    .clickable(actionStartActivity(appIntent(context))),
+                    .clickable(if (atToday) actionStartActivity(appIntent(context)) else navAction(0))
+                    .semantics {
+                        contentDescription = context.getString(if (atToday) R.string.widget_open_app else R.string.widget_today)
+                        testTag = "today"
+                    },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -173,18 +179,17 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
         HeaderButton("+", context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
-        // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 작음은 폭이 좁아 뺀다.
-        if (!small) HeaderButton("↻", context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
-        HeaderButton("‹", context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
-        if (!small) {
-            HeaderButton(context.getString(R.string.widget_today), context.getString(R.string.widget_today), "today", navAction(0), metrics, palette)
+        // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 48dp 버튼 4개가 들어가는 큼에서만 보인다.
+        if (metrics.mode == WidgetMode.LARGE) {
+            HeaderButton("↻", context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
         }
+        HeaderButton("‹", context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
         HeaderButton("›", context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
     }
 }
 
 /** 동기화 시각을 보일 최소 내용 폭. 이보다 좁으면 버튼이 밀리므로 오류 점만 보인다. */
-private val SYNC_TIME_MIN_WIDTH = 290.dp
+private val SYNC_TIME_MIN_WIDTH = 340.dp
 private val syncTodayFormat = DateTimeFormatter.ofPattern("H:mm")
 private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")
 
@@ -223,15 +228,20 @@ internal fun appIntent(context: Context): Intent =
     (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+private val HEADER_BUTTON_WIDTH = 48.dp
+
 private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
-/** 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). 큰 크기가 아니면 여백을 줄여 한 줄에 들어가게 한다. */
+/**
+ * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 폭 48dp(큼은 머리줄도 48dp라 48×48).
+ * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 글자 폭 그대로 둔다(예외).
+ */
 @Composable
 private fun HeaderButton(label: String, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
-            .padding(horizontal = if (metrics.mode == WidgetMode.LARGE) 8.dp else 5.dp)
+            .then(if (metrics.mode == WidgetMode.SMALL) GlanceModifier.padding(horizontal = 5.dp) else GlanceModifier.width(HEADER_BUTTON_WIDTH))
             .clickable(action)
             .semantics {
                 contentDescription = description
