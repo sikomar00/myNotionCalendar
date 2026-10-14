@@ -174,7 +174,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                     style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
-                SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH)
+                SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH * metrics.textScale)
             }
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
@@ -188,7 +188,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
     }
 }
 
-/** 동기화 시각을 보일 최소 내용 폭. 이보다 좁으면 버튼이 밀리므로 오류 점만 보인다. */
+/** 동기화 시각을 보일 최소 내용 폭(글자 배율 1 기준, 글자가 커지면 비례해 늘림). 모자라면 시각 없이 오류 점만 보인다. */
 private val SYNC_TIME_MIN_WIDTH = 340.dp
 private val syncTodayFormat = DateTimeFormatter.ofPattern("H:mm")
 private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")

@@ -43,6 +43,8 @@ data class WidgetMetrics(
     val weekdayFontSp: Float,
     /** 작음 단계에서 점을 그릴 공간이 있는지. */
     val showDots: Boolean,
+    /** 실제로 그려지는 글자 배율(기기 글꼴, 상한 [MAX_SYSTEM_TEXT_SCALE]). 글자 폭에 맞춰 넣을지 정할 때 쓴다. */
+    val textScale: Float = 1f,
 ) {
     /** WS-05: 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않는다(글자가 칸을 넘친다). */
     val overflows: Boolean get() = mode != WidgetMode.SMALL && dateLabelHeight + chipTextHeight > weekHeight + 0.5.dp
@@ -148,6 +150,7 @@ data class WidgetMetrics(
                 headerFontSp = headerFont * spFactor,
                 weekdayFontSp = weekdayFont * spFactor,
                 showDots = small && showDots,
+                textScale = textScale,
             )
         }
     }
