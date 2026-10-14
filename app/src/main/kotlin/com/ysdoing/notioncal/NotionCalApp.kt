@@ -9,6 +9,7 @@ import androidx.work.Configuration
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.sync.PeriodicSync
 import com.ysdoing.notioncal.crash.CrashReporting
+import com.ysdoing.notioncal.quickadd.QuickAdd
 import com.ysdoing.notioncal.reminders.ReminderScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,7 @@ class NotionCalApp : Application(), Configuration.Provider {
         }
         periodicSync.start(appScope) // NS-06 주기 동기화
         reminderScheduler.start(appScope) // EX-01 일정 알림
+        appScope.launch(Dispatchers.IO) { runCatching { QuickAdd.publishShortcut(this@NotionCalApp) } } // EX-06
         registerComponentCallbacks(WidgetConfigWatcher(this, resources.configuration, widgetRefresher))
     }
 

@@ -121,4 +121,7 @@
     <string name="reminder_in_hours">%1$d시간 후</string>
     <string name="reminder_in_hours_minutes">%1$d시간 %2$d분 후</string>
     <string name="reminder_in_days">%1$d일 후</string>
+    <string name="quick_add_tile">노션 일정 추가</string>
+    <string name="quick_add_short">빠른 추가</string>
+    <string name="quick_add_long">노션 일정 빠른 추가</string>
 </resources>
