@@ -85,6 +85,7 @@ fun DiagnosticsRoute(
         onClearCache = viewModel::clearCache,
         onDebug = { index -> viewModel.runDebug(viewModel.debugActions[index]) },
         onDismissNotice = viewModel::dismissNotice,
+        onDismissDebugResult = viewModel::dismissDebugResult,
     )
 }
 
@@ -101,6 +102,7 @@ fun DiagnosticsScreen(
     onClearCache: () -> Unit,
     onDebug: (Int) -> Unit,
     onDismissNotice: () -> Unit,
+    onDismissDebugResult: () -> Unit = {},
 ) {
     var confirmClear by rememberSaveable { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -151,6 +153,15 @@ fun DiagnosticsScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    state.debugResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = onDismissDebugResult,
+            title = { Text(result.label) },
+            text = { Text(result.text, Modifier.verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton(onClick = onDismissDebugResult) { Text(stringResource(R.string.diag_close)) } },
+        )
     }
 
     if (confirmClear) {

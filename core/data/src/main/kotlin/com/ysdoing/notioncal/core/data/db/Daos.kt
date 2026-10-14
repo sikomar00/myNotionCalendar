@@ -56,6 +56,16 @@ interface EventDao {
     )
     suspend fun pageIdsInRange(dataSourceId: String, from: LocalDate, to: LocalDate): List<String>
 
+    /** §12 대조('노션과 비교'): [pageIdsInRange]와 같은 범위의 일정 전체. */
+    @Query(
+        """
+        SELECT * FROM events
+        WHERE dataSourceId = :dataSourceId AND startDate <= :to AND COALESCE(endDate, startDate) >= :from
+          AND pendingOps = 0
+        """,
+    )
+    suspend fun eventsInRange(dataSourceId: String, from: LocalDate, to: LocalDate): List<EventEntity>
+
     @Query("SELECT * FROM events WHERE pageId = :pageId")
     suspend fun get(pageId: String): EventEntity?
 
@@ -106,6 +116,10 @@ interface DataSourceDao {
 
     @Query("UPDATE data_sources SET lastFullSyncAt = :at WHERE dataSourceId = :id")
     suspend fun setLastFullSyncAt(id: String, at: Long)
+
+    /** 다음 동기화가 모든 DB의 전체 범위를 다시 받게 한다(앱 업데이트 직후). */
+    @Query("UPDATE data_sources SET lastFullSyncAt = NULL")
+    suspend fun clearLastFullSync()
 
     @Query("UPDATE data_sources SET colorOptions = :json WHERE dataSourceId = :id")
     suspend fun setColorOptions(id: String, json: String?)

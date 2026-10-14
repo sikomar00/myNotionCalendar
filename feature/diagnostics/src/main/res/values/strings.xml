@@ -60,6 +60,7 @@
     <string name="diag_clear_cache_confirm_title">캐시를 초기화할까요?</string>
     <string name="diag_clear_cache_confirm_body">일정 캐시와 동기화·충돌 기록을 지우고 노션에서 다시 받습니다. 토큰·설정·DB 등록·위젯 설정·보내지 않은 일정은 남습니다.</string>
     <string name="diag_confirm">초기화</string>
+    <string name="diag_close">닫기</string>
     <string name="diag_cancel">취소</string>
     <string name="diag_notice_cache_cleared">캐시를 지웠습니다. 노션에서 다시 받는 중입니다.</string>
     <string name="diag_notice_reset_on_restart">지금은 DB를 열 수 없어 다음 실행 때 새로 만듭니다. 앱을 완전히 닫았다가 다시 여세요.</string>

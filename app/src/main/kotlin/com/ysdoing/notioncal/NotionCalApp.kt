@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import com.ysdoing.notioncal.widget.WidgetPreviews
+import com.ysdoing.notioncal.core.data.AppUpdateRefresh
 import com.ysdoing.notioncal.core.data.SettingsRepository
 
 @HiltAndroidApp
@@ -37,6 +38,9 @@ class NotionCalApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var appUpdateRefresh: AppUpdateRefresh
 
     /** 앱 프로세스 동안 사는 범위(설정 구독 등). 메인 스레드를 막지 않게 Default에서 돈다. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -62,6 +66,9 @@ class NotionCalApp : Application(), Configuration.Provider {
         reminderScheduler.start(appScope) // EX-01 일정 알림
         appScope.launch(Dispatchers.IO) { runCatching { QuickAdd.publishShortcut(this@NotionCalApp) } } // EX-06
         appScope.launch(Dispatchers.IO) { publishWidgetPreviews() } // WG-08
+        appScope.launch(Dispatchers.IO) { // 업데이트 직후 첫 동기화는 전체 범위(§12 대조)
+            runCatching { appUpdateRefresh.onStart(packageManager.getPackageInfo(packageName, 0).lastUpdateTime) }
+        }
         registerComponentCallbacks(WidgetConfigWatcher(this, resources.configuration, widgetRefresher))
     }
 

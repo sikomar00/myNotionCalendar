@@ -6,6 +6,12 @@ import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.DebugFlags
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.NotionException
+import com.ysdoing.notioncal.core.sync.CompareReport
+import com.ysdoing.notioncal.core.sync.Mismatch
+import com.ysdoing.notioncal.core.sync.NotionComparer
+import com.ysdoing.notioncal.core.sync.NotionSyncEngine
 import com.ysdoing.notioncal.feature.diagnostics.DebugAction
 import com.ysdoing.notioncal.feature.diagnostics.DebugMenu
 import dagger.Module
@@ -22,21 +28,73 @@ import kotlinx.coroutines.flow.first
 @InstallIn(SingletonComponent::class)
 object DebugMenuModule {
     @Provides
-    fun provideDebugMenu(flags: DebugFlags, health: AppHealth, sync: SyncRequester): DebugMenu = DebugMenu {
+    fun provideDebugMenu(
+        flags: DebugFlags,
+        health: AppHealth,
+        sync: SyncRequester,
+        engine: NotionSyncEngine,
+        comparer: NotionComparer,
+    ): DebugMenu = DebugMenu {
         if (!BuildConfig.DEBUG) return@DebugMenu emptyList()
         listOf(
+            DebugAction("노션과 비교") {
+                // §12 대조: 먼저 평소처럼 동기화(증분 + 이번 달 대조)한 뒤, 동기화 범위 전체를 노션과 비교한다.
+                val outcome = engine.sync(SyncTrigger.PULL_TO_REFRESH)
+                try {
+                    describeComparison(comparer.compare(), outcome.error)
+                } catch (e: NotionException) {
+                    "비교하지 못했습니다: ${e.error::class.simpleName}"
+                }
+            },
             DebugAction("테스트 크래시") {
                 // 화면 코드 바깥(메인 루프)에서 던져 실제 크래시처럼 수집되게 한다.
                 Handler(Looper.getMainLooper()).post { throw TestCrashException() }
+                null
             },
             DebugAction("인증 실패 흉내 켜기·끄기") {
                 flags.setFakeAuthFailure(!flags.fakeAuthFailure.first())
                 sync.request(SyncTrigger.PULL_TO_REFRESH)
+                null
             },
-            DebugAction("다음 실행 시 초기화 예외") { health.armStartupFault() },
+            DebugAction("다음 실행 시 초기화 예외") {
+                health.armStartupFault()
+                null
+            },
         )
     }
 }
+
+/** 결과 대화상자 문구. 불일치는 앞 [SHOWN]건만 날짜·제목·다른 필드로 보인다. */
+internal fun describeComparison(report: CompareReport, syncError: NotionError?): String = buildString {
+    appendLine("범위 ${report.from} ~ ${report.to}")
+    appendLine("노션 ${report.remoteCount}건 · 앱 ${report.localCount}건")
+    if (syncError != null) appendLine("먼저 한 동기화가 실패했습니다(${syncError::class.simpleName}).")
+    if (report.skippedSources.isNotEmpty()) appendLine("비교 못 한 DB: ${report.skippedSources.joinToString()}")
+    appendLine()
+    if (report.matches) {
+        append("불일치 0건 ✓")
+        return@buildString
+    }
+    appendLine(
+        "불일치 ${report.mismatches.size}건: 노션에만 ${report.count(Mismatch.Kind.REMOTE_ONLY)}, " +
+            "앱에만 ${report.count(Mismatch.Kind.LOCAL_ONLY)}, 내용 다름 ${report.count(Mismatch.Kind.DIFFERENT)}",
+    )
+    report.mismatches.take(SHOWN).forEach { m ->
+        val kind = when (m.kind) {
+            Mismatch.Kind.REMOTE_ONLY -> "노션에만"
+            Mismatch.Kind.LOCAL_ONLY -> "앱에만"
+            Mismatch.Kind.DIFFERENT -> "다름(${m.fields.joinToString()})"
+        }
+        appendLine()
+        append("${m.date} ${m.title} — $kind")
+    }
+    if (report.mismatches.size > SHOWN) {
+        appendLine()
+        append("… 외 ${report.mismatches.size - SHOWN}건")
+    }
+}
+
+private const val SHOWN = 5
 
 /** 수집 대시보드에서 구분하기 쉽게 따로 둔 예외. */
 class TestCrashException : RuntimeException("NotionCal 테스트 크래시(디버그 메뉴)")

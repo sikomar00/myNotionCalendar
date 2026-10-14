@@ -48,6 +48,8 @@ data class DiagnosticsUiState(
     val notice: DiagnosticsNotice? = null,
     /** [DiagnosticsNotice.DEBUG_DONE]에 붙는 항목 이름. */
     val noticeArg: String? = null,
+    /** 결과 문구를 돌려준 디버그 항목(대화상자). */
+    val debugResult: DebugResult? = null,
 )
 
 private data class LocalState(
@@ -56,6 +58,7 @@ private data class LocalState(
     val busy: Boolean = false,
     val notice: DiagnosticsNotice? = null,
     val noticeArg: String? = null,
+    val debugResult: DebugResult? = null,
 )
 
 /** S25-03·04·09, PF-04 로그 내보내기, PF-10 진단·복구 도구. */
@@ -75,7 +78,7 @@ class DiagnosticsViewModel @Inject constructor(
         .catch { emit(null) } // DB를 열지 못해도 진단 화면은 뜬다
 
     val state: StateFlow<DiagnosticsUiState> = combine(sync, health.failure, local) { s, failure, l ->
-        DiagnosticsUiState(s, l.power, l.exits, failure, l.busy, l.notice, l.noticeArg)
+        DiagnosticsUiState(s, l.power, l.exits, failure, l.busy, l.notice, l.noticeArg, l.debugResult)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DiagnosticsUiState(failure = health.failure.value))
 
     val debugActions: List<DebugAction> = debugMenu.actions()
@@ -106,9 +109,15 @@ class DiagnosticsViewModel @Inject constructor(
     }
 
     fun runDebug(action: DebugAction) = busy {
-        action.run()
-        notify(DiagnosticsNotice.DEBUG_DONE, action.label)
+        val text = action.run()
+        if (text == null) {
+            notify(DiagnosticsNotice.DEBUG_DONE, action.label)
+        } else {
+            local.update { it.copy(debugResult = DebugResult(action.label, text)) }
+        }
     }
+
+    fun dismissDebugResult() = local.update { it.copy(debugResult = null) }
 
     fun dismissNotice() = local.update { it.copy(notice = null, noticeArg = null) }
 

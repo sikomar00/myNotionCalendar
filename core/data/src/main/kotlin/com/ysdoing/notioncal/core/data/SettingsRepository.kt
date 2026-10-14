@@ -52,6 +52,8 @@ data class AppSettings(
     val remindersHandledUntil: Long = 0,
     /** WG-08 위젯 미리보기를 올린 앱 버전(versionCode). 시스템 호출 제한 때문에 버전마다 한 번만 올린다. */
     val widgetPreviewsVersion: Int = 0,
+    /** 마지막으로 본 앱 설치·업데이트 시각(PackageInfo.lastUpdateTime). 바뀌면 다음 동기화가 전체 범위를 다시 받는다. */
+    val seenAppUpdateAt: Long = 0,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -88,6 +90,7 @@ class SettingsRepository @Inject constructor(
                 ),
                 remindersHandledUntil = prefs[REMINDERS_HANDLED_UNTIL] ?: 0,
                 widgetPreviewsVersion = prefs[WIDGET_PREVIEWS_VERSION] ?: 0,
+                seenAppUpdateAt = prefs[SEEN_APP_UPDATE_AT] ?: 0,
                 hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
@@ -170,6 +173,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[WIDGET_PREVIEWS_VERSION] = version }
     }
 
+    suspend fun setSeenAppUpdateAt(at: Long) {
+        dataStore.edit { it[SEEN_APP_UPDATE_AT] = at }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -189,5 +196,6 @@ class SettingsRepository @Inject constructor(
         val ALL_DAY_REMINDER_DAY_BEFORE = booleanPreferencesKey("all_day_reminder_day_before")
         val REMINDERS_HANDLED_UNTIL = longPreferencesKey("reminders_handled_until")
         val WIDGET_PREVIEWS_VERSION = intPreferencesKey("widget_previews_version")
+        val SEEN_APP_UPDATE_AT = longPreferencesKey("seen_app_update_at")
     }
 }
