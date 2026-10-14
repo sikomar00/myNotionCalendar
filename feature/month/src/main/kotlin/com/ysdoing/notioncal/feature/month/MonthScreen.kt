@@ -211,7 +211,7 @@ fun MonthRoute(
                         )
                     }
                     CalendarView.AGENDA -> AgendaView(
-                        initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween,
+                        initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, holidays = viewModel::holidaysBetween,
                         onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
                     )
                 }
@@ -315,13 +315,14 @@ private fun MonthPager(
         val flow = remember(month, weekStart) { viewModel.eventsFor(month, weekStart) }
         val events by flow.collectAsStateWithLifecycle()
         val visible = events.orEmpty()
+        val holidays by remember(month, weekStart) { viewModel.holidaysFor(month, weekStart) }.collectAsStateWithLifecycle()
         // 그리드는 스크롤할 내용이 없지만, 당겨서 새로고침이 제스처를 받도록 세로 스크롤 컨테이너에 넣는다.
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = maxHeight
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 TextZoom(zoom) {
                     MonthGrid(
-                        state = MonthGridState(month, weekStart, today, visible),
+                        state = MonthGridState(month, weekStart, today, visible, holidays),
                         onDayClick = onDayClick,
                         onMove = viewModel::move,
                         modifier = Modifier.fillMaxWidth().height(height),
@@ -377,12 +378,14 @@ private fun PeriodPager(
         val flow = remember(start, days) { viewModel.eventsBetween(start, start.plusDays(days - 1L)) }
         val events by flow.collectAsStateWithLifecycle()
         val visible = events.orEmpty()
+        val holidays by remember(start, days) { viewModel.holidaysBetween(start, start.plusDays(days - 1L)) }.collectAsStateWithLifecycle()
         TimeGrid(
             start = start,
             days = days,
             today = today,
             nowMinute = nowMinute,
             events = visible,
+            holidays = holidays,
             hourHeight = 48.dp * zoom,
             onDayClick = onDayClick,
             onEventClick = onEventClick,

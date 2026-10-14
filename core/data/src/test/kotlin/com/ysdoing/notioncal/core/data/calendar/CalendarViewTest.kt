@@ -66,4 +66,10 @@ class CalendarViewTest {
         val days = Agenda.build(listOf(event("a", "2026-10-03")), LocalDate.of(2026, 10, 1), LocalDate.of(2027, 2, 1), today, anchor = LocalDate.of(2026, 11, 1))
         assertEquals(listOf(LocalDate.of(2026, 10, 3), today, LocalDate.of(2026, 11, 1)), days.map { it.date })
     }
+    @Test
+    fun agendaIncludesHolidaysWithoutEvents() {
+        // EX-02: 공휴일만 있는 날도 목록에 나온다.
+        val days = Agenda.build(emptyList(), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), today, holidays = setOf(LocalDate.of(2026, 10, 9)))
+        assertEquals(listOf(LocalDate.of(2026, 10, 9), today), days.map { it.date })
+    }
 }

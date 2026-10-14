@@ -12,7 +12,15 @@ data class AgendaDay(val date: LocalDate, val items: List<Pair<CalendarEvent, Bo
  * 여러 날 일정은 걸친 날마다 넣고, 둘째 날부터는 이어짐 표시를 한다. 하루 안 순서는 받은 순서(Room 정렬)를 따른다.
  */
 object Agenda {
-    fun build(events: List<CalendarEvent>, from: LocalDate, to: LocalDate, today: LocalDate, anchor: LocalDate? = null): List<AgendaDay> {
+    fun build(
+        events: List<CalendarEvent>,
+        from: LocalDate,
+        to: LocalDate,
+        today: LocalDate,
+        anchor: LocalDate? = null,
+        /** EX-02 공휴일 날짜. 일정이 없어도 목록에 넣는다. */
+        holidays: Set<LocalDate> = emptySet(),
+    ): List<AgendaDay> {
         val byDate = sortedMapOf<LocalDate, MutableList<Pair<CalendarEvent, Boolean>>>()
         for (event in events) {
             var date = maxOf(event.startDate, from)
@@ -22,7 +30,7 @@ object Agenda {
                 date = date.plusDays(1)
             }
         }
-        listOfNotNull(today, anchor).filter { it in from..to }.forEach { byDate.getOrPut(it) { mutableListOf() } }
+        (listOfNotNull(today, anchor) + holidays).filter { it in from..to }.forEach { byDate.getOrPut(it) { mutableListOf() } }
         return byDate.map { (date, items) -> AgendaDay(date, items) }
     }
 }

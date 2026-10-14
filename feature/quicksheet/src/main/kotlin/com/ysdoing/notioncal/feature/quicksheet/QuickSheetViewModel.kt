@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
+import com.ysdoing.notioncal.core.data.HolidayRepository
 
 /** 시간 입력(시작·종료). 종일 일정이면 null. */
 data class TimeRange(val start: LocalTime, val end: LocalTime)
@@ -63,6 +64,7 @@ class QuickSheetViewModel @Inject constructor(
     dataSources: DataSourceRepository,
     settings: SettingsRepository,
     private val writer: EventWriter,
+    private val holidays: HolidayRepository,
 ) : ViewModel() {
     private val date = MutableStateFlow<LocalDate?>(null)
 
@@ -74,6 +76,12 @@ class QuickSheetViewModel @Inject constructor(
     val dayEvents: StateFlow<List<CalendarEvent>> = date
         .flatMapLatest { d -> if (d == null) flowOf(emptyList()) else events.observeRange(d, d) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** EX-02 그날 공휴일 이름(없거나 표시를 끄면 null). */
+    val dayHoliday: StateFlow<String?> = date
+        .flatMapLatest { d -> if (d == null) flowOf(emptyMap()) else holidays.observe(d, d) }
+        .map { it.values.firstOrNull() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** 추가할 수 있는 DB(앱에서 켠 것). */
     val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeAll()

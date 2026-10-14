@@ -114,4 +114,12 @@ class WidgetContentTest {
             events.any { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
         }
     }
+    /** EX-02: 공휴일 이름을 칸 설명으로 읽는다(숫자 색은 스크린샷으로 확인). */
+    @Test
+    fun holidayInDayDescription() = render(
+        DpSize(380.dp, 420.dp),
+        WidgetSamples.state().copy(holidays = mapOf(LocalDate.of(2026, 10, 9) to "한글날")),
+    ) {
+        onNode(androidx.glance.testing.unit.hasContentDescriptionEqualTo("10월 9일, 한글날, 일정 0개")).assertExists()
+    }
 }

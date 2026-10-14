@@ -75,6 +75,8 @@ fun TimeGrid(
     today: LocalDate,
     nowMinute: Int?,
     events: List<CalendarEvent>,
+    /** EX-02 공휴일(날짜 → 이름). */
+    holidays: Map<LocalDate, String> = emptyMap(),
     hourHeight: Dp,
     onDayClick: (LocalDate) -> Unit,
     onEventClick: (CalendarEvent) -> Unit,
@@ -84,7 +86,7 @@ fun TimeGrid(
     val dates = remember(start, days) { (0 until days).map { start.plusDays(it.toLong()) } }
     val density = LocalDensity.current
     Column(modifier.fillMaxSize()) {
-        DayHeaders(dates, today, onDayClick)
+        DayHeaders(dates, today, holidays, onDayClick)
         AllDayLane(start, days, events, onEventClick)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val scroll = rememberScrollState(initial = with(density) { (hourHeight * initialScrollHour.coerceIn(0, 20)).roundToPx() })
@@ -148,7 +150,8 @@ fun TimeGrid(
 }
 
 @Composable
-private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
+private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<LocalDate, String>, onDayClick: (LocalDate) -> Unit) {
+    val anyHoliday = dates.any { it in holidays }
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Spacer(Modifier.width(GUTTER))
         dates.forEach { date ->
@@ -168,7 +171,23 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, onDayClick: (Lo
                         date.dayOfMonth.toString(),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                        color = when {
+                            isToday -> MaterialTheme.colorScheme.onPrimary
+                            date in holidays -> HOLIDAY_COLOR
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
+                // EX-02: 공휴일 이름(그 기간에 공휴일이 있으면 모든 칸에 같은 높이로 자리를 둔다).
+                if (anyHoliday) {
+                    Text(
+                        holidays[date].orEmpty(),
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        color = HOLIDAY_COLOR,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 2.dp),
                     )
                 }
             }
@@ -267,6 +286,8 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
         Text(time, fontSize = 9.sp, lineHeight = 11.sp, color = Color.White.copy(alpha = 0.85f), maxLines = 1, softWrap = false)
     }
 }
+
+private val HOLIDAY_COLOR = Color(0xFFE03E3E)
 
 private fun weekdayColor(day: DayOfWeek): Color? = when (day) {
     DayOfWeek.SUNDAY -> Color(0xFFE03E3E)

@@ -63,6 +63,8 @@ data class AgendaUiState(
     val days: List<AgendaDay>,
     val config: WidgetConfig,
     val sync: WidgetSync = WidgetSync(),
+    /** EX-02 공휴일(날짜 → 이름). */
+    val holidays: Map<LocalDate, String> = emptyMap(),
 )
 
 /**
@@ -79,6 +81,7 @@ class AgendaWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialEvents = deps.events().observeRange(initialToday, lastDay(initialToday)).first()
         val initialSync = WidgetSync.observe(deps.syncStatus()).first()
+        val initialHolidays = deps.holidays().observe(initialToday, lastDay(initialToday)).first()
 
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
@@ -88,7 +91,9 @@ class AgendaWidget : GlanceAppWidget() {
             val today = LocalDate.now(APP_ZONE)
             val events by remember(today) { deps.events().observeRange(today, lastDay(today)) }
                 .collectAsState(if (today == initialToday) initialEvents else emptyList())
-            AgendaWidgetContent(uiState(today, config, events, sync), fontScale ?: SystemFontScale.current(context))
+            val holidays by remember(today) { deps.holidays().observe(today, lastDay(today)) }
+                .collectAsState(if (today == initialToday) initialHolidays else emptyMap())
+            AgendaWidgetContent(uiState(today, config, events, sync, holidays), fontScale ?: SystemFontScale.current(context))
         }
     }
 
@@ -96,11 +101,18 @@ class AgendaWidget : GlanceAppWidget() {
         fun lastDay(today: LocalDate): LocalDate = today.plusDays(AGENDA_DAYS - 1)
 
         /** 위젯별 DB 필터·완료 숨김(WG-04)을 건 뒤 날짜별로 묶는다. */
-        fun uiState(today: LocalDate, config: WidgetConfig, events: List<CalendarEvent>, sync: WidgetSync = WidgetSync()): AgendaUiState {
+        fun uiState(
+            today: LocalDate,
+            config: WidgetConfig,
+            events: List<CalendarEvent>,
+            sync: WidgetSync = WidgetSync(),
+            holidays: Map<LocalDate, String> = emptyMap(),
+        ): AgendaUiState {
             val shown = events.filter { event ->
                 (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done)
             }
-            return AgendaUiState(today, Agenda.build(shown, today, lastDay(today), today), config, sync)
+            // 공휴일만 있는 날도 목록에 넣는다(EX-02).
+            return AgendaUiState(today, Agenda.build(shown, today, lastDay(today), today, holidays = holidays.keys), config, sync, holidays)
         }
     }
 }
@@ -164,8 +176,8 @@ fun AgendaWidgetContent(
         AgendaHeader(state, metrics, palette)
         LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
             state.days.forEach { day ->
-                item(itemId = day.date.toEpochDay()) { DateRow(day.date, state.today, metrics, palette) }
-                if (day.items.isEmpty()) {
+                item(itemId = day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) }
+                if (day.items.isEmpty() && day.date !in state.holidays) {
                     item(itemId = -day.date.toEpochDay() - 1) { EmptyRow(metrics, palette) }
                 }
                 items(day.items, itemId = { (event, _) -> (event.pageId + day.date).hashCode().toLong() }) { (event, continues) ->
@@ -219,9 +231,9 @@ private fun AgendaHeader(state: AgendaUiState, metrics: AgendaMetrics, palette: 
 }
 
 @Composable
-private fun DateRow(date: LocalDate, today: LocalDate, metrics: AgendaMetrics, palette: WidgetPalette) {
+private fun DateRow(date: LocalDate, today: LocalDate, holiday: String?, metrics: AgendaMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
-    val label = if (date == today) {
+    val day = if (date == today) {
         context.getString(R.string.agenda_widget_today)
     } else {
         context.getString(
@@ -231,6 +243,8 @@ private fun DateRow(date: LocalDate, today: LocalDate, metrics: AgendaMetrics, p
             date.dayOfWeek.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN),
         )
     }
+    // EX-02: 공휴일은 날짜 줄에 이름을 붙이고 빨강으로.
+    val label = listOfNotNull(day, holiday).joinToString(" ")
     Text(
         text = label,
         modifier = GlanceModifier
@@ -240,7 +254,11 @@ private fun DateRow(date: LocalDate, today: LocalDate, metrics: AgendaMetrics, p
             .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
             .semantics { testTag = "agendaDate" },
         style = TextStyle(
-            color = if (date == today) palette.accent else palette.dayColor(date.dayOfWeek),
+            color = when {
+                holiday != null -> palette.holiday
+                date == today -> palette.accent
+                else -> palette.dayColor(date.dayOfWeek)
+            },
             fontSize = metrics.dateFontSp.sp,
             fontWeight = FontWeight.Bold,
         ),

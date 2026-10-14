@@ -84,4 +84,14 @@ class AgendaWidgetTest {
     }
 
     // 목록(LazyColumn)은 실제 위젯에서 컬렉션 어댑터로 채워져 정적 RemoteViews 스크린샷에는 나오지 않는다. 모습은 실기기에서 확인한다.
+    /** EX-02: 공휴일만 있는 날도 목록에 나오고, 날짜 줄에 이름이 붙는다. */
+    @Test
+    fun holidayRows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 152.dp))
+        val holidays = mapOf(today.plusDays(1) to "임시공휴일")
+        provideComposable { AgendaWidgetContent(AgendaWidget.uiState(today, WidgetConfig(1), emptyList(), holidays = holidays)) }
+        onNode(hasTextEqualTo("10/14(수) 임시공휴일")).assertExists()
+        onAllNodes(hasTestTag("agendaEmpty")).assertCountEquals(1) // 오늘만 '일정 없음'
+    }
 }

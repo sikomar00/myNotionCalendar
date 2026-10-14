@@ -44,6 +44,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
+import com.ysdoing.notioncal.core.data.HolidayRepository
 
 /** 상단 상태줄·배너(PF-05 최소 형태). */
 data class SyncHeader(
@@ -84,6 +85,7 @@ class MonthViewModel @Inject constructor(
     private val syncRequester: SyncRequester,
     syncStatus: SyncStatusRepository,
     private val dataSourceRepository: DataSourceRepository,
+    private val holidayRepository: HolidayRepository,
     private val conflicts: ConflictRepository,
     private val health: AppHealth,
     private val writer: EventWriter,
@@ -148,6 +150,24 @@ class MonthViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
 
     private val rangeFlows = HashMap<Pair<LocalDate, LocalDate>, StateFlow<List<CalendarEvent>?>>()
+    private val holidayFlows = HashMap<Pair<LocalDate, LocalDate>, StateFlow<Map<LocalDate, String>>>()
+
+    /** EX-02 [from]~[to] 공휴일(날짜 → 이름). 공휴일 표시를 끄면 비어 있다. */
+    fun holidaysBetween(from: LocalDate, to: LocalDate): StateFlow<Map<LocalDate, String>> =
+        holidayFlows.getOrPut(from to to) {
+            holidayRepository.observe(from, to)
+                .catch { error ->
+                    health.report(error)
+                    emit(emptyMap())
+                }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+        }
+
+    /** 월 그리드 42일 범위의 공휴일. */
+    fun holidaysFor(month: YearMonth, weekStart: DayOfWeek): StateFlow<Map<LocalDate, String>> {
+        val from = gridStart(month, weekStart)
+        return holidaysBetween(from, from.plusDays(GRID_DAYS - 1))
+    }
 
     /** 그리드 42일 범위의 일정. Room만 읽으므로 오프라인·인증 오류와 무관하게 즉시 나온다(PF-02). */
     fun eventsFor(month: YearMonth, weekStart: DayOfWeek): StateFlow<List<CalendarEvent>?> {

@@ -38,6 +38,7 @@ class NotionCalWidget : GlanceAppWidget() {
         val initialMonth = monthFor(initialConfig)
         val initialEvents = deps.events().observeRange(gridFrom(initialMonth, initialSettings.weekStart), gridTo(initialMonth, initialSettings.weekStart)).first()
         val initialSync = WidgetSync.observe(deps.syncStatus()).first()
+        val initialHolidays = deps.holidays().observe(gridFrom(initialMonth, initialSettings.weekStart), gridTo(initialMonth, initialSettings.weekStart)).first()
 
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
@@ -51,7 +52,10 @@ class NotionCalWidget : GlanceAppWidget() {
             val events by remember(month, settings.weekStart) {
                 deps.events().observeRange(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
             }.collectAsState(initial)
-            WidgetContent(uiState(month, today, settings, config, events, sync), fontScale ?: SystemFontScale.current(context))
+            val holidays by remember(month, settings.weekStart) {
+                deps.holidays().observe(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
+            }.collectAsState(if (month == initialMonth) initialHolidays else emptyMap())
+            WidgetContent(uiState(month, today, settings, config, events, sync).copy(holidays = holidays), fontScale ?: SystemFontScale.current(context))
         }
     }
 

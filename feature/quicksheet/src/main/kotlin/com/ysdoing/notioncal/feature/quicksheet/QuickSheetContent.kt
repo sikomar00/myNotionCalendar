@@ -96,7 +96,11 @@ fun QuickSheetContent(
             is QuickSheetStart.Day -> {
                 LaunchedEffect(start.date) { viewModel.showDay(start.date) }
                 val events by viewModel.dayEvents.collectAsStateWithLifecycle()
-                Text(dayTitle(start.date), style = MaterialTheme.typography.titleLarge)
+                val holiday by viewModel.dayHoliday.collectAsStateWithLifecycle()
+                Text(
+                    listOfNotNull(dayTitle(start.date), holiday).joinToString(" · "),
+                    style = MaterialTheme.typography.titleLarge,
+                )
                 AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) })
                 HorizontalDivider()
                 DayList(

@@ -73,6 +73,8 @@ data class WidgetUiState(
     val config: WidgetConfig,
     /** WG-07 마지막 동기화 시각·오류. */
     val sync: WidgetSync = WidgetSync(),
+    /** EX-02 공휴일(날짜 → 이름). */
+    val holidays: Map<LocalDate, String> = emptyMap(),
 )
 
 /**
@@ -285,7 +287,7 @@ private fun WeekRow(
             Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
                 repeat(7) { col ->
                     val date = weekStart.plusDays(col.toLong())
-                    DateLabel(date, YearMonth.from(date) == state.month, date == state.today, metrics, palette)
+                    DateLabel(date, YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
                 }
             }
             if (metrics.mode == WidgetMode.SMALL) {
@@ -314,7 +316,11 @@ private fun WeekRow(
                         // WI-01: 그날 퀵 시트(목록·체크·추가)가 홈 화면 위에 뜬다.
                         .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
                         .semantics {
-                            contentDescription = "${date.monthValue}월 ${date.dayOfMonth}일, 일정 ${count}개"
+                            contentDescription = listOfNotNull(
+                                "${date.monthValue}월 ${date.dayOfMonth}일",
+                                state.holidays[date],
+                                "일정 ${count}개",
+                            ).joinToString(", ")
                             testTag = "day"
                         },
                 ) {}
@@ -324,13 +330,18 @@ private fun WeekRow(
 }
 
 @Composable
-private fun DateLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, metrics: WidgetMetrics, palette: WidgetPalette) {
+private fun DateLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoliday: Boolean, metrics: WidgetMetrics, palette: WidgetPalette) {
     Box(
         modifier = GlanceModifier.width(metrics.cellWidth).height(metrics.dateLabelHeight),
         contentAlignment = Alignment.TopCenter,
     ) {
         val text = date.dayOfMonth.toString()
-        val color = if (inMonth) palette.dayColor(date.dayOfWeek) else palette.outside
+        // MV-01·EX-02: 공휴일은 일요일과 같은 빨강(이름은 칸 설명으로 읽는다).
+        val color = when {
+            !inMonth -> palette.outside
+            isHoliday -> palette.holiday
+            else -> palette.dayColor(date.dayOfWeek)
+        }
         if (isToday) {
             Box(
                 modifier = GlanceModifier
@@ -493,6 +504,9 @@ class WidgetPalette private constructor(
     private val sunday: ColorProvider,
     private val saturday: ColorProvider,
 ) {
+    /** EX-02 공휴일 색(일요일과 같다). */
+    val holiday: ColorProvider get() = sunday
+
     fun dayColor(day: DayOfWeek): ColorProvider = when (day) {
         DayOfWeek.SUNDAY -> sunday
         DayOfWeek.SATURDAY -> saturday

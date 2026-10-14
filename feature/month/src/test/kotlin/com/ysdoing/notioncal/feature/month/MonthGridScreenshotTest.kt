@@ -6,6 +6,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.ysdoing.notioncal.core.data.CalendarEvent
@@ -59,12 +61,18 @@ class MonthGridScreenshotTest {
         event("13", "8월 마감", "2026-08-31", color = "#E03E3E"),
     )
 
-    private fun capture(month: YearMonth, name: String, weekStart: DayOfWeek = DayOfWeek.SUNDAY, zoom: Float = 1f) {
+    private fun capture(
+        month: YearMonth,
+        name: String,
+        weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+        zoom: Float = 1f,
+        holidays: Map<LocalDate, String> = emptyMap(),
+    ) {
         compose.setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface {
                     TextZoom(zoom) {
-                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), events), onDayClick = {})
+                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), events, holidays), onDayClick = {})
                     }
                 }
             }
@@ -95,4 +103,24 @@ class MonthGridScreenshotTest {
 
     @Test
     fun zoomOut() = capture(YearMonth.of(2026, 10), "month_2026_10_zoom_70", zoom = 0.7f)
+    // EX-02: 공휴일 숫자는 빨강, 공휴일이 있는 주에만 이름 줄이 생긴다.
+    private val october2026Holidays = mapOf(
+        LocalDate.of(2026, 10, 3) to "개천절",
+        LocalDate.of(2026, 10, 5) to "쉬는 날 개천절",
+        LocalDate.of(2026, 10, 9) to "한글날",
+    )
+
+    @Test
+    fun holidays() = capture(YearMonth.of(2026, 10), "month_2026_10_holidays", holidays = october2026Holidays)
+
+    @Test
+    fun holidayIsReadInCellDescription() {
+        compose.setContent {
+            MaterialTheme {
+                MonthGrid(MonthGridState(YearMonth.of(2026, 10), DayOfWeek.SUNDAY, LocalDate.of(2026, 10, 13), emptyList(), october2026Holidays), onDayClick = {})
+            }
+        }
+        compose.onNodeWithContentDescription("10월 9일, 한글날, 일정 0개").assertExists()
+        compose.onNodeWithText("쉬는 날 개천절").assertExists()
+    }
 }

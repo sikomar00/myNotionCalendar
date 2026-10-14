@@ -76,6 +76,8 @@ data class MonthGridState(
     val weekStart: DayOfWeek,
     val today: LocalDate,
     val events: List<CalendarEvent>,
+    /** EX-02 공휴일(날짜 → 이름). 공휴일 표시를 끄면 비어 있다. */
+    val holidays: Map<LocalDate, String> = emptyMap(),
 )
 
 private val SundayColor = Color(0xFFE03E3E)
@@ -126,6 +128,7 @@ fun MonthGrid(
                     month = state.month,
                     today = state.today,
                     events = state.events,
+                    holidays = state.holidays,
                     onDayClick = onDayClick,
                     drag = drag,
                     toGrid = { local -> Offset(local.x, headerHeight + week * weekHeight + local.y) },
@@ -173,6 +176,7 @@ private fun WeekRow(
     month: YearMonth,
     today: LocalDate,
     events: List<CalendarEvent>,
+    holidays: Map<LocalDate, String>,
     onDayClick: (LocalDate) -> Unit,
     drag: GridDrag?,
     toGrid: (Offset) -> Offset,
@@ -186,15 +190,19 @@ private fun WeekRow(
     // 글꼴 크기 설정을 따라 줄 높이를 정한다(시스템 글꼴 최대에서도 글자가 잘리지 않게).
     val laneHeight = with(density) { 15.sp.toDp() }
     val labelHeight = with(density) { 20.sp.toDp() } + 4.dp
+    // EX-02: 공휴일이 있는 주에만 날짜 아래에 이름 줄을 둔다(그만큼 일정 줄이 줄어든다).
+    val hasHoliday = (0 until 7).any { weekStart.plusDays(it.toLong()) in holidays }
+    val nameHeight = if (hasHoliday) with(density) { 12.sp.toDp() } else 0.dp
+    val topHeight = labelHeight + nameHeight
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val cellWidth = maxWidth / 7
-        val maxLanes = ((maxHeight - labelHeight) / laneHeight).toInt().coerceAtLeast(1)
+        val maxLanes = ((maxHeight - topHeight) / laneHeight).toInt().coerceAtLeast(1)
         val layout = remember(weekStart, events, maxLanes) { WeekLayout.layout(weekStart, events, maxLanes) }
         val hitTarget = remember(layout, density, maxWidth) {
             ChipHitTest(
                 layout = layout,
                 cellWidthPx = with(density) { cellWidth.toPx() },
-                labelHeightPx = with(density) { labelHeight.toPx() },
+                labelHeightPx = with(density) { topHeight.toPx() },
                 laneHeightPx = with(density) { laneHeight.toPx() },
             )
         }
@@ -223,15 +231,33 @@ private fun WeekRow(
                     date = date,
                     inMonth = YearMonth.from(date) == month,
                     isToday = date == today,
+                    isHoliday = date in holidays,
                     modifier = Modifier.weight(1f).height(labelHeight),
                 )
+            }
+        }
+        if (hasHoliday) {
+            Row(Modifier.offset(y = labelHeight).fillMaxWidth().height(nameHeight)) {
+                repeat(7) { col ->
+                    val date = weekStart.plusDays(col.toLong())
+                    Text(
+                        holidays[date].orEmpty(),
+                        modifier = Modifier.weight(1f).alpha(if (YearMonth.from(date) == month) 1f else 0.4f).padding(horizontal = 2.dp),
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        color = SundayColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
             }
         }
         layout.placed.forEach { placed ->
             EventChip(
                 placed = placed,
                 modifier = Modifier
-                    .offset(x = cellWidth * placed.startCol, y = labelHeight + laneHeight * placed.lane)
+                    .offset(x = cellWidth * placed.startCol, y = topHeight + laneHeight * placed.lane)
                     .width(cellWidth * placed.span)
                     .height(laneHeight)
                     .alpha(if (drag?.event?.pageId == placed.event.pageId) 0.35f else 1f)
@@ -244,7 +270,7 @@ private fun WeekRow(
                 Text(
                     text = stringResource(R.string.month_more, hidden),
                     modifier = Modifier
-                        .offset(x = cellWidth * col, y = labelHeight + laneHeight * layout.overflowLane[col])
+                        .offset(x = cellWidth * col, y = topHeight + laneHeight * layout.overflowLane[col])
                         .width(cellWidth)
                         .height(laneHeight)
                         .padding(horizontal = 3.dp),
@@ -290,7 +316,12 @@ private fun WeekRow(
             repeat(7) { col ->
                 val date = weekStart.plusDays(col.toLong())
                 val count = events.count { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
-                val description = stringResource(R.string.month_day_a11y, date.monthValue, date.dayOfMonth, count)
+                val holiday = holidays[date]
+                val description = if (holiday != null) {
+                    stringResource(R.string.month_day_holiday_a11y, date.monthValue, date.dayOfMonth, holiday, count)
+                } else {
+                    stringResource(R.string.month_day_a11y, date.monthValue, date.dayOfMonth, count)
+                }
                 Spacer(
                     Modifier
                         .weight(1f)
@@ -354,8 +385,9 @@ private fun DraggedChip(drag: GridDrag, cellWidth: Float) {
 }
 
 @Composable
-private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, modifier: Modifier = Modifier) {
-    val base = dayColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurface
+private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoliday: Boolean, modifier: Modifier = Modifier) {
+    // MV-01·EX-02: 공휴일은 일요일과 같은 빨강.
+    val base = if (isHoliday) SundayColor else dayColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurface
     // 글꼴 크기에 맞춰 커지도록 sp 기준 최소 크기를 쓴다(고정 dp면 글꼴 최대에서 숫자가 잘림).
     val minSize = with(LocalDensity.current) { 18.sp.toDp() }
     Box(modifier.alpha(if (inMonth) 1f else 0.4f).padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {

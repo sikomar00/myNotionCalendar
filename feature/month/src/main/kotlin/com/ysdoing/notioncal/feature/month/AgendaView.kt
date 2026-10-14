@@ -54,8 +54,10 @@ import com.ysdoing.notioncal.core.data.calendar.DONE_MARK
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.heightIn
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private val agendaTime = DateTimeFormatter.ofPattern("H:mm")
+private val AGENDA_HOLIDAY_COLOR = Color(0xFFE03E3E)
 
 /** 목록을 뒤로 늘리는 한계(기준 날짜로부터). 미래 일정이 없을 때 끝없이 늘리지 않게. */
 private const val MAX_AHEAD_YEARS = 2L
@@ -77,6 +79,8 @@ fun AgendaView(
     onFocusChange: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
     textScale: Float = 1f,
+    /** EX-02 공휴일(날짜 → 이름). */
+    holidays: (from: LocalDate, to: LocalDate) -> StateFlow<Map<LocalDate, String>> = { _, _ -> MutableStateFlow(emptyMap()) },
 ) {
     var anchor by remember { mutableStateOf(initialFocus) }
     LaunchedEffect(jump) { jump?.let { anchor = it.date } }
@@ -88,8 +92,10 @@ fun AgendaView(
     // 범위를 뒤로 늘리는 동안(새 값이 오기 전)에는 이전 목록을 그대로 둔다. 목록이 잠깐 비면 스크롤 위치가 맨 앞으로 돌아간다.
     // 기준 날짜가 바뀌면 이전 목록을 버린다(이전 기준의 목록으로 스크롤 위치를 정하지 않게).
     var lastDays by remember(anchor) { mutableStateOf<List<AgendaDay>?>(null) }
-    val days = remember(loaded, from, until, today, anchor) {
-        loaded?.let { list -> Agenda.build(list, from, until, today, anchor) }
+    val holidayFlow = remember(from, until) { holidays(from, until) }
+    val holidayNames by holidayFlow.collectAsStateWithLifecycle()
+    val days = remember(loaded, from, until, today, anchor, holidayNames) {
+        loaded?.let { list -> Agenda.build(list, from, until, today, anchor, holidayNames.keys) }
     } ?: lastDays
     LaunchedEffect(days) { if (days != null) lastDays = days }
     val listState = rememberLazyListState()
@@ -119,7 +125,7 @@ fun AgendaView(
     }
     LazyColumn(modifier.fillMaxSize(), state = listState) {
         items(days.orEmpty(), key = { it.date.toEpochDay() }) { day ->
-            AgendaDayRow(day, today, onDayClick, onEventClick, textScale)
+            AgendaDayRow(day, today, holidayNames[day.date], onDayClick, onEventClick, textScale)
         }
     }
 }
@@ -128,12 +134,17 @@ fun AgendaView(
 private fun AgendaDayRow(
     day: AgendaDay,
     today: LocalDate,
+    holiday: String?,
     onDayClick: (LocalDate) -> Unit,
     onEventClick: (CalendarEvent) -> Unit,
     textScale: Float,
 ) {
     val isToday = day.date == today
-    val accent = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    val accent = when {
+        isToday -> MaterialTheme.colorScheme.primary
+        holiday != null -> AGENDA_HOLIDAY_COLOR // EX-02
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
         Column(
             // A11Y-02: 날짜 머리도 누르는 버튼이라 48dp 이상.
@@ -153,7 +164,15 @@ private fun AgendaDayRow(
             )
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (day.items.isEmpty()) {
+            if (holiday != null) {
+                Text(
+                    holiday,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AGENDA_HOLIDAY_COLOR,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            if (day.items.isEmpty() && holiday == null) {
                 Text(
                     stringResource(R.string.agenda_empty),
                     style = MaterialTheme.typography.bodyMedium,
