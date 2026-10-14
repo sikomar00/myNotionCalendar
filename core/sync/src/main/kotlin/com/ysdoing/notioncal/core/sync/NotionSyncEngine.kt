@@ -212,6 +212,7 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     lastEditedTime = lastEditedTime.toEpochMilli(),
     colorOptionId = colorOptionId,
     extraValues = encodeExtraValues(extraValues.mapValues { it.value.toPropValue() }),
+    titleHasMention = titleHasMention,
 )
 
 /** 색 기준 속성(select·status)의 옵션 목록 JSON. 속성이 없으면 null. */

@@ -74,6 +74,8 @@ data class EventEntity(
     @ColumnInfo(defaultValue = "0") val pendingOps: Int = 0,
     /** EX-07 추가 속성 값(JSON: {속성 ID: PropValue}, v4). */
     val extraValues: String? = null,
+    /** 제목에 노션 언급(@)이 있다(v7). 앱에서 제목을 바꾸면 언급이 글자로 바뀌므로 편집 화면이 경고한다. */
+    @ColumnInfo(defaultValue = "0") val titleHasMention: Boolean = false,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */

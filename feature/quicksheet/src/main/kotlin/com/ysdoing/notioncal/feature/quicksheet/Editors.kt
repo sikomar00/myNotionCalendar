@@ -263,6 +263,13 @@ fun EventEditorForm(
             modifier = Modifier.fillMaxWidth(),
             label = { Text(stringResource(R.string.qs_title_hint)) },
             singleLine = true,
+            // 제목에 노션 언급(@)이 있으면, 바꿔 저장할 때 언급이 글자로 바뀐다고 알린다(제목을 그대로 두면 언급은 유지).
+            supportingText = if (item.titleHasMention) {
+                { Text(stringResource(R.string.qs_title_mention_warning)) }
+            } else {
+                null
+            },
+            isError = item.titleHasMention && title.trim() != event.title,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             DateChip(date) { date = it }

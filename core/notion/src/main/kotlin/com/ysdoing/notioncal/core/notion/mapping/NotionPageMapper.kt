@@ -45,6 +45,8 @@ data class RemoteEvent(
     val lastEditedTime: Instant,
     /** EX-07: 지원 타입 속성(select·multi_select·status·number·url)의 값. 키는 속성 ID. */
     val extraValues: Map<String, PropertyValue> = emptyMap(),
+    /** 제목에 언급(@페이지·@사람·@날짜)이 들어 있다. 앱에서 제목을 바꾸면 언급이 글자로 바뀐다. */
+    val titleHasMention: Boolean = false,
 )
 
 /** 페이지 해석 결과. 날짜가 없으면 [event]가 null이고 캘린더에서 빠진다. */
@@ -78,9 +80,9 @@ class NotionPageMapper(
         if (page.inTrash || date == null) return MappedPage(page.id, null)
 
         val (startDate, endDate) = DateCodec.displayDates(date)
-        val title = prop(mapping.titlePropId)?.get("title").let { it as? JsonArray }
-            ?.joinToString("") { (it as? JsonObject)?.str("plain_text").orEmpty() }
-            .orEmpty()
+        val titleParts = (prop(mapping.titlePropId)?.get("title") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        val title = titleParts.joinToString("") { titleText(it) }
+        val titleHasMention = titleParts.any { it.str("type") == "mention" }
         val done = when (mapping.doneType) {
             DoneType.CHECKBOX -> prop(mapping.donePropId)?.get("checkbox")?.jsonPrimitiveOrNull()?.booleanOrNull ?: false
             DoneType.STATUS -> prop(mapping.donePropId)?.obj("status")?.str("id") in completeStatusOptionIds
@@ -95,6 +97,7 @@ class NotionPageMapper(
             page.id,
             RemoteEvent(
                 pageId = page.id,
+                titleHasMention = titleHasMention,
                 title = title,
                 startDate = startDate,
                 endDate = endDate,
@@ -129,9 +132,23 @@ class NotionPageMapper(
         const val COMPLETE_GROUP = "Complete"
     }
 
+    /** 제목 조각 하나의 글자. 공유 안 된 페이지·DB 언급은 [UNSHARED_MENTION_LABEL]로 바꾼다. */
+    private fun titleText(part: JsonObject): String {
+        val text = part.str("plain_text").orEmpty()
+        val mentionType = part.obj("mention")?.str("type")
+        val unshared = part.str("type") == "mention" && mentionType in setOf("page", "database") && text == UNSHARED_MENTION_TEXT
+        return if (unshared) UNSHARED_MENTION_LABEL else text
+    }
+
     private fun JsonObject.obj(key: String): JsonObject? = get(key) as? JsonObject
 
     private fun JsonObject.str(key: String): String? = get(key)?.jsonPrimitiveOrNull()?.contentOrNull
 
     private fun JsonElement.jsonPrimitiveOrNull() = if (this is JsonNull || this is JsonObject || this is JsonArray) null else jsonPrimitive
 }
+
+/** 노션이 연결에 공유되지 않은 페이지·DB를 언급하면 그 글자로 "Untitled"를 준다. */
+private const val UNSHARED_MENTION_TEXT = "Untitled"
+
+/** 공유 안 된 언급은 'Untitled' 대신 알아볼 수 있게 표시한다(실제 이름은 노션 연결에 공유해야 받을 수 있다). */
+const val UNSHARED_MENTION_LABEL = "@공유 안 된 페이지"

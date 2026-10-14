@@ -21,4 +21,5 @@
     <string name="qs_toggle_done">%1$s 완료 표시</string>
     <string name="qs_parsed_title">제목: %1$s</string>
     <string name="qs_open_link">열기</string>
+    <string name="qs_title_mention_warning">노션 페이지 언급(@)이 든 제목입니다. 제목을 바꾸면 언급이 일반 글자로 바뀝니다.</string>
 </resources>

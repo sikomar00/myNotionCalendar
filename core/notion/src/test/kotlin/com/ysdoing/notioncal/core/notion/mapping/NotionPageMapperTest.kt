@@ -96,4 +96,27 @@ class NotionPageMapperTest {
         val trashed = pages("query_calendar_p1.json").first().copy(inTrash = true)
         assertNull(mapper.map(trashed).event)
     }
+    /** 제목의 언급(@): 공유 안 된 페이지는 'Untitled' 대신 알아볼 수 있게, 공유된 페이지는 노션이 준 이름 그대로. */
+    @Test
+    fun titleMentions() {
+        val mapper = NotionPageMapper(calendarMapping, schema("data_source_calendar.json"))
+        fun page(titleParts: String) = NotionJson.decodeFromString(
+            com.ysdoing.notioncal.core.notion.dto.PageDto.serializer(),
+            """{"id":"m1","url":"","last_edited_time":"2026-10-13T04:12:53.054Z","properties":{
+                "Name":{"id":"title","type":"title","title":[$titleParts]},
+                "Date":{"id":"dAtE","type":"date","date":{"start":"2026-10-14"}}}}""",
+        )
+        val unshared = """{"type":"mention","mention":{"type":"page","page":{"id":"p"}},"plain_text":"Untitled","href":"https://www.notion.so/p"}"""
+        val shared = """{"type":"mention","mention":{"type":"page","page":{"id":"p"}},"plain_text":"섹션 2: 인사부","href":"https://www.notion.so/p"}"""
+        val text = """{"type":"text","text":{"content":" DS6PJS"},"plain_text":" DS6PJS"}"""
+
+        val hidden = mapper.map(page("$unshared,$text")).event!!
+        assertEquals("@공유 안 된 페이지 DS6PJS", hidden.title)
+        assertTrue(hidden.titleHasMention)
+        assertEquals("섹션 2: 인사부 DS6PJS", mapper.map(page("$shared,$text")).event!!.title)
+        // 언급 없는 제목, 그리고 진짜 글자 "Untitled"는 그대로 둔다.
+        val plain = mapper.map(page("""{"type":"text","text":{"content":"Untitled"},"plain_text":"Untitled"}""")).event!!
+        assertEquals("Untitled", plain.title)
+        assertFalse(plain.titleHasMention)
+    }
 }

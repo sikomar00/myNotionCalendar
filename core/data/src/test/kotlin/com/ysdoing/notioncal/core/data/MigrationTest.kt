@@ -201,4 +201,22 @@ class MigrationTest {
             db.close()
         }
     }
+    /** v6 → v7: events.titleHasMention(기본 0)이 붙는다. */
+    @Test
+    fun v6ToV7AddsTitleMentionFlag() = runTest {
+        helper.createDatabase(6).use { db ->
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime, colorOptionId, pendingOps, extraValues)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, NULL, NULL, '', 0, NULL, 0, NULL)""",
+            )
+        }
+        helper.runMigrationsAndValidate(7).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            assertEquals(false, db.eventDao().get("p1")!!.titleHasMention)
+        } finally {
+            db.close()
+        }
+    }
 }

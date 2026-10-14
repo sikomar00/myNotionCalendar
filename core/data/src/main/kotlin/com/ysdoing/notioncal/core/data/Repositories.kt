@@ -87,6 +87,8 @@ data class EditableEvent(
     /** EX-07: 편집 화면에 보여 줄 추가 속성(설정에서 고른 것 중 지금 스키마에 있는 것). */
     val extraProps: List<ExtraProp> = emptyList(),
     val extraValues: Map<String, PropValue> = emptyMap(),
+    /** 제목에 노션 언급(@)이 있다. 제목을 바꾸면 언급이 글자로 바뀐다. */
+    val titleHasMention: Boolean = false,
 )
 
 @Singleton
@@ -104,6 +106,7 @@ class EditableEventRepository @Inject constructor(
                 dataSourceName = source.name,
                 extraProps = source.shownExtraProps(),
                 extraValues = parseExtraValues(event.extraValues),
+                titleHasMention = event.titleHasMention,
             )
         }
 }
