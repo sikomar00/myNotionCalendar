@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.feature.month
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,9 @@ import java.util.Locale
 
 private val agendaTime = DateTimeFormatter.ofPattern("H:mm")
 
+/** 목록을 뒤로 늘리는 한계(기준 날짜로부터). 미래 일정이 없을 때 끝없이 늘리지 않게. */
+private const val MAX_AHEAD_YEARS = 2L
+
 /**
  * MV-06 목록 보기. 기준 날짜 한 달 전부터 석 달 뒤까지 일정이 있는 날을 이어 보여 주고, 끝에 가까워지면 석 달씩 늘린다.
  * - 처음에는 [initialFocus]로, [jump]가 오면 그 날짜로 스크롤한다(오늘 버튼·위젯 날짜·검색 결과).
@@ -75,10 +79,15 @@ fun AgendaView(
     val from = remember(anchor) { anchor.minusMonths(1).withDayOfMonth(1) }
     var until by remember(anchor) { mutableStateOf(anchor.plusMonths(3)) }
     val flow = remember(from, until) { events(from, until) }
-    // 범위가 바뀌면 이전 범위의 값을 한 프레임이라도 쓰지 않게 새 흐름마다 상태를 새로 만든다
-    // (이전 값으로 스크롤 위치를 정해 이동 요청이 엉뚱한 날에 멈췄다).
+    // 새 흐름마다 상태를 새로 만들어 이전 범위의 값을 새 범위의 결과로 쓰지 않는다.
     val loaded = key(flow) { flow.collectAsStateWithLifecycle().value }
-    val days = remember(loaded, from, until, today) { loaded?.let { list -> Agenda.build(list, from, until, today) } }
+    // 범위를 뒤로 늘리는 동안(새 값이 오기 전)에는 이전 목록을 그대로 둔다. 목록이 잠깐 비면 스크롤 위치가 맨 앞으로 돌아간다.
+    // 기준 날짜가 바뀌면 이전 목록을 버린다(이전 기준의 목록으로 스크롤 위치를 정하지 않게).
+    var lastDays by remember(anchor) { mutableStateOf<List<AgendaDay>?>(null) }
+    val days = remember(loaded, from, until, today, anchor) {
+        loaded?.let { list -> Agenda.build(list, from, until, today, anchor) }
+    } ?: lastDays
+    LaunchedEffect(days) { if (days != null) lastDays = days }
     val listState = rememberLazyListState()
     // 기준 날짜가 바뀐 뒤 처음 데이터가 오면 한 번 그 날짜로 스크롤한다.
     var scrolledTo by remember { mutableStateOf<LocalDate?>(null) }
@@ -90,12 +99,18 @@ fun AgendaView(
         }
     }
     val focusChange by rememberUpdatedState(onFocusChange)
+    // 기준 날짜 바꾸기와 범위 늘리기는 사용자가 손가락으로 끌었을 때만 한다(처음 자리 잡기나 일정이 적어 끝이 바로 보일 때 말고).
+    var userScrolled by remember(anchor) { mutableStateOf(false) }
+    LaunchedEffect(listState, anchor) {
+        listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) userScrolled = true }
+    }
     LaunchedEffect(listState, days) {
         val shown = days ?: return@LaunchedEffect
         snapshotFlow { listState.firstVisibleItemIndex to listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
             .collect { (first, last) ->
+                if (!userScrolled) return@collect
                 shown.getOrNull(first)?.let { focusChange(it.date) }
-                if (last != null && last >= shown.size - 3) until = until.plusMonths(3)
+                if (last != null && last >= shown.size - 3 && until < anchor.plusYears(MAX_AHEAD_YEARS)) until = until.plusMonths(3)
             }
     }
     LazyColumn(modifier.fillMaxSize(), state = listState) {

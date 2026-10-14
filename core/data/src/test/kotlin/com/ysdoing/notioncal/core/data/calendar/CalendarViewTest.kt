@@ -59,4 +59,11 @@ class CalendarViewTest {
         assertEquals(listOf(today), days.map { it.date })
         assertEquals(emptyList<Any>(), days.single().items)
     }
+
+    @Test
+    fun agendaShowsAnchorWithoutEvents() {
+        // 11월에 일정이 없어도 11/1로 옮겨 오면 그 자리가 있다(맨 앞 10월로 튀지 않게).
+        val days = Agenda.build(listOf(event("a", "2026-10-03")), LocalDate.of(2026, 10, 1), LocalDate.of(2027, 2, 1), today, anchor = LocalDate.of(2026, 11, 1))
+        assertEquals(listOf(LocalDate.of(2026, 10, 3), today, LocalDate.of(2026, 11, 1)), days.map { it.date })
+    }
 }

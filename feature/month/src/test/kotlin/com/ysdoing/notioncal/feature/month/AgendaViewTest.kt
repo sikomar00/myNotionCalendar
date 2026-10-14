@@ -91,6 +91,25 @@ class AgendaViewTest {
     }
 
     @Test
+    fun anchorWithoutEventsIsShownAndNotOverwritten() {
+        // 기준 날짜 뒤로 일정이 없어도 그 날짜에 머물고, 처음 자리 잡기로 기준 날짜를 바꾸지 않는다(실기기에서 10월로 튀던 문제).
+        val focusChanges = mutableListOf<LocalDate>()
+        compose.setContent {
+            MaterialTheme {
+                AgendaView(
+                    initialFocus = LocalDate.of(2027, 1, 10), jump = null, today = today, events = ::source,
+                    onDayClick = {}, onEventClick = {}, onFocusChange = { focusChanges += it },
+                )
+            }
+        }
+        compose.onNodeWithText("1/10").assertExists()
+        compose.onNodeWithText("일정 없음").assertExists()
+        assertEquals(emptyList<LocalDate>(), focusChanges)
+        // 일정이 적어 끝이 바로 보여도 스스로 범위를 늘리지 않는다(늘리다 목록이 비어 맨 앞으로 튀던 문제).
+        assertEquals(1, requested.size)
+    }
+
+    @Test
     fun screenshotAgenda() {
         compose.setContent {
             MaterialTheme {
