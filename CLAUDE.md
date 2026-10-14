@@ -12,7 +12,7 @@
 - JDK: Android Studio 내장 JBR (`C:\Program Files\Android\Android Studio\jbr`). PATH에 없으므로 빌드 전 `JAVA_HOME`을 이 경로로 지정한다.
 - SDK: `%LOCALAPPDATA%\Android\Sdk` (local.properties의 sdk.dir). adb: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
 - 빌드: `gradlew.bat test lint assembleDebug`. 스크린샷: `adb exec-out screencap -p > docs/shots/<이름>.png`.
-- StrictMode 확인(PF-03): `adb logcat -d -s NotionCalStrictMode:W` 결과가 0줄이어야 한다. One UI 내부 위반(Typeface.setFlipFonts, IdsController)은 D 레벨 'OEM 위반 무시'로만 남는다. 새 OEM 예외는 근거 스택을 확인한 뒤에만 `StrictModeSetup.oemFrames`에 추가한다.
+- StrictMode 확인(PF-03): `adb logcat -d -s NotionCalStrictMode:W` 결과가 0줄이어야 한다. One UI 내부 위반(Typeface.setFlipFonts, IdsController, InputRune, 권한 창 등 startActivity 때 시스템 서버 ASKS)은 D 레벨 'OEM 위반 무시'로만 남는다. 새 OEM 예외는 근거 스택을 확인한 뒤에만 `StrictModeSetup.oemFrames`에 추가한다.
 
 # 모듈 규칙 (PRD §7)
 - `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`
