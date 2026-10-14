@@ -2,9 +2,7 @@ package com.ysdoing.notioncal.settings
 
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,9 +40,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
+import com.ysdoing.notioncal.reminders.notificationPermissionGranted
 import androidx.compose.ui.unit.dp
 
 /** EX-01 "10분 전", "1시간 30분 전", "1일 전", "정시". */
@@ -72,9 +71,9 @@ internal fun ReminderSection(
 ) {
     val context = LocalContext.current
     // minSdk 31: Android 13 미만은 알림 권한이 따로 없다.
-    val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    val granted = !needsPermission ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    val granted = notificationPermissionGranted(context)
+    // 권한과 별개로 시스템 설정에서 앱 알림을 끄면 알림이 오지 않는다(Android 12는 권한 대신 이것만 있다).
+    val systemEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
     var denied by rememberSaveable { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         denied = !ok
@@ -114,6 +113,20 @@ internal fun ReminderSection(
         }) { Text(stringResource(R.string.settings_holidays_open_app_settings)) }
     }
     if (!enabled || !granted) return
+    if (!systemEnabled) {
+        Text(
+            stringResource(R.string.settings_reminders_blocked),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = {
+            context.startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }) { Text(stringResource(R.string.settings_reminders_open_notification_settings)) }
+    }
 
     // 시간 일정: N분 전(여러 개)
     Text(stringResource(R.string.settings_reminders_timed), style = MaterialTheme.typography.bodyMedium)

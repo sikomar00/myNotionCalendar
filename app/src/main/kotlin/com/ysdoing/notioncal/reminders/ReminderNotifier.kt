@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -23,6 +24,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
+ * 알림 권한(POST_NOTIFICATIONS)은 Android 13부터 있다. 그 전 기기(minSdk 31·32)는 권한 없이 게시할 수 있으므로
+ * 검사하면 늘 '거부'로 나와 알림이 막힌다.
+ */
+fun notificationPermissionGranted(context: Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+/**
  * EX-01 알림 게시. 누르면 그 일정 편집 시트(퀵 시트), '완료'는 아웃박스를 거쳐 노션에 반영한다([ReminderActionReceiver]).
  * 일정 제목은 기기 알림에만 쓰고 로그에는 남기지 않는다(SEC-02).
  */
@@ -32,8 +41,7 @@ class ReminderNotifier @Inject constructor(
     private val clock: Clock,
 ) {
     fun canNotify(): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED &&
-            NotificationManagerCompat.from(context).areNotificationsEnabled()
+        notificationPermissionGranted(context) && NotificationManagerCompat.from(context).areNotificationsEnabled()
 
     fun show(reminder: Reminder) {
         if (!canNotify()) return
