@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.notion.dto.ParentDto
 import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
 import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
+import dagger.Lazy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -40,12 +41,20 @@ interface NotionWriter {
     suspend fun trashPage(pageId: String): PageDto?
 }
 
-/** [NotionApi] 호출을 감싸 실패를 [NotionException]으로 바꾼다. */
+/**
+ * [NotionApi] 호출을 감싸 실패를 [NotionException]으로 바꾼다.
+ * API(OkHttp·SSL 초기화)는 첫 호출 때 만든다. 화면 ViewModel이 메인 스레드에서 이 클래스를 주입받아도
+ * 무거운 초기화는 호출하는 쪽의 IO 스레드에서 일어난다(PF-03).
+ */
 @Singleton
 class NotionClient @Inject constructor(
-    private val api: NotionApi,
+    private val apiLazy: Lazy<NotionApi>,
     private val json: Json,
 ) : NotionReader, NotionWriter {
+    constructor(api: NotionApi, json: Json) : this(Lazy { api }, json)
+
+    private val api: NotionApi get() = apiLazy.get()
+
     suspend fun me(): UserDto = call { api.me() }
 
     suspend fun database(databaseId: String): DatabaseDto = call { api.database(databaseId) }

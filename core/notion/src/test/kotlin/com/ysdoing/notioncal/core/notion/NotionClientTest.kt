@@ -56,6 +56,23 @@ class NotionClientTest {
         MockResponse.Builder().code(code).body("""{"object":"error","status":$code,"code":"$notionCode","message":"x"}""").build()
 
     @Test
+    fun apiIsCreatedOnFirstCallNotOnInjection() = runTest {
+        // PF-03: 화면이 메인 스레드에서 주입받아도 OkHttp·SSL 초기화가 일어나지 않아야 한다.
+        var created = 0
+        val lazyClient = NotionClient(
+            dagger.Lazy {
+                created++
+                createNotionApi(server.url("/"), tokenProvider = { token }, socketTag = null)
+            },
+            NotionJson,
+        )
+        assertEquals(0, created)
+        server.enqueue(ok("""{"object":"user","id":"u1","name":"bot","type":"bot"}"""))
+        lazyClient.me()
+        assertEquals(1, created)
+    }
+
+    @Test
     fun sendsRequiredHeaders() = runTest {
         server.enqueue(ok("""{"object":"user","id":"u1","name":"bot","type":"bot"}"""))
         client.me()
