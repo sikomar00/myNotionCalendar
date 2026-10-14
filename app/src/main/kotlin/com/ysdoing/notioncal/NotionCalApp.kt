@@ -17,6 +17,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.flow.first
+import com.ysdoing.notioncal.widget.WidgetPreviews
+import com.ysdoing.notioncal.core.data.SettingsRepository
 
 @HiltAndroidApp
 class NotionCalApp : Application(), Configuration.Provider {
@@ -31,6 +34,9 @@ class NotionCalApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var reminderScheduler: ReminderScheduler
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
 
     /** 앱 프로세스 동안 사는 범위(설정 구독 등). 메인 스레드를 막지 않게 Default에서 돈다. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -55,7 +61,16 @@ class NotionCalApp : Application(), Configuration.Provider {
         periodicSync.start(appScope) // NS-06 주기 동기화
         reminderScheduler.start(appScope) // EX-01 일정 알림
         appScope.launch(Dispatchers.IO) { runCatching { QuickAdd.publishShortcut(this@NotionCalApp) } } // EX-06
+        appScope.launch(Dispatchers.IO) { publishWidgetPreviews() } // WG-08
         registerComponentCallbacks(WidgetConfigWatcher(this, resources.configuration, widgetRefresher))
+    }
+
+    /** WG-08: 버전마다 한 번 위젯 미리보기를 올린다(시스템이 호출 횟수를 제한, 실패하면 다음 시작 때 다시). */
+    private suspend fun publishWidgetPreviews() {
+        if (settingsRepository.settings.first().widgetPreviewsVersion == BuildConfig.VERSION_CODE) return
+        if (runCatching { WidgetPreviews.publish(this) }.getOrDefault(false)) {
+            settingsRepository.setWidgetPreviewsVersion(BuildConfig.VERSION_CODE)
+        }
     }
 
     private companion object {

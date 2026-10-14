@@ -29,6 +29,14 @@ import java.time.YearMonth
 class NotionCalWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Exact
 
+    /** WG-08 위젯 선택 화면 미리보기: 4×4 크기에 예시 일정(개인 일정 아님). */
+    override val previewSizeMode = SizeMode.Responsive(setOf(WidgetPreviews.MONTH_SIZE))
+
+    override suspend fun providePreview(context: Context, widgetCategory: Int) {
+        val state = WidgetPreviews.monthState()
+        provideContent { WidgetContent(state, systemFontScale = 1f) }
+    }
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val deps = WidgetDependencies.from(context)

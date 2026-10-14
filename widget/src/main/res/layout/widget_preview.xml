@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 위젯 선택 목록의 정적 미리보기. 실제 데이터 미리보기(providePreview)는 WG-08(P2). -->
+<!-- 위젯 선택 목록의 정적 미리보기. Android 15 이상 런처는 providePreview로 만든 실제 모양을 보인다(WG-08). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
