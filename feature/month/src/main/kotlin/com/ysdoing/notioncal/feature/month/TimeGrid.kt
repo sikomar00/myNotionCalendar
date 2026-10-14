@@ -75,12 +75,12 @@ fun TimeGrid(
     today: LocalDate,
     nowMinute: Int?,
     events: List<CalendarEvent>,
-    /** EX-02 공휴일(날짜 → 이름). */
-    holidays: Map<LocalDate, String> = emptyMap(),
     hourHeight: Dp,
     onDayClick: (LocalDate) -> Unit,
     onEventClick: (CalendarEvent) -> Unit,
     modifier: Modifier = Modifier,
+    /** EX-02 공휴일(날짜 → 이름). */
+    holidays: Map<LocalDate, String> = emptyMap(),
     initialScrollHour: Int = 8,
 ) {
     val dates = remember(start, days) { (0 until days).map { start.plusDays(it.toLong()) } }
