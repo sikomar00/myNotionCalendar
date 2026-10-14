@@ -83,4 +83,17 @@
     <string name="add_db_register">등록</string>
     <string name="add_db_no_date">이 DB에는 날짜 속성이 없어 달력에 표시할 수 없습니다.</string>
     <string name="add_db_preset_note">추천 값은 속성 이름으로 고른 기본값입니다. 필요하면 바꾸세요.</string>
+    <string name="reminder_channel">일정 알림</string>
+    <string name="reminder_untitled">(제목 없음)</string>
+    <string name="reminder_done">완료</string>
+    <string name="reminder_today">오늘</string>
+    <string name="reminder_tomorrow">내일</string>
+    <string name="reminder_date">%1$d월 %2$d일</string>
+    <string name="reminder_all_day">종일 · %1$s</string>
+    <string name="reminder_timed">%1$s %2$s · %3$s</string>
+    <string name="reminder_now">지금</string>
+    <string name="reminder_in_minutes">%1$d분 후</string>
+    <string name="reminder_in_hours">%1$d시간 후</string>
+    <string name="reminder_in_hours_minutes">%1$d시간 %2$d분 후</string>
+    <string name="reminder_in_days">%1$d일 후</string>
 </resources>

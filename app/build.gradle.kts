@@ -62,4 +62,10 @@ dependencies {
     baselineProfile(project(":baselineprofile"))
 
     testImplementation(libs.junit4)
+    // EX-01 알림 예약·발화 테스트(Robolectric AlarmManager·NotificationManager, Room·DataStore).
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.room.testing)
+    testImplementation(libs.datastore.preferences)
 }

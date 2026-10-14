@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- EX-02: 폰의 공휴일 캘린더(구글 '대한민국의 휴일' 등)만 읽는다. 다른 캘린더 일정은 읽지 않는다. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- EX-01 일정 알림(Android 13+ 런타임 권한). 정확한 알람(USE_EXACT_ALARM)·부팅 수신은 위젯 모듈 매니페스트에 있다. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".NotionCalApp"
@@ -44,6 +46,21 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+        <!-- EX-01 알림 발화·다시 걸기(부팅·시간 변경·앱 업데이트). -->
+        <receiver
+            android:name=".reminders.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- EX-01 알림의 '완료' 버튼. -->
+        <receiver
+            android:name=".reminders.ReminderActionReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

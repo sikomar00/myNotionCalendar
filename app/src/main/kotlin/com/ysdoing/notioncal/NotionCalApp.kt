@@ -9,6 +9,7 @@ import androidx.work.Configuration
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.sync.PeriodicSync
 import com.ysdoing.notioncal.crash.CrashReporting
+import com.ysdoing.notioncal.reminders.ReminderScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +27,9 @@ class NotionCalApp : Application(), Configuration.Provider {
 
     @Inject
     lateinit var widgetRefresher: WidgetRefresher
+
+    @Inject
+    lateinit var reminderScheduler: ReminderScheduler
 
     /** 앱 프로세스 동안 사는 범위(설정 구독 등). 메인 스레드를 막지 않게 Default에서 돈다. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -48,6 +52,7 @@ class NotionCalApp : Application(), Configuration.Provider {
             )
         }
         periodicSync.start(appScope) // NS-06 주기 동기화
+        reminderScheduler.start(appScope) // EX-01 일정 알림
         registerComponentCallbacks(WidgetConfigWatcher(this, resources.configuration, widgetRefresher))
     }
 
