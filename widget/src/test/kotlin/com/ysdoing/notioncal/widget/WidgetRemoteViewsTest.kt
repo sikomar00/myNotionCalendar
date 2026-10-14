@@ -50,7 +50,7 @@ class WidgetRemoteViewsTest {
     }
 
     private val small = DpSize(110.dp, 110.dp)
-    private val medium = DpSize(250.dp, 250.dp)
+    private val medium = DpSize(280.dp, 299.dp)
     private val large = DpSize(380.dp, 420.dp)
     private val huge = DpSize(411.dp, 800.dp)
 

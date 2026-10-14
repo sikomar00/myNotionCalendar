@@ -60,7 +60,7 @@ class WidgetLogicTest {
         val auto = WidgetMetrics.of(large, WidgetConfig(1), systemFontScale = 1f)
         assertTrue(auto.lanes in 1..WidgetMetrics.MAX_LANES)
         assertEquals(2, WidgetMetrics.of(large, WidgetConfig(1, maxPerCell = 2), 1f).lanes)
-        assertTrue(WidgetMetrics.of(DpSize(250.dp, 250.dp), WidgetConfig(1), 1f).lanes <= 2) // 중간: 제목 1줄 + N
+        assertTrue(WidgetMetrics.of(DpSize(280.dp, 299.dp), WidgetConfig(1), 1f).lanes <= 2) // 중간: 제목 1줄 + N
         // 글자를 키우거나 줄 간격을 넓히면 줄 수가 줄어든다(잘림 대신 +N).
         val big = WidgetMetrics.of(large, WidgetConfig(1, fontScale = 150, lineSpacing = LineSpacing.WIDE), 1.3f)
         assertTrue(big.lanes <= auto.lanes)
@@ -152,5 +152,27 @@ class WidgetLogicTest {
         advanceTimeBy(301)
         runCurrent()
         assertEquals(2, runs)
+    }
+    /** WS-05: 위젯 배율 × 기기 글꼴을 곱해 적용하고, 넘치면 한 단계 작은 레이아웃으로 바꾼다(넘침 0). */
+    @Test
+    fun textScaleNeverOverflowsAndStepsDown() {
+        val sizes = listOf(
+            DpSize(110.dp, 110.dp), DpSize(180.dp, 190.dp), DpSize(358.dp, 152.dp), DpSize(250.dp, 220.dp),
+            DpSize(358.dp, 250.dp), DpSize(358.dp, 350.dp), DpSize(380.dp, 420.dp), DpSize(411.dp, 800.dp),
+        )
+        for (size in sizes) for (scale in listOf(70, 100, 150)) for (font in listOf(0.8f, 1f, 1.3f, 2f)) {
+            val m = WidgetMetrics.of(size, WidgetConfig(1, fontScale = scale), font)
+            val label = "$size 배율 $scale 글꼴 $font → ${m.mode}"
+            assertTrue(label, !m.overflows)
+            assertTrue(label, m.dateLabelHeight.value <= m.weekHeight.value + 0.01f)
+            // 고른 단계는 크기로 정한 단계보다 크지 않다.
+            assertTrue(label, m.mode.ordinal <= widgetMode(size).ordinal)
+        }
+        // 기본 설정에서는 크기대로, 글자를 최대로 키우면 한 단계 내려간다.
+        val mediumSize = DpSize(280.dp, 299.dp)
+        assertEquals(WidgetMode.MEDIUM, WidgetMetrics.of(mediumSize, WidgetConfig(1), 1f).mode)
+        // 중간 크기라도 낮으면(250×250) 일정 한 줄이 칸을 넘쳐 작음으로 그린다.
+        assertEquals(WidgetMode.SMALL, WidgetMetrics.of(DpSize(250.dp, 250.dp), WidgetConfig(1), 1f).mode)
+        assertEquals(WidgetMode.SMALL, WidgetMetrics.of(mediumSize, WidgetConfig(1, fontScale = 150), 2f).mode)
     }
 }

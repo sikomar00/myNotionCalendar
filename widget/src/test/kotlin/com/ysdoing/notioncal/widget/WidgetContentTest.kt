@@ -87,7 +87,7 @@ class WidgetContentTest {
     }
 
     @Test
-    fun mediumShowsTitleAndPlusNOnOneLine() = render(DpSize(250.dp, 250.dp), WidgetSamples.state()) {
+    fun mediumShowsTitleAndPlusNOnOneLine() = render(DpSize(280.dp, 299.dp), WidgetSamples.state()) {
         // 중간(WS-03): 10/13처럼 일정이 2개인 날도 제목 1개와 +1이 함께 보인다.
         onNode(hasTextEqualTo("영어 스터디")).assertExists()
         onAllNodes(hasTextEqualTo("+1")).assertCountEquals(2) // 10/13(2개), 10/31(완료 일정 + 기간 일정)

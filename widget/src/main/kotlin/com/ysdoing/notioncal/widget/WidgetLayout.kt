@@ -33,6 +33,8 @@ data class WidgetMetrics(
     val weekHeight: Dp,
     val dateLabelHeight: Dp,
     val laneHeight: Dp,
+    /** 일정 글자가 실제로 차지하는 높이(줄 간격 여백 제외). WS-05 넘침 판정에 쓴다. */
+    val chipTextHeight: Dp,
     /** 칸당 일정 줄 수(마지막 줄은 넘칠 때 +N 자리). 1이면 날짜마다 "첫 일정 + N"을 한 줄에 그린다. */
     val lanes: Int,
     val chipFontSp: Float,
@@ -42,6 +44,9 @@ data class WidgetMetrics(
     /** 작음 단계에서 점을 그릴 공간이 있는지. */
     val showDots: Boolean,
 ) {
+    /** WS-05: 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않는다(글자가 칸을 넘친다). */
+    val overflows: Boolean get() = mode != WidgetMode.SMALL && dateLabelHeight + chipTextHeight > weekHeight + 0.5.dp
+
     companion object {
         val PADDING = 6.dp
         private val HEADER_HEIGHT = 34.dp
@@ -70,9 +75,21 @@ data class WidgetMetrics(
 
         /**
          * [systemFontScale]은 기기 글꼴 크기. sp 글자가 실제로 차지하는 높이를 dp로 어림해 줄이 잘리지 않게 한다.
+         *
+         * WS-05: 글자 배율 = 위젯 글자 배율 × 기기 글꼴 크기(상한 [MAX_SYSTEM_TEXT_SCALE]). 이 배율로 크기 단계(큼·중간)에서
+         * 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않으면 한 단계 작은 레이아웃으로 바꿔 다시 계산한다(큼 → 중간 → 작음).
+         * 작음은 줄 높이를 고정하고 글자를 줄이므로 넘치지 않는다.
          */
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): WidgetMetrics {
-            val mode = widgetMode(size)
+            var mode = widgetMode(size)
+            while (true) {
+                val metrics = compute(size, config, systemFontScale, mode)
+                if (mode == WidgetMode.SMALL || !metrics.overflows) return metrics
+                mode = if (mode == WidgetMode.LARGE) WidgetMode.MEDIUM else WidgetMode.SMALL
+            }
+        }
+
+        private fun compute(size: DpSize, config: WidgetConfig, systemFontScale: Float, mode: WidgetMode): WidgetMetrics {
             val scale = config.fontScale / 100f
             val small = mode == WidgetMode.SMALL
             // 실제로 그려지는 배율과, 그 배율이 되도록 sp에 곱할 값.
@@ -121,6 +138,7 @@ data class WidgetMetrics(
                 weekHeight = weekHeight,
                 dateLabelHeight = dateLabel,
                 laneHeight = lane,
+                chipTextHeight = lineHeight(chipFont),
                 lanes = lanes,
                 chipFontSp = chipFont * spFactor,
                 dateFontSp = dateFont * spFactor,
