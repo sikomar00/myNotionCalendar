@@ -59,11 +59,13 @@ class MonthGridScreenshotTest {
         event("13", "8월 마감", "2026-08-31", color = "#E03E3E"),
     )
 
-    private fun capture(month: YearMonth, name: String, weekStart: DayOfWeek = DayOfWeek.SUNDAY) {
+    private fun capture(month: YearMonth, name: String, weekStart: DayOfWeek = DayOfWeek.SUNDAY, zoom: Float = 1f) {
         compose.setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface {
-                    MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), events), onDayClick = {})
+                    TextZoom(zoom) {
+                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), events), onDayClick = {})
+                    }
                 }
             }
         }
@@ -86,4 +88,11 @@ class MonthGridScreenshotTest {
     @Test
     @Config(fontScale = 2.0f)
     fun maxFont() = capture(YearMonth.of(2026, 10), "month_2026_10_font_max")
+
+    // MV-08: 확대하면 줄·글자가 커지고 넘친 일정은 +N, 축소하면 더 많은 줄이 보인다.
+    @Test
+    fun zoomIn() = capture(YearMonth.of(2026, 10), "month_2026_10_zoom_150", zoom = 1.5f)
+
+    @Test
+    fun zoomOut() = capture(YearMonth.of(2026, 10), "month_2026_10_zoom_70", zoom = 0.7f)
 }

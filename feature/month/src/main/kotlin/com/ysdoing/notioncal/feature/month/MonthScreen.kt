@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +52,7 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.calendar.CalendarFocus
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
+import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
@@ -121,6 +123,10 @@ fun MonthRoute(
     }
     var sheet by rememberSaveable(stateSaver = SheetSaver) { mutableStateOf<QuickSheetStart?>(null) }
     var picking by rememberSaveable { mutableStateOf(false) }
+    // MV-08: 제스처 중에는 화면 상태만 바꾸고, 손을 떼면 저장한다.
+    val savedZoom = settings?.zoomPercent ?: CalendarZoom.DEFAULT
+    var zoomPercent by remember(savedZoom) { mutableFloatStateOf(savedZoom.toFloat()) }
+    val zoom = zoomPercent / 100f
 
     // 위젯에서 날짜를 눌러 들어오면 그 날짜로 이동하고 날짜 시트를 연다.
     LaunchedEffect(openDate) {
@@ -161,27 +167,30 @@ fun MonthRoute(
             PullToRefreshBox(
                 isRefreshing = header.syncing,
                 onRefresh = viewModel::refresh,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).pinchToZoom(
+                    onZoom = { factor -> zoomPercent = CalendarZoom.clamp(zoomPercent * factor) },
+                    onEnd = { viewModel.saveZoom(zoomPercent) },
+                ),
             ) {
                 val openDay = { date: LocalDate -> sheet = QuickSheetStart.Day(date) }
                 val openEvent = { event: CalendarEvent -> sheet = QuickSheetStart.Edit(event.pageId) }
                 when (view) {
                     CalendarView.MONTH -> MonthPager(
                         initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                        hideDone = hideDone, viewModel = viewModel, ready = settings != null,
+                        hideDone = hideDone, viewModel = viewModel, ready = settings != null, zoom = zoom,
                         onFocusChange = { focus = it }, onDayClick = openDay,
                     )
                     CalendarView.WEEK, CalendarView.THREE_DAY -> key(view) {
                         PeriodPager(
                             view = view, initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                            hideDone = hideDone, viewModel = viewModel,
+                            hideDone = hideDone, viewModel = viewModel, zoom = zoom,
                             onFocusChange = { focus = it }, onShownChange = { shownStart = it },
                             onDayClick = openDay, onEventClick = openEvent,
                         )
                     }
                     CalendarView.AGENDA -> AgendaView(
                         initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, hideDone = hideDone,
-                        onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it },
+                        onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
                     )
                 }
             }
@@ -253,6 +262,7 @@ private fun MonthPager(
     hideDone: Boolean,
     viewModel: MonthViewModel,
     ready: Boolean,
+    zoom: Float,
     onFocusChange: (LocalDate) -> Unit,
     onDayClick: (LocalDate) -> Unit,
 ) {
@@ -285,12 +295,14 @@ private fun MonthPager(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = maxHeight
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                MonthGrid(
-                    state = MonthGridState(month, weekStart, today, visible),
-                    onDayClick = onDayClick,
-                    onMove = viewModel::move,
-                    modifier = Modifier.fillMaxWidth().height(height),
-                )
+                TextZoom(zoom) {
+                    MonthGrid(
+                        state = MonthGridState(month, weekStart, today, visible),
+                        onDayClick = onDayClick,
+                        onMove = viewModel::move,
+                        modifier = Modifier.fillMaxWidth().height(height),
+                    )
+                }
             }
         }
     }
@@ -307,6 +319,7 @@ private fun PeriodPager(
     weekStart: DayOfWeek,
     hideDone: Boolean,
     viewModel: MonthViewModel,
+    zoom: Float,
     onFocusChange: (LocalDate) -> Unit,
     onShownChange: (LocalDate) -> Unit,
     onDayClick: (LocalDate) -> Unit,
@@ -347,7 +360,7 @@ private fun PeriodPager(
             today = today,
             nowMinute = nowMinute,
             events = visible,
-            hourHeight = 48.dp,
+            hourHeight = 48.dp * zoom,
             onDayClick = onDayClick,
             onEventClick = onEventClick,
             initialScrollHour = if (today in start..start.plusDays(days - 1L)) (nowMinute / 60 - 1).coerceAtLeast(0) else 8,

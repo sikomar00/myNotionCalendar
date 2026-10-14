@@ -13,6 +13,15 @@ enum class CalendarView(val days: Int) {
     AGENDA(0),
 }
 
+/** MV-08 확대 배율(%) 범위. 손을 떼면 이 범위로 잘라 저장한다. */
+object CalendarZoom {
+    const val MIN = 70
+    const val MAX = 150
+    const val DEFAULT = 100
+
+    fun clamp(percent: Float): Float = percent.coerceIn(MIN.toFloat(), MAX.toFloat())
+}
+
 /**
  * MV-06 '보기를 바꿔도 같은 날짜 유지' 규칙. 모든 보기는 기준 날짜(focus) 하나를 공유한다.
  * - 화면에 보이는 기간(달·주·3일)에 오늘이 있으면 오늘, 없으면 그 기간의 첫날을 기준 날짜로 삼는다.

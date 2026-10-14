@@ -16,6 +16,8 @@ import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
+import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
+import kotlin.math.roundToInt
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 import com.ysdoing.notioncal.core.data.dateValue
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
@@ -110,6 +112,11 @@ class MonthViewModel @Inject constructor(
                 }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
         }
+
+    /** MV-08 확대를 마친 배율을 저장한다(재실행 후에도 유지). */
+    fun saveZoom(percent: Float) {
+        viewModelScope.launch { settingsRepository.setZoomPercent(CalendarZoom.clamp(percent).roundToInt()) }
+    }
 
     /** MV-06 보기 바꾸기(마지막 보기를 기억한다). */
     fun setView(view: CalendarView) {

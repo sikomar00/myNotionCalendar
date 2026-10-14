@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
+import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,6 +28,8 @@ data class AppSettings(
     val batteryGuideDismissed: Boolean = false,
     /** MV-06 마지막으로 본 보기. */
     val calendarView: CalendarView = CalendarView.MONTH,
+    /** MV-08 두 손가락 확대 배율(%), 70~150. */
+    val zoomPercent: Int = CalendarZoom.DEFAULT,
 ) {
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
@@ -46,6 +49,7 @@ class SettingsRepository @Inject constructor(
                 syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: 15,
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
+                zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
         }
@@ -77,6 +81,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[CALENDAR_VIEW] = view.name }
     }
 
+    suspend fun setZoomPercent(percent: Int) {
+        dataStore.edit { it[ZOOM_PERCENT] = percent.coerceIn(CalendarZoom.MIN, CalendarZoom.MAX) }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -84,5 +92,6 @@ class SettingsRepository @Inject constructor(
         val DEFAULT_SOURCE = stringPreferencesKey("default_data_source")
         val BATTERY_GUIDE_DISMISSED = booleanPreferencesKey("battery_guide_dismissed")
         val CALENDAR_VIEW = stringPreferencesKey("calendar_view")
+        val ZOOM_PERCENT = intPreferencesKey("zoom_percent")
     }
 }
