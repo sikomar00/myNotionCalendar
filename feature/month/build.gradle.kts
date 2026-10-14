@@ -23,6 +23,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.compose.material.icons.core)
+    implementation(libs.androidx.activity.compose) // ReportDrawnWhen(PF-01 측정 시점)
+    implementation(libs.metrics.performance) // S25-05 JankStats
 
     testImplementation(libs.junit4)
     testImplementation(libs.robolectric)

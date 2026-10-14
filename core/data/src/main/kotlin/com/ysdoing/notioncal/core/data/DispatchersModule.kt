@@ -9,6 +9,7 @@ import androidx.room.Room
 import com.ysdoing.notioncal.core.data.db.DataSourceDao
 import com.ysdoing.notioncal.core.data.db.EventDao
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import com.ysdoing.notioncal.core.data.db.RecoveringOpenHelperFactory
 import com.ysdoing.notioncal.core.data.db.SyncLogDao
 import com.ysdoing.notioncal.core.data.db.WidgetConfigDao
 import dagger.Module
@@ -49,11 +50,21 @@ object DispatchersModule {
 @Module
 @InstallIn(SingletonComponent::class)
 object DataModule {
-    /** Room은 첫 쿼리 때 백그라운드에서 연다. 여기서는 빌더만 만든다(PF-01). */
+    /**
+     * Room은 첫 쿼리 때 백그라운드에서 연다. 여기서는 빌더만 만든다(PF-01).
+     * 마이그레이션이 실패하면 캐시만 비우고 DB 등록·위젯 설정·미전송 쓰기를 살려 다시 연다(PF-09).
+     */
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): NotionCalDatabase =
-        Room.databaseBuilder(context, NotionCalDatabase::class.java, NotionCalDatabase.NAME).build()
+    fun provideDatabase(@ApplicationContext context: Context, health: AppHealth): NotionCalDatabase =
+        Room.databaseBuilder(context, NotionCalDatabase::class.java, NotionCalDatabase.NAME)
+            .openHelperFactory(
+                RecoveringOpenHelperFactory(
+                    beforeOpen = health::checkFault, // 디버그 고장 주입(PF-10)
+                    forceRecover = health::consumeDatabaseReset, // 진단 화면의 'DB 다시 만들기'
+                ),
+            )
+            .build()
 
     @Provides
     fun provideEventDao(db: NotionCalDatabase): EventDao = db.eventDao()

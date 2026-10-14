@@ -7,6 +7,9 @@ enum class SyncTrigger {
     WIDGET_REFRESH,
     PERIODIC,
     NETWORK_RESTORED,
+
+    /** 진단 화면의 캐시 초기화 또는 DB 복구(PF-09) 뒤 전체 재동기화. */
+    CACHE_RESET,
 }
 
 /**
@@ -18,6 +21,17 @@ interface SyncRequester {
 
     /** 동기화 작업이 실행 중인지(새로고침 표시용). */
     val isSyncing: kotlinx.coroutines.flow.Flow<Boolean>
+}
+
+/** S25-04: 다음 주기 동기화 예정 시각(epoch ms, 예약이 없으면 null). 구현은 :core:sync(WorkManager). */
+interface SyncScheduleInfo {
+    val nextPeriodicAt: kotlinx.coroutines.flow.Flow<Long?>
+
+    companion object {
+        val None = object : SyncScheduleInfo {
+            override val nextPeriodicAt = kotlinx.coroutines.flow.flowOf<Long?>(null)
+        }
+    }
 }
 
 /** NS-04: 아웃박스에 쌓인 쓰기를 노션으로 보내 달라는 요청. 구현은 :core:sync(OutboxWorker). */

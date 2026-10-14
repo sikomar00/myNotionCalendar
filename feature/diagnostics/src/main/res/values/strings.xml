@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="diag_title">진단</string>
+    <string name="diag_back">뒤로</string>
+
+    <string name="diag_failure_title">앱을 정상으로 열지 못했습니다</string>
+    <string name="diag_failure_safe_mode">이전 실행이 두 번 연속 첫 화면 전에 끝나 안전 모드로 열었습니다.</string>
+    <string name="diag_failure_kind">오류 종류: %1$s</string>
+    <string name="diag_failure_hint">캐시를 초기화하거나 로그를 내보낸 뒤 다시 시도하세요. 토큰·설정·보내지 않은 일정은 지워지지 않습니다.</string>
+    <string name="diag_failure_continue">확인하고 월 화면으로</string>
+
+    <string name="diag_section_sync">동기화</string>
+    <string name="diag_last_success">마지막 성공</string>
+    <string name="diag_last_failure">마지막 실패</string>
+    <string name="diag_next_periodic">다음 주기 동기화</string>
+    <string name="diag_pending_writes">전송 대기</string>
+    <string name="diag_unseen_conflicts">미확인 충돌·실패</string>
+    <string name="diag_count">%1$d건</string>
+    <string name="diag_none">없음</string>
+    <string name="diag_not_scheduled">예약 없음</string>
+    <string name="diag_failure_entry">%1$s (%2$s, %3$s)</string>
+
+    <string name="diag_section_power">절전</string>
+    <string name="diag_battery_optimization">배터리 최적화</string>
+    <string name="diag_battery_exempt">제한 없음(예외)</string>
+    <string name="diag_battery_optimized">최적화됨(동기화가 늦어질 수 있음)</string>
+    <string name="diag_standby_bucket">앱 대기 등급</string>
+    <string name="diag_bucket_active">활성</string>
+    <string name="diag_bucket_working">자주 사용</string>
+    <string name="diag_bucket_frequent">가끔 사용</string>
+    <string name="diag_bucket_rare">드물게 사용(동기화 지연)</string>
+    <string name="diag_bucket_restricted">제한됨(동기화 거의 안 됨)</string>
+    <string name="diag_power_guide">삼성 기기에서는 설정 → 배터리 → 백그라운드 사용 제한에서 이 앱을 \'절전 앱\'·\'깊은 절전 앱\' 목록에서 빼고, \'사용하지 않는 앱을 절전 상태로 전환\'을 끄세요. 노션 변경이 위젯에 늦게 뜨는 가장 흔한 원인입니다.</string>
+    <string name="diag_open_battery_optimization">배터리 최적화 설정 열기</string>
+    <string name="diag_open_app_settings">앱 배터리 설정 열기</string>
+
+    <string name="diag_section_exits">최근 종료 사유</string>
+    <string name="diag_exit_memory_limit">메모리 한도 종료</string>
+    <string name="diag_exit_anr">응답 없음(ANR)</string>
+    <string name="diag_exit_crash">크래시</string>
+    <string name="diag_exit_crash_native">네이티브 크래시</string>
+    <string name="diag_exit_low_memory">메모리 부족</string>
+    <string name="diag_exit_resource">자원 과다 사용</string>
+    <string name="diag_exit_user">사용자가 종료</string>
+    <string name="diag_exit_self">앱이 스스로 종료</string>
+    <string name="diag_exit_signaled">시스템이 종료</string>
+    <string name="diag_exit_freezer">시스템 동결</string>
+    <string name="diag_exit_init">초기화 실패</string>
+    <string name="diag_exit_package">앱 업데이트·상태 변경</string>
+    <string name="diag_exit_permission">권한 변경</string>
+    <string name="diag_exit_other">기타</string>
+
+    <string name="diag_section_tools">도구</string>
+    <string name="diag_export">로그 내보내기</string>
+    <string name="diag_export_chooser">진단 기록 보내기</string>
+    <string name="diag_clear_cache">캐시 초기화</string>
+    <string name="diag_clear_cache_confirm_title">캐시를 초기화할까요?</string>
+    <string name="diag_clear_cache_confirm_body">일정 캐시와 동기화·충돌 기록을 지우고 노션에서 다시 받습니다. 토큰·설정·DB 등록·위젯 설정·보내지 않은 일정은 남습니다.</string>
+    <string name="diag_confirm">초기화</string>
+    <string name="diag_cancel">취소</string>
+    <string name="diag_notice_cache_cleared">캐시를 지웠습니다. 노션에서 다시 받는 중입니다.</string>
+    <string name="diag_notice_reset_on_restart">지금은 DB를 열 수 없어 다음 실행 때 새로 만듭니다. 앱을 완전히 닫았다가 다시 여세요.</string>
+    <string name="diag_notice_export_failed">로그 파일을 만들지 못했습니다.</string>
+    <string name="diag_notice_debug_done">실행했습니다: %1$s</string>
+
+    <string name="diag_section_debug">디버그 메뉴</string>
+
+    <string name="battery_guide_title">위젯이 노션 변경을 늦게 받을 수 있어요</string>
+    <string name="battery_guide_body">이 앱이 배터리 최적화 대상입니다. 삼성 기기는 백그라운드 동기화를 강하게 막으니, 배터리 최적화에서 \'제한 없음\'으로 바꾸고 절전 앱 목록에서 빼 주세요. 자세한 상태는 설정 → 진단에서 볼 수 있습니다.</string>
+    <string name="battery_guide_open">설정 열기</string>
+    <string name="battery_guide_dismiss">다시 보지 않기</string>
+</resources>

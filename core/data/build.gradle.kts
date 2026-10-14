@@ -18,6 +18,7 @@ dependencies {
     api(libs.kotlinx.coroutines.android)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.sqlite.framework) // PF-09 복구용 openHelperFactory 래퍼
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
     implementation(libs.tink.android)

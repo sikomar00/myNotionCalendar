@@ -2,6 +2,19 @@
 
 2026-10-13 작성. PRD §15 결정 항목. **선택은 사용자가 하고, 연결은 선택 후(늦어도 Phase 4 전)에 한다.**
 
+## 결정 (2026-10-14, Phase 4)
+
+**Sentry**로 연결했다. 구현은 `app/.../crash/CrashReporting.kt`.
+
+- 의존: `io.sentry:sentry-android-core` 8.60.0. 화면 녹화(replay)·NDK 모듈은 넣지 않는다(일정 내용이 화면에 보이고, 네이티브 코드가 없음).
+- DSN: `local.properties`의 `sentry.dsn=...`. 빌드 때 `BuildConfig.SENTRY_DSN`으로 들어가고 비어 있으면 수집하지 않는다. 저장소에는 넣지 않는다.
+- 초기화: 매니페스트에서 자동 초기화를 끄고(`io.sentry.auto-init=false`) `NotionCalApp`이 IO 스레드에서 시작한다(PF-03). 초기화 전 몇 ms의 크래시는 놓칠 수 있다.
+- 대상 빌드: debug·release(일상 사용이 debug 빌드라 debug도 수집, `environment`로 구분). 성능 측정 빌드(benchmarkRelease 등)는 끈다.
+- 켠 것: ANR(debug 포함), Android 17 메모리 한도 종료(`isMemoryLimiterEnabled`).
+- 끈 것: 화면 캡처, 뷰 계층, 사용자 상호작용·네트워크 브레드크럼, 기본 PII.
+- SEC-02: `beforeSend`가 예외 메시지·메시지·브레드크럼의 토큰 형식과 따옴표 안 문자열(노션 응답·제목)을 지우고, HTTP 브레드크럼은 버린다(`CrashReportingTest`).
+- 한계: Gradle 플러그인을 쓰지 않아 release의 R8 매핑 파일이 올라가지 않는다. release 스택은 난독화된 채 보인다.
+
 ## 요약
 
 | 항목 | Firebase Crashlytics | Sentry |

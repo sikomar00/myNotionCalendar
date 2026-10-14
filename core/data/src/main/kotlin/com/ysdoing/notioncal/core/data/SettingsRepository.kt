@@ -22,6 +22,8 @@ data class AppSettings(
     val syncIntervalMinutes: Int = 15,
     /** WI-02 퀵 추가 기본 DB. null이면 첫 번째로 켠 DB. */
     val defaultDataSourceId: String? = null,
+    /** S25-03 첫 실행 절전 안내 카드를 닫았는지. */
+    val batteryGuideDismissed: Boolean = false,
 ) {
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
@@ -40,6 +42,7 @@ class SettingsRepository @Inject constructor(
                 hideDone = prefs[HIDE_DONE] ?: false,
                 syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: 15,
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
+                batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -62,10 +65,15 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { if (id == null) it.remove(DEFAULT_SOURCE) else it[DEFAULT_SOURCE] = id }
     }
 
+    suspend fun dismissBatteryGuide() {
+        dataStore.edit { it[BATTERY_GUIDE_DISMISSED] = true }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
         val SYNC_INTERVAL = intPreferencesKey("sync_interval_minutes")
         val DEFAULT_SOURCE = stringPreferencesKey("default_data_source")
+        val BATTERY_GUIDE_DISMISSED = booleanPreferencesKey("battery_guide_dismissed")
     }
 }

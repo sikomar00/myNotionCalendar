@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.quicksheet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -96,6 +97,50 @@ class QuickSheetUiTest {
         }
         compose.onNodeWithContentDescription("영어 스터디 완료 표시").performClick()
         assertEquals("p1" to true, toggled)
+    }
+
+    @Test
+    fun addFormSurvivesProcessRecreation() {
+        // PF-06: 활동 유지 안 함·프로세스 회수 뒤에도 입력 중인 제목과 시간이 남는다.
+        var added: List<Any?>? = null
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            MaterialTheme {
+                AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = { t, d, time, ds -> added = listOf(t, d, time, ds) })
+            }
+        }
+        compose.onNodeWithText("제목").performTextInput("영어 스터디")
+        compose.onNodeWithContentDescription("시간 지정").performClick()
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(listOf("영어 스터디", day, TimeRange(LocalTime.of(9, 0), LocalTime.of(10, 0)), "ds"), added)
+    }
+
+    @Test
+    fun editorKeepsTurnedOffTimeAfterRecreation() {
+        // 원래 시간 일정에서 시간을 끈 상태가 복원 뒤 원래 시간으로 되돌아가면 안 된다.
+        var saved: EventChange? = null
+        val item = EditableEvent(event("p1", "회의", time = "2026-10-13T01:00:00Z"), null, emptyList(), "Calendar")
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { MaterialTheme { EventEditorForm(item, onSave = { saved = it }, onDelete = {}) } }
+        compose.onNodeWithContentDescription("시간 지정").performClick()
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        compose.onNodeWithText("저장").performClick()
+        assertEquals(dateValueOf(day, null), saved!!.date)
+    }
+
+    @Test
+    fun timeRangeSaverRoundTrip() {
+        val range = TimeRange(LocalTime.of(15, 0), LocalTime.of(16, 30))
+        val scope = androidx.compose.runtime.saveable.SaverScope { true }
+        with(TimeRangeSaver) {
+            assertEquals(range, restore(scope.save(range)!!))
+            assertNull(restore(scope.save(null)!!))
+        }
     }
 
     @Test

@@ -18,5 +18,8 @@
 - `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`
 - `:core:sync` → `:core:notion`, `:core:data`
 - `:widget` → `:core:data`만. `:core:notion` 의존 금지(위젯 네트워크 호출을 빌드 단계에서 차단).
+- `:feature:diagnostics` → `:core:data`만. 다음 동기화 시각 등 sync 정보는 `:core:data` 인터페이스(`SyncScheduleInfo`)로 받는다.
+- `:baselineprofile`(com.android.test) → `:app` 측정 전용. 실행: `gradlew :app:generateBaselineProfile`, `:baselineprofile:connectedBenchmarkReleaseAndroidTest`.
+- debug 전용 코드는 소스 세트를 나누지 않고 `BuildConfig.DEBUG`로 막는다(benchmarkRelease 빌드가 `src/release`를 쓰지 않음).
 - 공통 빌드 설정은 `build-logic/` convention plugin(`notioncal.android.*`)에 둔다.
 - 라이브러리 버전은 `gradle/libs.versions.toml`에만 적는다. 알파·베타 금지.

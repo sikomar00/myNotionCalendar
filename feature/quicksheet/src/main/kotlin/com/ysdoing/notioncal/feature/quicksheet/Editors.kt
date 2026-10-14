@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -96,7 +97,7 @@ fun AddForm(
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var date by rememberSaveable(initialDate) { mutableStateOf(initialDate) }
-    var time by remember { mutableStateOf<TimeRange?>(null) }
+    var time by rememberSaveable(stateSaver = TimeRangeSaver) { mutableStateOf<TimeRange?>(null) }
     var sourceId by rememberSaveable(defaultSourceId) { mutableStateOf(defaultSourceId) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -218,10 +219,10 @@ fun EventEditorForm(
     }
     var title by rememberSaveable(event.pageId) { mutableStateOf(event.title) }
     var date by rememberSaveable(event.pageId) { mutableStateOf(event.startDate) }
-    var time by remember(event.pageId) { mutableStateOf(originalTime) }
+    var time by rememberSaveable(event.pageId, stateSaver = TimeRangeSaver) { mutableStateOf(originalTime) }
     var done by rememberSaveable(event.pageId) { mutableStateOf(event.done) }
     var optionId by rememberSaveable(event.pageId) { mutableStateOf(item.colorOptionId) }
-    var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(
@@ -302,7 +303,7 @@ fun EventEditorForm(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DateChip(date: LocalDate, onPick: (LocalDate) -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf(false) }
     AssistChip(onClick = { open = true }, label = { Text(date.format(dateFormat)) })
     if (open) {
         // DatePicker는 UTC 자정 기준 epoch ms를 쓴다(기기 시간대와 무관하게 날짜가 밀리지 않게, NS-07).
@@ -320,11 +321,22 @@ private fun DateChip(date: LocalDate, onPick: (LocalDate) -> Unit) {
     }
 }
 
+/**
+ * PF-06: 프로세스가 죽었다 살아나도(활동 유지 안 함·메모리 회수) 입력 중인 시간을 지킨다.
+ * null(종일)도 빈 문자열로 저장해, 복원 때 처음 값으로 되돌아가지 않게 한다.
+ */
+internal val TimeRangeSaver = Saver<TimeRange?, String>(
+    save = { range -> range?.let { "${it.start}|${it.end}" } ?: "" },
+    restore = { saved ->
+        saved.takeIf { it.isNotEmpty() }?.split('|')?.let { (start, end) -> TimeRange(LocalTime.parse(start), LocalTime.parse(end)) }
+    },
+)
+
 /** 시간은 선택: 끄면 종일, 켜면 시작·종료(기본 1시간). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeChip(time: TimeRange?, onChange: (TimeRange?) -> Unit) {
-    var editing by remember { mutableStateOf<String?>(null) } // "start" | "end"
+    var editing by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end"
     val timeLabel = stringResource(R.string.qs_time)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Switch(

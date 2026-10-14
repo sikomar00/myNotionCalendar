@@ -60,7 +60,12 @@ import java.time.DayOfWeek
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsRoute(onBack: () -> Unit, onAddDatabase: () -> Unit, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsRoute(
+    onBack: () -> Unit,
+    onAddDatabase: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
     val tokenSaved by viewModel.tokenSaved.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val sources by viewModel.sources.collectAsStateWithLifecycle()
@@ -148,6 +153,15 @@ fun SettingsRoute(onBack: () -> Unit, onAddDatabase: () -> Unit, viewModel: Sett
                     }
                 }
             }
+
+            HorizontalDivider()
+            Section(stringResource(R.string.settings_section_diagnostics))
+            Text(
+                stringResource(R.string.settings_diagnostics_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.settings_open_diagnostics)) }
         }
     }
 

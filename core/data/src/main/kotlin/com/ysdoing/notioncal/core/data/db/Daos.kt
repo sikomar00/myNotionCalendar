@@ -56,6 +56,10 @@ interface EventDao {
 
     @Query("DELETE FROM events WHERE dataSourceId = :dataSourceId")
     suspend fun deleteForSource(dataSourceId: String)
+
+    /** 캐시 초기화: 노션에서 다시 받을 수 있는 일정만 지운다. 아직 보내지 않은 쓰기가 있는 일정은 남긴다. */
+    @Query("DELETE FROM events WHERE pendingOps = 0")
+    suspend fun deleteSynced()
 }
 
 @Dao
@@ -89,6 +93,10 @@ interface DataSourceDao {
 
     @Query("DELETE FROM data_sources WHERE dataSourceId = :id")
     suspend fun deleteRow(id: String)
+
+    /** 캐시 초기화 뒤 다음 동기화가 전체 조회가 되게 한다. */
+    @Query("UPDATE data_sources SET lastSyncAt = NULL, lastFullSyncAt = NULL")
+    suspend fun resetSyncCursors()
 }
 
 @Dao
@@ -101,6 +109,15 @@ interface SyncLogDao {
 
     @Query("SELECT * FROM sync_log WHERE result != 'ERROR' ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestSuccess(): Flow<SyncLogEntity?>
+
+    @Query("SELECT * FROM sync_log WHERE result != 'OK' ORDER BY at DESC, id DESC LIMIT 1")
+    fun observeLatestFailure(): Flow<SyncLogEntity?>
+
+    @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT :limit")
+    suspend fun recent(limit: Int): List<SyncLogEntity>
+
+    @Query("DELETE FROM sync_log")
+    suspend fun deleteAll()
 
     @Query("DELETE FROM sync_log WHERE id NOT IN (SELECT id FROM sync_log ORDER BY at DESC, id DESC LIMIT :keep)")
     suspend fun trim(keep: Int = 1000)

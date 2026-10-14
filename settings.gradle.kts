@@ -18,9 +18,11 @@ dependencyResolutionManagement {
 rootProject.name = "NotionCal"
 
 include(":app")
+include(":baselineprofile")
 include(":core:data")
 include(":core:notion")
 include(":core:sync")
+include(":feature:diagnostics")
 include(":feature:month")
 include(":feature:quicksheet")
 include(":widget")

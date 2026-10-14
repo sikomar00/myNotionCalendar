@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.month
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.ConflictRepository
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +52,7 @@ class MonthViewModel @Inject constructor(
     syncStatus: SyncStatusRepository,
     dataSources: DataSourceRepository,
     private val conflicts: ConflictRepository,
+    private val health: AppHealth,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -78,6 +81,10 @@ class MonthViewModel @Inject constructor(
             pendingWrites = pending,
             writeIssues = issues,
         )
+    }.catch { error ->
+        // DB를 열지 못하면 앱이 죽는 대신 진단 화면으로 간다(PF-10).
+        health.report(error)
+        emit(SyncHeader())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
 
     private val monthFlows = HashMap<Pair<YearMonth, DayOfWeek>, StateFlow<List<CalendarEvent>?>>()
@@ -87,6 +94,10 @@ class MonthViewModel @Inject constructor(
         monthFlows.getOrPut(month to weekStart) {
             val from = gridStart(month, weekStart)
             eventRepository.observeRange(from, from.plusDays(GRID_DAYS - 1))
+                .catch { error ->
+                    health.report(error)
+                    emit(emptyList())
+                }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
         }
 

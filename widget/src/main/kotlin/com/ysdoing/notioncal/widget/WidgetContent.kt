@@ -68,9 +68,13 @@ data class WidgetUiState(
 
 /** 위젯 화면. 위젯과 설정 화면 미리보기가 같은 코드를 쓴다. 비트맵 없이 레이아웃·배경색만 쓴다(PF-07). */
 @Composable
-fun WidgetContent(state: WidgetUiState) {
+fun WidgetContent(
+    state: WidgetUiState,
+    /** 기기 글꼴 크기. 위젯에서는 [SystemFontScale]이 알려 준 값을 넘긴다(세션 컨텍스트 값은 오래된 값일 수 있음). */
+    systemFontScale: Float = LocalContext.current.applicationContext.resources.configuration.fontScale,
+) {
     val context = LocalContext.current
-    val metrics = WidgetMetrics.of(LocalSize.current, state.config, context.resources.configuration.fontScale)
+    val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale)
     val palette = WidgetPalette.of(state.config.theme, state.config.opacity)
     val start = gridStart(state.month, state.weekStart)
 
@@ -120,7 +124,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
             ) {
                 Text(
                     text = context.getString(R.string.widget_month_short, state.month.monthValue),
-                    style = TextStyle(color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
             }
@@ -128,7 +132,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
             Text(
                 text = context.getString(R.string.widget_month_title, state.month.year, state.month.monthValue),
                 modifier = GlanceModifier.defaultWeight().padding(start = 4.dp),
-                style = TextStyle(color = palette.text, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
         }
@@ -149,7 +153,6 @@ private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionPara
 /** 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). 큰 크기가 아니면 여백을 줄여 한 줄에 들어가게 한다. */
 @Composable
 private fun HeaderButton(label: String, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
-    val small = metrics.mode == WidgetMode.SMALL
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
@@ -161,7 +164,7 @@ private fun HeaderButton(label: String, description: String, tag: String, action
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(color = palette.accent, fontSize = if (small) 13.sp else 15.sp, fontWeight = FontWeight.Medium))
+        Text(label, style = TextStyle(color = palette.accent, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -175,7 +178,7 @@ private fun WeekdayRow(weekStart: DayOfWeek, metrics: WidgetMetrics, palette: Wi
                 modifier = GlanceModifier.width(metrics.cellWidth),
                 style = TextStyle(
                     color = palette.dayColor(day),
-                    fontSize = if (metrics.mode == WidgetMode.SMALL) 8.sp else 10.sp,
+                    fontSize = metrics.weekdayFontSp.sp,
                     textAlign = TextAlign.Center,
                 ),
             )

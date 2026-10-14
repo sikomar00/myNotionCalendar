@@ -49,9 +49,15 @@ class GlanceWidgetRefresher @Inject constructor(
     private val debouncer = Debouncer(scope, DEBOUNCE_MS) {
         val requestedAt = firstRequestAt
         firstRequestAt = 0L
+        // 살아 있는 위젯 세션은 관찰 상태가 바뀌어야 다시 그린다. 기기 글꼴 크기도 그 상태에 넣는다(S25-06).
+        SystemFontScale.refresh(context)
         runCatching { NotionCalWidget().updateAll(context) }
             .onFailure { Log.w(TAG, "위젯 갱신 실패", it) }
-        Log.d(TAG, "위젯 갱신 완료: 첫 요청부터 ${SystemClock.elapsedRealtime() - requestedAt}ms")
+        val config = context.resources.configuration
+        Log.d(
+            TAG,
+            "위젯 갱신 완료: 첫 요청부터 ${SystemClock.elapsedRealtime() - requestedAt}ms (글꼴 ${config.fontScale}, 밀도 ${config.densityDpi})",
+        )
     }
 
     override fun requestUpdate() {

@@ -79,6 +79,28 @@ class WidgetLogicTest {
     }
 
     @Test
+    fun systemFontScaleIsCappedSoRowsDoNotClip() {
+        // S25-06: 기기 글꼴 최대(2.0)에서도 위젯 글자는 1.3배까지만 커지고, 날짜·요일·머리줄이 줄 높이 안에 들어간다.
+        val large = DpSize(380.dp, 420.dp)
+        val atCap = WidgetMetrics.of(large, WidgetConfig(1), 1.3f)
+        val huge = WidgetMetrics.of(large, WidgetConfig(1), 2.0f)
+        assertEquals(atCap.chipFontSp * 1.3f, huge.chipFontSp * 2.0f, 0.01f) // 실제로 그려지는 크기가 같다
+        assertEquals(atCap.dateFontSp * 1.3f, huge.dateFontSp * 2.0f, 0.01f)
+        assertEquals(atCap.weekdayHeight, huge.weekdayHeight)
+        assertEquals(atCap.lanes, huge.lanes)
+        for (font in listOf(0.8f, 1f, 1.3f, 2f)) {
+            val m = WidgetMetrics.of(large, WidgetConfig(1), font)
+            val rendered = minOf(font, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
+            // 글자 칸 높이(S25 실측 글자 크기의 1.65배)보다 날짜·요일 줄이 낮으면 잘린다. 일정 줄은 글자 획(1.4배)만 들어가면 된다.
+            assertTrue("요일 $font", m.weekdayHeight.value >= m.weekdayFontSp * font * 1.65f)
+            assertTrue("머리줄 $font", m.headerHeight.value >= m.headerFontSp * font * 1.4f)
+            assertTrue("날짜 $font", m.dateLabelHeight.value >= m.dateFontSp * font * 1.65f)
+            assertTrue("일정 $font", m.laneHeight.value >= m.chipFontSp * font * 1.4f)
+            assertTrue("배율 $font", m.chipFontSp * font <= 10f * rendered + 0.01f)
+        }
+    }
+
+    @Test
     fun perWidgetFilterAndHideDone() {
         val settings = AppSettings()
         val all = NotionCalWidget.uiState(WidgetSamples.october, WidgetSamples.today, settings, WidgetConfig(1), WidgetSamples.events)

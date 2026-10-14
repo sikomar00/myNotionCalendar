@@ -26,6 +26,11 @@
             </intent-filter>
         </activity>
 
+        <!-- PF-04: Sentry는 NotionCalApp에서 DSN이 있을 때만 백그라운드로 초기화한다. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
+
         <!-- Hilt WorkerFactory를 쓰려고 WorkManager 기본 초기화를 끈다(NotionCalApp이 Configuration.Provider). -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -17,6 +17,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.ysdoing.notioncal.core.data.SyncRequester
+import com.ysdoing.notioncal.core.data.SyncScheduleInfo
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.notion.NotionError
 import dagger.assisted.Assisted
@@ -76,7 +77,7 @@ class OutboxWorker @AssistedInject constructor(
 
 /** 화면에서 동기화를 요청하는 유일한 통로. 화면은 노션 API를 직접 부르지 않는다. */
 @Singleton
-class SyncScheduler @Inject constructor(@ApplicationContext private val context: Context) : SyncRequester {
+class SyncScheduler @Inject constructor(@ApplicationContext private val context: Context) : SyncRequester, SyncScheduleInfo {
     private val workManager get() = WorkManager.getInstance(context)
 
     /** NS-06 중 Phase 1 트리거(앱 열기, 당겨서 새로고침). 이미 도는 중이면 새로 쌓지 않는다. */
@@ -121,6 +122,13 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
             .build()
         workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
+
+    /** S25-04: 예약된 주기 작업의 다음 실행 시각. 삼성 절전 상태에 따라 실제 실행은 늦어질 수 있다. */
+    override val nextPeriodicAt: Flow<Long?> = workManager.getWorkInfosForUniqueWorkFlow(PERIODIC_NAME)
+        .map { infos ->
+            infos.firstOrNull { it.state == WorkInfo.State.ENQUEUED }?.nextScheduleTimeMillis?.takeIf { it != Long.MAX_VALUE }
+        }
+        .distinctUntilChanged()
 
     override val isSyncing: Flow<Boolean> = workManager.getWorkInfosByTagFlow(TAG)
         .map { infos -> infos.any { it.state == WorkInfo.State.RUNNING } }

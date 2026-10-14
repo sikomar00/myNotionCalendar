@@ -41,6 +41,7 @@ class NotionCalWidget : GlanceAppWidget() {
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
+            val fontScale by SystemFontScale.flow.collectAsState()
             // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
             val today = LocalDate.now(APP_ZONE)
             val month = YearMonth.from(today).plusMonths(config.monthOffset.toLong())
@@ -48,7 +49,7 @@ class NotionCalWidget : GlanceAppWidget() {
             val events by remember(month, settings.weekStart) {
                 deps.events().observeRange(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
             }.collectAsState(initial)
-            WidgetContent(uiState(month, today, settings, config, events))
+            WidgetContent(uiState(month, today, settings, config, events), fontScale ?: SystemFontScale.current(context))
         }
     }
 

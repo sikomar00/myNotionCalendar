@@ -96,4 +96,7 @@ interface ConflictDao {
 
     @Query("UPDATE conflicts SET seen = 1 WHERE seen = 0")
     suspend fun markAllSeen()
+
+    @Query("DELETE FROM conflicts")
+    suspend fun deleteAll()
 }

@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -57,6 +58,8 @@ fun MonthRoute(
     onOpenSettings: () -> Unit,
     openDate: LocalDate? = null,
     onOpenDateHandled: () -> Unit = {},
+    /** 상태줄 아래 추가 안내(앱이 절전 안내 카드를 넣는다, S25-03). */
+    topBanner: @Composable () -> Unit = {},
     viewModel: MonthViewModel = hiltViewModel(),
 ) {
     val today by viewModel.today.collectAsStateWithLifecycle()
@@ -74,6 +77,14 @@ fun MonthRoute(
     val scope = rememberCoroutineScope()
     var picking by rememberSaveable { mutableStateOf(false) }
     var selectedDay by rememberSaveable { mutableStateOf<LocalDate?>(null) }
+
+    // PF-01: 이번 달 일정을 처음 그린 시점을 '완전히 그림'으로 알린다(Macrobenchmark timeToFullDisplay).
+    val currentEvents by remember(baseMonth, settings?.weekStart) {
+        viewModel.eventsFor(baseMonth, settings?.weekStart ?: DayOfWeek.SUNDAY)
+    }.collectAsStateWithLifecycle()
+    ReportDrawnWhen { settings != null && currentEvents != null }
+    // S25-05: 월 스와이프 중 느린 프레임 비율을 logcat(NotionCalJank)에 남긴다.
+    MonthSwipeJankTracker(swiping = pager.isScrollInProgress)
 
     fun pageOf(month: YearMonth) = CENTER_PAGE + (month.year - baseMonth.year) * 12 + (month.monthValue - baseMonth.monthValue)
 
@@ -112,6 +123,7 @@ fun MonthRoute(
             SyncStatusLine(header)
             Banner(header, onOpenSettings)
             WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
+            topBanner()
             PullToRefreshBox(
                 isRefreshing = header.syncing,
                 onRefresh = viewModel::refresh,

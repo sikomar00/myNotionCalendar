@@ -18,7 +18,13 @@ fun widgetMode(size: DpSize): WidgetMode = when {
     else -> WidgetMode.MEDIUM
 }
 
-/** 위젯 크기·설정에서 계산한 치수. Glance에는 임의 위치 지정이 없어 막대 폭을 칸 폭의 배수로 그린다. */
+/**
+ * 위젯 크기·설정에서 계산한 치수. Glance에는 임의 위치 지정이 없어 막대 폭을 칸 폭의 배수로 그린다.
+ *
+ * 글자 크기(…Sp)는 Glance에 그대로 넘기는 sp 값이다. 위젯은 줄 높이를 dp로 고정하므로, 기기 글꼴 크기가
+ * [MAX_SYSTEM_TEXT_SCALE]를 넘으면 그 이상 커지지 않게 sp를 줄여 넘긴다(S25-06: 글꼴 최대에서 날짜·요일이 잘림).
+ * 위젯 글자를 더 키우려면 위젯 설정의 글자 배율(최대 150%)을 쓴다. 앱 화면은 기기 글꼴을 끝까지 따른다.
+ */
 data class WidgetMetrics(
     val mode: WidgetMode,
     val headerHeight: Dp,
@@ -31,6 +37,8 @@ data class WidgetMetrics(
     val lanes: Int,
     val chipFontSp: Float,
     val dateFontSp: Float,
+    val headerFontSp: Float,
+    val weekdayFontSp: Float,
     /** 작음 단계에서 점을 그릴 공간이 있는지. */
     val showDots: Boolean,
 ) {
@@ -44,6 +52,22 @@ data class WidgetMetrics(
         private const val MIN_DOT_DATE_FONT = 6.5f
         const val MAX_LANES = 6
 
+        /** 위젯 글자가 기기 글꼴 크기를 따라 커지는 상한. */
+        const val MAX_SYSTEM_TEXT_SCALE = 1.3f
+
+        /** 한글 글꼴의 실제 줄 높이(글자 크기 대비). 1.3으로는 S25에서 아랫부분이 잘렸다. */
+        private const val LINE = 1.45f
+        private const val WEEKDAY_LINE = 1.35f
+
+        /**
+         * 글자 칸(TextView)이 실제로 차지하는 높이(글자 크기 대비). S25 실측: 날짜 숫자 칸이 글꼴 0.8에서 14.5dp/8.8dp,
+         * 2.0에서 23.2dp/14.3dp. 이보다 줄이 낮으면 날짜·요일 위아래가 잘렸다.
+         */
+        private const val TEXT_BOX = 1.65f
+
+        /** 작음(2×2, 4×2)의 날짜 줄. 높이가 모자라 글자 위아래 여백만 잘리는 수준(1.3)까지 줄인다. */
+        private const val SMALL_DATE_LINE = 1.3f
+
         /**
          * [systemFontScale]은 기기 글꼴 크기. sp 글자가 실제로 차지하는 높이를 dp로 어림해 줄이 잘리지 않게 한다.
          */
@@ -51,20 +75,28 @@ data class WidgetMetrics(
             val mode = widgetMode(size)
             val scale = config.fontScale / 100f
             val small = mode == WidgetMode.SMALL
+            // 실제로 그려지는 배율과, 그 배율이 되도록 sp에 곱할 값.
+            val textScale = minOf(systemFontScale, MAX_SYSTEM_TEXT_SCALE)
+            val spFactor = textScale / systemFontScale
             val chipFont = 10f * scale
             val spacing = when (config.lineSpacing) {
                 LineSpacing.COMPACT -> 1.15f
                 LineSpacing.NORMAL -> 1.35f
                 LineSpacing.WIDE -> 1.6f
             }
-            val header = if (small) SMALL_HEADER_HEIGHT else HEADER_HEIGHT
-            val weekday = if (small) SMALL_WEEKDAY_HEIGHT else WEEKDAY_HEIGHT
+            fun lineHeight(fontSp: Float, line: Float = LINE) = (fontSp * textScale * line).dp
+            // 큰·중간: 글자에 맞춰 머리줄·요일 줄을 키운다. 작음(2×2, 4×2): 높이가 모자라 줄은 고정하고 글자를 줄인다.
+            val headerFont = if (small) minOf(13f, (SMALL_HEADER_HEIGHT - 4.dp).value / LINE / textScale) else 15f
+            val weekdayFont = if (small) minOf(8f, SMALL_WEEKDAY_HEIGHT.value / WEEKDAY_LINE / textScale) else 10f
+            val header = if (small) SMALL_HEADER_HEIGHT else maxOf(HEADER_HEIGHT, lineHeight(headerFont) + 4.dp)
+            val weekday = if (small) SMALL_WEEKDAY_HEIGHT else maxOf(WEEKDAY_HEIGHT, lineHeight(weekdayFont, TEXT_BOX))
             val contentWidth = size.width - PADDING * 2
             val weekHeight = (size.height - PADDING * 2 - header - weekday) / 6
             // 작음(2×2, 4×2)은 주 한 줄 높이가 10~18dp까지 줄어든다. 점 자리를 먼저 남기고 날짜 숫자를 맞춘다.
             // 그래도 숫자가 너무 작아지면(6.5sp 미만) 점을 포기하고 숫자만 겹치지 않게 그린다.
             val wantedDateFont = (if (small) 9f else 11f) * scale
-            fun fontFor(height: Dp) = (height - 2.dp).value / 1.3f / systemFontScale
+            val dateLine = if (small) SMALL_DATE_LINE else TEXT_BOX
+            fun fontFor(height: Dp) = (height - 2.dp).value / dateLine / textScale
             val withDots = fontFor(weekHeight - DOT_SPACE)
             val showDots = !small || withDots >= MIN_DOT_DATE_FONT
             val dateFont = when {
@@ -72,8 +104,9 @@ data class WidgetMetrics(
                 showDots -> minOf(wantedDateFont, withDots)
                 else -> minOf(wantedDateFont, fontFor(weekHeight).coerceAtLeast(5f))
             }
-            val dateLabel = (dateFont * systemFontScale * 1.3f).dp + 2.dp
-            val lane = (chipFont * systemFontScale * spacing).dp + 1.dp
+            val dateLabel = lineHeight(dateFont, dateLine) + 2.dp
+            // 줄 간격 설정은 글자 높이 위에 더하는 여백으로 쓴다(촘촘하게 해도 글자는 잘리지 않음).
+            val lane = lineHeight(chipFont) + (chipFont * textScale * (spacing - 1.15f)).dp + 1.dp
             val fit = floor((weekHeight - dateLabel) / lane).toInt().coerceIn(1, MAX_LANES)
             val lanes = when {
                 mode == WidgetMode.MEDIUM -> minOf(fit, 2)
@@ -89,8 +122,10 @@ data class WidgetMetrics(
                 dateLabelHeight = dateLabel,
                 laneHeight = lane,
                 lanes = lanes,
-                chipFontSp = chipFont,
-                dateFontSp = dateFont,
+                chipFontSp = chipFont * spFactor,
+                dateFontSp = dateFont * spFactor,
+                headerFontSp = headerFont * spFactor,
+                weekdayFontSp = weekdayFont * spFactor,
                 showDots = small && showDots,
             )
         }

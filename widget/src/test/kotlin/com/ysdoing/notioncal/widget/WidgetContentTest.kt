@@ -16,6 +16,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.DayOfWeek
 import java.time.LocalDate
+import kotlin.time.Duration.Companion.seconds
 
 /** WS-03 크기 단계별 구성과 WI-04 버튼을 Glance 단위 테스트로 확인한다. */
 @RunWith(RobolectricTestRunner::class)
@@ -23,7 +24,8 @@ class WidgetContentTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
     private fun render(size: DpSize, state: WidgetUiState, block: androidx.glance.appwidget.testing.unit.GlanceAppWidgetUnitTest.() -> Unit) =
-        runGlanceAppWidgetUnitTest {
+        // 전체 빌드(모듈 병렬 실행) 중에는 기본 대기 시간(10초)을 넘겨 간헐 실패가 났다(Phase 4).
+        runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
             setContext(context)
             setAppWidgetSize(size)
             provideComposable { WidgetContent(state) }
