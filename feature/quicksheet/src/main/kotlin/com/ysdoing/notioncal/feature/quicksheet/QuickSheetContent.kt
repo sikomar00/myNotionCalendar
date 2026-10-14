@@ -91,7 +91,11 @@ fun QuickSheetContent(
         when (start) {
             is QuickSheetStart.Add -> {
                 Text(stringResource(R.string.qs_add_title), style = MaterialTheme.typography.titleLarge)
-                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it, onAdded = onFinished) })
+                AddForm(
+                    start.date, sources, defaultSource, autoFocus = autoFocus,
+                    onAdd = { viewModel.add(it, onAdded = onFinished) },
+                    onAddRepeated = { viewModel.addAll(it, onAdded = onFinished) },
+                )
             }
             is QuickSheetStart.Day -> {
                 LaunchedEffect(start.date) { viewModel.showDay(start.date) }
@@ -101,7 +105,7 @@ fun QuickSheetContent(
                     listOfNotNull(dayTitle(start.date), holiday).joinToString(" · "),
                     style = MaterialTheme.typography.titleLarge,
                 )
-                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) })
+                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) }, onAddRepeated = { viewModel.addAll(it) })
                 HorizontalDivider()
                 DayList(
                     events = events,

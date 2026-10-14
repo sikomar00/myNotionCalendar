@@ -104,6 +104,16 @@ class QuickSheetViewModel @Inject constructor(
         }
     }
 
+    /** NS-10 반복 일정: 펼친 날짜마다 따로 만든다(아웃박스가 순서대로 보낸다). 모두 쌓은 뒤 [onAdded]. */
+    fun addAll(events: List<NewEvent>, onAdded: () -> Unit = {}) {
+        val valid = events.filter { it.title.isNotBlank() }
+        if (valid.isEmpty()) return
+        viewModelScope.launch {
+            valid.forEach { event -> writer.create(event.dataSourceId, event.title, dateValueOf(event.date, event.time, event.endDate)) }
+            onAdded()
+        }
+    }
+
     /** WI-03 */
     fun setDone(pageId: String, done: Boolean) {
         viewModelScope.launch { writer.setDone(pageId, done) }

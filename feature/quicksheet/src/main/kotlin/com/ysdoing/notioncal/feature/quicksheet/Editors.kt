@@ -80,6 +80,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import com.ysdoing.notioncal.core.data.calendar.Recurrence
+import com.ysdoing.notioncal.core.data.calendar.RepeatRule
 
 private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val dateFormat = DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN)
@@ -98,6 +100,8 @@ fun AddForm(
     autoFocus: Boolean = true,
     /** WI-07 '내일'·'다음 주 월요일'의 기준일. */
     today: LocalDate = LocalDate.now(APP_ZONE),
+    /** NS-10 반복 일정 여러 개 추가. null이면 '반복' 칩을 보이지 않는다. */
+    onAddRepeated: ((List<NewEvent>) -> Unit)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var date by rememberSaveable(initialDate) { mutableStateOf(initialDate) }
@@ -106,6 +110,8 @@ fun AddForm(
     var dateTouched by rememberSaveable(initialDate) { mutableStateOf(false) }
     var timeTouched by rememberSaveable { mutableStateOf(false) }
     var sourceId by rememberSaveable(defaultSourceId) { mutableStateOf(defaultSourceId) }
+    var repeat by rememberSaveable(stateSaver = RepeatSaver) { mutableStateOf<RepeatRule?>(null) }
+    var confirming by remember { mutableStateOf<List<NewEvent>?>(null) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val windowInfo = LocalWindowInfo.current
@@ -130,10 +136,19 @@ fun AddForm(
         val target = sourceId ?: sources.first().dataSourceId
         if (title.isNotBlank()) {
             val cleanTitle = parsed.title.takeIf { parsed.hasSchedule && it.isNotBlank() } ?: title.trim()
-            onAdd(NewEvent(cleanTitle, shownDate, shownTime, target, shownEnd))
-            title = ""
-            dateTouched = false
-            timeTouched = false
+            val rule = repeat
+            if (rule != null && onAddRepeated != null) {
+                // NS-10: 날짜를 펼쳐 만들기 전에 개수·미리보기를 확인받는다. 기간 일정은 길이를 유지한다.
+                val span = Recurrence.spanDays(shownDate, shownEnd)
+                confirming = Recurrence.expand(shownDate, rule).map { day ->
+                    NewEvent(cleanTitle, day, shownTime, target, shownEnd?.let { day.plusDays(span) })
+                }
+            } else {
+                onAdd(NewEvent(cleanTitle, shownDate, shownTime, target, shownEnd))
+                title = ""
+                dateTouched = false
+                timeTouched = false
+            }
         }
     }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -165,6 +180,7 @@ fun AddForm(
                 time = it
                 timeTouched = true
             }
+            if (onAddRepeated != null) RepeatChip(repeat, shownDate) { repeat = it }
             if (sources.size > 1) {
                 sources.forEach { s ->
                     FilterChip(selected = s.dataSourceId == (sourceId ?: sources.first().dataSourceId), onClick = { sourceId = s.dataSourceId }, label = {
@@ -173,6 +189,20 @@ fun AddForm(
                 }
             }
         }
+    }
+    confirming?.let { events ->
+        RepeatConfirmDialog(
+            events = events,
+            onConfirm = {
+                onAddRepeated?.invoke(events)
+                confirming = null
+                repeat = null
+                title = ""
+                dateTouched = false
+                timeTouched = false
+            },
+            onDismiss = { confirming = null },
+        )
     }
 }
 
