@@ -12,7 +12,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetContent
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
 import androidx.compose.ui.Modifier
-import java.time.LocalDate
 
 /**
  * MV-04 날짜 시트: 그날 목록에서 체크·편집·추가. 위젯 퀵 시트와 같은 [QuickSheetContent]를 쓴다.
@@ -20,7 +19,7 @@ import java.time.LocalDate
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DaySheet(date: LocalDate, onDismiss: () -> Unit) {
+fun DaySheet(start: QuickSheetStart, onDismiss: () -> Unit) {
     // 실기기에서 마지막 일정이 화면 아래(내비게이션 바 밑)에 걸렸다.
     // 1) 시트를 연 직후에는 그날 일정이 아직 로드되지 않아, 시트가 짧은 높이로 자리를 잡고 내용이 길어져도 올라오지
     //    않았다. → 높이를 화면의 85%로 고정해 처음부터 그 높이로 열고, 넘치는 일정은 시트 안에서 스크롤한다.
@@ -32,7 +31,7 @@ fun DaySheet(date: LocalDate, onDismiss: () -> Unit) {
         contentWindowInsets = { WindowInsets(0) },
     ) {
         QuickSheetContent(
-            start = QuickSheetStart.Day(date),
+            start = start,
             viewModel = hiltViewModel(key = "day-sheet"),
             onFinished = onDismiss,
             autoFocus = false,

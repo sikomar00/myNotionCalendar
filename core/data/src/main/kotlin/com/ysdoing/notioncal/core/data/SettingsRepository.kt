@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,6 +25,8 @@ data class AppSettings(
     val defaultDataSourceId: String? = null,
     /** S25-03 첫 실행 절전 안내 카드를 닫았는지. */
     val batteryGuideDismissed: Boolean = false,
+    /** MV-06 마지막으로 본 보기. */
+    val calendarView: CalendarView = CalendarView.MONTH,
 ) {
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
@@ -43,6 +46,7 @@ class SettingsRepository @Inject constructor(
                 syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: 15,
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
+                calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
         }
         .distinctUntilChanged()
@@ -69,11 +73,16 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[BATTERY_GUIDE_DISMISSED] = true }
     }
 
+    suspend fun setCalendarView(view: CalendarView) {
+        dataStore.edit { it[CALENDAR_VIEW] = view.name }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
         val SYNC_INTERVAL = intPreferencesKey("sync_interval_minutes")
         val DEFAULT_SOURCE = stringPreferencesKey("default_data_source")
         val BATTERY_GUIDE_DISMISSED = booleanPreferencesKey("battery_guide_dismissed")
+        val CALENDAR_VIEW = stringPreferencesKey("calendar_view")
     }
 }

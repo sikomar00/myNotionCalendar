@@ -15,6 +15,7 @@ import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 import com.ysdoing.notioncal.core.data.dateValue
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
@@ -50,7 +51,7 @@ data class SyncHeader(
 @HiltViewModel
 class MonthViewModel @Inject constructor(
     private val eventRepository: EventRepository,
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
     private val syncRequester: SyncRequester,
     syncStatus: SyncStatusRepository,
     dataSources: DataSourceRepository,
@@ -91,19 +92,29 @@ class MonthViewModel @Inject constructor(
         emit(SyncHeader())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
 
-    private val monthFlows = HashMap<Pair<YearMonth, DayOfWeek>, StateFlow<List<CalendarEvent>?>>()
+    private val rangeFlows = HashMap<Pair<LocalDate, LocalDate>, StateFlow<List<CalendarEvent>?>>()
 
     /** 그리드 42일 범위의 일정. Room만 읽으므로 오프라인·인증 오류와 무관하게 즉시 나온다(PF-02). */
-    fun eventsFor(month: YearMonth, weekStart: DayOfWeek): StateFlow<List<CalendarEvent>?> =
-        monthFlows.getOrPut(month to weekStart) {
-            val from = gridStart(month, weekStart)
-            eventRepository.observeRange(from, from.plusDays(GRID_DAYS - 1))
+    fun eventsFor(month: YearMonth, weekStart: DayOfWeek): StateFlow<List<CalendarEvent>?> {
+        val from = gridStart(month, weekStart)
+        return eventsBetween(from, from.plusDays(GRID_DAYS - 1))
+    }
+
+    /** [from]~[to]와 겹치는 일정(MV-06 주·3일·목록 보기도 같은 길로 읽는다). 같은 범위는 흐름을 함께 쓴다. */
+    fun eventsBetween(from: LocalDate, to: LocalDate): StateFlow<List<CalendarEvent>?> =
+        rangeFlows.getOrPut(from to to) {
+            eventRepository.observeRange(from, to)
                 .catch { error ->
                     health.report(error)
                     emit(emptyList())
                 }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
         }
+
+    /** MV-06 보기 바꾸기(마지막 보기를 기억한다). */
+    fun setView(view: CalendarView) {
+        viewModelScope.launch { settingsRepository.setCalendarView(view) }
+    }
 
     fun onResume() {
         _today.value = today()

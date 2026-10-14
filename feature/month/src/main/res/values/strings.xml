@@ -30,4 +30,14 @@
     <string name="timegrid_hour">%1$d시</string>
     <string name="timegrid_all_day">종일</string>
     <string name="timegrid_day_a11y">%1$d월 %2$d일 시간표</string>
+    <string name="view_month">월</string>
+    <string name="view_week">주</string>
+    <string name="view_three_day">3일</string>
+    <string name="view_agenda">목록</string>
+    <string name="period_title_same_month">%1$d월 %2$d–%3$d일</string>
+    <string name="period_title">%1$d월 %2$d일–%3$d월 %4$d일</string>
+    <string name="agenda_date">%1$d/%2$d</string>
+    <string name="agenda_empty">일정 없음</string>
+    <string name="agenda_multi_day">여러 날</string>
+    <string name="agenda_continues">이어짐</string>
 </resources>
