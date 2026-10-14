@@ -9,6 +9,8 @@
     <string name="widget_today">오늘</string>
     <string name="widget_add">일정 추가</string>
     <string name="widget_refresh">노션과 동기화</string>
+    <string name="widget_last_sync">마지막 동기화 %1$s</string>
+    <string name="widget_sync_error">동기화 오류. 눌러서 앱 열기</string>
     <string name="widget_more">+%1$d</string>
 
     <string name="widget_config_title">위젯 설정</string>

@@ -138,7 +138,7 @@ class NotionSyncEngineTest {
         remote.failWith = NotionError.Unauthorized
         widgetRefreshes = 0
         val outcome = engine().sync(SyncTrigger.PULL_TO_REFRESH)
-        assertEquals("바뀐 것이 없으면 위젯 갱신 요청도 없다", 0, widgetRefreshes)
+        assertEquals("일정은 그대로지만 위젯 오류 점(WG-07)을 위해 갱신을 한 번 요청한다", 1, widgetRefreshes)
 
         assertEquals(NotionError.Unauthorized, outcome.error)
         assertEquals(mapOf("a" to "캐시"), local())

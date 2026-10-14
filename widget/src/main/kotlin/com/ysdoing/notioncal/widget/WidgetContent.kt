@@ -41,6 +41,13 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.AppIntents
+import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.SyncStatusRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.WidgetConfig
@@ -64,7 +71,22 @@ data class WidgetUiState(
     /** DB 필터·완료 숨김을 적용한 뒤의 일정. */
     val events: List<CalendarEvent>,
     val config: WidgetConfig,
+    /** WG-07 마지막 동기화 시각·오류. */
+    val sync: WidgetSync = WidgetSync(),
 )
+
+/**
+ * WG-07 위젯 머리줄의 동기화 상태. [lastSuccessAt]은 마지막 성공 시각(ms), [failed]는 마지막 동기화가 실패했는지.
+ * 실패해도 일정은 캐시 그대로 그린다(PF-05). 자세한 안내는 앱 배너가 맡는다.
+ */
+data class WidgetSync(val lastSuccessAt: Long? = null, val failed: Boolean = false) {
+    companion object {
+        fun observe(repo: SyncStatusRepository): Flow<WidgetSync> =
+            combine(repo.latest, repo.latestSuccess) { latest, success ->
+                WidgetSync(lastSuccessAt = success?.at, failed = latest != null && latest.result != "OK")
+            }.distinctUntilChanged()
+    }
+}
 
 /** 위젯 화면. 위젯과 설정 화면 미리보기가 같은 코드를 쓴다. 비트맵 없이 레이아웃·배경색만 쓴다(PF-07). */
 @Composable
@@ -122,19 +144,32 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                     },
                 contentAlignment = Alignment.CenterStart,
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = context.getString(R.string.widget_month_short, state.month.monthValue),
+                        style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                    )
+                    SyncBadge(state, metrics, palette, showTime = false)
+                }
+            }
+        } else {
+            // 제목과 동기화 상태를 누르면 앱이 열린다(오류 안내는 앱 배너가 맡는다).
+            Row(
+                modifier = GlanceModifier
+                    .defaultWeight()
+                    .height(metrics.headerHeight)
+                    .padding(start = 4.dp)
+                    .clickable(actionStartActivity(appIntent(context))),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
-                    text = context.getString(R.string.widget_month_short, state.month.monthValue),
+                    text = context.getString(R.string.widget_month_title, state.month.year, state.month.monthValue),
                     style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
+                SyncBadge(state, metrics, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH)
             }
-        } else {
-            Text(
-                text = context.getString(R.string.widget_month_title, state.month.year, state.month.monthValue),
-                modifier = GlanceModifier.defaultWeight().padding(start = 4.dp),
-                style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
-            )
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
         HeaderButton("+", context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
@@ -147,6 +182,46 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
         HeaderButton("›", context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
     }
 }
+
+/** 동기화 시각을 보일 최소 내용 폭. 이보다 좁으면 버튼이 밀리므로 오류 점만 보인다. */
+private val SYNC_TIME_MIN_WIDTH = 290.dp
+private val syncTodayFormat = DateTimeFormatter.ofPattern("H:mm")
+private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")
+
+/** WG-07: 마지막 동기화 시각(오늘이면 시:분, 아니면 월/일)과 실패 점. */
+@Composable
+private fun SyncBadge(state: WidgetUiState, metrics: WidgetMetrics, palette: WidgetPalette, showTime: Boolean) {
+    val context = LocalContext.current
+    val at = state.sync.lastSuccessAt?.let { Instant.ofEpochMilli(it).atZone(APP_ZONE) }
+    if (showTime && at != null) {
+        val text = if (at.toLocalDate() == state.today) at.format(syncTodayFormat) else at.format(syncDateFormat)
+        Text(
+            text = text,
+            modifier = GlanceModifier.padding(start = 6.dp).semantics {
+                contentDescription = context.getString(R.string.widget_last_sync, text)
+                testTag = "syncTime"
+            },
+            style = TextStyle(color = palette.subtle, fontSize = metrics.chipFontSp.sp),
+            maxLines = 1,
+        )
+    }
+    if (state.sync.failed) {
+        Text(
+            text = "●",
+            modifier = GlanceModifier.padding(start = 4.dp).semantics {
+                contentDescription = context.getString(R.string.widget_sync_error)
+                testTag = "syncError"
+            },
+            style = TextStyle(color = palette.error, fontSize = metrics.chipFontSp.sp),
+            maxLines = 1,
+        )
+    }
+}
+
+/** 앱 첫 화면 열기(런처 실행과 같다). */
+private fun appIntent(context: Context): Intent =
+    (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
@@ -403,6 +478,8 @@ class WidgetPalette private constructor(
     val accent: ColorProvider,
     val todayBackground: ColorProvider,
     val todayText: ColorProvider,
+    /** WG-07 동기화 오류 점. */
+    val error: ColorProvider,
     private val sunday: ColorProvider,
     private val saturday: ColorProvider,
 ) {
@@ -474,6 +551,7 @@ class WidgetPalette private constructor(
                 accent = pick({ it.accent }),
                 todayBackground = pick({ it.accent }),
                 todayText = if (theme == WidgetTheme.MATERIAL_YOU) pick({ it.background }) else ColorProvider(Color.White),
+                error = ColorProvider(SUNDAY),
                 sunday = ColorProvider(SUNDAY),
                 saturday = ColorProvider(SATURDAY),
             )

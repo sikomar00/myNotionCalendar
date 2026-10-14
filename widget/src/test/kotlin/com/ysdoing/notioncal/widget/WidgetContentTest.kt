@@ -32,6 +32,31 @@ class WidgetContentTest {
             block()
         }
 
+    // WG-07: 인증 오류여도 일정은 그대로 두고 오류 점·마지막 동기화 시각을 보인다.
+    private val failedSync = WidgetSync(
+        lastSuccessAt = WidgetSamples.today.atTime(14, 39).atZone(com.ysdoing.notioncal.core.data.APP_ZONE).toInstant().toEpochMilli(),
+        failed = true,
+    )
+
+    @Test
+    fun syncErrorKeepsEventsAndShowsDotAndTime() = render(DpSize(380.dp, 420.dp), WidgetSamples.state().copy(sync = failedSync)) {
+        onAllNodes(hasTestTag("chip")).assertCountEquals(8)
+        onNode(hasTestTag("syncError")).assertExists()
+        onNode(hasTextEqualTo("14:39")).assertExists()
+    }
+
+    @Test
+    fun smallShowsErrorDotOnly() = render(DpSize(110.dp, 110.dp), WidgetSamples.state().copy(sync = failedSync)) {
+        onNode(hasTestTag("syncError")).assertExists()
+        onAllNodes(hasTestTag("syncTime")).assertCountEquals(0)
+    }
+
+    @Test
+    fun noErrorDotWhenSyncOk() = render(DpSize(380.dp, 420.dp), WidgetSamples.state().copy(sync = failedSync.copy(failed = false))) {
+        onAllNodes(hasTestTag("syncError")).assertCountEquals(0)
+        onNode(hasTestTag("syncTime")).assertExists()
+    }
+
     @Test
     fun largeShowsTitlesAndNavButtons() = render(DpSize(380.dp, 420.dp), WidgetSamples.state()) {
         onNode(hasTestTag("prev")).assertExists()

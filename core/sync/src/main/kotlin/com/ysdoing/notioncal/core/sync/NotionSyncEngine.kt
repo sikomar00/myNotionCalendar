@@ -95,6 +95,8 @@ class NotionSyncEngine @Inject constructor(
                     error = lastError?.let { it::class.simpleName },
                 ),
             )
+            // WG-07: 위젯 머리줄의 동기화 시각·오류 점을 맞춘다(일정이 그대로여도).
+            widgetRefresher.requestUpdate()
             SyncOutcome(pulled, lastError)
         }
     }

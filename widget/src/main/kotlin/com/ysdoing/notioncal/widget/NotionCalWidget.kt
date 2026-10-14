@@ -37,11 +37,13 @@ class NotionCalWidget : GlanceAppWidget() {
         val initialSettings = deps.settings().settings.first()
         val initialMonth = monthFor(initialConfig)
         val initialEvents = deps.events().observeRange(gridFrom(initialMonth, initialSettings.weekStart), gridTo(initialMonth, initialSettings.weekStart)).first()
+        val initialSync = WidgetSync.observe(deps.syncStatus()).first()
 
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
+            val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
             // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
             val today = LocalDate.now(APP_ZONE)
             val month = YearMonth.from(today).plusMonths(config.monthOffset.toLong())
@@ -49,7 +51,7 @@ class NotionCalWidget : GlanceAppWidget() {
             val events by remember(month, settings.weekStart) {
                 deps.events().observeRange(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
             }.collectAsState(initial)
-            WidgetContent(uiState(month, today, settings, config, events), fontScale ?: SystemFontScale.current(context))
+            WidgetContent(uiState(month, today, settings, config, events, sync), fontScale ?: SystemFontScale.current(context))
         }
     }
 
@@ -67,6 +69,7 @@ class NotionCalWidget : GlanceAppWidget() {
             settings: AppSettings,
             config: WidgetConfig,
             events: List<CalendarEvent>,
+            sync: WidgetSync = WidgetSync(),
         ) = WidgetUiState(
             month = month,
             today = today,
@@ -75,6 +78,7 @@ class NotionCalWidget : GlanceAppWidget() {
                 (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done)
             },
             config = config,
+            sync = sync,
         )
     }
 }

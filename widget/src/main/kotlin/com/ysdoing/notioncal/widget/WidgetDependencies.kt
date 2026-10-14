@@ -4,6 +4,7 @@ import android.content.Context
 import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.EventRepository
 import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.WidgetConfigRepository
 import com.ysdoing.notioncal.core.data.WidgetRefresher
@@ -22,6 +23,7 @@ interface WidgetDependencies {
     fun settings(): SettingsRepository
     fun widgetConfigs(): WidgetConfigRepository
     fun dataSources(): DataSourceRepository
+    fun syncStatus(): SyncStatusRepository
     fun syncRequester(): SyncRequester
 
     companion object {
