@@ -27,4 +27,7 @@
     <string name="month_issue_rejected">노션이 거부해 변경을 되돌렸습니다</string>
     <string name="month_issue_remote_deleted">노션에서 삭제되어 내 변경을 버렸습니다</string>
     <string name="month_issue_conflict">양쪽에서 바뀌어 노션 값을 남겼습니다(내 값: %1$s → 노션: %2$s)</string>
+    <string name="timegrid_hour">%1$d시</string>
+    <string name="timegrid_all_day">종일</string>
+    <string name="timegrid_day_a11y">%1$d월 %2$d일 시간표</string>
 </resources>

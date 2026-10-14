@@ -28,10 +28,13 @@ data class WeekLayoutResult(
  * 1. 여러 날 일정을 먼저 시작일 → 긴 순서로 가장 낮은 빈 줄에 놓고, 하루 일정은 받은 순서(DB·정렬 키·시간)대로 채운다.
  * 2. 칸에 [maxLanes]줄이 넘치면 그 칸의 마지막 줄을 +N 자리로 비운다. 막대가 걸친 어느 칸에서든 자리를 못 얻으면
  *    막대 전체를 숨기고, 걸친 모든 칸의 +N에 센다. 그래서 일정이 화면에서 빠지거나 겹치는 경우가 없다.
+ *
+ * [days]는 한 줄의 칸 수다. 월·위젯은 7, 시간표 보기(MV-06)의 종일 줄은 7 또는 3이다.
  */
 object WeekLayout {
-    fun layout(weekStart: LocalDate, events: List<CalendarEvent>, maxLanes: Int): WeekLayoutResult {
-        val weekEnd = weekStart.plusDays(6)
+    fun layout(weekStart: LocalDate, events: List<CalendarEvent>, maxLanes: Int, days: Int = 7): WeekLayoutResult {
+        val last = days - 1
+        val weekEnd = weekStart.plusDays(last.toLong())
         val inWeek = events.filter { !it.startDate.isAfter(weekEnd) && !it.lastDate.isBefore(weekStart) }
         val ordered = inWeek.filter { it.isMultiDay }
             .sortedWith(compareBy<CalendarEvent> { it.startDate }.thenByDescending { ChronoUnit.DAYS.between(it.startDate, it.lastDate) }) +
@@ -41,10 +44,10 @@ object WeekLayout {
         val occupied = mutableListOf<BooleanArray>()
         val all = ordered.map { event ->
             val start = maxOf(0, ChronoUnit.DAYS.between(weekStart, event.startDate).toInt())
-            val end = minOf(6, ChronoUnit.DAYS.between(weekStart, event.lastDate).toInt())
+            val end = minOf(last, ChronoUnit.DAYS.between(weekStart, event.lastDate).toInt())
             var lane = occupied.indexOfFirst { row -> (start..end).none { row[it] } }
             if (lane < 0) {
-                occupied += BooleanArray(7)
+                occupied += BooleanArray(days)
                 lane = occupied.lastIndex
             }
             (start..end).forEach { occupied[lane][it] = true }
@@ -60,12 +63,12 @@ object WeekLayout {
 
         // 2단계: 칸별 허용 줄 수를 줄여 가며 숨길 일정을 정한다(줄어들기만 하므로 반드시 끝난다).
         val lanes = maxLanes.coerceAtLeast(1)
-        val limit = IntArray(7) { col -> if (all.count { it.covers(col) } > lanes) lanes - 1 else lanes }
+        val limit = IntArray(days) { col -> if (all.count { it.covers(col) } > lanes) lanes - 1 else lanes }
         var visible: List<PlacedEvent>
         while (true) {
             visible = all.filter { p -> p.cols().all { p.lane < limit[it] } }
             var changed = false
-            for (col in 0..6) {
+            for (col in 0..last) {
                 val hiddenHere = all.count { it.covers(col) } - visible.count { it.covers(col) }
                 if (hiddenHere > 0 && limit[col] == lanes) {
                     limit[col] = lanes - 1
@@ -75,8 +78,8 @@ object WeekLayout {
             if (!changed) break
         }
 
-        val hidden = IntArray(7) { col -> all.count { it.covers(col) } - visible.count { it.covers(col) } }
-        val overflowLane = IntArray(7) { col -> if (hidden[col] > 0) limit[col] else -1 }
+        val hidden = IntArray(days) { col -> all.count { it.covers(col) } - visible.count { it.covers(col) } }
+        val overflowLane = IntArray(days) { col -> if (hidden[col] > 0) limit[col] else -1 }
         return WeekLayoutResult(visible, hidden, overflowLane)
     }
 
