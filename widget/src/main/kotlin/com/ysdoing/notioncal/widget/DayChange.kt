@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.glance.appwidget.updateAll
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +55,7 @@ class DayChangeReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                NotionCalWidget().updateAll(context)
+                AllWidgets.updateAll(context)
             } finally {
                 DayChangeScheduler.scheduleNext(context)
                 pending.finish()

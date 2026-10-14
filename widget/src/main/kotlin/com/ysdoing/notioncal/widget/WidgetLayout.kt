@@ -61,14 +61,14 @@ data class WidgetMetrics(
         const val MAX_SYSTEM_TEXT_SCALE = 1.3f
 
         /** 한글 글꼴의 실제 줄 높이(글자 크기 대비). 1.3으로는 S25에서 아랫부분이 잘렸다. */
-        private const val LINE = 1.45f
+        internal const val LINE = 1.45f
         private const val WEEKDAY_LINE = 1.35f
 
         /**
          * 글자 칸(TextView)이 실제로 차지하는 높이(글자 크기 대비). S25 실측: 날짜 숫자 칸이 글꼴 0.8에서 14.5dp/8.8dp,
          * 2.0에서 23.2dp/14.3dp. 이보다 줄이 낮으면 날짜·요일 위아래가 잘렸다.
          */
-        private const val TEXT_BOX = 1.65f
+        internal const val TEXT_BOX = 1.65f
 
         /** 작음(2×2, 4×2)의 날짜 줄. 높이가 모자라 글자 위아래 여백만 잘리는 수준(1.3)까지 줄인다. */
         private const val SMALL_DATE_LINE = 1.3f

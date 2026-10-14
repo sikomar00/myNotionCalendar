@@ -3,7 +3,6 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
-import androidx.glance.appwidget.updateAll
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +35,7 @@ class Debouncer(
     }
 }
 
-/** WG-05: 데이터가 바뀌면 모든 위젯을 갱신한다. 요청~갱신 완료 시간을 로그로 남겨 §3 지표(0.5초)를 확인한다. */
+/** WG-05: 데이터가 바뀌면 모든 위젯(월·보조)을 갱신한다. 요청~갱신 완료 시간을 로그로 남겨 §3 지표(0.5초)를 확인한다. */
 @Singleton
 class GlanceWidgetRefresher @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -51,7 +50,7 @@ class GlanceWidgetRefresher @Inject constructor(
         firstRequestAt = 0L
         // 살아 있는 위젯 세션은 관찰 상태가 바뀌어야 다시 그린다. 기기 글꼴 크기도 그 상태에 넣는다(S25-06).
         SystemFontScale.refresh(context)
-        runCatching { NotionCalWidget().updateAll(context) }
+        runCatching { AllWidgets.updateAll(context) }
             .onFailure { Log.w(TAG, "위젯 갱신 실패", it) }
         val config = context.resources.configuration
         Log.d(

@@ -68,6 +68,11 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
+    /** WG-06 보조 위젯이면 목록 미리보기를 보이고, 월 위젯 전용 설정(칸당 줄 수·줄 간격)은 숨긴다. */
+    private val isAgenda by lazy {
+        AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className == AgendaWidgetReceiver::class.java.name
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -111,11 +116,13 @@ class WidgetConfigActivity : ComponentActivity() {
         LaunchedEffect(Unit) {
             val saved = deps.widgetConfigs().get(appWidgetId)
             val settings = deps.settings().settings.first()
+            val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = deps.events().observeRange(
-                NotionCalWidget.gridFrom(month, settings.weekStart),
-                NotionCalWidget.gridTo(month, settings.weekStart),
-            ).first()
+            val events = if (isAgenda) {
+                deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
+            } else {
+                deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
+            }
             config = saved
             loaded = Loaded(settings, events, deps.dataSources().observeAll().first())
         }
@@ -159,21 +166,23 @@ class WidgetConfigActivity : ComponentActivity() {
                 steps = (WidgetConfig.FONT_SCALE_RANGE.last - WidgetConfig.FONT_SCALE_RANGE.first) / 10 - 1,
             )
 
-            Section(stringResource(R.string.widget_config_lanes))
-            Choice(
-                WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
-                config.maxPerCell,
-            ) { config = config.copy(maxPerCell = it) }
+            if (!isAgenda) {
+                Section(stringResource(R.string.widget_config_lanes))
+                Choice(
+                    WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
+                    config.maxPerCell,
+                ) { config = config.copy(maxPerCell = it) }
 
-            Section(stringResource(R.string.widget_config_spacing))
-            Choice(
-                listOf(
-                    LineSpacing.COMPACT to R.string.widget_config_spacing_compact,
-                    LineSpacing.NORMAL to R.string.widget_config_spacing_normal,
-                    LineSpacing.WIDE to R.string.widget_config_spacing_wide,
-                ),
-                config.lineSpacing,
-            ) { config = config.copy(lineSpacing = it) }
+                Section(stringResource(R.string.widget_config_spacing))
+                Choice(
+                    listOf(
+                        LineSpacing.COMPACT to R.string.widget_config_spacing_compact,
+                        LineSpacing.NORMAL to R.string.widget_config_spacing_normal,
+                        LineSpacing.WIDE to R.string.widget_config_spacing_wide,
+                    ),
+                    config.lineSpacing,
+                ) { config = config.copy(lineSpacing = it) }
+            }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
@@ -185,7 +194,11 @@ class WidgetConfigActivity : ComponentActivity() {
                     scope.launch {
                         deps.widgetConfigs().save(config)
                         val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-                        NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
+                        if (isAgenda) {
+                            AgendaWidget().update(this@WidgetConfigActivity, glanceId)
+                        } else {
+                            NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
+                        }
                         onSaved()
                     }
                 },
@@ -202,8 +215,13 @@ class WidgetConfigActivity : ComponentActivity() {
         var views by remember { mutableStateOf<RemoteViews?>(null) }
         LaunchedEffect(config) {
             val today = LocalDate.now(APP_ZONE)
-            val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
-            views = GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+            views = if (isAgenda) {
+                val state = AgendaWidget.uiState(today, config, data.events)
+                GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
+            } else {
+                val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
+                GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+            }
         }
         AndroidView(
             factory = { FrameLayout(it) },

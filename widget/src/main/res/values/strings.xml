@@ -9,6 +9,17 @@
     <string name="widget_today">오늘</string>
     <string name="widget_add">일정 추가</string>
     <string name="widget_refresh">노션과 동기화</string>
+    <string name="agenda_widget_label">노션 일정 목록</string>
+    <string name="agenda_widget_description">오늘부터 7일 동안의 노션 일정을 목록으로 보여줍니다</string>
+    <string name="agenda_widget_title">오늘 %1$d/%2$d(%3$s)</string>
+    <string name="agenda_widget_today">오늘</string>
+    <string name="agenda_widget_date">%1$d/%2$d(%3$s)</string>
+    <string name="agenda_widget_empty">일정 없음</string>
+    <string name="agenda_widget_all_day">종일</string>
+    <string name="agenda_widget_multi_day">여러 날</string>
+    <string name="agenda_widget_continues">이어짐</string>
+    <string name="agenda_widget_untitled">(제목 없음)</string>
+    <string name="agenda_widget_done">완료됨</string>
     <string name="widget_last_sync">마지막 동기화 %1$s</string>
     <string name="widget_sync_error">동기화 오류. 눌러서 앱 열기</string>
     <string name="widget_more">+%1$d</string>

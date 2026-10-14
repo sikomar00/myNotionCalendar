@@ -19,6 +19,19 @@
                 android:resource="@xml/notioncal_widget_info" />
         </receiver>
 
+        <!-- WG-06 보조 위젯(오늘·다가오는 7일). -->
+        <receiver
+            android:name=".AgendaWidgetReceiver"
+            android:exported="true"
+            android:label="@string/agenda_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/agenda_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".DayChangeReceiver"
             android:exported="false">

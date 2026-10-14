@@ -150,7 +150,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                         style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                         maxLines = 1,
                     )
-                    SyncBadge(state, metrics, palette, showTime = false)
+                    SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = false)
                 }
             }
         } else {
@@ -168,7 +168,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                     style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
-                SyncBadge(state, metrics, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH)
+                SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH)
             }
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
@@ -190,36 +190,36 @@ private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")
 
 /** WG-07: 마지막 동기화 시각(오늘이면 시:분, 아니면 월/일)과 실패 점. */
 @Composable
-private fun SyncBadge(state: WidgetUiState, metrics: WidgetMetrics, palette: WidgetPalette, showTime: Boolean) {
+internal fun SyncBadge(sync: WidgetSync, today: LocalDate, fontSp: Float, palette: WidgetPalette, showTime: Boolean) {
     val context = LocalContext.current
-    val at = state.sync.lastSuccessAt?.let { Instant.ofEpochMilli(it).atZone(APP_ZONE) }
+    val at = sync.lastSuccessAt?.let { Instant.ofEpochMilli(it).atZone(APP_ZONE) }
     if (showTime && at != null) {
-        val text = if (at.toLocalDate() == state.today) at.format(syncTodayFormat) else at.format(syncDateFormat)
+        val text = if (at.toLocalDate() == today) at.format(syncTodayFormat) else at.format(syncDateFormat)
         Text(
             text = text,
             modifier = GlanceModifier.padding(start = 6.dp).semantics {
                 contentDescription = context.getString(R.string.widget_last_sync, text)
                 testTag = "syncTime"
             },
-            style = TextStyle(color = palette.subtle, fontSize = metrics.chipFontSp.sp),
+            style = TextStyle(color = palette.subtle, fontSize = fontSp.sp),
             maxLines = 1,
         )
     }
-    if (state.sync.failed) {
+    if (sync.failed) {
         Text(
             text = "●",
             modifier = GlanceModifier.padding(start = 4.dp).semantics {
                 contentDescription = context.getString(R.string.widget_sync_error)
                 testTag = "syncError"
             },
-            style = TextStyle(color = palette.error, fontSize = metrics.chipFontSp.sp),
+            style = TextStyle(color = palette.error, fontSize = fontSp.sp),
             maxLines = 1,
         )
     }
 }
 
 /** 앱 첫 화면 열기(런처 실행과 같다). */
-private fun appIntent(context: Context): Intent =
+internal fun appIntent(context: Context): Intent =
     (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 

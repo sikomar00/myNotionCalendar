@@ -31,6 +31,7 @@ class NotionCalWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        DayChangeScheduler.cancel(context)
+        // 보조 위젯(WG-06)이 남아 있으면 자정 알람을 유지한다.
+        if (!AllWidgets.anyPlaced(context)) DayChangeScheduler.cancel(context)
     }
 }
