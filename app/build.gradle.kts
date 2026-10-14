@@ -68,4 +68,6 @@ dependencies {
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.room.testing)
     testImplementation(libs.datastore.preferences)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

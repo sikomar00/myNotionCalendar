@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.sync.HolidayScheduler
+import java.time.Clock
+import com.ysdoing.notioncal.core.data.reminders.ReminderRules
+import com.ysdoing.notioncal.reminders.ReminderScheduler
 
 sealed interface ConnectionUi {
     data object Idle : ConnectionUi
@@ -31,7 +34,33 @@ class SettingsViewModel @Inject constructor(
     private val dataSources: DataSourceRepository,
     private val settingsRepository: SettingsRepository,
     private val holidayScheduler: HolidayScheduler,
+    private val reminderScheduler: ReminderScheduler,
+    private val clock: Clock,
 ) : ViewModel() {
+    /** S25-11 정확한 알람을 쓸 수 있는지. 설정 화면이 다시 보일 때 [refreshExactAlarm]로 갱신한다. */
+    private val _exactAlarm = MutableStateFlow(reminderScheduler.exactAllowed())
+    val exactAlarm: StateFlow<Boolean> = _exactAlarm.asStateFlow()
+
+    fun refreshExactAlarm() {
+        _exactAlarm.value = reminderScheduler.exactAllowed()
+    }
+
+    /** EX-01 알림 켜기·끄기(켤 때는 권한을 받은 뒤 부른다). */
+    fun setRemindersEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setRemindersEnabled(enabled, clock.millis())
+            reminderScheduler.reschedule()
+        }
+    }
+
+    /** EX-01 알림 규칙(전체 공통). */
+    fun setReminderRules(rules: ReminderRules) {
+        viewModelScope.launch {
+            settingsRepository.setReminderRules(rules)
+            reminderScheduler.reschedule()
+        }
+    }
+
     private val _tokenSaved = MutableStateFlow<Boolean?>(null)
     val tokenSaved: StateFlow<Boolean?> = _tokenSaved.asStateFlow()
 

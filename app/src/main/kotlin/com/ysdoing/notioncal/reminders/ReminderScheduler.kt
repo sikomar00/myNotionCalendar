@@ -45,6 +45,14 @@ class ReminderScheduler @Inject constructor(
     private val alarms get() = context.getSystemService(AlarmManager::class.java)
     private val lock = Mutex()
 
+    /** 앱 설정에서 알림 권한을 거둬 갔으면 알림을 끄고 알람을 취소한다. 앱이 보일 때마다 부른다. */
+    suspend fun dropIfPermissionRevoked() {
+        if (settings.settings.first().remindersEnabled && !notifier.canNotify()) {
+            settings.setRemindersEnabled(false, clock.millis())
+            cancelAlarm()
+        }
+    }
+
     /** 정확한 알람을 걸 수 있는지(S25-11). */
     fun exactAllowed(): Boolean = alarms?.canScheduleExactAlarms() == true
 

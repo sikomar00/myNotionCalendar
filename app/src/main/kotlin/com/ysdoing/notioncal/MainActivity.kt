@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.sync.HolidayScheduler
+import com.ysdoing.notioncal.reminders.ReminderScheduler
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var holidayScheduler: HolidayScheduler
+
+    @Inject
+    lateinit var reminderScheduler: ReminderScheduler
 
     /** null: 실행 표지를 확인하는 중(수 ms), true: 안전 모드로 시작(PF-10), false: 정상 시작. */
     private var safeMode by mutableStateOf<Boolean?>(null)
@@ -86,7 +90,10 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // EX-02: 앱 설정에서 캘린더 권한을 거둔 뒤 돌아오면 공휴일을 숨긴다(프로세스 복원 실행 포함).
-        lifecycleScope.launch { holidayScheduler.dropIfPermissionRevoked() }
+        lifecycleScope.launch {
+            holidayScheduler.dropIfPermissionRevoked()
+            reminderScheduler.dropIfPermissionRevoked() // EX-01
+        }
     }
 
     /** 앱이 떠 있는 상태에서 위젯 날짜를 누르면 singleTop이라 여기로 온다. */

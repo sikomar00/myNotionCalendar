@@ -77,6 +77,7 @@ import android.net.Uri
 import android.content.pm.PackageManager
 import android.content.Intent
 import android.Manifest
+import androidx.lifecycle.compose.LifecycleResumeEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -193,6 +194,21 @@ fun SettingsRoute(
                     }
                 }
             }
+
+            HorizontalDivider()
+            Section(stringResource(R.string.settings_section_reminders))
+            val exactAlarm by viewModel.exactAlarm.collectAsStateWithLifecycle()
+            LifecycleResumeEffect(Unit) {
+                viewModel.refreshExactAlarm()
+                onPauseOrDispose { }
+            }
+            ReminderSection(
+                enabled = settings.remindersEnabled,
+                rules = settings.reminderRules,
+                exactAllowed = exactAlarm,
+                onEnable = viewModel::setRemindersEnabled,
+                onRulesChange = viewModel::setReminderRules,
+            )
 
             HorizontalDivider()
             Section(stringResource(R.string.settings_section_diagnostics))
