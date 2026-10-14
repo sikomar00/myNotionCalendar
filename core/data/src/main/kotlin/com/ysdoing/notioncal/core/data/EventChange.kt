@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data
 import com.ysdoing.notioncal.core.data.db.EventEntity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.time.Instant
 import java.time.LocalDate
 
 /**
@@ -18,10 +19,33 @@ data class DateValue(
 ) {
     val isTimed: Boolean get() = startTime != null
 
+    /**
+     * MV-07: 일정을 [days]일 옮긴다. 기간 일정은 시작·끝을 함께 옮기고, 시간 일정은 Asia/Seoul 달력 기준으로 옮겨
+     * 시각과 길이를 그대로 둔다.
+     */
+    fun shiftedDays(days: Long): DateValue {
+        if (days == 0L) return this
+        fun shiftEpoch(ms: Long) = Instant.ofEpochMilli(ms).atZone(APP_ZONE).plusDays(days).toInstant().toEpochMilli()
+        return DateValue(
+            startDate = LocalDate.parse(startDate).plusDays(days).toString(),
+            endDate = endDate?.let { LocalDate.parse(it).plusDays(days).toString() },
+            startTime = startTime?.let(::shiftEpoch),
+            endTime = endTime?.let(::shiftEpoch),
+        )
+    }
+
     companion object {
         fun allDay(date: LocalDate, end: LocalDate? = null) = DateValue(date.toString(), end?.toString())
     }
 }
+
+/** 화면 모델의 날짜를 저장용 값으로 바꾼다. */
+fun CalendarEvent.dateValue() = DateValue(
+    startDate = startDate.toString(),
+    endDate = endDate?.toString(),
+    startTime = startTime?.toEpochMilli(),
+    endTime = endTime?.toEpochMilli(),
+)
 
 /** 색 기준 select 값. [optionId]가 null이면 값을 비운다. */
 @Serializable

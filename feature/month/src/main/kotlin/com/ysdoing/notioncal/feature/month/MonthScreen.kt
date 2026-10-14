@@ -145,6 +145,7 @@ fun MonthRoute(
                             MonthGrid(
                                 state = MonthGridState(month, weekStart, today, visible),
                                 onDayClick = { selectedDay = it },
+                                onMove = viewModel::move,
                                 modifier = Modifier.fillMaxWidth().height(height),
                             )
                         }

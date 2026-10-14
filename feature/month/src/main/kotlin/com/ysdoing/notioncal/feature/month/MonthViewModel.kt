@@ -8,12 +8,15 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.ConflictRepository
 import com.ysdoing.notioncal.core.data.DataSourceRepository
+import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventRepository
+import com.ysdoing.notioncal.core.data.EventWriter
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
+import com.ysdoing.notioncal.core.data.dateValue
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.calendar.gridStart
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,6 +56,7 @@ class MonthViewModel @Inject constructor(
     dataSources: DataSourceRepository,
     private val conflicts: ConflictRepository,
     private val health: AppHealth,
+    private val writer: EventWriter,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -106,6 +110,12 @@ class MonthViewModel @Inject constructor(
     }
 
     fun refresh() = syncRequester.request(SyncTrigger.PULL_TO_REFRESH)
+
+    /** MV-07: 끌어 놓은 일정을 [days]일 옮긴다. 시간·기간 길이는 그대로고, 노션에는 아웃박스로 보낸다. */
+    fun move(event: CalendarEvent, days: Long) {
+        if (days == 0L) return
+        viewModelScope.launch { writer.update(event.pageId, EventChange(date = event.dateValue().shiftedDays(days))) }
+    }
 
     fun acknowledgeConflicts() {
         viewModelScope.launch { conflicts.markAllSeen() }
