@@ -64,7 +64,6 @@ fun AgendaView(
     jump: CalendarJump?,
     today: LocalDate,
     events: (from: LocalDate, to: LocalDate) -> StateFlow<List<CalendarEvent>?>,
-    hideDone: Boolean,
     onDayClick: (LocalDate) -> Unit,
     onEventClick: (CalendarEvent) -> Unit,
     onFocusChange: (LocalDate) -> Unit,
@@ -79,9 +78,7 @@ fun AgendaView(
     // 범위가 바뀌면 이전 범위의 값을 한 프레임이라도 쓰지 않게 새 흐름마다 상태를 새로 만든다
     // (이전 값으로 스크롤 위치를 정해 이동 요청이 엉뚱한 날에 멈췄다).
     val loaded = key(flow) { flow.collectAsStateWithLifecycle().value }
-    val days = remember(loaded, from, until, today, hideDone) {
-        loaded?.let { list -> Agenda.build(if (hideDone) list.filterNot { it.done } else list, from, until, today) }
-    }
+    val days = remember(loaded, from, until, today) { loaded?.let { list -> Agenda.build(list, from, until, today) } }
     val listState = rememberLazyListState()
     // 기준 날짜가 바뀐 뒤 처음 데이터가 오면 한 번 그 날짜로 스크롤한다.
     var scrolledTo by remember { mutableStateOf<LocalDate?>(null) }

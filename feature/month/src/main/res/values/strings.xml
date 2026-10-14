@@ -40,4 +40,11 @@
     <string name="agenda_empty">일정 없음</string>
     <string name="agenda_multi_day">여러 날</string>
     <string name="agenda_continues">이어짐</string>
+    <string name="filter_title">필터</string>
+    <string name="filter_active">필터(적용 중)</string>
+    <string name="filter_reset">모두 보기</string>
+    <string name="filter_hide_done">완료한 일정 숨기기</string>
+    <string name="filter_no_value">값 없음</string>
+    <string name="filter_note">앱 화면에만 적용됩니다. 위젯은 위젯 설정을 따릅니다.</string>
+    <string name="filter_no_sources">켜 둔 데이터베이스가 없습니다.</string>
 </resources>

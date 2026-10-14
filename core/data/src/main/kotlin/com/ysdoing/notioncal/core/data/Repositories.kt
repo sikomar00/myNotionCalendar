@@ -32,6 +32,8 @@ data class CalendarEvent(
     val url: String,
     /** 아직 노션에 보내지 않은 변경이 있다(전송 대기 표시). */
     val pending: Boolean = false,
+    /** 색 기준 select 값의 옵션 ID(MV-09 값별 숨김). 값이 없으면 null. */
+    val colorOptionId: String? = null,
 ) {
     val lastDate: LocalDate get() = endDate ?: startDate
     val isMultiDay: Boolean get() = endDate != null && endDate.isAfter(startDate)
@@ -51,6 +53,7 @@ internal fun EventRow.toCalendarEvent() = CalendarEvent(
     sourceColorHex = sourceColorHex,
     url = event.url,
     pending = event.pendingOps > 0,
+    colorOptionId = event.colorOptionId,
 )
 
 @Singleton

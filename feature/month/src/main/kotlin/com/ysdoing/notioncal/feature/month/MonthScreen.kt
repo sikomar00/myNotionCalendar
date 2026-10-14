@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -53,6 +54,7 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.calendar.CalendarFocus
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
+import com.ysdoing.notioncal.core.data.calendar.EventFilter
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
@@ -111,7 +113,9 @@ fun MonthRoute(
 
     val view = settings?.calendarView ?: CalendarView.MONTH
     val weekStart = settings?.weekStart ?: DayOfWeek.SUNDAY
-    val hideDone = settings?.hideDone ?: false
+    val filter = settings?.filter ?: EventFilter()
+    val filterSources by viewModel.filterSources.collectAsStateWithLifecycle()
+    var filtering by rememberSaveable { mutableStateOf(false) }
     var focus by rememberSaveable { mutableStateOf(today) }
     var shownStart by remember { mutableStateOf<LocalDate?>(null) }
     var jump by remember { mutableStateOf<CalendarJump?>(null) }
@@ -152,6 +156,13 @@ fun MonthRoute(
                 actions = {
                     TextButton(onClick = { jumpTo(today) }) { Text(stringResource(R.string.month_today)) }
                     ViewMenu(view, onSelect = viewModel::setView)
+                    IconButton(onClick = { filtering = true }) {
+                        Icon(
+                            FilterIcon,
+                            contentDescription = stringResource(if (filter.isActive) R.string.filter_active else R.string.filter_title),
+                            tint = if (filter.isActive) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        )
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.month_settings))
                     }
@@ -177,19 +188,19 @@ fun MonthRoute(
                 when (view) {
                     CalendarView.MONTH -> MonthPager(
                         initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                        hideDone = hideDone, viewModel = viewModel, ready = settings != null, zoom = zoom,
+                        viewModel = viewModel, ready = settings != null, zoom = zoom,
                         onFocusChange = { focus = it }, onDayClick = openDay,
                     )
                     CalendarView.WEEK, CalendarView.THREE_DAY -> key(view) {
                         PeriodPager(
                             view = view, initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                            hideDone = hideDone, viewModel = viewModel, zoom = zoom,
+                            viewModel = viewModel, zoom = zoom,
                             onFocusChange = { focus = it }, onShownChange = { shownStart = it },
                             onDayClick = openDay, onEventClick = openEvent,
                         )
                     }
                     CalendarView.AGENDA -> AgendaView(
-                        initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, hideDone = hideDone,
+                        initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween,
                         onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
                     )
                 }
@@ -206,6 +217,9 @@ fun MonthRoute(
             },
             onDismiss = { picking = false },
         )
+    }
+    if (filtering) {
+        FilterSheet(filter, filterSources, onChange = viewModel::setFilter, onDismiss = { filtering = false })
     }
     sheet?.let { start -> key(start) { DaySheet(start, onDismiss = { sheet = null }) } }
 }
@@ -259,7 +273,6 @@ private fun MonthPager(
     jump: CalendarJump?,
     today: LocalDate,
     weekStart: DayOfWeek,
-    hideDone: Boolean,
     viewModel: MonthViewModel,
     ready: Boolean,
     zoom: Float,
@@ -290,7 +303,7 @@ private fun MonthPager(
         val month = baseMonth.plusMonths((page - CENTER_PAGE).toLong())
         val flow = remember(month, weekStart) { viewModel.eventsFor(month, weekStart) }
         val events by flow.collectAsStateWithLifecycle()
-        val visible = remember(events, hideDone) { events.orEmpty().let { list -> if (hideDone) list.filterNot { it.done } else list } }
+        val visible = events.orEmpty()
         // 그리드는 스크롤할 내용이 없지만, 당겨서 새로고침이 제스처를 받도록 세로 스크롤 컨테이너에 넣는다.
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = maxHeight
@@ -317,7 +330,6 @@ private fun PeriodPager(
     jump: CalendarJump?,
     today: LocalDate,
     weekStart: DayOfWeek,
-    hideDone: Boolean,
     viewModel: MonthViewModel,
     zoom: Float,
     onFocusChange: (LocalDate) -> Unit,
@@ -353,7 +365,7 @@ private fun PeriodPager(
         val start = startOf(page)
         val flow = remember(start, days) { viewModel.eventsBetween(start, start.plusDays(days - 1L)) }
         val events by flow.collectAsStateWithLifecycle()
-        val visible = remember(events, hideDone) { events.orEmpty().let { list -> if (hideDone) list.filterNot { it.done } else list } }
+        val visible = events.orEmpty()
         TimeGrid(
             start = start,
             days = days,

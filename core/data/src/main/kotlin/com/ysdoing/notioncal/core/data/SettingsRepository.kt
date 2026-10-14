@@ -6,11 +6,13 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
+import com.ysdoing.notioncal.core.data.calendar.EventFilter
 import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,7 +32,13 @@ data class AppSettings(
     val calendarView: CalendarView = CalendarView.MONTH,
     /** MV-08 두 손가락 확대 배율(%), 70~150. */
     val zoomPercent: Int = CalendarZoom.DEFAULT,
+    /** MV-09 앱에서만 숨길 DB. */
+    val hiddenSourceIds: Set<String> = emptySet(),
+    /** MV-09 앱에서만 숨길 색 기준 값("dsId/optionId"). */
+    val hiddenOptionKeys: Set<String> = emptySet(),
 ) {
+    val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
+
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
     }
@@ -50,6 +58,8 @@ class SettingsRepository @Inject constructor(
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
+                hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
+                hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
         }
@@ -85,6 +95,15 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[ZOOM_PERCENT] = percent.coerceIn(CalendarZoom.MIN, CalendarZoom.MAX) }
     }
 
+    /** MV-09 필터를 한 번에 저장한다. 완료 숨김은 설정 화면(MV-05)과 같은 값이다. */
+    suspend fun setFilter(filter: EventFilter) {
+        dataStore.edit {
+            it[HIDDEN_SOURCES] = filter.hiddenSourceIds
+            it[HIDDEN_OPTIONS] = filter.hiddenOptionKeys
+            it[HIDE_DONE] = filter.hideDone
+        }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -93,5 +112,7 @@ class SettingsRepository @Inject constructor(
         val BATTERY_GUIDE_DISMISSED = booleanPreferencesKey("battery_guide_dismissed")
         val CALENDAR_VIEW = stringPreferencesKey("calendar_view")
         val ZOOM_PERCENT = intPreferencesKey("zoom_percent")
+        val HIDDEN_SOURCES = stringSetPreferencesKey("hidden_source_ids")
+        val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
     }
 }

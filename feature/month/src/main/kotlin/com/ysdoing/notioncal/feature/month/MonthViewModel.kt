@@ -17,6 +17,13 @@ import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
+import com.ysdoing.notioncal.core.data.calendar.EventFilter
+import com.ysdoing.notioncal.core.data.ColorOption
+import com.ysdoing.notioncal.core.data.parseColorOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 import com.ysdoing.notioncal.core.data.dateValue
@@ -50,6 +57,15 @@ data class SyncHeader(
     val writeIssues: List<ConflictEntity> = emptyList(),
 )
 
+/** MV-09 필터 시트의 DB 한 줄. [options]는 색 기준 select 값(색 속성이 없으면 비어 있다). */
+data class FilterSource(
+    val id: String,
+    val name: String,
+    val colorHex: String,
+    val hasColorProp: Boolean,
+    val options: List<ColorOption>,
+)
+
 @HiltViewModel
 class MonthViewModel @Inject constructor(
     private val eventRepository: EventRepository,
@@ -70,6 +86,28 @@ class MonthViewModel @Inject constructor(
 
     val settings: StateFlow<AppSettings?> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val filter = settingsRepository.settings.map { it.filter }.distinctUntilChanged()
+
+    /** MV-09 필터 시트에 보일 켜 둔 DB와 색 기준 값. */
+    val filterSources: StateFlow<List<FilterSource>> = dataSources.observeAll()
+        .map { sources ->
+            sources.filter { it.enabled }.map { source ->
+                FilterSource(
+                    id = source.dataSourceId,
+                    name = source.name,
+                    colorHex = source.colorHex,
+                    hasColorProp = source.colorPropId != null,
+                    options = if (source.colorPropId != null) parseColorOptions(source.colorOptions) else emptyList(),
+                )
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .catch { error ->
+            health.report(error)
+            emit(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val writeState = combine(conflicts.pendingCount, conflicts.unseen) { pending, issues -> pending to issues }
 
@@ -102,10 +140,14 @@ class MonthViewModel @Inject constructor(
         return eventsBetween(from, from.plusDays(GRID_DAYS - 1))
     }
 
-    /** [from]~[to]와 겹치는 일정(MV-06 주·3일·목록 보기도 같은 길로 읽는다). 같은 범위는 흐름을 함께 쓴다. */
+    /**
+     * [from]~[to]와 겹치는 일정(MV-06 주·3일·목록 보기도 같은 길로 읽는다). 같은 범위는 흐름을 함께 쓴다.
+     * MV-09 앱 필터를 여기서 한 번만 건다(모든 보기에 같이 적용, 위젯과는 무관).
+     */
     fun eventsBetween(from: LocalDate, to: LocalDate): StateFlow<List<CalendarEvent>?> =
         rangeFlows.getOrPut(from to to) {
-            eventRepository.observeRange(from, to)
+            combine(eventRepository.observeRange(from, to), filter) { events, f -> f.apply(events) }
+                .flowOn(Dispatchers.Default)
                 .catch { error ->
                     health.report(error)
                     emit(emptyList())
@@ -116,6 +158,11 @@ class MonthViewModel @Inject constructor(
     /** MV-08 확대를 마친 배율을 저장한다(재실행 후에도 유지). */
     fun saveZoom(percent: Float) {
         viewModelScope.launch { settingsRepository.setZoomPercent(CalendarZoom.clamp(percent).roundToInt()) }
+    }
+
+    /** MV-09 필터 저장. */
+    fun setFilter(filter: EventFilter) {
+        viewModelScope.launch { settingsRepository.setFilter(filter) }
     }
 
     /** MV-06 보기 바꾸기(마지막 보기를 기억한다). */

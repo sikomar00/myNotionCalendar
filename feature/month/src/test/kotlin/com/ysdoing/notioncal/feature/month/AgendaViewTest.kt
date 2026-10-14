@@ -59,7 +59,7 @@ class AgendaViewTest {
         compose.setContent {
             MaterialTheme {
                 AgendaView(
-                    initialFocus = LocalDate.of(2026, 10, 20), jump = null, today = today, events = ::source, hideDone = false,
+                    initialFocus = LocalDate.of(2026, 10, 20), jump = null, today = today, events = ::source,
                     onDayClick = { dayClicks += it }, onEventClick = { eventClicks += it.title }, onFocusChange = {},
                 )
             }
@@ -78,7 +78,7 @@ class AgendaViewTest {
         compose.setContent {
             MaterialTheme {
                 AgendaView(
-                    initialFocus = LocalDate.of(2026, 11, 20), jump = jump, today = today, events = ::source, hideDone = false,
+                    initialFocus = LocalDate.of(2026, 11, 20), jump = jump, today = today, events = ::source,
                     onDayClick = {}, onEventClick = {}, onFocusChange = {},
                 )
             }
@@ -96,7 +96,7 @@ class AgendaViewTest {
             MaterialTheme {
                 Surface {
                     AgendaView(
-                        initialFocus = today, jump = null, today = today, events = ::source, hideDone = false,
+                        initialFocus = today, jump = null, today = today, events = ::source,
                         onDayClick = {}, onEventClick = {}, onFocusChange = {},
                     )
                 }
