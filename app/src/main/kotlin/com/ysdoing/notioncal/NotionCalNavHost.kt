@@ -2,6 +2,10 @@ package com.ysdoing.notioncal
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -9,6 +13,7 @@ import com.ysdoing.notioncal.core.data.AppFailure
 import com.ysdoing.notioncal.feature.diagnostics.BatteryGuideCard
 import com.ysdoing.notioncal.feature.diagnostics.DiagnosticsRoute
 import com.ysdoing.notioncal.feature.month.MonthRoute
+import com.ysdoing.notioncal.feature.month.SearchRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
 import com.ysdoing.notioncal.settings.SettingsRoute
 import java.time.LocalDate
@@ -18,6 +23,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val ADD_DATABASE = "settings/add"
     const val DIAGNOSTICS = "diagnostics"
+    const val SEARCH = "search"
 }
 
 /**
@@ -33,6 +39,8 @@ fun NotionCalNavHost(
     failure: AppFailure?,
 ) {
     val nav = rememberNavController()
+    // MV-10: 검색 결과를 누르면 월 화면으로 돌아와 그 날짜를 연다(위젯 날짜와 같은 길).
+    var searchDate by rememberSaveable { mutableStateOf<LocalDate?>(null) }
     LaunchedEffect(openDate) {
         if (openDate != null) nav.popBackStack(Routes.MONTH, inclusive = false)
     }
@@ -45,9 +53,21 @@ fun NotionCalNavHost(
         composable(Routes.MONTH) {
             MonthRoute(
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
-                openDate = openDate,
-                onOpenDateHandled = onOpenDateHandled,
+                openDate = openDate ?: searchDate,
+                onOpenDateHandled = {
+                    if (openDate != null) onOpenDateHandled() else searchDate = null
+                },
+                onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
                 topBanner = { BatteryGuideCard() },
+            )
+        }
+        composable(Routes.SEARCH) {
+            SearchRoute(
+                onBack = { nav.popBackStack() },
+                onPick = { event ->
+                    searchDate = event.startDate
+                    nav.popBackStack(Routes.MONTH, inclusive = false)
+                },
             )
         }
         composable(Routes.SETTINGS) {

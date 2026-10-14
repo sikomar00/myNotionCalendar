@@ -21,6 +21,24 @@ interface EventDao {
     )
     fun observeRange(from: LocalDate, to: LocalDate): Flow<List<EventRow>>
 
+    /**
+     * MV-10 제목 검색(켜 둔 DB만). [pattern]은 `%`·`_`·`\`를 이스케이프한 검색어다. 영문은 대소문자를 가리지 않는다(SQLite LIKE).
+     * 아직 안 끝난 일정(오늘 이후)을 날짜 오름차순으로 먼저, 지난 일정을 최근 것부터 뒤에 둔다.
+     */
+    @Query(
+        """
+        SELECT e.*, d.colorHex AS sourceColorHex FROM events e
+        JOIN data_sources d ON e.dataSourceId = d.dataSourceId
+        WHERE d.enabled = 1 AND e.title LIKE '%' || :pattern || '%' ESCAPE '\'
+        ORDER BY COALESCE(e.endDate, e.startDate) < :today,
+          CASE WHEN COALESCE(e.endDate, e.startDate) >= :today THEN e.startDate END ASC,
+          CASE WHEN COALESCE(e.endDate, e.startDate) < :today THEN e.startDate END DESC,
+          e.startTime IS NOT NULL, e.startTime, e.title
+        LIMIT :limit
+        """,
+    )
+    suspend fun search(pattern: String, today: LocalDate, limit: Int): List<EventRow>
+
     @Upsert
     suspend fun upsert(events: List<EventEntity>)
 

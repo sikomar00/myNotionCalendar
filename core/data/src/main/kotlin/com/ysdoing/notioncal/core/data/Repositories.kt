@@ -61,6 +61,21 @@ class EventRepository @Inject constructor(private val eventDao: EventDao) {
     /** Room 조회만 한다. 네트워크와 무관하게 즉시 마지막 데이터를 낸다(PF-02). */
     fun observeRange(from: LocalDate, to: LocalDate): Flow<List<CalendarEvent>> =
         eventDao.observeRange(from, to).map { rows -> rows.map { it.toCalendarEvent() } }
+
+    /** MV-10 로컬 캐시 제목 검색. 앞뒤 공백은 무시하고, 빈 검색어는 빈 결과다. 앱 필터(MV-09)는 걸지 않는다. */
+    suspend fun search(query: String, today: LocalDate, limit: Int = SEARCH_LIMIT): List<CalendarEvent> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return eventDao.search(escapeLike(trimmed), today, limit).map { it.toCalendarEvent() }
+    }
+
+    companion object {
+        const val SEARCH_LIMIT = 100
+
+        /** LIKE 와일드카드를 글자 그대로 찾게 한다(ESCAPE '\\'). */
+        fun escapeLike(text: String): String =
+            text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    }
 }
 
 /** 편집 시트(WI-05)가 쓰는 일정 1개와 그 DB의 색 기준 선택지. */

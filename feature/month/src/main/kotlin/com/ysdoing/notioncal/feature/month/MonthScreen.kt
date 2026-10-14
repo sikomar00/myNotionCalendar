@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -98,6 +99,8 @@ private val SheetSaver = Saver<QuickSheetStart?, String>(
 fun MonthRoute(
     onOpenSettings: () -> Unit,
     openDate: LocalDate? = null,
+    /** MV-10 검색 화면 열기. */
+    onOpenSearch: () -> Unit = {},
     onOpenDateHandled: () -> Unit = {},
     /** 상태줄 아래 추가 안내(앱이 절전 안내 카드를 넣는다, S25-03). */
     topBanner: @Composable () -> Unit = {},
@@ -156,6 +159,9 @@ fun MonthRoute(
                 actions = {
                     TextButton(onClick = { jumpTo(today) }) { Text(stringResource(R.string.month_today)) }
                     ViewMenu(view, onSelect = viewModel::setView)
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_title))
+                    }
                     IconButton(onClick = { filtering = true }) {
                         Icon(
                             FilterIcon,

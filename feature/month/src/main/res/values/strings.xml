@@ -47,4 +47,11 @@
     <string name="filter_no_value">값 없음</string>
     <string name="filter_note">앱 화면에만 적용됩니다. 위젯은 위젯 설정을 따릅니다.</string>
     <string name="filter_no_sources">켜 둔 데이터베이스가 없습니다.</string>
+    <string name="search_title">검색</string>
+    <string name="search_hint">일정 제목 검색</string>
+    <string name="search_back">뒤로</string>
+    <string name="search_clear">지우기</string>
+    <string name="search_empty_query">찾을 일정 제목을 입력하세요.</string>
+    <string name="search_no_result">찾는 일정이 없습니다.</string>
+    <string name="search_untitled">(제목 없음)</string>
 </resources>
