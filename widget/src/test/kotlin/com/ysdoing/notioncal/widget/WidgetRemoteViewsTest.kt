@@ -19,6 +19,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * 실제 RemoteViews 변환. Glance Row·Column 자식이 10개를 넘으면 여기서 예외가 난다(PRD §13).
@@ -55,7 +56,8 @@ class WidgetRemoteViewsTest {
     private val huge = DpSize(411.dp, 800.dp)
 
     @Test
-    fun denseDataTranslatesInEverySizeAndSetting() = runTest {
+    // 30번 렌더한다. 전체 병렬 빌드 중에는 1분(기본)을 넘길 때가 있어 넉넉히 둔다.
+    fun denseDataTranslatesInEverySizeAndSetting() = runTest(timeout = 3.minutes) {
         val configs = listOf(
             WidgetConfig(1),
             WidgetConfig(1, fontScale = 70),

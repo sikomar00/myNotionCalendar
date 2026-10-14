@@ -199,6 +199,16 @@ private fun SyncSection(state: DiagnosticsUiState) {
         InfoRow(stringResource(R.string.diag_next_periodic), sync?.nextPeriodicAt?.let(::time) ?: stringResource(R.string.diag_not_scheduled))
         InfoRow(stringResource(R.string.diag_pending_writes), stringResource(R.string.diag_count, sync?.pendingWrites ?: 0))
         InfoRow(stringResource(R.string.diag_unseen_conflicts), stringResource(R.string.diag_count, sync?.unseenConflicts ?: 0))
+        InfoRow(
+            stringResource(R.string.diag_holiday_source),
+            stringResource(
+                when (sync?.holidaySource) {
+                    "GOOGLE" -> R.string.diag_holiday_google
+                    "SAMSUNG" -> R.string.diag_holiday_samsung
+                    else -> R.string.diag_none
+                },
+            ),
+        )
     }
 }
 

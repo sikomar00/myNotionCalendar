@@ -98,3 +98,13 @@ data class SyncLogEntity(
     /** NotionError 종류 이름(예: "Unauthorized"). */
     val error: String?,
 )
+
+/** EX-02 공휴일(PRD §10 holidays). 폰의 공휴일 캘린더에서 복사한다. 날짜 하나에 이름 하나. */
+@Entity(tableName = "holidays")
+data class HolidayEntity(
+    @PrimaryKey val date: LocalDate,
+    val name: String,
+    /** "GOOGLE"(대한민국의 휴일) 또는 "SAMSUNG"(삼성 공휴일). */
+    val source: String,
+)
+

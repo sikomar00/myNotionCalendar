@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- EX-02: 폰의 공휴일 캘린더(구글 '대한민국의 휴일' 등)만 읽는다. 다른 캘린더 일정은 읽지 않는다. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
 
     <application
         android:name=".NotionCalApp"

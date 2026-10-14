@@ -21,6 +21,8 @@ data class SyncDiagnostics(
     val nextPeriodicAt: Long?,
     val pendingWrites: Int,
     val unseenConflicts: Int,
+    /** EX-02 공휴일 출처("GOOGLE"·"SAMSUNG", 없으면 null). */
+    val holidaySource: String? = null,
 )
 
 /** 로그 내보내기에 덧붙일 화면 쪽 정보(절전 상태, 종료 사유 등). 줄마다 마스킹을 다시 거친다. */
@@ -46,7 +48,7 @@ class DiagnosticsRepository @Inject constructor(
         db.conflictDao().observeUnseen().map { it.size },
     ) { success, failure, next, pending, conflicts ->
         SyncDiagnostics(success, failure, next, pending, conflicts)
-    }
+    }.combine(db.holidayDao().observeSource()) { diagnostics, holidays -> diagnostics.copy(holidaySource = holidays) }
 
     /**
      * 노션에서 다시 받을 수 있는 것(일정 캐시, 동기화 기록, 충돌 기록)만 지우고 전체 재동기화를 요청한다.

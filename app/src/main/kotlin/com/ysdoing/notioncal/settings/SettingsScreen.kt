@@ -68,6 +68,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.filled.Warning
 import com.ysdoing.notioncal.core.data.SchemaIssue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.provider.Settings
+import android.net.Uri
+import android.content.pm.PackageManager
+import android.content.Intent
+import android.Manifest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -144,6 +153,7 @@ fun SettingsRoute(
                 }
                 Switch(checked = settings.hideDone, onCheckedChange = viewModel::setHideDone)
             }
+            HolidaySetting(settings.showHolidays, onChange = viewModel::setShowHolidays)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_dynamic_color))
@@ -285,6 +295,55 @@ private fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave:
             )
             is ConnectionResult.Failed -> Text(result.error.text(), color = MaterialTheme.colorScheme.error)
         }
+    }
+}
+
+/**
+ * EX-02 공휴일 표시. 켜면 READ_CALENDAR를 요청하고, 허용하면 폰의 공휴일 캘린더를 읽는다.
+ * 거부하면 꺼 둔 채 안내하고, 앱 설정에서 허용할 수 있게 버튼을 보인다. 노션 일정은 권한과 무관하다.
+ */
+@Composable
+private fun HolidaySetting(show: Boolean, onChange: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    var denied by rememberSaveable { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        denied = !granted
+        if (granted) onChange(true)
+    }
+    // 권한을 앱 설정에서 거둬 갔으면 꺼진 것으로 보인다.
+    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.settings_holidays))
+            Text(
+                stringResource(R.string.settings_holidays_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(
+            checked = show && granted,
+            onCheckedChange = { on ->
+                when {
+                    !on -> onChange(false)
+                    granted -> onChange(true)
+                    else -> launcher.launch(Manifest.permission.READ_CALENDAR)
+                }
+            },
+        )
+    }
+    if (denied && !granted) {
+        Text(
+            stringResource(R.string.settings_holidays_denied),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        TextButton(onClick = {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }) { Text(stringResource(R.string.settings_holidays_open_app_settings)) }
     }
 }
 

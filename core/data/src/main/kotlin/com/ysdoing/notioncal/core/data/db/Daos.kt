@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.core.data.db
 
 import androidx.room.Dao
+import androidx.room.OnConflictStrategy
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
@@ -163,3 +164,30 @@ interface SyncLogDao {
         trim()
     }
 }
+
+/** EX-02 공휴일. */
+@Dao
+interface HolidayDao {
+    @Query("SELECT * FROM holidays WHERE date BETWEEN :from AND :to ORDER BY date")
+    fun observeRange(from: LocalDate, to: LocalDate): Flow<List<HolidayEntity>>
+
+    @Query("DELETE FROM holidays WHERE date BETWEEN :from AND :to")
+    suspend fun deleteRange(from: LocalDate, to: LocalDate)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(holidays: List<HolidayEntity>)
+
+    @Transaction
+    suspend fun replaceRange(from: LocalDate, to: LocalDate, holidays: List<HolidayEntity>) {
+        deleteRange(from, to)
+        insert(holidays)
+    }
+
+    @Query("SELECT source FROM holidays LIMIT 1")
+    suspend fun anySource(): String?
+
+    /** 진단 화면: 저장된 공휴일 출처(없으면 null). */
+    @Query("SELECT source FROM holidays LIMIT 1")
+    fun observeSource(): Flow<String?>
+}
+

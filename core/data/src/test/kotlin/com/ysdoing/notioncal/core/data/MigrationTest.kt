@@ -181,4 +181,24 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v5 → v6: holidays 테이블이 붙고 기존 데이터는 그대로다(EX-02). */
+    @Test
+    fun v5ToV6AddsHolidays() = runTest {
+        helper.createDatabase(5).close()
+        helper.runMigrationsAndValidate(6).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val day = java.time.LocalDate.of(2026, 10, 3)
+            db.holidayDao().replaceRange(day.minusDays(10), day.plusDays(10), listOf(com.ysdoing.notioncal.core.data.db.HolidayEntity(day, "개천절", "GOOGLE")))
+            assertEquals(listOf("개천절"), db.holidayDao().observeRange(day, day).first().map { it.name })
+            // 범위를 다시 채우면 이전 값은 지워진다(캘린더에서 빠진 공휴일 정리).
+            db.holidayDao().replaceRange(day.minusDays(10), day.plusDays(10), emptyList())
+            assertEquals(emptyList<Any>(), db.holidayDao().observeRange(day, day).first())
+        } finally {
+            db.close()
+        }
+    }
 }

@@ -14,6 +14,9 @@
     <string name="diag_last_failure">마지막 실패</string>
     <string name="diag_next_periodic">다음 주기 동기화</string>
     <string name="diag_pending_writes">전송 대기</string>
+    <string name="diag_holiday_source">공휴일 출처</string>
+    <string name="diag_holiday_google">구글 대한민국의 휴일</string>
+    <string name="diag_holiday_samsung">삼성 공휴일(연휴 날 없음)</string>
     <string name="diag_unseen_conflicts">미확인 충돌·실패</string>
     <string name="diag_count">%1$d건</string>
     <string name="diag_none">없음</string>

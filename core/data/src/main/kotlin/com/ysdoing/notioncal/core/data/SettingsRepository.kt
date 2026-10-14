@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +39,10 @@ data class AppSettings(
     val hiddenOptionKeys: Set<String> = emptySet(),
     /** S25-10 Material You(배경화면 색) 사용. 기본 켬. */
     val dynamicColor: Boolean = true,
+    /** EX-02 공휴일 표시(폰의 공휴일 캘린더, READ_CALENDAR). 권한을 받으면 켠다. */
+    val showHolidays: Boolean = false,
+    /** EX-02 공휴일을 마지막으로 읽어 온 시각(epoch ms). 앱 열기 때 하루 한 번 다시 읽는다. */
+    val holidaysRefreshedAt: Long = 0,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -62,6 +67,8 @@ class SettingsRepository @Inject constructor(
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
                 dynamicColor = prefs[DYNAMIC_COLOR] ?: true,
+                showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
+                holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
                 hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
             )
@@ -111,6 +118,15 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    suspend fun setShowHolidays(show: Boolean) {
+        dataStore.edit { it[SHOW_HOLIDAYS] = show }
+        widgetRefresher.requestUpdate()
+    }
+
+    suspend fun setHolidaysRefreshedAt(at: Long) {
+        dataStore.edit { it[HOLIDAYS_REFRESHED_AT] = at }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -122,5 +138,7 @@ class SettingsRepository @Inject constructor(
         val HIDDEN_SOURCES = stringSetPreferencesKey("hidden_source_ids")
         val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
+        val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
     }
 }

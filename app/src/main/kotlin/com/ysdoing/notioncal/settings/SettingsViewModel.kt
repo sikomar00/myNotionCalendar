@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import javax.inject.Inject
+import com.ysdoing.notioncal.core.sync.HolidayScheduler
 
 sealed interface ConnectionUi {
     data object Idle : ConnectionUi
@@ -29,6 +30,7 @@ class SettingsViewModel @Inject constructor(
     private val connection: ConnectionService,
     private val dataSources: DataSourceRepository,
     private val settingsRepository: SettingsRepository,
+    private val holidayScheduler: HolidayScheduler,
 ) : ViewModel() {
     private val _tokenSaved = MutableStateFlow<Boolean?>(null)
     val tokenSaved: StateFlow<Boolean?> = _tokenSaved.asStateFlow()
@@ -87,6 +89,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setHideDone(hide: Boolean) {
         viewModelScope.launch { settingsRepository.setHideDone(hide) }
+    }
+
+    /** EX-02 공휴일 표시. 켤 때는 권한을 받은 뒤에 부르고, 바로 폰의 공휴일 캘린더를 읽는다. */
+    fun setShowHolidays(show: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setShowHolidays(show)
+            if (show) holidayScheduler.requestNow()
+        }
     }
 
     /** S25-10 Material You 색 켜기·끄기. */

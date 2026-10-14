@@ -36,6 +36,10 @@
     <string name="settings_color_database">모든 일정을 아래 DB 색으로 표시합니다.</string>
     <string name="settings_color_save">저장</string>
     <string name="settings_color_button">%1$s 색 바꾸기</string>
+    <string name="settings_holidays">공휴일 표시</string>
+    <string name="settings_holidays_note">폰의 공휴일 캘린더(구글 대한민국의 휴일)를 읽습니다. 캘린더 권한이 필요합니다.</string>
+    <string name="settings_holidays_denied">권한이 없어 공휴일을 표시하지 않습니다. 노션 일정은 그대로입니다.</string>
+    <string name="settings_holidays_open_app_settings">앱 설정에서 허용</string>
     <string name="settings_dynamic_color">배경화면 색 쓰기(Material You)</string>
     <string name="settings_dynamic_color_note">앱 화면 색을 배경화면에 맞춥니다. 일정 색은 그대로입니다.</string>
     <string name="settings_sync_interval">노션 자동 동기화 주기</string>

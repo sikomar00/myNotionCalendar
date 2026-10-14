@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.ysdoing.notioncal.core.data.db.DataSourceDao
 import com.ysdoing.notioncal.core.data.db.EventDao
+import com.ysdoing.notioncal.core.data.db.HolidayDao
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.RecoveringOpenHelperFactory
 import com.ysdoing.notioncal.core.data.db.SyncLogDao
@@ -77,6 +78,9 @@ object DataModule {
 
     @Provides
     fun provideWidgetConfigDao(db: NotionCalDatabase): WidgetConfigDao = db.widgetConfigDao()
+
+    @Provides
+    fun provideHolidayDao(db: NotionCalDatabase): HolidayDao = db.holidayDao()
 
     @Provides
     @Singleton
