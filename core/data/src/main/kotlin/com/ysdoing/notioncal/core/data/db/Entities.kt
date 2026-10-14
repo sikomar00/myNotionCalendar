@@ -33,6 +33,10 @@ data class DataSourceEntity(
     val position: Int = 0,
     /** 색 기준 select 옵션 목록(JSON: [{id,name,color}]). 동기화 때 스키마로 갱신한다(편집 시트용, v3). */
     val colorOptions: String? = null,
+    /** EX-07 보기·편집할 수 있는 속성 목록(JSON: [ExtraProp]). 동기화 때 스키마로 갱신한다(v4). null이면 아직 안 받음. */
+    val propCatalog: String? = null,
+    /** EX-07 편집 화면에 보여 줄 속성 ID 목록(JSON 배열, v4). */
+    val extraPropIds: String? = null,
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
@@ -62,6 +66,8 @@ data class EventEntity(
     val colorOptionId: String? = null,
     /** 아직 노션에 보내지 않은 쓰기 작업 수(v3). 0보다 크면 읽기 동기화가 덮어쓰거나 지우지 않는다. */
     @ColumnInfo(defaultValue = "0") val pendingOps: Int = 0,
+    /** EX-07 추가 속성 값(JSON: {속성 ID: PropValue}, v4). */
+    val extraValues: String? = null,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */

@@ -51,22 +51,44 @@ fun CalendarEvent.dateValue() = DateValue(
 @Serializable
 data class SelectValue(val optionId: String?)
 
-/** 쓰기 1건에서 바뀐 필드만 담는다(PRD §8.5-6: 바뀐 속성만 전송). */
+/**
+ * EX-07 추가 속성 값. 타입에 따라 한 칸만 쓴다(select·status는 [optionIds]에 0~1개, multi_select는 0개 이상,
+ * number는 [number], url은 [text]). 빈 목록·null은 '값 없음'이다.
+ */
+@Serializable
+data class PropValue(
+    val optionIds: List<String>? = null,
+    val number: Double? = null,
+    val text: String? = null,
+)
+
+/** EX-07 보기·편집할 수 있는 속성(data_sources.propCatalog). [type]은 노션 API 타입 이름. */
+@Serializable
+data class ExtraProp(
+    val id: String,
+    val name: String,
+    val type: String,
+    val options: List<ColorOption> = emptyList(),
+)
+
+/** 쓰기 1건에서 바뀐 필드만 담는다(PRD §8.5-6: 바뀐 속성만 전송). [props]는 EX-07 추가 속성(키는 속성 ID). */
 @Serializable
 data class EventChange(
     val title: String? = null,
     val date: DateValue? = null,
     val done: Boolean? = null,
     val select: SelectValue? = null,
+    val props: Map<String, PropValue>? = null,
 ) {
     fun mergedWith(later: EventChange) = EventChange(
         title = later.title ?: title,
         date = later.date ?: date,
         done = later.done ?: done,
         select = later.select ?: select,
+        props = if (props == null && later.props == null) null else props.orEmpty() + later.props.orEmpty(),
     )
 
-    val isEmpty: Boolean get() = title == null && date == null && done == null && select == null
+    val isEmpty: Boolean get() = title == null && date == null && done == null && select == null && props.isNullOrEmpty()
 }
 
 /** 색 기준 select 옵션(data_sources.colorOptions JSON). */
@@ -90,6 +112,7 @@ data class EventSnapshot(
     val sortKey: Int?,
     val url: String,
     val lastEditedTime: Long,
+    val extraValues: String? = null,
 )
 
 /** outbox JSON 직렬화. 모르는 키는 무시해 이후 필드 추가에도 이전 행을 읽을 수 있게 한다. */
@@ -100,7 +123,7 @@ val OutboxJson: Json = Json {
 
 fun EventEntity.snapshot() = EventSnapshot(
     pageId, dataSourceId, title, startDate.toString(), endDate?.toString(), startTime, endTime, isAllDay, done,
-    colorKey, colorOptionId, sortKey, url, lastEditedTime,
+    colorKey, colorOptionId, sortKey, url, lastEditedTime, extraValues,
 )
 
 fun EventSnapshot.toEntity() = EventEntity(
@@ -118,6 +141,7 @@ fun EventSnapshot.toEntity() = EventEntity(
     url = url,
     lastEditedTime = lastEditedTime,
     colorOptionId = colorOptionId,
+    extraValues = extraValues,
 )
 
 fun EventEntity.dateValue() = DateValue(startDate.toString(), endDate?.toString(), startTime, endTime)
@@ -128,6 +152,10 @@ fun EventEntity.valuesFor(change: EventChange) = EventChange(
     date = dateValue().takeIf { change.date != null },
     done = done.takeIf { change.done != null },
     select = SelectValue(colorOptionId).takeIf { change.select != null },
+    props = change.props?.let { wanted ->
+        val current = parseExtraValues(extraValues)
+        wanted.keys.associateWith { current[it] ?: PropValue() }
+    },
 )
 
 /** 일정에 변경을 적용한다. select 색은 DB의 옵션 목록에서 찾는다. */
@@ -148,8 +176,25 @@ fun EventEntity.applying(change: EventChange, colorOptions: List<ColorOption>): 
         val option = colorOptions.firstOrNull { it.id == s.optionId }
         next = next.copy(colorOptionId = s.optionId, colorKey = option?.color?.takeIf { it != "default" })
     }
+    change.props?.let { props -> next = next.copy(extraValues = encodeExtraValues(parseExtraValues(next.extraValues) + props)) }
     return next
 }
 
 fun parseColorOptions(json: String?): List<ColorOption> =
     json?.let { runCatching { OutboxJson.decodeFromString<List<ColorOption>>(it) }.getOrNull() }.orEmpty()
+
+fun parseExtraValues(json: String?): Map<String, PropValue> =
+    json?.let { runCatching { OutboxJson.decodeFromString<Map<String, PropValue>>(it) }.getOrNull() }.orEmpty()
+
+fun encodeExtraValues(values: Map<String, PropValue>): String? =
+    values.takeIf { it.isNotEmpty() }?.let { OutboxJson.encodeToString(it) }
+
+fun parsePropCatalog(json: String?): List<ExtraProp> =
+    json?.let { runCatching { OutboxJson.decodeFromString<List<ExtraProp>>(it) }.getOrNull() }.orEmpty()
+
+fun encodePropCatalog(props: List<ExtraProp>): String = OutboxJson.encodeToString(props)
+
+fun parseIdList(json: String?): List<String> =
+    json?.let { runCatching { OutboxJson.decodeFromString<List<String>>(it) }.getOrNull() }.orEmpty()
+
+fun encodeIdList(ids: List<String>): String? = ids.takeIf { it.isNotEmpty() }?.let { OutboxJson.encodeToString(it) }

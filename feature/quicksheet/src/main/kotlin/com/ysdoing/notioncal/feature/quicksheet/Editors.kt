@@ -66,6 +66,7 @@ import com.ysdoing.notioncal.core.data.quickinput.QuickInputParser
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.EditableEvent
 import com.ysdoing.notioncal.core.data.EventChange
+import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.SelectValue
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
@@ -231,7 +232,10 @@ private fun timeText(event: CalendarEvent): String {
     return if (to != null) "$from–$to" else from
 }
 
-/** WI-05 편집 폼: 제목·날짜·시간·완료·색 기준 select, 노션에서 열기, 삭제(휴지통). 바뀐 필드만 저장한다. */
+/**
+ * WI-05 편집 폼: 제목·날짜·시간·완료·색 기준 select, 설정에서 고른 추가 속성(EX-07), 노션에서 열기, 삭제(휴지통).
+ * 바뀐 필드만 저장한다.
+ */
 @Composable
 fun EventEditorForm(
     item: EditableEvent,
@@ -249,6 +253,7 @@ fun EventEditorForm(
     var time by rememberSaveable(event.pageId, stateSaver = TimeRangeSaver) { mutableStateOf(originalTime) }
     var done by rememberSaveable(event.pageId) { mutableStateOf(event.done) }
     var optionId by rememberSaveable(event.pageId) { mutableStateOf(item.colorOptionId) }
+    var propEdits by rememberSaveable(event.pageId, stateSaver = PropEditsSaver) { mutableStateOf(emptyMap<String, PropValue>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -285,6 +290,14 @@ fun EventEditorForm(
                 }
             }
         }
+        item.extraProps.forEach { prop ->
+            ExtraPropEditor(
+                prop = prop,
+                value = propEdits[prop.id] ?: item.extraValues[prop.id] ?: PropValue(),
+                onChange = { propEdits = propEdits + (prop.id to it) },
+                key = "${event.pageId}/${prop.id}",
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 val dateChanged = date != event.startDate || time != originalTime
@@ -298,6 +311,7 @@ fun EventEditorForm(
                         } else null,
                         done = done.takeIf { it != event.done },
                         select = SelectValue(optionId).takeIf { optionId != item.colorOptionId },
+                        props = propEdits.filter { (id, value) -> value != (item.extraValues[id] ?: PropValue()) }.takeIf { it.isNotEmpty() },
                     ),
                 )
             }) { Text(stringResource(R.string.qs_save)) }

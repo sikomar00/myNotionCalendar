@@ -7,6 +7,9 @@ import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventWriter
 import com.ysdoing.notioncal.core.data.OutboxRequester
+import com.ysdoing.notioncal.core.data.PropValue
+import com.ysdoing.notioncal.core.data.parseExtraValues
+import com.ysdoing.notioncal.core.data.parsePropCatalog
 import com.ysdoing.notioncal.core.data.SelectValue
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
@@ -78,6 +81,56 @@ class OutboxProcessorTest {
     }
 
     private suspend fun conflicts() = db.conflictDao().all()
+
+    @Test
+    fun extraPropertiesSyncAndSendOnlyChanged() = runTest {
+        // EX-07: 동기화로 속성 목록·값을 받고, 편집한 속성만 보낸다.
+        seeded()
+        notion.editRemotely("p1") {
+            pri = "pri-1"
+            tags = listOf("t-home")
+        }
+        tick()
+        engine().sync(SyncTrigger.PULL_TO_REFRESH)
+        tick()
+        val source = db.dataSourceDao().get("ds")!!
+        assertEquals(listOf("Cost", "Ctgr", "Pri.", "Tags", "URL"), parsePropCatalog(source.propCatalog).map { it.name })
+        assertEquals(PropValue(optionIds = listOf("pri-1")), parseExtraValues(db.eventDao().get("p1")!!.extraValues)["pRi"])
+
+        writer.update("p1", EventChange(props = mapOf("tAg" to PropValue(optionIds = listOf("t-home", "t-work")), "cOs" to PropValue(number = 3.5))))
+        tick()
+        processor().process()
+
+        val page = notion.pages.getValue("p1")
+        assertEquals(listOf("t-home", "t-work"), page.tags)
+        assertEquals(3.5, page.cost)
+        assertEquals("pri-1", page.pri) // 안 바꾼 속성은 그대로
+        assertEquals("UPDATE 영어 스터디 [Cost, Tags]", notion.writeLog.last())
+        val local = parseExtraValues(db.eventDao().get("p1")!!.extraValues)
+        assertEquals(PropValue(number = 3.5), local["cOs"])
+        assertEquals(0, db.eventDao().get("p1")!!.pendingOps)
+    }
+
+    @Test
+    fun extraPropertyConflictNotionWins() = runTest {
+        // EX-07도 §8.5-6 규칙: 같은 속성을 양쪽에서 바꾸면 노션 값이 남고 기록된다. 다른 속성은 보낸다.
+        seeded()
+        writer.update("p1", EventChange(props = mapOf("uRl" to PropValue(text = "https://phone.example"), "pRi" to PropValue(optionIds = listOf("pri-1")))))
+        tick()
+        notion.editRemotely("p1") { link = "https://notion.example" }
+        tick()
+
+        processor().process()
+
+        val page = notion.pages.getValue("p1")
+        assertEquals("https://notion.example", page.link)
+        assertEquals("pri-1", page.pri)
+        val conflict = conflicts().single()
+        assertEquals("PROP:URL", conflict.field)
+        assertEquals("https://phone.example", conflict.localValue)
+        assertEquals("https://notion.example", conflict.remoteValue)
+        assertEquals(PropValue(text = "https://notion.example"), parseExtraValues(db.eventDao().get("p1")!!.extraValues)["uRl"])
+    }
 
     @Test
     fun conflict1DifferentFieldsBothSurvive() = runTest {

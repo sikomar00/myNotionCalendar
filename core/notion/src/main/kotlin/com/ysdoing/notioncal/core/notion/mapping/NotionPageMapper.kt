@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
 import java.time.LocalDate
@@ -42,6 +43,8 @@ data class RemoteEvent(
     val colorOptionId: String? = null,
     val url: String,
     val lastEditedTime: Instant,
+    /** EX-07: 지원 타입 속성(select·multi_select·status·number·url)의 값. 키는 속성 ID. */
+    val extraValues: Map<String, PropertyValue> = emptyMap(),
 )
 
 /** 페이지 해석 결과. 날짜가 없으면 [event]가 null이고 캘린더에서 빠진다. */
@@ -86,6 +89,7 @@ class NotionPageMapper(
         val colorValue = prop(mapping.colorPropId)?.let { it.obj("select") ?: it.obj("status") }
         val color = colorValue?.str("color")
         val sortKey = prop(mapping.sortPropId)?.obj("select")?.str("id")?.let { sortOrder[it] }
+        val extraValues = props.mapNotNull { p -> extraValue(p)?.let { value -> p.str("id")?.let { it to value } } }.toMap()
 
         return MappedPage(
             page.id,
@@ -103,8 +107,21 @@ class NotionPageMapper(
                 colorOptionId = colorValue?.str("id"),
                 url = page.url,
                 lastEditedTime = Instant.parse(page.lastEditedTime),
+                extraValues = extraValues,
             ),
         )
+    }
+
+    /** EX-07 지원 타입이면 값을 읽고, 아니면 null. 값이 비어 있어도(선택 안 함) 빈 값으로 돌려준다. */
+    private fun extraValue(prop: JsonObject): PropertyValue? = when (prop.str("type")) {
+        ExtraTypes.SELECT -> PropertyValue(optionIds = listOfNotNull(prop.obj("select")?.str("id")))
+        ExtraTypes.STATUS -> PropertyValue(optionIds = listOfNotNull(prop.obj("status")?.str("id")))
+        ExtraTypes.MULTI_SELECT -> PropertyValue(
+            optionIds = (prop["multi_select"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.str("id") },
+        )
+        ExtraTypes.NUMBER -> PropertyValue(number = prop["number"]?.jsonPrimitiveOrNull()?.doubleOrNull)
+        ExtraTypes.URL -> PropertyValue(text = prop.str("url"))
+        else -> null
     }
 
     companion object {

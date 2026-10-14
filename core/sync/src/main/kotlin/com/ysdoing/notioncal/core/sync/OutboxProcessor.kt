@@ -3,6 +3,9 @@ package com.ysdoing.notioncal.core.sync
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EventChange
+import com.ysdoing.notioncal.core.data.ExtraProp
+import com.ysdoing.notioncal.core.data.PropValue
+import com.ysdoing.notioncal.core.data.parsePropCatalog
 import com.ysdoing.notioncal.core.data.EventSnapshot
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.OutboxJson
@@ -106,7 +109,7 @@ class OutboxProcessor @Inject constructor(
         // §8.5-8: 지난번 생성이 시간 초과·서버 오류로 끝났다면 실제로는 만들어졌을 수 있다. 다시 보내기 전에 찾아본다.
         val title = change.title
         val existing = if (row.attempts > 0 && title != null) findCreated(row, source, title) else null
-        val page = existing ?: writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite()))
+        val page = existing ?: writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
         db.withTransaction {
             events.renamePage(row.pageId, page.id)
             outbox.renamePage(row.pageId, page.id)
@@ -143,8 +146,22 @@ class OutboxProcessor @Inject constructor(
                 ),
             )
         }
+        // EX-07 추가 속성도 속성 하나씩 같은 규칙(노션 값 우선)으로 판정한다.
+        val catalog = parsePropCatalog(source.propCatalog)
+        val propConflicts = conflictingProps(change, base, remoteValues)
+        propConflicts.forEach { id ->
+            db.conflictDao().insert(
+                ConflictEntity(
+                    pageId = row.pageId, title = remoteEvent?.title.orEmpty(),
+                    field = "PROP:" + (catalog.firstOrNull { it.id == id }?.name ?: id),
+                    localValue = change.props?.get(id)?.describe(), remoteValue = remoteValues.props?.get(id)?.describe(),
+                    kind = KIND_CONFLICT, at = clock.millis(),
+                ),
+            )
+        }
         val toSend = conflicts.fold(change) { acc, field -> field.drop(acc) }
-        val page = if (toSend.isEmpty) remote else writer.updatePage(row.pageId, encoder.encode(toSend.toPageWrite()))
+            .let { c -> if (propConflicts.isEmpty()) c else c.copy(props = c.props?.minus(propConflicts.toSet())) }
+        val page = if (toSend.isEmpty) remote else writer.updatePage(row.pageId, encoder.encode(toSend.toPageWrite(catalog)))
         db.withTransaction {
             outbox.delete(row.id)
             applyServerPage(row.pageId, mapper.map(page).event, source)
@@ -265,9 +282,17 @@ internal fun RemoteEvent.valuesFor(change: EventChange) = EventChange(
     ).takeIf { change.date != null },
     done = done.takeIf { change.done != null },
     select = SelectValue(colorOptionId).takeIf { change.select != null },
+    props = change.props?.let { wanted -> wanted.keys.associateWith { extraValues[it]?.toPropValue() ?: PropValue() } },
 )
 
-internal fun EventChange.toPageWrite() = PageWrite(
+/** EX-07: 내가 바꾼 추가 속성 중 노션에서도 기준값과 달라진 것(속성 ID). */
+internal fun conflictingProps(change: EventChange, base: EventChange, remote: EventChange): List<String> =
+    change.props.orEmpty().keys.filter { id -> (remote.props?.get(id) ?: PropValue()) != (base.props?.get(id) ?: PropValue()) }
+
+private fun PropValue.describe(): String =
+    optionIds?.joinToString(",") ?: number?.toString() ?: text.orEmpty()
+
+internal fun EventChange.toPageWrite(catalog: List<ExtraProp> = emptyList()) = PageWrite(
     title = title,
     date = date?.let { d ->
         WriteDate(
@@ -280,4 +305,5 @@ internal fun EventChange.toPageWrite() = PageWrite(
     done = done,
     setSelect = select != null,
     selectOptionId = select?.optionId,
+    props = props.orEmpty().toPropertyWrites(catalog),
 )

@@ -15,6 +15,7 @@ import java.time.LocalDate
  * - 1: data_sources, events, sync_log (Phase 1)
  * - 2: widget_configs 추가 (Phase 2, 테이블 추가만이라 AutoMigration)
  * - 3: outbox·conflicts 추가, events.pendingOps·colorOptionId, data_sources.colorOptions (Phase 3, AutoMigration)
+ * - 4: data_sources.propCatalog·extraPropIds, events.extraValues (EX-07, 열 추가만이라 AutoMigration)
  */
 @Database(
     entities = [
@@ -25,9 +26,9 @@ import java.time.LocalDate
         OutboxEntity::class,
         ConflictEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {

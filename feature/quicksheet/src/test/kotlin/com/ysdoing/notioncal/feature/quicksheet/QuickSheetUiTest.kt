@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,6 +18,8 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.ColorOption
 import com.ysdoing.notioncal.core.data.EditableEvent
 import com.ysdoing.notioncal.core.data.EventChange
+import com.ysdoing.notioncal.core.data.ExtraProp
+import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -111,6 +114,49 @@ class QuickSheetUiTest {
         compose.onNodeWithText("저장").performClick()
 
         assertEquals(EventChange(title = "영어 회화"), saved)
+    }
+
+    private val extraItem = EditableEvent(
+        event("p1", "회의"), null, emptyList(), "Calendar",
+        extraProps = listOf(
+            ExtraProp("pRi", "Pri.", "select", listOf(ColorOption("o1", "1st", "red"), ColorOption("o2", "2nd", "blue"))),
+            ExtraProp("tAg", "Tags", "multi_select", listOf(ColorOption("t1", "집", "blue"), ColorOption("t2", "회사", "green"))),
+            ExtraProp("cOs", "Cost", "number"),
+            ExtraProp("uRl", "URL", "url"),
+        ),
+        extraValues = mapOf("pRi" to PropValue(optionIds = listOf("o1")), "tAg" to PropValue(optionIds = listOf("t1"))),
+    )
+
+    @Test
+    fun editorSendsOnlyChangedExtraProps() {
+        // EX-07: 바꾼 속성만 저장한다. 안 건드린 Tags·URL은 보내지 않는다.
+        var saved: EventChange? = null
+        compose.setContent { MaterialTheme { EventEditorForm(extraItem, onSave = { saved = it }, onDelete = {}) } }
+        compose.onNodeWithText("2nd").performClick()
+        compose.onNodeWithText("Cost").assertExists()
+        compose.onAllNodes(hasSetTextAction())[1].performTextInput("12.5") // 0: 제목, 1: Cost, 2: URL
+        compose.onNodeWithText("저장").performClick()
+        assertEquals(
+            EventChange(props = mapOf("pRi" to PropValue(optionIds = listOf("o2")), "cOs" to PropValue(number = 12.5))),
+            saved,
+        )
+    }
+
+    @Test
+    fun editorMultiSelectAndClearSelect() {
+        var saved: EventChange? = null
+        compose.setContent { MaterialTheme { EventEditorForm(extraItem, onSave = { saved = it }, onDelete = {}) } }
+        compose.onNodeWithText("회사").performClick() // 추가
+        compose.onNodeWithText("1st").performClick() // select는 다시 누르면 비운다
+        compose.onNodeWithText("저장").performClick()
+        assertEquals(PropValue(optionIds = listOf("t1", "t2")), saved!!.props!!["tAg"])
+        assertEquals(PropValue(optionIds = emptyList()), saved!!.props!!["pRi"])
+    }
+
+    @Test
+    fun screenshotEditorWithExtraProps() {
+        compose.setContent { MaterialTheme { Surface { EventEditorForm(extraItem, onSave = {}, onDelete = {}) } } }
+        compose.onRoot().captureRoboImage("src/test/screenshots/quicksheet_edit_extra.png")
     }
 
     @Test

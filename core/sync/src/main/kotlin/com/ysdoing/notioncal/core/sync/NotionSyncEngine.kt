@@ -2,6 +2,8 @@ package com.ysdoing.notioncal.core.sync
 
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.ColorOption
+import com.ysdoing.notioncal.core.data.encodeExtraValues
+import com.ysdoing.notioncal.core.data.encodePropCatalog
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.OutboxJson
 import com.ysdoing.notioncal.core.data.SyncTrigger
@@ -104,10 +106,13 @@ class NotionSyncEngine @Inject constructor(
         val mapper = NotionPageMapper(source.toMapping(), schema)
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
         sources.setColorOptions(source.dataSourceId, colorOptionsJson(schema, source.colorPropId))
+        // EX-07: 보기·편집할 수 있는 속성 목록. 처음 받는 DB(앱 업데이트 직후 포함)는 기존 일정에도 값을 채우려고 전체 조회한다.
+        val catalogMissing = source.propCatalog == null
+        sources.setPropCatalog(source.dataSourceId, encodePropCatalog(schema.propCatalog()))
         var pulled = 0
 
         val lastFull = source.lastFullSyncAt
-        val fullDue = lastFull == null || Duration.between(Instant.ofEpochMilli(lastFull), now) >= FULL_RECONCILE_INTERVAL
+        val fullDue = lastFull == null || catalogMissing || Duration.between(Instant.ofEpochMilli(lastFull), now) >= FULL_RECONCILE_INTERVAL
         val lastSync = source.lastSyncAt
         if (lastSync != null) {
             val since = Instant.ofEpochMilli(lastSync).minus(INCREMENTAL_OVERLAP)
@@ -197,6 +202,7 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     url = url,
     lastEditedTime = lastEditedTime.toEpochMilli(),
     colorOptionId = colorOptionId,
+    extraValues = encodeExtraValues(extraValues.mapValues { it.value.toPropValue() }),
 )
 
 /** 색 기준 속성(select·status)의 옵션 목록 JSON. 속성이 없으면 null. */

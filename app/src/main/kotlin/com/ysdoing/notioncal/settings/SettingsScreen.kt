@@ -52,6 +52,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.ui.semantics.Role
+import com.ysdoing.notioncal.core.data.parseIdList
+import com.ysdoing.notioncal.core.data.selectableExtraProps
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
@@ -71,6 +76,7 @@ fun SettingsRoute(
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
+    var choosingProps by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -97,7 +103,12 @@ fun SettingsRoute(
                 Text(stringResource(R.string.settings_no_databases), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             sources.forEach { source ->
-                SourceRow(source, onToggle = { viewModel.setEnabled(source.dataSourceId, it) }, onDelete = { pendingDelete = source.dataSourceId })
+                SourceRow(
+                    source,
+                    onToggle = { viewModel.setEnabled(source.dataSourceId, it) },
+                    onChooseProps = { choosingProps = source.dataSourceId },
+                    onDelete = { pendingDelete = source.dataSourceId },
+                )
             }
             OutlinedButton(onClick = onAddDatabase) { Text(stringResource(R.string.settings_add_database)) }
 
@@ -162,6 +173,19 @@ fun SettingsRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.settings_open_diagnostics)) }
+        }
+    }
+
+    choosingProps?.let { id ->
+        sources.firstOrNull { it.dataSourceId == id }?.let { source ->
+            ExtraPropsDialog(
+                source = source,
+                onSave = { ids ->
+                    viewModel.setExtraProps(id, ids)
+                    choosingProps = null
+                },
+                onDismiss = { choosingProps = null },
+            )
         }
     }
 
@@ -233,13 +257,69 @@ private fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave:
 }
 
 @Composable
-private fun SourceRow(source: DataSourceEntity, onToggle: (Boolean) -> Unit, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun SourceRow(source: DataSourceEntity, onToggle: (Boolean) -> Unit, onChooseProps: () -> Unit, onDelete: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(14.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
         Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        TextButton(onClick = onChooseProps) { Text(stringResource(R.string.settings_extra_props)) }
         Switch(checked = source.enabled, onCheckedChange = onToggle)
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.settings_delete_database, source.name))
         }
     }
 }
+
+/** EX-07: 편집 화면에 보여 줄 속성 고르기. 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. */
+@Composable
+private fun ExtraPropsDialog(source: DataSourceEntity, onSave: (List<String>) -> Unit, onDismiss: () -> Unit) {
+    val candidates = source.selectableExtraProps()
+    var chosen by rememberSaveable(source.dataSourceId) { mutableStateOf(parseIdList(source.extraPropIds)) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_extra_props_title, source.name)) },
+        text = {
+            Column {
+                when {
+                    source.propCatalog == null -> Text(stringResource(R.string.settings_extra_props_pending))
+                    candidates.isEmpty() -> Text(stringResource(R.string.settings_extra_props_empty))
+                    else -> candidates.forEach { prop ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .toggleable(value = prop.id in chosen, role = Role.Checkbox) { on ->
+                                    chosen = if (on) chosen + prop.id else chosen - prop.id
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(checked = prop.id in chosen, onCheckedChange = null)
+                            Text(prop.name, Modifier.weight(1f))
+                            Text(
+                                extraTypeLabel(prop.type),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            // 목록 순서대로 저장한다(편집 화면도 이 순서).
+            TextButton(onClick = { onSave(candidates.map { it.id }.filter { it in chosen }) }) {
+                Text(stringResource(R.string.settings_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+    )
+}
+
+@Composable
+private fun extraTypeLabel(type: String): String = stringResource(
+    when (type) {
+        "select" -> R.string.settings_type_select
+        "multi_select" -> R.string.settings_type_multi_select
+        "status" -> R.string.settings_type_status
+        "number" -> R.string.settings_type_number
+        else -> R.string.settings_type_url
+    },
+)

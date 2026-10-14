@@ -66,6 +66,9 @@ data class EditableEvent(
     val colorOptionId: String?,
     val colorOptions: List<ColorOption>,
     val dataSourceName: String,
+    /** EX-07: 편집 화면에 보여 줄 추가 속성(설정에서 고른 것 중 지금 스키마에 있는 것). */
+    val extraProps: List<ExtraProp> = emptyList(),
+    val extraValues: Map<String, PropValue> = emptyMap(),
 )
 
 @Singleton
@@ -81,6 +84,8 @@ class EditableEventRepository @Inject constructor(
                 colorOptionId = event.colorOptionId,
                 colorOptions = parseColorOptions(source.colorOptions),
                 dataSourceName = source.name,
+                extraProps = source.shownExtraProps(),
+                extraValues = parseExtraValues(event.extraValues),
             )
         }
 }
@@ -99,6 +104,11 @@ class DataSourceRepository @Inject constructor(
         widgetRefresher.requestUpdate()
     }
 
+    /** EX-07: 편집 화면에 보여 줄 속성을 고른다. 값은 동기화 때 이미 받아 두므로 다시 받지 않는다. */
+    suspend fun setExtraProps(id: String, propIds: List<String>) {
+        dataSourceDao.setExtraPropIds(id, encodeIdList(propIds))
+    }
+
     /** 등록을 지우면 그 DB의 로컬 일정도 지운다. 노션 원본은 건드리지 않는다. */
     suspend fun delete(id: String) {
         db.withTransaction {
@@ -113,4 +123,18 @@ class DataSourceRepository @Inject constructor(
 class SyncStatusRepository @Inject constructor(private val syncLogDao: SyncLogDao) {
     val latest: Flow<SyncLogEntity?> = syncLogDao.observeLatest()
     val latestSuccess: Flow<SyncLogEntity?> = syncLogDao.observeLatestSuccess()
+}
+
+/**
+ * EX-07: 고른 속성 중 지금 스키마에 있는 것만, 고른 순서대로. 노션에서 지워진 속성은 앱이 죽지 않게 조용히 뺀다
+ * (알림은 NS-09). 이미 편집기가 있는 속성(제목·날짜·완료·색 기준)은 고를 수 없게 [selectableExtraProps]에서 뺀다.
+ */
+fun DataSourceEntity.shownExtraProps(): List<ExtraProp> {
+    val catalog = selectableExtraProps().associateBy { it.id }
+    return parseIdList(extraPropIds).mapNotNull { catalog[it] }
+}
+
+fun DataSourceEntity.selectableExtraProps(): List<ExtraProp> {
+    val taken = setOfNotNull(titlePropId, datePropId, donePropId, colorPropId)
+    return parsePropCatalog(propCatalog).filterNot { it.id in taken }
 }

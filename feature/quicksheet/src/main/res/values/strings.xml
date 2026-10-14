@@ -20,4 +20,5 @@
     <string name="qs_no_database">노션 DB를 먼저 등록하세요(앱 → 설정).</string>
     <string name="qs_toggle_done">%1$s 완료 표시</string>
     <string name="qs_parsed_title">제목: %1$s</string>
+    <string name="qs_open_link">열기</string>
 </resources>

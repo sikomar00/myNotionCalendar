@@ -106,4 +106,44 @@ class MigrationTest {
             db.close()
         }
     }
+
+    @Test
+    fun v3ToV4AddsExtraPropertyColumns() = runTest {
+        helper.createDatabase(3).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position, colorOptions)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', NULL, NULL, NULL, NULL, 'cTgR', NULL, 1, 500, 500, 0, '[]')""",
+            )
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime, colorOptionId, pendingOps)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, NULL, NULL, '', 0, 'o1', 1)""",
+            )
+            db.execSQL(
+                """INSERT INTO outbox (pageId, dataSourceId, op, changes, baseValues, baseLastEdited, createdAt, attempts,
+                   nextAttemptAt, lastError) VALUES ('p1', 'ds', 'UPDATE', '{"title":"회의2"}', '{"title":"회의"}', 0, 1, 0, 0, NULL)""",
+            )
+        }
+        helper.runMigrationsAndValidate(4).close()
+
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val source = db.dataSourceDao().get("ds")!!
+            assertEquals(null, source.propCatalog)
+            assertEquals(null, source.extraPropIds)
+            assertEquals(500L, source.lastSyncAt)
+            val event = db.eventDao().get("p1")!!
+            assertEquals(null, event.extraValues)
+            assertEquals(1, event.pendingOps)
+            // v3 때 쌓인 아웃박스 JSON(props 없음)도 그대로 읽힌다.
+            val change = OutboxJson.decodeFromString(EventChange.serializer(), db.outboxDao().all().single().changes)
+            assertEquals(EventChange(title = "회의2"), change)
+        } finally {
+            db.close()
+        }
+    }
 }

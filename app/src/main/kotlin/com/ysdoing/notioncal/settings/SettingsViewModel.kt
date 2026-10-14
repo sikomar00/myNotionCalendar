@@ -67,6 +67,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { dataSources.setEnabled(id, enabled) }
     }
 
+    /** EX-07: 편집 화면에 보여 줄 속성 */
+    fun setExtraProps(id: String, propIds: List<String>) {
+        viewModelScope.launch { dataSources.setExtraProps(id, propIds) }
+    }
+
     fun delete(id: String) {
         viewModelScope.launch { dataSources.delete(id) }
     }

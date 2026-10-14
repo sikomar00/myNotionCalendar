@@ -27,7 +27,12 @@ data class PageWrite(
     val done: Boolean? = null,
     val setSelect: Boolean = false,
     val selectOptionId: String? = null,
+    /** EX-07: 추가 속성. 키는 속성 ID. */
+    val props: Map<String, PropertyWrite> = emptyMap(),
 )
+
+/** EX-07 추가 속성 쓰기 하나. [type]은 [ExtraTypes] 값. */
+data class PropertyWrite(val type: String, val value: PropertyValue)
 
 /**
  * PRD §8.3 쓰기 규칙. status 완료는 완료 그룹 첫 옵션([doneOption]), 해제는 할 일 그룹 첫 옵션([undoneOption])으로 쓴다.
@@ -88,6 +93,26 @@ class PropertyEncoder(
             putJsonObject(keyFor(colorPropId)) {
                 val id = write.selectOptionId
                 if (id == null) put("select", JsonNull) else putJsonObject("select") { put("id", id) }
+            }
+        }
+        write.props.forEach { (propId, prop) ->
+            val value = prop.value
+            when (prop.type) {
+                ExtraTypes.SELECT, ExtraTypes.STATUS -> putJsonObject(keyFor(propId)) {
+                    val id = value.optionIds?.firstOrNull()
+                    if (id == null) put(prop.type, JsonNull) else putJsonObject(prop.type) { put("id", id) }
+                }
+                ExtraTypes.MULTI_SELECT -> putJsonObject(keyFor(propId)) {
+                    put("multi_select", buildJsonArray { value.optionIds.orEmpty().forEach { id -> add(buildJsonObject { put("id", id) }) } })
+                }
+                ExtraTypes.NUMBER -> putJsonObject(keyFor(propId)) {
+                    val number = value.number
+                    if (number == null) put("number", JsonNull) else put("number", number)
+                }
+                ExtraTypes.URL -> putJsonObject(keyFor(propId)) {
+                    val url = value.text?.trim()?.takeIf { it.isNotEmpty() }
+                    if (url == null) put("url", JsonNull) else put("url", url)
+                }
             }
         }
     }

@@ -64,6 +64,7 @@ data class PropertySchemaDto(
     val type: String,
     val select: SelectSchemaDto? = null,
     val status: StatusSchemaDto? = null,
+    @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
 )
 
 @Serializable

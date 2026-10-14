@@ -31,6 +31,11 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
         var end: String? = null,
         var done: Boolean = false,
         var optionId: String? = null,
+        /** EX-07 추가 속성: Pri.(select) 옵션 ID, Tags(multi_select) 옵션 ID들, Cost(number), URL(url). */
+        var pri: String? = null,
+        var tags: List<String> = emptyList(),
+        var cost: Double? = null,
+        var link: String? = null,
         var inTrash: Boolean = false,
         val createdTime: Instant,
         var lastEdited: Instant,
@@ -55,7 +60,12 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             "Ctgr":{"id":"cTgR","name":"Ctgr","type":"select","select":{"options":[
               {"id":"opt-event","name":"Event","color":"yellow"},
               {"id":"opt-learn","name":"Learn","color":"blue"},
-              {"id":"opt-habit","name":"Habit","color":"red"}]}}}}""",
+              {"id":"opt-habit","name":"Habit","color":"red"}]}},
+            "Pri.":{"id":"pRi","name":"Pri.","type":"select","select":{"options":[{"id":"pri-1","name":"1st","color":"red"}]}},
+            "Tags":{"id":"tAg","name":"Tags","type":"multi_select","multi_select":{"options":[
+              {"id":"t-home","name":"집","color":"blue"},{"id":"t-work","name":"회사","color":"green"}]}},
+            "Cost":{"id":"cOs","name":"Cost","type":"number"},
+            "URL":{"id":"uRl","name":"URL","type":"url"}}}""",
     )
 
     fun seed(id: String, title: String, start: String, optionId: String? = null, editedAt: Instant = Instant.parse("2026-10-01T00:00:00Z")) {
@@ -164,6 +174,13 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             val select = c["select"]
             optionId = if (select == null || select is JsonNull) null else select.jsonObject["id"]?.jsonPrimitive?.content
         }
+        props["Pri."]?.jsonObject?.let { c ->
+            val select = c["select"]
+            pri = if (select == null || select is JsonNull) null else select.jsonObject["id"]?.jsonPrimitive?.content
+        }
+        props["Tags"]?.jsonObject?.get("multi_select")?.jsonArray?.let { arr -> tags = arr.map { it.jsonObject["id"]!!.jsonPrimitive.content } }
+        props["Cost"]?.jsonObject?.let { c -> cost = (c["number"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.toDouble() }
+        props["URL"]?.jsonObject?.let { c -> link = (c["url"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull }
     }
 
     private fun Page.toDto(): PageDto {
@@ -176,7 +193,11 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
                 "Name":{"id":"title","type":"title","title":[{"plain_text":${NotionJson.encodeToString(kotlinx.serialization.serializer<String>(), title)}}]},
                 "Date":{"id":"dAtE","type":"date","date":$date},
                 "완료":{"id":"dOnE","type":"checkbox","checkbox":$done},
-                "Ctgr":{"id":"cTgR","type":"select","select":$select}}}""",
+                "Ctgr":{"id":"cTgR","type":"select","select":$select},
+                "Pri.":{"id":"pRi","type":"select","select":${pri?.let { """{"id":"$it","name":"1st","color":"red"}""" } ?: "null"}},
+                "Tags":{"id":"tAg","type":"multi_select","multi_select":[${tags.joinToString(",") { """{"id":"$it","name":"$it"}""" }}]},
+                "Cost":{"id":"cOs","type":"number","number":${cost ?: "null"}},
+                "URL":{"id":"uRl","type":"url","url":${link?.let { "\"$it\"" } ?: "null"}}}}""",
         )
     }
 }

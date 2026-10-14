@@ -91,6 +91,12 @@ interface DataSourceDao {
     @Query("UPDATE data_sources SET colorOptions = :json WHERE dataSourceId = :id")
     suspend fun setColorOptions(id: String, json: String?)
 
+    @Query("UPDATE data_sources SET propCatalog = :json WHERE dataSourceId = :id")
+    suspend fun setPropCatalog(id: String, json: String?)
+
+    @Query("UPDATE data_sources SET extraPropIds = :json WHERE dataSourceId = :id")
+    suspend fun setExtraPropIds(id: String, json: String?)
+
     @Query("DELETE FROM data_sources WHERE dataSourceId = :id")
     suspend fun deleteRow(id: String)
 
