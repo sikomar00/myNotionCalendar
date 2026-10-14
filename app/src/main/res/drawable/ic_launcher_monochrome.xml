@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One UI·Android 테마 아이콘용 단색 모양. 시스템이 배경화면 색 한 가지로 칠한다(알파만 쓴다). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 고리·머리줄 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M41,31a2,2 0,0 1,4 0v5a2,2 0,0 1,-4 0zM63,31a2,2 0,0 1,4 0v5a2,2 0,0 1,-4 0zM38,34h32a6,6 0,0 1,6 6v6h-44v-6a6,6 0,0 1,6 -6z" />
+    <!-- 몸통 테두리 -->
+    <path
+        android:pathData="M33.5,46v22a4.5,4.5 0,0 0,4.5 4.5h32a4.5,4.5 0,0 0,4.5 -4.5v-22"
+        android:strokeWidth="3"
+        android:strokeColor="#FFFFFFFF" />
+    <!-- 날짜 칸(흐리게) -->
+    <path
+        android:fillAlpha="0.45"
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M39,52h6v6h-6zM51,52h6v6h-6zM63,52h6v6h-6zM39,62h6v6h-6zM51,62h6v6h-6z" />
+    <!-- 오늘 칸 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M62,61h8v8h-8z" />
+</vector>
