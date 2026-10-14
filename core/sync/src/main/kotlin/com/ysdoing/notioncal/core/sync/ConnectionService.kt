@@ -118,6 +118,13 @@ class ConnectionService @Inject constructor(
                 lastSyncAt = existing?.lastSyncAt?.takeUnless { mappingChanged },
                 lastFullSyncAt = existing?.lastFullSyncAt?.takeUnless { mappingChanged },
                 position = existing?.position ?: dataSourceDao.nextPosition(),
+                colorOptions = existing?.colorOptions,
+                propCatalog = existing?.propCatalog,
+                extraPropIds = existing?.extraPropIds,
+                useOptionColors = existing?.useOptionColors ?: true,
+                // 다시 연결(NS-09)하면 알림을 지우고, 이름은 다음 동기화에서 새 매핑으로 다시 적는다.
+                mappedPropNames = existing?.mappedPropNames?.takeUnless { mappingChanged },
+                schemaIssues = null,
             ),
         )
         scheduler.request(SyncTrigger.APP_OPEN, inspection.dataSourceId)

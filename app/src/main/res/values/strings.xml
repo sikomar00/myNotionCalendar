@@ -28,6 +28,13 @@
     <string name="settings_monday">월요일</string>
     <string name="settings_hide_done">완료 항목 숨기기</string>
     <string name="settings_hide_done_off">끄면 취소선으로 표시합니다.</string>
+    <string name="settings_color_title">%1$s 색</string>
+    <string name="settings_color_by_option">속성 값 색으로(예: Ctgr)</string>
+    <string name="settings_color_by_database">DB 색 하나로</string>
+    <string name="settings_color_fallback">값이 없는 일정은 아래 DB 색으로 표시합니다.</string>
+    <string name="settings_color_database">모든 일정을 아래 DB 색으로 표시합니다.</string>
+    <string name="settings_color_save">저장</string>
+    <string name="settings_color_button">%1$s 색 바꾸기</string>
     <string name="settings_dynamic_color">배경화면 색 쓰기(Material You)</string>
     <string name="settings_dynamic_color_note">앱 화면 색을 배경화면에 맞춥니다. 일정 색은 그대로입니다.</string>
     <string name="settings_sync_interval">노션 자동 동기화 주기</string>

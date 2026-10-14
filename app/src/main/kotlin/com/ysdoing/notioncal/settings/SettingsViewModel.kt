@@ -68,6 +68,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     /** EX-07: 편집 화면에 보여 줄 속성 */
+    /** EX-03 DB 색·색 기준. */
+    fun setColorStyle(id: String, colorHex: String, useOptionColors: Boolean) {
+        viewModelScope.launch { dataSources.setColorStyle(id, colorHex, useOptionColors) }
+    }
+
     fun setExtraProps(id: String, propIds: List<String>) {
         viewModelScope.launch { dataSources.setExtraProps(id, propIds) }
     }

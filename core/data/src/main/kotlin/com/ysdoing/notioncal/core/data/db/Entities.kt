@@ -37,6 +37,12 @@ data class DataSourceEntity(
     val propCatalog: String? = null,
     /** EX-07 편집 화면에 보여 줄 속성 ID 목록(JSON 배열, v4). */
     val extraPropIds: String? = null,
+    /** EX-03 일정 색 기준: true면 색 속성(select) 값의 노션 색(값이 없으면 DB 색), false면 모두 DB 색(v5). */
+    @ColumnInfo(defaultValue = "1") val useOptionColors: Boolean = true,
+    /** NS-09 매핑한 속성의 마지막으로 본 이름(JSON {역할: 이름}, v5). 이름 변경 감지용. */
+    val mappedPropNames: String? = null,
+    /** NS-09 아직 확인하지 않은 스키마 변경 알림(JSON 배열, v5). null이면 없음. */
+    val schemaIssues: String? = null,
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
@@ -74,6 +80,8 @@ data class EventEntity(
 data class EventRow(
     @Embedded val event: EventEntity,
     val sourceColorHex: String,
+    /** EX-03 소속 DB의 색 기준(꺼져 있으면 DB 색만 쓴다). */
+    val useOptionColors: Boolean,
 )
 
 /** 동기화 기록(진단 화면·§3 지표). 오류 문구에 토큰·일정 제목을 넣지 않는다(SEC-02). */

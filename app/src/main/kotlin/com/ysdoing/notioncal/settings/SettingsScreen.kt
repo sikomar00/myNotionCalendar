@@ -62,6 +62,10 @@ import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.sync.ConnectionResult
 import java.time.DayOfWeek
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.selection.selectable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +81,7 @@ fun SettingsRoute(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingProps by rememberSaveable { mutableStateOf<String?>(null) }
+    var choosingColor by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -107,6 +112,7 @@ fun SettingsRoute(
                     source,
                     onToggle = { viewModel.setEnabled(source.dataSourceId, it) },
                     onChooseProps = { choosingProps = source.dataSourceId },
+                    onChooseColor = { choosingColor = source.dataSourceId },
                     onDelete = { pendingDelete = source.dataSourceId },
                 )
             }
@@ -184,6 +190,19 @@ fun SettingsRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.settings_open_diagnostics)) }
+        }
+    }
+
+    choosingColor?.let { id ->
+        sources.firstOrNull { it.dataSourceId == id }?.let { source ->
+            ColorDialog(
+                source = source,
+                onSave = { hex, useOptionColors ->
+                    viewModel.setColorStyle(id, hex, useOptionColors)
+                    choosingColor = null
+                },
+                onDismiss = { choosingColor = null },
+            )
         }
     }
 
@@ -268,9 +287,19 @@ private fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave:
 }
 
 @Composable
-private fun SourceRow(source: DataSourceEntity, onToggle: (Boolean) -> Unit, onChooseProps: () -> Unit, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(14.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
+private fun SourceRow(
+    source: DataSourceEntity,
+    onToggle: (Boolean) -> Unit,
+    onChooseProps: () -> Unit,
+    onChooseColor: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
+        val colorLabel = stringResource(R.string.settings_color_button, source.name)
+        IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
+            Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
+        }
         Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         TextButton(onClick = onChooseProps) { Text(stringResource(R.string.settings_extra_props)) }
         Switch(checked = source.enabled, onCheckedChange = onToggle)
@@ -278,6 +307,62 @@ private fun SourceRow(source: DataSourceEntity, onToggle: (Boolean) -> Unit, onC
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.settings_delete_database, source.name))
         }
     }
+}
+
+/**
+ * EX-03: DB 색(20색 격자)과 일정 색 기준을 고른다. 색 속성(select)이 있는 DB만 '속성 값 색'을 고를 수 있다.
+ * 노션 쪽 옵션 색은 바꾸지 않는다(앱 표시 색만).
+ */
+@Composable
+private fun ColorDialog(source: DataSourceEntity, onSave: (String, Boolean) -> Unit, onDismiss: () -> Unit) {
+    var hex by rememberSaveable(source.dataSourceId) { mutableStateOf(source.colorHex) }
+    var useOptions by rememberSaveable(source.dataSourceId) { mutableStateOf(source.useOptionColors) }
+    val hasColorProp = source.colorPropId != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_color_title, source.name)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (hasColorProp) {
+                    listOf(true to R.string.settings_color_by_option, false to R.string.settings_color_by_database).forEach { (value, label) ->
+                        Row(
+                            Modifier.fillMaxWidth().selectable(selected = useOptions == value, role = Role.RadioButton) { useOptions = value },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = useOptions == value, onClick = null)
+                            Text(stringResource(label), Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+                Text(
+                    stringResource(if (hasColorProp && useOptions) R.string.settings_color_fallback else R.string.settings_color_database),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                NotionColors.pickerPalette.chunked(5).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        row.forEach { color ->
+                            val selected = color.equals(hex, ignoreCase = true)
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .selectable(selected = selected, role = Role.RadioButton) { hex = color }
+                                    .semantics { contentDescription = color },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(Modifier.size(32.dp).clip(CircleShape).background(Color(NotionColors.argb(color))), contentAlignment = Alignment.Center) {
+                                    if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(hex, useOptions) }) { Text(stringResource(R.string.settings_color_save)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+    )
 }
 
 /** EX-07: 편집 화면에 보여 줄 속성 고르기. 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. */

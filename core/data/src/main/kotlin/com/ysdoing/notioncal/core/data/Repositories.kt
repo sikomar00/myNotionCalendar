@@ -49,7 +49,7 @@ internal fun EventRow.toCalendarEvent() = CalendarEvent(
     endTime = event.endTime?.let(Instant::ofEpochMilli),
     isAllDay = event.isAllDay,
     done = event.done,
-    colorHex = NotionColors.hexFor(event.colorKey) ?: sourceColorHex,
+    colorHex = NotionColors.hexFor(event.colorKey.takeIf { useOptionColors }) ?: sourceColorHex,
     sourceColorHex = sourceColorHex,
     url = event.url,
     pending = event.pendingOps > 0,
@@ -98,7 +98,7 @@ class EditableEventRepository @Inject constructor(
         combine(eventDao.observe(pageId), dataSourceDao.observeAll()) { event, sources ->
             val source = event?.let { e -> sources.firstOrNull { it.dataSourceId == e.dataSourceId } } ?: return@combine null
             EditableEvent(
-                event = EventRow(event, source.colorHex).toCalendarEvent(),
+                event = EventRow(event, source.colorHex, source.useOptionColors).toCalendarEvent(),
                 colorOptionId = event.colorOptionId,
                 colorOptions = parseColorOptions(source.colorOptions),
                 dataSourceName = source.name,
@@ -123,6 +123,12 @@ class DataSourceRepository @Inject constructor(
     }
 
     /** EX-07: 편집 화면에 보여 줄 속성을 고른다. 값은 동기화 때 이미 받아 두므로 다시 받지 않는다. */
+    /** EX-03 DB 색과 색 기준을 바꾸고 위젯을 다시 그린다. */
+    suspend fun setColorStyle(id: String, colorHex: String, useOptionColors: Boolean) {
+        dataSourceDao.setColorStyle(id, colorHex, useOptionColors)
+        widgetRefresher.requestUpdate()
+    }
+
     suspend fun setExtraProps(id: String, propIds: List<String>) {
         dataSourceDao.setExtraPropIds(id, encodeIdList(propIds))
     }

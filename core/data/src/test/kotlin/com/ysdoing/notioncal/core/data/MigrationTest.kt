@@ -146,4 +146,39 @@ class MigrationTest {
             db.close()
         }
     }
+    /** v4 → v5: 색 기준(기본 '속성 값 색')·NS-09 열이 붙고 기존 값은 그대로다. 색 기준을 끄면 DB 색으로 읽힌다(EX-03). */
+    @Test
+    fun v4ToV5AddsColorStyleAndSchemaColumns() = runTest {
+        helper.createDatabase(4).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position, colorOptions, propCatalog, extraPropIds)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', NULL, NULL, NULL, NULL, 'cTgR', NULL, 1, 500, 500, 0, '[]', '[]', '["p"]')""",
+            )
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime, colorOptionId, pendingOps, extraValues)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, 'yellow', NULL, '', 0, 'o1', 0, NULL)""",
+            )
+        }
+        helper.runMigrationsAndValidate(5).close()
+
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val source = db.dataSourceDao().get("ds")!!
+            assertEquals(true, source.useOptionColors)
+            assertEquals(null, source.schemaIssues)
+            assertEquals("[\"p\"]", source.extraPropIds)
+            val repo = EventRepository(db.eventDao())
+            val day = java.time.LocalDate.of(2026, 10, 13)
+            assertEquals("#DFAB01", repo.observeRange(day, day).first().single().colorHex) // Ctgr 노랑
+            db.dataSourceDao().setColorStyle("ds", "#E03E3E", useOptionColors = false)
+            assertEquals("#E03E3E", repo.observeRange(day, day).first().single().colorHex) // DB 색 하나로
+        } finally {
+            db.close()
+        }
+    }
 }

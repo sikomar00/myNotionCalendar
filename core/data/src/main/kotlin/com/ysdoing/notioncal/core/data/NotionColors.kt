@@ -15,6 +15,12 @@ object NotionColors {
         "red" to "#E03E3E",
     )
 
+    /** EX-03 DB 색 격자: 노션 10색 + 밝은·진한 변형 10색. */
+    val pickerPalette: List<String> = palette.map { it.second } + listOf(
+        "#2D9CDB", "#56CCF2", "#27AE60", "#6FCF97", "#F2C94C",
+        "#F2994A", "#EB5757", "#BB6BD9", "#9B51E0", "#4F4F4F",
+    )
+
     private val byName = palette.toMap()
 
     fun hexFor(colorKey: String?): String? = colorKey?.let { byName[it] }
