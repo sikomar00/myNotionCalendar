@@ -43,6 +43,10 @@ data class DataSourceEntity(
     val mappedPropNames: String? = null,
     /** NS-09 아직 확인하지 않은 스키마 변경 알림(JSON 배열, v5). null이면 없음. */
     val schemaIssues: String? = null,
+    /** EX-11 강조 기준 속성(select·multi_select·status) ID(v8). null이면 강조 안 함. */
+    val emphasisPropId: String? = null,
+    /** EX-11 강조할 옵션 ID 목록(JSON 배열, v8). 예: 우선순위 '1st'. */
+    val emphasisOptionIds: String? = null,
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
@@ -84,6 +88,9 @@ data class EventRow(
     val sourceColorHex: String,
     /** EX-03 소속 DB의 색 기준(꺼져 있으면 DB 색만 쓴다). */
     val useOptionColors: Boolean,
+    /** EX-11 소속 DB의 강조 기준(속성 ID·옵션 ID JSON). */
+    val emphasisPropId: String? = null,
+    val emphasisOptionIds: String? = null,
 )
 
 /** 동기화 기록(진단 화면·§3 지표). 오류 문구에 토큰·일정 제목을 넣지 않는다(SEC-02). */

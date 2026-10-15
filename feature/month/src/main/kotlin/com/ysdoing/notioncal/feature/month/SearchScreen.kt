@@ -215,10 +215,13 @@ private fun SearchRow(event: CalendarEvent, onPick: (CalendarEvent) -> Unit) {
         Column(Modifier.weight(1f).alpha(if (event.done) 0.55f else 1f)) {
             Text(
                 event.title.ifBlank { stringResource(R.string.search_untitled) },
+                modifier = Modifier.emphasisPill(event),
                 style = MaterialTheme.typography.bodyLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textDecoration = if (event.done) TextDecoration.LineThrough else null,
+                fontWeight = event.emphasisWeight,
+                color = if (event.showsEmphasis) event.emphasisTextColor() else Color.Unspecified,
             )
             Text(date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

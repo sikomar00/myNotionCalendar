@@ -209,14 +209,19 @@ private fun AgendaEventRow(event: CalendarEvent, continues: Boolean, onEventClic
         } else {
             Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         }
-        Text(
-            event.title,
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).alpha(if (event.done) 0.55f else 1f),
-            fontSize = scaled(15.sp, textScale),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textDecoration = if (event.done) TextDecoration.LineThrough else null,
-        )
+        // EX-11 강조 일정은 제목을 일정 색 칸에 대비되는 굵은 글자로.
+        Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Text(
+                event.title,
+                modifier = Modifier.emphasisPill(event).alpha(if (event.done) 0.55f else 1f),
+                fontSize = scaled(15.sp, textScale),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textDecoration = if (event.done) TextDecoration.LineThrough else null,
+                fontWeight = event.emphasisWeight,
+                color = if (event.showsEmphasis) event.emphasisTextColor() else Color.Unspecified,
+            )
+        }
         Text(time, fontSize = scaled(12.sp, textScale), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

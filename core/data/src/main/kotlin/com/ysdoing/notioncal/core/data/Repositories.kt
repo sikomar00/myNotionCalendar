@@ -34,7 +34,12 @@ data class CalendarEvent(
     val pending: Boolean = false,
     /** 색 기준 select 값의 옵션 ID(MV-09 값별 숨김). 값이 없으면 null. */
     val colorOptionId: String? = null,
+    /** EX-11 강조 일정(예: 우선순위 '1st'). 완료되지 않았을 때만 강조해 그린다([showsEmphasis]). */
+    val emphasized: Boolean = false,
 ) {
+    /** EX-11 강조해 그릴지: 완료한 일정은 강조하지 않는다(취소선·흐림이 우선). */
+    val showsEmphasis: Boolean get() = emphasized && !done
+
     val lastDate: LocalDate get() = endDate ?: startDate
     val isMultiDay: Boolean get() = endDate != null && endDate.isAfter(startDate)
 }
@@ -54,7 +59,15 @@ internal fun EventRow.toCalendarEvent() = CalendarEvent(
     url = event.url,
     pending = event.pendingOps > 0,
     colorOptionId = event.colorOptionId,
+    emphasized = isEmphasized(event.extraValues, emphasisPropId, emphasisOptionIds),
 )
+
+/** EX-11: 일정의 추가 속성 값(동기화 때 모든 select·status 값을 받아 둔다) 중 강조 속성 값이 강조 옵션이면 true. */
+internal fun isEmphasized(extraValues: String?, propId: String?, optionIds: String?): Boolean {
+    if (propId == null || optionIds == null || extraValues == null) return false
+    val wanted = parseIdList(optionIds).toSet().ifEmpty { return false }
+    return parseExtraValues(extraValues)[propId]?.optionIds.orEmpty().any { it in wanted }
+}
 
 @Singleton
 class EventRepository @Inject constructor(private val eventDao: EventDao) {
@@ -135,6 +148,13 @@ class DataSourceRepository @Inject constructor(
     /** EX-03 DB 색과 색 기준을 바꾸고 위젯을 다시 그린다. */
     suspend fun setColorStyle(id: String, colorHex: String, useOptionColors: Boolean) {
         dataSourceDao.setColorStyle(id, colorHex, useOptionColors)
+        widgetRefresher.requestUpdate()
+    }
+
+    /** EX-11 강조 기준을 바꾸고 위젯을 다시 그린다. [propId]가 null이거나 옵션이 없으면 끈다. */
+    suspend fun setEmphasis(id: String, propId: String?, optionIds: List<String>) {
+        val ids = encodeIdList(optionIds).takeIf { propId != null }
+        dataSourceDao.setEmphasis(id, propId?.takeIf { ids != null }, ids)
         widgetRefresher.requestUpdate()
     }
 

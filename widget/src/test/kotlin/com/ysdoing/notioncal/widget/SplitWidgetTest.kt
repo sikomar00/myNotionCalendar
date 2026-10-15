@@ -5,6 +5,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasClickAction
+import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
@@ -83,5 +84,19 @@ class SplitWidgetTest {
         // 'other' DB 일정(10/5 운동)은 7일 범위 밖이라 오늘만 '일정 없음'으로 남는다.
         assertEquals(listOf(today), onlyOther.agenda.days.map { it.date })
         assertTrue(onlyOther.agenda.days.single().items.isEmpty())
+    }
+
+    /** EX-11: 강조 일정은 '중요'로 읽히고, 완료한 강조 일정은 강조하지 않는다. */
+    @Test
+    fun emphasizedItemIsAnnounced() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 168.dp))
+        val events = listOf(
+            WidgetSamples.event("top", "2026-10-13", title = "중요한 일").copy(emphasized = true),
+            WidgetSamples.event("old", "2026-10-13", title = "끝낸 중요한 일", done = true).copy(emphasized = true),
+        )
+        provideComposable { SplitWidgetContent(SplitWidget.uiState(today, sunday, WidgetConfig(1), events), systemFontScale = 1f) }
+        onNode(hasContentDescriptionEqualTo("중요, 중요한 일")).assertExists()
+        onNode(hasContentDescriptionEqualTo("끝낸 중요한 일, 완료됨")).assertExists()
     }
 }

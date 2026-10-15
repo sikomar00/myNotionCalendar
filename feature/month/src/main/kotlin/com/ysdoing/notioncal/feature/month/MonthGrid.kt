@@ -420,19 +420,31 @@ private fun EventChip(placed: PlacedEvent, modifier: Modifier = Modifier) {
             topEnd = if (placed.continuesAfter) 0.dp else 3.dp,
             bottomEnd = if (placed.continuesAfter) 0.dp else 3.dp,
         )
-        Box(modifier.clip(shape).background(color.copy(alpha = 0.28f)), contentAlignment = Alignment.CenterStart) {
-            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle.padding(horizontal = 3.dp))
+        // EX-11 강조 일정은 막대를 진하게 칠하고 대비되는 굵은 글자로 쓴다.
+        Box(
+            modifier.clip(shape).background(if (event.showsEmphasis) color else color.copy(alpha = 0.28f)),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle.padding(horizontal = 3.dp), event)
+        }
+    } else if (event.showsEmphasis) {
+        // EX-11: 하루 일정은 색 점 대신 일정 색으로 칠한 칸.
+        Box(
+            modifier.padding(horizontal = 1.dp).clip(RoundedCornerShape(3.dp)).background(color).padding(horizontal = 2.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, Modifier, event)
         }
     } else {
         Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Start) {
             Box(Modifier.padding(start = 2.dp, end = 2.dp).size(5.dp).clip(CircleShape).background(color))
-            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle)
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle, event)
         }
     }
 }
 
 @Composable
-private fun ChipText(text: String, decoration: TextDecoration?, modifier: Modifier) {
+private fun ChipText(text: String, decoration: TextDecoration?, modifier: Modifier, event: CalendarEvent) {
     Text(
         text = text,
         modifier = modifier,
@@ -442,6 +454,7 @@ private fun ChipText(text: String, decoration: TextDecoration?, modifier: Modifi
         softWrap = false,
         overflow = TextOverflow.Clip,
         textDecoration = decoration,
-        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = if (event.showsEmphasis) FontWeight.Bold else null,
+        color = if (event.showsEmphasis) event.emphasisTextColor() else MaterialTheme.colorScheme.onSurface,
     )
 }

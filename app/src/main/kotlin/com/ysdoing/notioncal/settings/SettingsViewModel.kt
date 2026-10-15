@@ -104,6 +104,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { dataSources.setColorStyle(id, colorHex, useOptionColors) }
     }
 
+    /** EX-11 강조할 일정(속성·값). */
+    fun setEmphasis(id: String, propId: String?, optionIds: List<String>) {
+        viewModelScope.launch { dataSources.setEmphasis(id, propId, optionIds) }
+    }
+
     fun setExtraProps(id: String, propIds: List<String>) {
         viewModelScope.launch { dataSources.setExtraProps(id, propIds) }
     }

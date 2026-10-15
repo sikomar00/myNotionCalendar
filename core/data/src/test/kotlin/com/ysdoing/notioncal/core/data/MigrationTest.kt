@@ -219,4 +219,28 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v7 → v8: data_sources에 강조 기준 열(EX-11)이 붙고, 기존 DB는 강조 없음(null)이다. */
+    @Test
+    fun v7ToV8AddsEmphasisColumns() = runTest {
+        helper.createDatabase(7).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position, colorOptions, propCatalog, extraPropIds, useOptionColors, mappedPropNames, schemaIssues)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', NULL, NULL, NULL, NULL, NULL, NULL, 1, 500, 500, 0,
+                   NULL, NULL, NULL, 1, NULL, NULL)""",
+            )
+        }
+        helper.runMigrationsAndValidate(8).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val source = db.dataSourceDao().get("ds")!!
+            assertEquals(null, source.emphasisPropId)
+            assertEquals(null, source.emphasisOptionIds)
+            assertEquals(500L, source.lastSyncAt)
+        } finally {
+            db.close()
+        }
+    }
 }

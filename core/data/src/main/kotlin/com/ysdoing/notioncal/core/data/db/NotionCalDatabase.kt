@@ -19,6 +19,7 @@ import java.time.LocalDate
  * - 5: data_sources.useOptionColors(기본 1)·mappedPropNames·schemaIssues (EX-03·NS-09, AutoMigration)
  * - 6: holidays 추가 (EX-02, 테이블 추가만이라 AutoMigration)
  * - 7: events.titleHasMention (제목 언급 편집 경고, AutoMigration)
+ * - 8: data_sources.emphasisPropId·emphasisOptionIds (EX-11 우선순위 강조, AutoMigration)
  */
 @Database(
     entities = [
@@ -30,9 +31,9 @@ import java.time.LocalDate
         ConflictEntity::class,
         HolidayEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {

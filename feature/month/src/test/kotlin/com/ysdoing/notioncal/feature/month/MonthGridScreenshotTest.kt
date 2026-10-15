@@ -38,10 +38,11 @@ class MonthGridScreenshotTest {
         color: String = "#0B6E99",
         done: Boolean = false,
         time: String? = null,
+        emphasized: Boolean = false,
     ) = CalendarEvent(
         pageId = id, dataSourceId = "ds", title = title, startDate = LocalDate.parse(start), endDate = end?.let(LocalDate::parse),
         startTime = time?.let(Instant::parse), endTime = null, isAllDay = time == null, done = done, colorHex = color,
-        sourceColorHex = color, url = "",
+        sourceColorHex = color, url = "", emphasized = emphasized,
     )
 
     // §8.4 두 DB를 본뜬 표본: Ctgr 색(Event 노랑·Learn 파랑·Habit 빨강), 상태 Done 취소선, 기간 일정, 넘침(+N).
@@ -67,12 +68,13 @@ class MonthGridScreenshotTest {
         weekStart: DayOfWeek = DayOfWeek.SUNDAY,
         zoom: Float = 1f,
         holidays: Map<LocalDate, String> = emptyMap(),
+        shown: List<CalendarEvent> = events,
     ) {
         compose.setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface {
                     TextZoom(zoom) {
-                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), events, holidays), onDayClick = {})
+                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), shown, holidays), onDayClick = {})
                     }
                 }
             }
@@ -109,6 +111,17 @@ class MonthGridScreenshotTest {
         LocalDate.of(2026, 10, 5) to "쉬는 날 개천절",
         LocalDate.of(2026, 10, 9) to "한글날",
     )
+
+    // EX-11: 강조 일정(우선순위 '1st')은 일정 색 칸 + 대비 글자 + 굵게. 완료한 일정(바코프로젝트)은 강조하지 않는다.
+    private val emphasizedIds = setOf("1", "2", "3", "11")
+    private val withEmphasis = events.map { if (it.pageId in emphasizedIds) it.copy(emphasized = true) else it }
+
+    @Test
+    fun emphasized() = capture(YearMonth.of(2026, 10), "month_2026_10_emphasized", shown = withEmphasis)
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun emphasizedDark() = capture(YearMonth.of(2026, 10), "month_2026_10_emphasized_dark", shown = withEmphasis)
 
     @Test
     fun holidays() = capture(YearMonth.of(2026, 10), "month_2026_10_holidays", holidays = october2026Holidays)

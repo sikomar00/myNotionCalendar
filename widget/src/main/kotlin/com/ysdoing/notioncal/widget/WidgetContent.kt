@@ -404,10 +404,12 @@ private fun SingleLineRow(weekStart: LocalDate, events: List<CalendarEvent>, met
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (first != null) {
-                    Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(ColorProvider(Color(NotionColors.argb(first.colorHex))))) {}
+                    if (!first.showsEmphasis) {
+                        Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(ColorProvider(Color(NotionColors.argb(first.colorHex))))) {}
+                    }
                     Text(
                         text = chipLabel(first, continuesBefore = first.startDate.isBefore(date)),
-                        modifier = GlanceModifier.defaultWeight().padding(start = 2.dp).semantics { testTag = "chip" },
+                        modifier = GlanceModifier.defaultWeight().padding(start = 2.dp).emphasisBox(first).semantics { testTag = "chip" },
                         style = chipStyle(first, metrics, palette),
                         maxLines = 1,
                     )
@@ -426,10 +428,28 @@ private fun SingleLineRow(weekStart: LocalDate, events: List<CalendarEvent>, met
 }
 
 private fun chipStyle(event: CalendarEvent, metrics: WidgetMetrics, palette: WidgetPalette) = TextStyle(
-    color = if (event.done) palette.subtle else palette.text,
+    color = when {
+        event.showsEmphasis -> emphasisTextColor(event)
+        event.done -> palette.subtle
+        else -> palette.text
+    },
     fontSize = metrics.chipFontSp.sp,
+    fontWeight = if (event.showsEmphasis) FontWeight.Bold else null,
     textDecoration = if (event.done) TextDecoration.LineThrough else null,
 )
+
+/**
+ * EX-11 강조 일정(예: 우선순위 '1st'): 일정 색으로 칠한 칸에 대비되는 굵은 글자. 색만으로 구분하지 않게 굵기도 바꾼다(A11Y-03).
+ * 완료한 일정은 강조하지 않는다([CalendarEvent.showsEmphasis]).
+ */
+internal fun emphasisTextColor(event: CalendarEvent): ColorProvider = ColorProvider(Color(NotionColors.onColor(event.colorHex)))
+
+internal fun GlanceModifier.emphasisBox(event: CalendarEvent): GlanceModifier =
+    if (event.showsEmphasis) {
+        background(ColorProvider(Color(NotionColors.argb(event.colorHex)))).cornerRadius(3.dp).padding(horizontal = 3.dp)
+    } else {
+        this
+    }
 
 @Composable
 private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: WidgetPalette) {
@@ -448,7 +468,7 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
                     Box(
                         modifier = GlanceModifier
                             .fillMaxSize()
-                            .background(ColorProvider(color.copy(alpha = 0.28f)))
+                            .background(ColorProvider(if (event.showsEmphasis) color else color.copy(alpha = 0.28f)))
                             .cornerRadius(3.dp)
                             .padding(horizontal = 3.dp)
                             .semantics { testTag = "chip" },
@@ -462,8 +482,12 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
                     modifier = GlanceModifier.width(width).height(metrics.laneHeight).padding(start = 2.dp).semantics { testTag = "chip" },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(ColorProvider(color))) {}
-                    Text(label, modifier = GlanceModifier.padding(start = 2.dp), style = style, maxLines = 1)
+                    if (event.showsEmphasis) {
+                        Text(label, modifier = GlanceModifier.emphasisBox(event).semantics { testTag = "emphasized" }, style = style, maxLines = 1)
+                    } else {
+                        Box(GlanceModifier.size(4.dp).cornerRadius(2.dp).background(ColorProvider(color))) {}
+                        Text(label, modifier = GlanceModifier.padding(start = 2.dp), style = style, maxLines = 1)
+                    }
                 }
             }
         }

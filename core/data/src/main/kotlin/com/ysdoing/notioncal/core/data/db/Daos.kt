@@ -14,7 +14,8 @@ interface EventDao {
     /** [from]~[to]와 겹치는 일정(기간 일정 포함). 꺼 둔 DB는 제외한다. */
     @Query(
         """
-        SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors FROM events e
+        SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors,
+          d.emphasisPropId AS emphasisPropId, d.emphasisOptionIds AS emphasisOptionIds FROM events e
         JOIN data_sources d ON e.dataSourceId = d.dataSourceId
         WHERE d.enabled = 1 AND e.startDate <= :to AND COALESCE(e.endDate, e.startDate) >= :from
         ORDER BY e.startDate, d.position, e.sortKey IS NULL, e.sortKey, e.startTime IS NOT NULL, e.startTime, e.title
@@ -28,7 +29,8 @@ interface EventDao {
      */
     @Query(
         """
-        SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors FROM events e
+        SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors,
+          d.emphasisPropId AS emphasisPropId, d.emphasisOptionIds AS emphasisOptionIds FROM events e
         JOIN data_sources d ON e.dataSourceId = d.dataSourceId
         WHERE d.enabled = 1 AND e.title LIKE '%' || :pattern || '%' ESCAPE '\'
         ORDER BY COALESCE(e.endDate, e.startDate) < :today,
@@ -133,6 +135,10 @@ interface DataSourceDao {
     /** EX-03 DB 색과 색 기준. */
     @Query("UPDATE data_sources SET colorHex = :colorHex, useOptionColors = :useOptionColors WHERE dataSourceId = :id")
     suspend fun setColorStyle(id: String, colorHex: String, useOptionColors: Boolean)
+
+    /** EX-11 강조 기준(속성 ID, 옵션 ID JSON 배열). 둘 다 null이면 강조를 끈다. */
+    @Query("UPDATE data_sources SET emphasisPropId = :propId, emphasisOptionIds = :optionIds WHERE dataSourceId = :id")
+    suspend fun setEmphasis(id: String, propId: String?, optionIds: String?)
 
     /** NS-09 매핑 속성 이름과 알림. */
     @Query("UPDATE data_sources SET mappedPropNames = :names, schemaIssues = :issues WHERE dataSourceId = :id")

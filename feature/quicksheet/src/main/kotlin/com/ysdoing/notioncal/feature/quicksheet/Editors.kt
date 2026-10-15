@@ -18,6 +18,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -245,12 +247,26 @@ fun DayList(
                 )
                 Box(Modifier.size(8.dp).clip(CircleShape).background(Color(NotionColors.argb(event.colorHex))))
                 Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    // EX-11 강조 일정(예: 우선순위 '1st')은 제목을 일정 색 칸에 대비되는 굵은 글자로.
+                    val emphasized = event.showsEmphasis
                     Text(
                         event.title,
+                        modifier = if (emphasized) {
+                            Modifier.clip(RoundedCornerShape(4.dp))
+                                .background(Color(NotionColors.argb(event.colorHex)))
+                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                        } else {
+                            Modifier
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textDecoration = if (event.done) TextDecoration.LineThrough else null,
-                        color = if (event.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (emphasized) FontWeight.Bold else null,
+                        color = when {
+                            emphasized -> Color(NotionColors.onColor(event.colorHex))
+                            event.done -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
                     )
                     Text(
                         listOfNotNull(timeText(event), if (event.pending) stringResource(R.string.qs_pending) else null).joinToString(" · "),

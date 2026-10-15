@@ -78,6 +78,10 @@ import android.content.pm.PackageManager
 import android.content.Intent
 import android.Manifest
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.ysdoing.notioncal.core.data.parsePropCatalog
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -225,8 +229,9 @@ fun SettingsRoute(
         sources.firstOrNull { it.dataSourceId == id }?.let { source ->
             ColorDialog(
                 source = source,
-                onSave = { hex, useOptionColors ->
+                onSave = { hex, useOptionColors, emphasis ->
                     viewModel.setColorStyle(id, hex, useOptionColors)
+                    viewModel.setEmphasis(id, emphasis.first, emphasis.second)
                     choosingColor = null
                 },
                 onDismiss = { choosingColor = null },
@@ -397,17 +402,24 @@ private fun SourceRow(
 /**
  * EX-03: DB 색(20색 격자)과 일정 색 기준을 고른다. 색 속성(select)이 있는 DB만 '속성 값 색'을 고를 수 있다.
  * 노션 쪽 옵션 색은 바꾸지 않는다(앱 표시 색만).
+ * EX-11: 강조할 일정(속성 하나와 그 값들, 예: 'Pri.'의 '1st')도 여기서 고른다.
  */
 @Composable
-private fun ColorDialog(source: DataSourceEntity, onSave: (String, Boolean) -> Unit, onDismiss: () -> Unit) {
+private fun ColorDialog(
+    source: DataSourceEntity,
+    onSave: (String, Boolean, Pair<String?, List<String>>) -> Unit,
+    onDismiss: () -> Unit,
+) {
     var hex by rememberSaveable(source.dataSourceId) { mutableStateOf(source.colorHex) }
     var useOptions by rememberSaveable(source.dataSourceId) { mutableStateOf(source.useOptionColors) }
+    var emphasisProp by rememberSaveable(source.dataSourceId) { mutableStateOf(source.emphasisPropId) }
+    var emphasisOptions by rememberSaveable(source.dataSourceId) { mutableStateOf(parseIdList(source.emphasisOptionIds)) }
     val hasColorProp = source.colorPropId != null
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_color_title, source.name)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasColorProp) {
                     listOf(true to R.string.settings_color_by_option, false to R.string.settings_color_by_database).forEach { (value, label) ->
                         Row(
@@ -443,12 +455,71 @@ private fun ColorDialog(source: DataSourceEntity, onSave: (String, Boolean) -> U
                         }
                     }
                 }
+                EmphasisPicker(
+                    source = source,
+                    propId = emphasisProp,
+                    optionIds = emphasisOptions,
+                    onProp = {
+                        emphasisProp = it
+                        emphasisOptions = emptyList()
+                    },
+                    onOptions = { emphasisOptions = it },
+                )
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(hex, useOptions) }) { Text(stringResource(R.string.settings_color_save)) } },
+        confirmButton = {
+            TextButton(onClick = { onSave(hex, useOptions, emphasisProp to emphasisOptions) }) { Text(stringResource(R.string.settings_color_save)) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
     )
 }
+
+/**
+ * EX-11 강조할 일정: 선택형 속성(select·multi_select·status) 하나와 강조할 값(여러 개)을 고른다.
+ * 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. 고른 값이면 앱·위젯에서 일정 색 칸·굵은 글씨로 보인다.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EmphasisPicker(
+    source: DataSourceEntity,
+    propId: String?,
+    optionIds: List<String>,
+    onProp: (String?) -> Unit,
+    onOptions: (List<String>) -> Unit,
+) {
+    val props = parsePropCatalog(source.propCatalog).filter { it.type in EMPHASIS_TYPES && it.options.isNotEmpty() }
+    HorizontalDivider()
+    Text(stringResource(R.string.settings_emphasis_title), style = MaterialTheme.typography.titleSmall)
+    Text(
+        stringResource(if (props.isEmpty()) R.string.settings_emphasis_empty else R.string.settings_emphasis_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (props.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FilterChip(selected = propId == null, onClick = { onProp(null) }, label = { Text(stringResource(R.string.settings_emphasis_off)) })
+        props.forEach { prop ->
+            FilterChip(selected = prop.id == propId, onClick = { onProp(prop.id) }, label = { Text(prop.name, maxLines = 1) })
+        }
+    }
+    val prop = props.firstOrNull { it.id == propId } ?: return
+    Text(stringResource(R.string.settings_emphasis_values, prop.name), style = MaterialTheme.typography.labelLarge)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        prop.options.forEach { option ->
+            val on = option.id in optionIds
+            FilterChip(
+                selected = on,
+                onClick = { onOptions(if (on) optionIds - option.id else optionIds + option.id) },
+                label = { Text(option.name, maxLines = 1) },
+                leadingIcon = {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(NotionColors.argb(NotionColors.hexFor(option.color) ?: source.colorHex))))
+                },
+            )
+        }
+    }
+}
+
+private val EMPHASIS_TYPES = setOf("select", "multi_select", "status")
 
 /** EX-07: 편집 화면에 보여 줄 속성 고르기. 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. */
 @Composable

@@ -137,4 +137,18 @@ class WidgetRemoteViewsTest {
         renderView(DpSize(358.dp, 380.dp)) { SplitWidgetContent(splitState(), systemFontScale = 1f) }
             .captureRoboImage("src/test/screenshots/split_4x4.png")
     }
+
+    // EX-11: 강조 일정(일정 색 칸 + 대비 글자 + 굵게)을 월 위젯·달력 + 일정 위젯에서 본다. 완료한 일정은 강조하지 않는다.
+    private val emphasizedEvents = WidgetSamples.events.map { if (it.pageId in setOf("1", "2", "3", "6")) it.copy(emphasized = true) else it }
+
+    @Test
+    fun screenshotEmphasizedMonth() = runTest {
+        renderView(large, WidgetSamples.state(emphasizedEvents)).captureRoboImage("src/test/screenshots/widget_large_emphasized.png")
+    }
+
+    @Test
+    fun screenshotEmphasizedMonthDark() = runTest {
+        renderView(large, WidgetSamples.state(emphasizedEvents, WidgetConfig(1, theme = WidgetTheme.DARK)))
+            .captureRoboImage("src/test/screenshots/widget_large_emphasized_dark.png")
+    }
 }

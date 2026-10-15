@@ -306,6 +306,7 @@ private fun EventRow(event: CalendarEvent, continues: Boolean, date: LocalDate, 
             .clickable(actionStartActivity(edit))
             .semantics {
                 contentDescription = listOfNotNull(
+                    context.getString(R.string.widget_emphasized).takeIf { event.showsEmphasis },
                     title,
                     time,
                     context.getString(R.string.agenda_widget_done).takeIf { event.done },
@@ -327,15 +328,23 @@ private fun EventRow(event: CalendarEvent, continues: Boolean, date: LocalDate, 
             style = TextStyle(color = palette.subtle, fontSize = metrics.timeFontSp.sp),
             maxLines = 1,
         )
-        Text(
-            text = title,
-            modifier = GlanceModifier.defaultWeight(),
-            style = TextStyle(
-                color = if (event.done) palette.subtle else palette.text,
-                fontSize = metrics.itemFontSp.sp,
-                textDecoration = if (event.done) TextDecoration.LineThrough else null,
-            ),
-            maxLines = 1,
-        )
+        // EX-11 강조 일정은 제목을 일정 색 칸에 대비되는 굵은 글자로(칸은 글자 폭만큼).
+        Box(GlanceModifier.defaultWeight()) {
+            Text(
+                text = title,
+                modifier = GlanceModifier.emphasisBox(event),
+                style = TextStyle(
+                    color = when {
+                        event.showsEmphasis -> emphasisTextColor(event)
+                        event.done -> palette.subtle
+                        else -> palette.text
+                    },
+                    fontSize = metrics.itemFontSp.sp,
+                    fontWeight = if (event.showsEmphasis) FontWeight.Bold else null,
+                    textDecoration = if (event.done) TextDecoration.LineThrough else null,
+                ),
+                maxLines = 1,
+            )
+        }
     }
 }

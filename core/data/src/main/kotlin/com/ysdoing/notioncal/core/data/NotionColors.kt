@@ -23,7 +23,23 @@ object NotionColors {
 
     private val byName = palette.toMap()
 
+    /** #191919의 상대 휘도. */
+    private const val DARK_TEXT_LUMINANCE = 0.0097
+
     fun hexFor(colorKey: String?): String? = colorKey?.let { byName[it] }
+
+    /**
+     * EX-11 강조 칸: [hex] 색 배경 위에 읽히는 글자색(ARGB). 흰색과 먹색(#191919) 중 WCAG 대비가 큰 쪽을 고른다
+     * (노랑·주황 같은 밝은 배경은 먹색, 파랑·보라·빨강은 흰색).
+     */
+    fun onColor(hex: String): Int {
+        val c = argb(hex)
+        fun lin(v: Int): Double = (v / 255.0).let { if (it <= 0.03928) it / 12.92 else Math.pow((it + 0.055) / 1.055, 2.4) }
+        val luminance = 0.2126 * lin(c shr 16 and 0xFF) + 0.7152 * lin(c shr 8 and 0xFF) + 0.0722 * lin(c and 0xFF)
+        val withWhite = 1.05 / (luminance + 0.05)
+        val withDark = (luminance + 0.05) / (DARK_TEXT_LUMINANCE + 0.05)
+        return if (withDark > withWhite) 0xFF191919.toInt() else 0xFFFFFFFF.toInt()
+    }
 
     /** "#RRGGBB" → ARGB Int. 형식이 틀리면 기본 회색. */
     fun argb(hex: String): Int =

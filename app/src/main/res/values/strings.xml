@@ -29,7 +29,12 @@
     <string name="settings_hide_done">완료 항목 숨기기</string>
     <string name="settings_hide_done_off">끄면 취소선으로 표시합니다.</string>
     <string name="settings_schema_warning">노션 속성이 바뀌었습니다. 다시 연결이 필요할 수 있습니다</string>
-    <string name="settings_color_title">%1$s 색</string>
+    <string name="settings_color_title">%1$s 색·강조</string>
+    <string name="settings_emphasis_title">강조할 일정</string>
+    <string name="settings_emphasis_note">고른 속성 값이면 앱과 위젯에서 일정 색 칸에 굵은 글씨로 보입니다(완료한 일정은 제외).</string>
+    <string name="settings_emphasis_empty">강조에 쓸 선택형 속성이 없습니다. 동기화가 끝나면 다시 열어 보세요.</string>
+    <string name="settings_emphasis_off">강조 안 함</string>
+    <string name="settings_emphasis_values">강조할 %1$s 값</string>
     <string name="settings_color_by_option">속성 값 색으로(예: Ctgr)</string>
     <string name="settings_color_by_database">DB 색 하나로</string>
     <string name="settings_color_fallback">값이 없는 일정은 아래 DB 색으로 표시합니다.</string>
