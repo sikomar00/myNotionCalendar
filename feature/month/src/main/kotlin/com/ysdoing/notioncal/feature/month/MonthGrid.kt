@@ -389,7 +389,8 @@ private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoli
     // 글꼴 크기에 맞춰 커지도록 sp 기준 최소 크기를 쓴다(고정 dp면 글꼴 최대에서 숫자가 잘림).
     val minSize = with(LocalDensity.current) { 18.sp.toDp() }
     Box(modifier.padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {
-        val circle = if (isToday) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier
+        // 오늘은 칠한 네모(위젯·앱 아이콘의 오늘 칸과 같은 모양).
+        val circle = if (isToday) Modifier.clip(TodayShape).background(MaterialTheme.colorScheme.primary) else Modifier
         Box(
             Modifier.defaultMinSize(minWidth = minSize, minHeight = minSize).then(circle).padding(horizontal = 3.dp),
             contentAlignment = Alignment.Center,

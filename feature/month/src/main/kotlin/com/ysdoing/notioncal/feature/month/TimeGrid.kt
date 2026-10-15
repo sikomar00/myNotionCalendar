@@ -165,7 +165,7 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<L
                     style = MaterialTheme.typography.labelSmall,
                     color = dayOfWeekColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val circle = if (isToday) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier
+                val circle = if (isToday) Modifier.clip(TodayShape).background(MaterialTheme.colorScheme.primary) else Modifier
                 Box(circle.defaultMinSize(28.dp, 28.dp), contentAlignment = Alignment.Center) {
                     Text(
                         date.dayOfMonth.toString(),

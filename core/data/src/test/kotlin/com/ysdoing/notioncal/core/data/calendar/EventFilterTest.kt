@@ -63,10 +63,10 @@ class EventFilterTest {
         repo.setFilter(filter)
         repo.setZoomPercent(400)
         repo.setCalendarView(CalendarView.AGENDA)
-        assertTrue(repo.settings.first().dynamicColor) // S25-10 기본 켬
-        repo.setDynamicColor(false)
+        assertFalse(repo.settings.first().dynamicColor) // 기본은 노션 문서 색(2026-10-16), Material You는 켜야 쓴다
+        repo.setDynamicColor(true)
         val saved = repo.settings.first()
-        assertFalse(saved.dynamicColor)
+        assertTrue(saved.dynamicColor)
         assertEquals(filter, saved.filter)
         assertTrue(saved.hideDone) // 설정 화면의 '완료 숨김'과 같은 값
         assertEquals(CalendarZoom.MAX, saved.zoomPercent)

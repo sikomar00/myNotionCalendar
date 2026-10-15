@@ -136,4 +136,23 @@ class MonthGridScreenshotTest {
         compose.onNodeWithContentDescription("10월 9일, 한글날, 일정 0개").assertExists()
         compose.onNodeWithText("쉬는 날 개천절").assertExists()
     }
+
+    // 앱 정체성(2026-10-16): 노션 문서 색·NotionCal Sans·오늘 칠한 네모를 실제 앱 테마로 그린다.
+    private fun captureIdentity(name: String) {
+        compose.setContent {
+            com.ysdoing.notioncal.feature.quicksheet.NotionCalTheme(dynamicColor = false) {
+                Surface {
+                    MonthGrid(MonthGridState(YearMonth.of(2026, 10), DayOfWeek.SUNDAY, LocalDate.of(2026, 10, 13), withEmphasis, october2026Holidays), onDayClick = {})
+                }
+            }
+        }
+        compose.onRoot().captureRoboImage("src/test/screenshots/$name.png")
+    }
+
+    @Test
+    fun identityLight() = captureIdentity("identity_month_light")
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun identityDark() = captureIdentity("identity_month_dark")
 }

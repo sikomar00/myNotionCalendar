@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.DesignTokens
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTheme
@@ -567,12 +568,13 @@ class WidgetPalette private constructor(
     )
 
     companion object {
-        private val LIGHT = Scheme(
-            Color(0xFFFFFFFF), Color(0xFF37352F), Color(0xFF787774), Color(0xFF808080), Color(0xFFE9E9E7), Color(0xFF2F80ED),
-        )
-        private val DARK = Scheme(
-            Color(0xFF191919), Color(0xFFE6E6E4), Color(0xFF9B9A97), Color(0xFF808083), Color(0xFF2F2F2F), Color(0xFF529CCA),
-        )
+        // 앱과 같은 화면 틀 색(DesignTokens). 다른 달 날짜(outside)만 위젯 전용 값(3:1 이상).
+        private val LIGHT = with(DesignTokens.Light) {
+            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT))
+        }
+        private val DARK = with(DesignTokens.Dark) {
+            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT))
+        }
         // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
         // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
         private val SUNDAY_LIGHT = Color(0xFFC62828)
@@ -628,7 +630,12 @@ class WidgetPalette private constructor(
                 divider = pick({ it.divider }),
                 accent = pick({ it.accent }),
                 todayBackground = pick({ it.accent }),
-                todayText = if (theme == WidgetTheme.MATERIAL_YOU) pick({ it.background }) else ColorProvider(Color.White),
+                // 오늘 칸 글자: 라이트는 흰색, 다크는 밝은 강조 위라 밤색(흰색은 2.7:1).
+                todayText = if (theme == WidgetTheme.MATERIAL_YOU) {
+                    pick({ it.background })
+                } else {
+                    pair(Color(DesignTokens.Light.ON_ACCENT), Color(DesignTokens.Dark.ON_ACCENT))
+                },
                 error = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 sunday = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 saturday = pair(SATURDAY_LIGHT, SATURDAY_DARK),

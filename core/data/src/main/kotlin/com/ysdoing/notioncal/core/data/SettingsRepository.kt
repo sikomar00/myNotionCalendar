@@ -39,7 +39,7 @@ data class AppSettings(
     /** MV-09 앱에서만 숨길 색 기준 값("dsId/optionId"). */
     val hiddenOptionKeys: Set<String> = emptySet(),
     /** S25-10 Material You(배경화면 색) 사용. 기본 켬. */
-    val dynamicColor: Boolean = true,
+    val dynamicColor: Boolean = false,
     /** EX-02 공휴일 표시(폰의 공휴일 캘린더, READ_CALENDAR). 권한을 받으면 켠다. */
     val showHolidays: Boolean = false,
     /** EX-02 공휴일을 마지막으로 읽어 온 시각(epoch ms). 앱 열기 때 하루 한 번 다시 읽는다. */
@@ -77,7 +77,7 @@ class SettingsRepository @Inject constructor(
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
-                dynamicColor = prefs[DYNAMIC_COLOR] ?: true,
+                dynamicColor = prefs[DYNAMIC_COLOR] ?: false,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
                 remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
@@ -187,7 +187,8 @@ class SettingsRepository @Inject constructor(
         val ZOOM_PERCENT = intPreferencesKey("zoom_percent")
         val HIDDEN_SOURCES = stringSetPreferencesKey("hidden_source_ids")
         val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
-        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        // 2026-10-16 앱 정체성(노션 문서 색)을 기본으로 하면서 키를 바꿨다. 예전 키(dynamic_color, 기본 켬)의 값은 읽지 않는다.
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_v2")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")

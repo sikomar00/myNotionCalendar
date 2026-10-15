@@ -47,7 +47,7 @@ class QuickSheetActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val start = startFrom(intent.getStringExtra(AppIntents.EXTRA_MODE), intent.getStringExtra(AppIntents.EXTRA_DATE), intent.getStringExtra(AppIntents.EXTRA_PAGE_ID))
         setContent {
-            val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(true)
+            val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 Box(
                     Modifier
