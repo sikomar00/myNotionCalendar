@@ -450,7 +450,7 @@ private fun ChipText(text: String, decoration: TextDecoration?, modifier: Modifi
         lineHeight = 12.sp,
         maxLines = 1,
         softWrap = false,
-        overflow = TextOverflow.Clip,
+        overflow = TextOverflow.Ellipsis,
         textDecoration = decoration,
         fontWeight = if (event.showsEmphasis) FontWeight.Bold else null,
         color = if (event.showsEmphasis) event.emphasisTextColor() else MaterialTheme.colorScheme.onSurface,

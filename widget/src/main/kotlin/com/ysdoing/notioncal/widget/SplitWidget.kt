@@ -168,6 +168,8 @@ internal data class SplitMetrics(
     val weekNumberFontSp: Float,
     val dayHeaderHeight: Dp,
     val itemHeight: Dp,
+    /** 오른쪽 목록 높이: 줄 높이의 배수(맨 아래 줄이 가로로 반쯤 잘려 보이지 않게). */
+    val listHeight: Dp,
     val dayHeaderFontSp: Float,
     val itemFontSp: Float,
     val timeFontSp: Float,
@@ -201,6 +203,9 @@ internal data class SplitMetrics(
             val dateFont = fit(rowHeight, 13f)
             val dayHeader = 13f * scale
             val item = 13f * scale
+            // 날짜 머리와 일정 줄은 높이가 같다(목록 높이를 줄 수 배수로 맞추려고).
+            val rowBox = box(maxOf(dayHeader, item)) + 6.dp
+            val listHeight = rowBox * kotlin.math.floor(innerHeight / rowBox).coerceAtLeast(1f)
             return SplitMetrics(
                 calendarWidth = calendarWidth,
                 cellWidth = cellWidth,
@@ -213,8 +218,9 @@ internal data class SplitMetrics(
                 weekdayFontSp = dateFont * 0.85f * spFactor,
                 dateFontSp = dateFont * spFactor,
                 weekNumberFontSp = dateFont * 0.8f * spFactor,
-                dayHeaderHeight = box(dayHeader) + 6.dp,
-                itemHeight = box(item) + 6.dp,
+                dayHeaderHeight = rowBox,
+                itemHeight = rowBox,
+                listHeight = listHeight,
                 dayHeaderFontSp = dayHeader * spFactor,
                 itemFontSp = item * spFactor,
                 timeFontSp = 11f * scale * spFactor,
@@ -252,7 +258,7 @@ fun SplitWidgetContent(
         }
         Spacer(GlanceModifier.width(SplitMetrics.GAP))
         Box(GlanceModifier.defaultWeight().fillMaxHeight(), contentAlignment = Alignment.BottomEnd) {
-            DayList(state, metrics, palette)
+            Column(GlanceModifier.fillMaxSize()) { DayList(state, metrics, palette) }
             AddButton(state.today, palette)
         }
     }
@@ -362,7 +368,7 @@ private fun DayCell(date: LocalDate, inMonth: Boolean, state: SplitUiState, metr
 @Composable
 private fun DayList(state: SplitUiState, metrics: SplitMetrics, palette: WidgetPalette) {
     val days = state.agenda.days
-    LazyColumn(GlanceModifier.fillMaxSize()) {
+    LazyColumn(GlanceModifier.fillMaxWidth().height(metrics.listHeight)) {
         days.forEach { day ->
             item(itemId = day.date.toEpochDay()) { DayHeader(day.date, state.holidays[day.date], metrics, palette) }
             if (day.items.isEmpty() && day.date !in state.holidays) {
@@ -503,7 +509,7 @@ private fun AddButton(today: LocalDate, palette: WidgetPalette) {
             modifier = GlanceModifier.size(40.dp).cornerRadius(20.dp).background(palette.accent),
             contentAlignment = Alignment.Center,
         ) {
-            Text("+", style = TextStyle(color = palette.todayText, fontSize = 22.sp, fontWeight = FontWeight.Medium))
+            WidgetIcon(R.drawable.ic_widget_add, palette.todayText, 24.dp)
         }
     }
 }

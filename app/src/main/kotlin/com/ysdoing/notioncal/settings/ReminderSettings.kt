@@ -164,7 +164,8 @@ internal fun ReminderSection(
                         selected = rules.allDayDayBefore == before,
                         onClick = { onRulesChange(rules.copy(allDayDayBefore = before)) },
                         shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    ) { Text(stringResource(label)) }
+                        icon = {},
+                    ) { Text(stringResource(label), maxLines = 1) }
                 }
         }
         TextButton(onClick = { picking = true }) {
@@ -237,7 +238,8 @@ private fun AddReminderDialog(onAdd: (Int) -> Unit, onDismiss: () -> Unit) {
                                 selected = unit == factor,
                                 onClick = { unit = factor },
                                 shape = SegmentedButtonDefaults.itemShape(index, 3),
-                            ) { Text(stringResource(label)) }
+                                icon = {},
+                            ) { Text(stringResource(label), maxLines = 1) }
                         }
                 }
             }

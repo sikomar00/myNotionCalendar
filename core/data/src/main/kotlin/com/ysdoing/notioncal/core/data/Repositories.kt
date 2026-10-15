@@ -97,6 +97,8 @@ data class EditableEvent(
     val colorOptionId: String?,
     val colorOptions: List<ColorOption>,
     val dataSourceName: String,
+    /** 색 기준 속성 이름(예: Ctgr). 편집 시트에서 옵션 칩 위에 붙인다. */
+    val colorPropName: String? = null,
     /** EX-07: 편집 화면에 보여 줄 추가 속성(설정에서 고른 것 중 지금 스키마에 있는 것). */
     val extraProps: List<ExtraProp> = emptyList(),
     val extraValues: Map<String, PropValue> = emptyMap(),
@@ -117,6 +119,7 @@ class EditableEventRepository @Inject constructor(
                 colorOptionId = event.colorOptionId,
                 colorOptions = parseColorOptions(source.colorOptions),
                 dataSourceName = source.name,
+                colorPropName = parsePropCatalog(source.propCatalog).firstOrNull { it.id == source.colorPropId }?.name,
                 extraProps = source.shownExtraProps(),
                 extraValues = parseExtraValues(event.extraValues),
                 titleHasMention = event.titleHasMention,

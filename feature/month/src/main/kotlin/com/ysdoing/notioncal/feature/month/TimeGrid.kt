@@ -235,7 +235,7 @@ private fun AllDayLane(start: LocalDate, days: Int, events: List<CalendarEvent>,
                     lineHeight = 12.sp,
                     maxLines = 1,
                     softWrap = false,
-                    overflow = TextOverflow.Clip,
+                    overflow = TextOverflow.Ellipsis,
                     textDecoration = if (event.done) TextDecoration.LineThrough else null,
                     fontWeight = event.emphasisWeight,
                     color = if (event.showsEmphasis) event.emphasisTextColor() else MaterialTheme.colorScheme.onSurface,
@@ -284,7 +284,7 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
             // 겹쳐서 좁아진 블록에서 한글이 한 글자씩 줄바꿈되지 않게 한 줄로 자른다.
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Clip,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             time,

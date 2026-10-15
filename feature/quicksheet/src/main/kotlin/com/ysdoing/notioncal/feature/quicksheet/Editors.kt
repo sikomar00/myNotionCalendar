@@ -336,9 +336,13 @@ fun EventEditorForm(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(checked = done, onCheckedChange = null)
-            Text(stringResource(R.string.qs_done), Modifier.padding(end = 12.dp))
+            Text(stringResource(R.string.qs_done), Modifier.padding(start = 8.dp, end = 12.dp))
         }
         if (item.colorOptions.isNotEmpty()) {
+            // 추가 속성(예: Pri.)처럼 색 기준 속성(예: Ctgr)도 이름을 붙인다.
+            item.colorPropName?.let { name ->
+                Text(name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             ChipScrollRow {
                 item.colorOptions.forEach { option ->
                     FilterChip(

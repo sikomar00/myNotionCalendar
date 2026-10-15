@@ -233,7 +233,7 @@ private fun AgendaHeader(state: AgendaUiState, metrics: AgendaMetrics, palette: 
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Text("+", style = TextStyle(color = palette.accent, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Medium))
+            WidgetIcon(R.drawable.ic_widget_add, palette.accent, (metrics.headerHeight * 0.55f).coerceAtMost(24.dp))
         }
     }
 }

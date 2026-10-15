@@ -146,7 +146,8 @@ fun SettingsRoute(
                             selected = settings.weekStart == day,
                             onClick = { viewModel.setWeekStart(day) },
                             shape = SegmentedButtonDefaults.itemShape(index, 2),
-                        ) { Text(stringResource(label)) }
+                            icon = {},
+                        ) { Text(stringResource(label), maxLines = 1) }
                     }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -180,7 +181,8 @@ fun SettingsRoute(
                         selected = settings.syncIntervalMinutes == minutes,
                         onClick = { viewModel.setSyncInterval(minutes) },
                         shape = SegmentedButtonDefaults.itemShape(index, AppSettings.SYNC_INTERVALS.size),
-                    ) { Text(stringResource(R.string.settings_minutes, minutes)) }
+                        icon = {},
+                    ) { Text(stringResource(R.string.settings_minutes, minutes), maxLines = 1) }
                 }
             }
             Text(

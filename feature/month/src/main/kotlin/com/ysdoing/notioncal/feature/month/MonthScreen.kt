@@ -237,8 +237,8 @@ fun MonthRoute(
 
 @Composable
 private fun title(view: CalendarView, focus: LocalDate, shownStart: LocalDate?): String = when (view) {
-    CalendarView.MONTH -> stringResource(R.string.month_title, focus.year, focus.monthValue)
-    CalendarView.AGENDA -> stringResource(R.string.view_agenda)
+    // 목록 보기도 맨 위 날짜의 연·월을 보인다(보기 이름은 오른쪽 '목록 ▾'에 있다).
+    CalendarView.MONTH, CalendarView.AGENDA -> stringResource(R.string.month_title, focus.year, focus.monthValue)
     else -> {
         val start = shownStart ?: focus
         val end = start.plusDays(view.days - 1L)

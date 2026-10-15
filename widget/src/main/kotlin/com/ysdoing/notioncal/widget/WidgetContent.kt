@@ -3,6 +3,11 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.glance.ImageProvider
+import androidx.glance.Image
+import androidx.glance.ColorFilter
+import androidx.compose.ui.unit.Dp
+import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -180,13 +185,13 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
             }
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
-        HeaderButton("+", context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
+        HeaderButton(R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
         // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 48dp 버튼 4개가 들어가는 큼에서만 보인다.
         if (metrics.mode == WidgetMode.LARGE) {
-            HeaderButton("↻", context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
+            HeaderButton(R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
         }
-        HeaderButton("‹", context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
-        HeaderButton("›", context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
+        HeaderButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
+        HeaderButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
     }
 }
 
@@ -239,7 +244,7 @@ private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionPara
  * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 글자 폭 그대로 둔다(예외).
  */
 @Composable
-private fun HeaderButton(label: String, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
+private fun HeaderButton(@DrawableRes icon: Int, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
@@ -251,8 +256,22 @@ private fun HeaderButton(label: String, description: String, tag: String, action
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = TextStyle(color = palette.accent, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Medium))
+        WidgetIcon(icon, palette.accent, (metrics.headerHeight * 0.55f).coerceAtMost(24.dp))
     }
+}
+
+/**
+ * 머리줄 아이콘(앱과 같은 Material 아이콘 모양). 벡터 리소스라 런처가 리소스로 그리고 비트맵을 넘기지 않는다(PF-07).
+ * 설명은 감싼 버튼이 갖는다.
+ */
+@Composable
+internal fun WidgetIcon(@DrawableRes icon: Int, tint: ColorProvider, size: Dp) {
+    Image(
+        provider = ImageProvider(icon),
+        contentDescription = null,
+        modifier = GlanceModifier.size(size),
+        colorFilter = ColorFilter.tint(tint),
+    )
 }
 
 @Composable
