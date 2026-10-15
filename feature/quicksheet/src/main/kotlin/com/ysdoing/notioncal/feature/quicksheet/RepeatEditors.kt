@@ -151,7 +151,7 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
                         onClick = { interval = (interval - 1).coerceAtLeast(1) },
                         enabled = interval > 1,
                         modifier = Modifier.semantics { contentDescription = less },
-                    ) { Text("−") }
+                    ) { Text("−", style = MaterialTheme.typography.titleLarge) }
                     Text(
                         intervalLabel(freq, interval),
                         modifier = Modifier.weight(1f),
@@ -162,7 +162,7 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
                         onClick = { interval = (interval + 1).coerceAtMost(Recurrence.MAX_INTERVAL) },
                         enabled = interval < Recurrence.MAX_INTERVAL,
                         modifier = Modifier.semantics { contentDescription = more },
-                    ) { Text("+") }
+                    ) { Text("+", style = MaterialTheme.typography.titleLarge) }
                 }
                 if (freq == RepeatFreq.WEEKLY) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
