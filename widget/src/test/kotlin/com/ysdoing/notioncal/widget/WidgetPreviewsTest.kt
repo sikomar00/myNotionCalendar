@@ -42,4 +42,14 @@ class WidgetPreviewsTest {
         onNode(hasTextEqualTo("팀 회의")).assertExists()
         onAllNodes(hasTextEqualTo("출장")).assertCountEquals(3) // 3일짜리 기간 일정은 날마다 한 줄
     }
+
+    @Test
+    fun splitPreviewRenders() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(WidgetPreviews.SPLIT_SIZE)
+        provideComposable { SplitWidgetContent(WidgetPreviews.splitState(today), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("10월")).assertExists()
+        onNode(hasTextEqualTo("팀 회의")).assertExists()
+        assertTrue(WidgetPreviews.splitState(today).agenda.days.flatMap { it.items }.all { it.first.pageId.startsWith("preview-") })
+    }
 }

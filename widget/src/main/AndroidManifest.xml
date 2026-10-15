@@ -32,6 +32,19 @@
                 android:resource="@xml/agenda_widget_info" />
         </receiver>
 
+        <!-- WG-09 달력 + 일정(왼쪽 미니 월 달력, 오른쪽 일정 목록). -->
+        <receiver
+            android:name=".SplitWidgetReceiver"
+            android:exported="true"
+            android:label="@string/split_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/split_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".DayChangeReceiver"
             android:exported="false">

@@ -20,6 +20,10 @@
     <string name="agenda_widget_continues">이어짐</string>
     <string name="agenda_widget_untitled">(제목 없음)</string>
     <string name="agenda_widget_done">완료됨</string>
+    <string name="split_widget_label">노션 달력 + 일정</string>
+    <string name="split_widget_description">왼쪽은 이번 달 달력, 오른쪽은 오늘부터 7일 동안의 노션 일정을 보여줍니다</string>
+    <string name="split_widget_week">%1$d주차</string>
+    <string name="split_widget_day">%1$d일</string>
     <string name="widget_open_app">앱 열기</string>
     <string name="widget_last_sync">마지막 동기화 %1$s</string>
     <string name="widget_sync_error">동기화 오류. 눌러서 앱 열기</string>

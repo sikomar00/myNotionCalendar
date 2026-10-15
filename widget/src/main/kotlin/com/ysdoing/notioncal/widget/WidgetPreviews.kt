@@ -23,6 +23,7 @@ object WidgetPreviews {
     /** 미리보기 크기: 월 위젯 4×4, 보조 위젯 4×2(S25 기본 칸 크기 근사). */
     val MONTH_SIZE = DpSize(358.dp, 380.dp)
     val AGENDA_SIZE = DpSize(358.dp, 152.dp)
+    val SPLIT_SIZE = DpSize(358.dp, 168.dp)
 
     private const val TAG = "NotionCalWidget"
 
@@ -49,8 +50,11 @@ object WidgetPreviews {
     fun agendaState(today: LocalDate = LocalDate.now(APP_ZONE)): AgendaUiState =
         AgendaWidget.uiState(today, WidgetConfig(0), sampleEvents(today))
 
+    fun splitState(today: LocalDate = LocalDate.now(APP_ZONE)): SplitUiState =
+        SplitWidget.uiState(today, AppSettings(weekStart = DayOfWeek.SUNDAY), WidgetConfig(0), sampleEvents(today))
+
     /**
-     * 두 위젯의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
+     * 위젯들의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
      * 모두 성공하면 true.
      */
     suspend fun publish(context: Context): Boolean {
@@ -59,6 +63,7 @@ object WidgetPreviews {
         val results = listOf(
             runCatching { manager.setWidgetPreviews(NotionCalWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(AgendaWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(SplitWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }

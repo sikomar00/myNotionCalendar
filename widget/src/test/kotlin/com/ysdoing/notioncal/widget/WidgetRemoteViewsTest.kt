@@ -4,12 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.view.View
 import android.widget.FrameLayout
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTheme
 import kotlinx.coroutines.test.runTest
@@ -19,6 +21,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.time.DayOfWeek
 import kotlin.time.Duration.Companion.minutes
 
 /**
@@ -32,8 +35,10 @@ import kotlin.time.Duration.Companion.minutes
 class WidgetRemoteViewsTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
-    private suspend fun renderView(size: DpSize, state: WidgetUiState): View {
-        val remoteViews = GlanceRemoteViews().compose(context, size) { WidgetContent(state) }.remoteViews
+    private suspend fun renderView(size: DpSize, state: WidgetUiState): View = renderView(size) { WidgetContent(state) }
+
+    private suspend fun renderView(size: DpSize, content: @Composable () -> Unit): View {
+        val remoteViews = GlanceRemoteViews().compose(context, size) { content() }.remoteViews
         // 스크린샷 도구가 Activity에 붙은 View를 요구한다. 제목 표시줄 없는 Activity에 위젯 크기 그대로 붙인다.
         val activity = Robolectric.buildActivity(Activity::class.java).create().get()
         activity.setTheme(android.R.style.Theme_Material_Light_NoActionBar)
@@ -107,5 +112,29 @@ class WidgetRemoteViewsTest {
     fun screenshotDarkFont150() = runTest {
         renderView(large, WidgetSamples.state(config = WidgetConfig(1, fontScale = 150)))
             .captureRoboImage("src/test/screenshots/widget_large_dark_font150.png")
+    }
+
+    // WG-09 '달력 + 일정'. 빽빽한 날(8개)·여러 날 일정이 섞여도 모든 크기·설정에서 변환된다(자식 10개 제한).
+    private fun splitState(config: WidgetConfig = WidgetConfig(1), events: List<com.ysdoing.notioncal.core.data.CalendarEvent> = WidgetSamples.events) =
+        SplitWidget.uiState(WidgetSamples.today, AppSettings(weekStart = DayOfWeek.SUNDAY), config, events)
+
+    @Test
+    fun splitTranslatesInEverySizeAndSetting() = runTest(timeout = 3.minutes) {
+        val configs = listOf(WidgetConfig(1), WidgetConfig(1, fontScale = 150), WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU, opacity = 60))
+        for (size in listOf(DpSize(250.dp, 110.dp), DpSize(358.dp, 152.dp), DpSize(358.dp, 380.dp), huge)) {
+            for (config in configs) renderView(size) { SplitWidgetContent(splitState(config, WidgetSamples.dense + WidgetSamples.events)) }
+        }
+    }
+
+    @Test
+    fun screenshotSplit4x2() = runTest {
+        renderView(DpSize(358.dp, 168.dp)) { SplitWidgetContent(splitState(), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/split_4x2.png")
+    }
+
+    @Test
+    fun screenshotSplit4x4() = runTest {
+        renderView(DpSize(358.dp, 380.dp)) { SplitWidgetContent(splitState(), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/split_4x4.png")
     }
 }

@@ -68,9 +68,15 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    /** WG-06 보조 위젯이면 목록 미리보기를 보이고, 월 위젯 전용 설정(칸당 줄 수·줄 간격)은 숨긴다. */
-    private val isAgenda by lazy {
-        AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className == AgendaWidgetReceiver::class.java.name
+    /** 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다. */
+    private enum class Kind { MONTH, AGENDA, SPLIT }
+
+    private val kind by lazy {
+        when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
+            AgendaWidgetReceiver::class.java.name -> Kind.AGENDA
+            SplitWidgetReceiver::class.java.name -> Kind.SPLIT
+            else -> Kind.MONTH
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,10 +124,10 @@ class WidgetConfigActivity : ComponentActivity() {
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = if (isAgenda) {
-                deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
-            } else {
+            val events = if (kind == Kind.MONTH) {
                 deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
+            } else {
+                deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
             loaded = Loaded(settings, events, deps.dataSources().observeAll().first())
@@ -166,7 +172,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 steps = (WidgetConfig.FONT_SCALE_RANGE.last - WidgetConfig.FONT_SCALE_RANGE.first) / 10 - 1,
             )
 
-            if (!isAgenda) {
+            if (kind == Kind.MONTH) {
                 Section(stringResource(R.string.widget_config_lanes))
                 Choice(
                     WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
@@ -194,10 +200,10 @@ class WidgetConfigActivity : ComponentActivity() {
                     scope.launch {
                         deps.widgetConfigs().save(config)
                         val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-                        if (isAgenda) {
-                            AgendaWidget().update(this@WidgetConfigActivity, glanceId)
-                        } else {
-                            NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
+                        when (kind) {
+                            Kind.AGENDA -> AgendaWidget().update(this@WidgetConfigActivity, glanceId)
+                            Kind.SPLIT -> SplitWidget().update(this@WidgetConfigActivity, glanceId)
+                            Kind.MONTH -> NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
                         }
                         onSaved()
                     }
@@ -215,12 +221,19 @@ class WidgetConfigActivity : ComponentActivity() {
         var views by remember { mutableStateOf<RemoteViews?>(null) }
         LaunchedEffect(config) {
             val today = LocalDate.now(APP_ZONE)
-            views = if (isAgenda) {
-                val state = AgendaWidget.uiState(today, config, data.events)
-                GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
-            } else {
-                val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
-                GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+            views = when (kind) {
+                Kind.AGENDA -> {
+                    val state = AgendaWidget.uiState(today, config, data.events)
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
+                }
+                Kind.SPLIT -> {
+                    val state = SplitWidget.uiState(today, data.settings, config, data.events)
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }.remoteViews
+                }
+                Kind.MONTH -> {
+                    val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+                }
             }
         }
         AndroidView(
