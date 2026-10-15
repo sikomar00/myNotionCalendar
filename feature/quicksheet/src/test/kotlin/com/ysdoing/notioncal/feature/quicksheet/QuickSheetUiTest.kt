@@ -3,6 +3,8 @@ package com.ysdoing.notioncal.feature.quicksheet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -204,7 +206,7 @@ class QuickSheetUiTest {
             }
         }
         compose.onNodeWithText("제목").performTextInput("영어 스터디")
-        compose.onNodeWithContentDescription("시간 지정").performClick()
+        compose.onNode(isToggleable() and hasText("종일")).performClick()
 
         restoration.emulateSavedInstanceStateRestore()
 
@@ -219,7 +221,7 @@ class QuickSheetUiTest {
         val item = EditableEvent(event("p1", "회의", time = "2026-10-13T01:00:00Z"), null, emptyList(), "Calendar")
         val restoration = StateRestorationTester(compose)
         restoration.setContent { MaterialTheme { EventEditorForm(item, onSave = { saved = it }, onDelete = {}) } }
-        compose.onNodeWithContentDescription("시간 지정").performClick()
+        compose.onNode(isToggleable() and hasText("종일")).performClick()
 
         restoration.emulateSavedInstanceStateRestore()
 

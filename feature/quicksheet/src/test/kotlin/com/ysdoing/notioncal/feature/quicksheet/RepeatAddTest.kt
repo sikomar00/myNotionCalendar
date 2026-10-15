@@ -1,7 +1,11 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
@@ -101,7 +105,7 @@ class RepeatAddTest {
                 AddForm(day, listOf(source, courses), "ds", autoFocus = false, today = day, onAdd = {}, onAddRepeated = {})
             }
         }
-        compose.onNodeWithContentDescription("시간 지정").performClick() // 종일 끄기 → 시작·종료 칩
+        compose.onNode(isToggleable() and hasText("종일")).performClick() // 종일 끄기 → 시작·종료 칩
         compose.onNodeWithText("09:00").assertExists()
 
         val date = compose.onNodeWithText("10월 13일 (화)").fetchSemanticsNode().boundsInRoot
@@ -109,5 +113,24 @@ class RepeatAddTest {
         assertTrue("반복 칩은 날짜·시간 줄 아래에 있다", repeat.top >= date.bottom)
         compose.onNodeWithText("Calendar").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Courses").performScrollTo().assertIsDisplayed()
+    }
+
+    /** '종일' 스위치는 켜짐 = 종일 일정. 끄면 시간 칩이 나오고, '종일' 글자는 그대로 남는다(다른 캘린더 앱과 같은 방향). */
+    @Test
+    fun allDaySwitchOnMeansAllDay() {
+        var added: NewEvent? = null
+        compose.setContent {
+            MaterialTheme { AddForm(day, listOf(source), "ds", autoFocus = false, today = day, onAdd = { added = it }) }
+        }
+        val allDay = compose.onNode(isToggleable() and hasText("종일"))
+        allDay.assertIsOn()
+        compose.onNodeWithText("09:00").assertDoesNotExist()
+
+        allDay.performClick()
+        allDay.assertIsOff()
+        compose.onNodeWithText("09:00").assertExists()
+        compose.onNodeWithText("제목").performTextInput("회의")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals("09:00", added!!.time!!.start.toString())
     }
 }

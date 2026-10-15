@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -376,13 +378,13 @@ private fun SourceRow(
     onChooseColor: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
         val colorLabel = stringResource(R.string.settings_color_button, source.name)
         IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
             Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
         }
-        Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
         if (SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }) {
             Icon(
@@ -391,7 +393,11 @@ private fun SourceRow(
                 tint = MaterialTheme.colorScheme.error,
             )
         }
-        TextButton(onClick = onChooseProps) { Text(stringResource(R.string.settings_extra_props)) }
+        // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로도 연다(디자인 리뷰 2026-10-16).
+        TextButton(onClick = onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text(stringResource(R.string.settings_color_emphasis))
+        }
+        TextButton(onClick = onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
         Switch(checked = source.enabled, onCheckedChange = onToggle)
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.settings_delete_database, source.name))

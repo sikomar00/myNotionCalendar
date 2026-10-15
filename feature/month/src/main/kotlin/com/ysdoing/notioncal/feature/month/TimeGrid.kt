@@ -163,7 +163,7 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<L
                 Text(
                     date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN),
                     style = MaterialTheme.typography.labelSmall,
-                    color = weekdayColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = dayOfWeekColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 val circle = if (isToday) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier
                 Box(circle.defaultMinSize(28.dp, 28.dp), contentAlignment = Alignment.Center) {
@@ -173,7 +173,7 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<L
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                         color = when {
                             isToday -> MaterialTheme.colorScheme.onPrimary
-                            date in holidays -> HOLIDAY_COLOR
+                            date in holidays -> sundayColor()
                             else -> MaterialTheme.colorScheme.onSurface
                         },
                     )
@@ -184,7 +184,7 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<L
                         holidays[date].orEmpty(),
                         fontSize = 9.sp,
                         lineHeight = 11.sp,
-                        color = HOLIDAY_COLOR,
+                        color = sundayColor(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 2.dp),
@@ -223,14 +223,14 @@ private fun AllDayLane(start: LocalDate, days: Int, events: List<CalendarEvent>,
                     .padding(horizontal = 1.dp, vertical = 1.dp)
                     .clip(RoundedCornerShape(3.dp))
                     // EX-11 강조 일정은 진하게 칠하고 대비되는 굵은 글자.
-                    .background(if (event.showsEmphasis) color else color.copy(alpha = 0.28f))
+                    .background(barBackground(event, color))
                     .clickable { onEventClick(event) }
                     .padding(horizontal = 3.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
                     chipLabel(event, placed.continuesBefore),
-                    modifier = Modifier.alpha(if (event.done) 0.55f else 1f),
+                    modifier = Modifier.alpha(barTextAlpha(event)),
                     fontSize = 10.sp,
                     lineHeight = 12.sp,
                     maxLines = 1,
@@ -297,10 +297,3 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
     }
 }
 
-private val HOLIDAY_COLOR = Color(0xFFE03E3E)
-
-private fun weekdayColor(day: DayOfWeek): Color? = when (day) {
-    DayOfWeek.SUNDAY -> Color(0xFFE03E3E)
-    DayOfWeek.SATURDAY -> Color(0xFF2F80ED)
-    else -> null
-}

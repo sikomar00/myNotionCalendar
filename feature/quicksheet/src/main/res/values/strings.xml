@@ -10,7 +10,6 @@
     <string name="qs_back">목록으로</string>
     <string name="qs_empty">일정 없음</string>
     <string name="qs_all_day">종일</string>
-    <string name="qs_time">시간 지정</string>
     <string name="qs_done">완료</string>
     <string name="qs_open_in_notion">노션에서 열기</string>
     <string name="qs_delete">삭제</string>

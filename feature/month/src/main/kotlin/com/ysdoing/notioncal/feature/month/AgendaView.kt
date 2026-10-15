@@ -57,7 +57,6 @@ import androidx.compose.foundation.layout.heightIn
 import kotlinx.coroutines.flow.MutableStateFlow
 
 private val agendaTime = DateTimeFormatter.ofPattern("H:mm")
-private val AGENDA_HOLIDAY_COLOR = Color(0xFFE03E3E)
 
 /** 목록을 뒤로 늘리는 한계(기준 날짜로부터). 미래 일정이 없을 때 끝없이 늘리지 않게. */
 private const val MAX_AHEAD_YEARS = 2L
@@ -142,7 +141,7 @@ private fun AgendaDayRow(
     val isToday = day.date == today
     val accent = when {
         isToday -> MaterialTheme.colorScheme.primary
-        holiday != null -> AGENDA_HOLIDAY_COLOR // EX-02
+        holiday != null -> sundayColor() // EX-02
         else -> MaterialTheme.colorScheme.onSurface
     }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
@@ -168,7 +167,7 @@ private fun AgendaDayRow(
                 Text(
                     holiday,
                     style = MaterialTheme.typography.labelMedium,
-                    color = AGENDA_HOLIDAY_COLOR,
+                    color = sundayColor(),
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }

@@ -456,23 +456,31 @@ internal val TimeRangeSaver = Saver<TimeRange?, String>(
     },
 )
 
-/** 시간은 선택: 끄면 종일, 켜면 시작·종료(기본 1시간). */
+/**
+ * '종일' 스위치: 켜면 종일 일정, 끄면 시작·종료 시간 칩(기본 9:00–10:00)이 나온다. 다른 캘린더 앱과 같은 방향이다
+ * (예전에는 꺼진 스위치 옆에 '종일'이 보여 '종일이 꺼짐'으로 읽혔다, 디자인 리뷰 2026-10-16).
+ * 글자까지 줄 전체를 누를 수 있다.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeChip(time: TimeRange?, onChange: (TimeRange?) -> Unit) {
     var editing by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end"
-    val timeLabel = stringResource(R.string.qs_time)
+    val allDay = time == null
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Switch(
-            checked = time != null,
-            onCheckedChange = { on ->
-                onChange(if (on) TimeRange(LocalTime.of(9, 0), LocalTime.of(10, 0)) else null)
-            },
-            modifier = Modifier.semantics { contentDescription = timeLabel },
-        )
-        if (time == null) {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .toggleable(value = allDay, role = Role.Switch) { on ->
+                    onChange(if (on) null else TimeRange(LocalTime.of(9, 0), LocalTime.of(10, 0)))
+                }
+                .padding(start = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(stringResource(R.string.qs_all_day), style = MaterialTheme.typography.bodyMedium)
-        } else {
+            Switch(checked = allDay, onCheckedChange = null)
+        }
+        if (time != null) {
             AssistChip(onClick = { editing = "start" }, label = { Text(time.start.format(timeFormat)) })
             Text("–")
             AssistChip(onClick = { editing = "end" }, label = { Text(time.end.format(timeFormat)) })

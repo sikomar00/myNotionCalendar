@@ -80,9 +80,6 @@ data class MonthGridState(
     val holidays: Map<LocalDate, String> = emptyMap(),
 )
 
-private val SundayColor = Color(0xFFE03E3E)
-private val SaturdayColor = Color(0xFF2F80ED)
-
 /**
  * MV-07 끌어 옮기기 진행 상태. [position]은 그리드 기준 좌표(px), [target]은 손가락 아래 날짜.
  * [origin]은 처음 누른 칸의 날짜라 여러 날 일정의 가운데를 잡아도 옮긴 날 수만큼 통째로 움직인다.
@@ -158,17 +155,12 @@ private fun WeekdayHeader(weekStart: DayOfWeek, modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.labelMedium,
-                color = dayColor(day) ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                color = dayOfWeekColor(day) ?: MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
-private fun dayColor(day: DayOfWeek): Color? = when (day) {
-    DayOfWeek.SUNDAY -> SundayColor
-    DayOfWeek.SATURDAY -> SaturdayColor
-    else -> null
-}
 
 @Composable
 private fun WeekRow(
@@ -240,12 +232,14 @@ private fun WeekRow(
             Row(Modifier.offset(y = labelHeight).fillMaxWidth().height(nameHeight)) {
                 repeat(7) { col ->
                     val date = weekStart.plusDays(col.toLong())
+                    val inMonth = YearMonth.from(date) == month
                     Text(
                         holidays[date].orEmpty(),
-                        modifier = Modifier.weight(1f).alpha(if (YearMonth.from(date) == month) 1f else 0.4f).padding(horizontal = 2.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
                         fontSize = 9.sp,
                         lineHeight = 11.sp,
-                        color = SundayColor,
+                        // 다른 달 공휴일은 빨강 대신 흐린 기본색(빨강을 흐리면 대비가 2:1대로 떨어진다).
+                        color = if (inMonth) sundayColor() else MaterialTheme.colorScheme.onSurface.copy(alpha = OUTSIDE_MONTH_ALPHA),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
@@ -386,11 +380,15 @@ private fun DraggedChip(drag: GridDrag, cellWidth: Float) {
 
 @Composable
 private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoliday: Boolean, modifier: Modifier = Modifier) {
-    // MV-01·EX-02: 공휴일은 일요일과 같은 빨강.
-    val base = if (isHoliday) SundayColor else dayColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurface
+    // MV-01·EX-02: 공휴일은 일요일과 같은 빨강. 다른 달 날짜는 요일색 없이 흐린 기본색(3:1 이상).
+    val base = when {
+        !inMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = OUTSIDE_MONTH_ALPHA)
+        isHoliday -> sundayColor()
+        else -> dayOfWeekColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurface
+    }
     // 글꼴 크기에 맞춰 커지도록 sp 기준 최소 크기를 쓴다(고정 dp면 글꼴 최대에서 숫자가 잘림).
     val minSize = with(LocalDensity.current) { 18.sp.toDp() }
-    Box(modifier.alpha(if (inMonth) 1f else 0.4f).padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {
+    Box(modifier.padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {
         val circle = if (isToday) Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.primary) else Modifier
         Box(
             Modifier.defaultMinSize(minWidth = minSize, minHeight = minSize).then(circle).padding(horizontal = 3.dp),
@@ -422,10 +420,10 @@ private fun EventChip(placed: PlacedEvent, modifier: Modifier = Modifier) {
         )
         // EX-11 강조 일정은 막대를 진하게 칠하고 대비되는 굵은 글자로 쓴다.
         Box(
-            modifier.clip(shape).background(if (event.showsEmphasis) color else color.copy(alpha = 0.28f)),
+            modifier.clip(shape).background(barBackground(event, color)),
             contentAlignment = Alignment.CenterStart,
         ) {
-            ChipText(chipLabel(event, placed.continuesBefore), decoration, textStyle.padding(horizontal = 3.dp), event)
+            ChipText(chipLabel(event, placed.continuesBefore), decoration, Modifier.alpha(barTextAlpha(event)).padding(horizontal = 3.dp), event)
         }
     } else if (event.showsEmphasis) {
         // EX-11: 하루 일정은 색 점 대신 일정 색으로 칠한 칸.

@@ -468,7 +468,8 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
                     Box(
                         modifier = GlanceModifier
                             .fillMaxSize()
-                            .background(ColorProvider(if (event.showsEmphasis) color else color.copy(alpha = 0.28f)))
+                            // 완료 막대는 더 옅게(흐린 글자가 4.5:1을 넘도록).
+                            .background(ColorProvider(if (event.showsEmphasis) color else color.copy(alpha = if (event.done) 0.12f else 0.28f)))
                             .cornerRadius(3.dp)
                             .padding(horizontal = 3.dp)
                             .semantics { testTag = "chip" },
@@ -548,13 +549,17 @@ class WidgetPalette private constructor(
 
     companion object {
         private val LIGHT = Scheme(
-            Color(0xFFFFFFFF), Color(0xFF37352F), Color(0xFF787774), Color(0xFFB4B4B0), Color(0xFFE9E9E7), Color(0xFF2F80ED),
+            Color(0xFFFFFFFF), Color(0xFF37352F), Color(0xFF787774), Color(0xFF808080), Color(0xFFE9E9E7), Color(0xFF2F80ED),
         )
         private val DARK = Scheme(
-            Color(0xFF191919), Color(0xFFE6E6E4), Color(0xFF9B9A97), Color(0xFF5A5A58), Color(0xFF2F2F2F), Color(0xFF529CCA),
+            Color(0xFF191919), Color(0xFFE6E6E4), Color(0xFF9B9A97), Color(0xFF808083), Color(0xFF2F2F2F), Color(0xFF529CCA),
         )
-        private val SUNDAY = Color(0xFFE03E3E)
-        private val SATURDAY = Color(0xFF2F80ED)
+        // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
+        // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
+        private val SUNDAY_LIGHT = Color(0xFFC62828)
+        private val SUNDAY_DARK = Color(0xFFFF6B6B)
+        private val SATURDAY_LIGHT = Color(0xFF1565C0)
+        private val SATURDAY_DARK = Color(0xFF5B9BF8)
 
         /**
          * Material You 색은 그릴 때마다 시스템 색 자원(android.R.color.system_*)에서 읽는다. 배경화면이 바뀌면
@@ -590,6 +595,12 @@ class WidgetPalette private constructor(
                     WidgetTheme.SYSTEM, WidgetTheme.MATERIAL_YOU -> DayNightColor(day = light, night = dark)
                 }
             }
+            /** 테마와 상관없이 정해진 밝은·어두운 값 쌍(요일색). */
+            fun pair(light: Color, dark: Color): ColorProvider = when (theme) {
+                WidgetTheme.LIGHT -> ColorProvider(light)
+                WidgetTheme.DARK -> ColorProvider(dark)
+                WidgetTheme.SYSTEM, WidgetTheme.MATERIAL_YOU -> DayNightColor(day = light, night = dark)
+            }
             return WidgetPalette(
                 background = pick({ it.background }, bg = true),
                 text = pick({ it.text }),
@@ -599,9 +610,9 @@ class WidgetPalette private constructor(
                 accent = pick({ it.accent }),
                 todayBackground = pick({ it.accent }),
                 todayText = if (theme == WidgetTheme.MATERIAL_YOU) pick({ it.background }) else ColorProvider(Color.White),
-                error = ColorProvider(SUNDAY),
-                sunday = ColorProvider(SUNDAY),
-                saturday = ColorProvider(SATURDAY),
+                error = pair(SUNDAY_LIGHT, SUNDAY_DARK),
+                sunday = pair(SUNDAY_LIGHT, SUNDAY_DARK),
+                saturday = pair(SATURDAY_LIGHT, SATURDAY_DARK),
             )
         }
     }
