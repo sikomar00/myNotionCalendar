@@ -20,6 +20,7 @@ rootProject.name = "NotionCal"
 include(":app")
 include(":baselineprofile")
 include(":core:data")
+include(":core:designsystem")
 include(":core:notion")
 include(":core:sync")
 include(":feature:diagnostics")

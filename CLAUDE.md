@@ -15,9 +15,11 @@
 - StrictMode 확인(PF-03): `adb logcat -d -s NotionCalStrictMode:W` 결과가 0줄이어야 한다. One UI 내부 위반(Typeface.setFlipFonts, IdsController, InputRune, 권한 창 등 startActivity 때 시스템 서버 ASKS)은 D 레벨 'OEM 위반 무시'로만 남는다. 새 OEM 예외는 근거 스택을 확인한 뒤에만 `StrictModeSetup.oemFrames`에 추가한다.
 
 # 모듈 규칙 (PRD §7)
-- `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`
+- `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`, `:core:designsystem`
 - `:core:sync` → `:core:notion`, `:core:data`
-- `:widget` → `:core:data`만. `:core:notion` 의존 금지(위젯 네트워크 호출을 빌드 단계에서 차단).
+- `:widget` → `:core:data`, `:core:designsystem`만. `:core:notion` 의존 금지(위젯 네트워크 호출을 빌드 단계에서 차단).
+- `:core:designsystem` → `:core:data`만(Compose 테마·글꼴·모양, UI 전용, 네트워크·DB 없음). 화면 틀 색 값은 `:core:data`의 `DesignTokens`. 기준 문서는 DESIGN.md.
+- `:feature:*` → `:core:data`, `:core:designsystem`(+ 화면 간 공유는 `:feature:quicksheet`).
 - `:feature:diagnostics` → `:core:data`만. 다음 동기화 시각 등 sync 정보는 `:core:data` 인터페이스(`SyncScheduleInfo`)로 받는다.
 - `:baselineprofile`(com.android.test) → `:app` 측정 전용. 실행: `gradlew :app:generateBaselineProfile`, `:baselineprofile:connectedBenchmarkReleaseAndroidTest`.
 - debug 전용 코드는 소스 세트를 나누지 않고 `BuildConfig.DEBUG`로 막는다(benchmarkRelease 빌드가 `src/release`를 쓰지 않음).

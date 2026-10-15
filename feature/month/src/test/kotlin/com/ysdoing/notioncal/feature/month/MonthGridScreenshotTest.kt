@@ -140,7 +140,7 @@ class MonthGridScreenshotTest {
     // 앱 정체성(2026-10-16): 노션 문서 색·NotionCal Sans·오늘 칠한 네모를 실제 앱 테마로 그린다.
     private fun captureIdentity(name: String) {
         compose.setContent {
-            com.ysdoing.notioncal.feature.quicksheet.NotionCalTheme(dynamicColor = false) {
+            com.ysdoing.notioncal.core.designsystem.NotionCalTheme(dynamicColor = false) {
                 Surface {
                     MonthGrid(MonthGridState(YearMonth.of(2026, 10), DayOfWeek.SUNDAY, LocalDate.of(2026, 10, 13), withEmphasis, october2026Holidays), onDayClick = {})
                 }

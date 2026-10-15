@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import java.time.LocalDate
+import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
 
 /**
  * 위젯 위에 뜨는 반투명 퀵 시트(WI-01·02·05). 앱 화면을 열지 않고 추가·체크·편집한다.

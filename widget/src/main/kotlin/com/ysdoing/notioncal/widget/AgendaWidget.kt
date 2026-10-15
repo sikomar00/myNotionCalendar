@@ -163,8 +163,6 @@ internal data class AgendaMetrics(
     }
 }
 
-private val agendaTimeFormat = DateTimeFormatter.ofPattern("H:mm")
-
 @Composable
 fun AgendaWidgetContent(
     state: AgendaUiState,
@@ -186,10 +184,15 @@ fun AgendaWidgetContent(
             state.days.forEach { day ->
                 item(itemId = day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) }
                 if (day.items.isEmpty() && day.date !in state.holidays) {
-                    item(itemId = -day.date.toEpochDay() - 1) { EmptyRow(metrics, palette) }
+                    item(itemId = -day.date.toEpochDay() - 1) {
+                        WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "agendaEmpty", startPadding = 12.dp)
+                    }
                 }
                 items(day.items, itemId = { (event, _) -> (event.pageId + day.date).hashCode().toLong() }) { (event, continues) ->
-                    EventRow(event, continues, day.date, metrics, palette)
+                    WidgetEventRow(
+                        event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
+                        tag = "agendaItem", dotWidth = 14.dp, timeColumn = metrics.timeWidth, continues = continues,
+                    )
                 }
             }
         }
@@ -272,79 +275,4 @@ private fun DateRow(date: LocalDate, today: LocalDate, holiday: String?, metrics
         ),
         maxLines = 1,
     )
-}
-
-@Composable
-private fun EmptyRow(metrics: AgendaMetrics, palette: WidgetPalette) {
-    val context = LocalContext.current
-    Text(
-        text = context.getString(R.string.agenda_widget_empty),
-        modifier = GlanceModifier.fillMaxWidth().height(metrics.itemHeight).padding(start = 12.dp).semantics { testTag = "agendaEmpty" },
-        style = TextStyle(color = palette.subtle, fontSize = metrics.itemFontSp.sp),
-        maxLines = 1,
-    )
-}
-
-@Composable
-private fun EventRow(event: CalendarEvent, continues: Boolean, date: LocalDate, metrics: AgendaMetrics, palette: WidgetPalette) {
-    val context = LocalContext.current
-    val color = ColorProvider(Color(NotionColors.argb(event.colorHex)))
-    val time = when {
-        event.isMultiDay -> context.getString(if (continues) R.string.agenda_widget_continues else R.string.agenda_widget_multi_day)
-        event.startTime == null -> context.getString(R.string.agenda_widget_all_day)
-        else -> event.startTime!!.atZone(APP_ZONE).format(agendaTimeFormat)
-    }
-    val title = event.title.ifBlank { context.getString(R.string.agenda_widget_untitled) }
-    // 일정을 누르면 그 일정의 편집 시트(WI-05). PendingIntent가 일정마다 구분되도록 데이터 URI에 페이지 ID를 넣는다.
-    val edit = quickSheetIntent(context, AppIntents.MODE_EDIT, date)
-        .setData("notioncal://edit/$date/${event.pageId}".toUri())
-        .putExtra(AppIntents.EXTRA_PAGE_ID, event.pageId)
-    Row(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .height(metrics.itemHeight)
-            .clickable(actionStartActivity(edit))
-            .semantics {
-                contentDescription = listOfNotNull(
-                    context.getString(R.string.widget_emphasized).takeIf { event.showsEmphasis },
-                    title,
-                    time,
-                    context.getString(R.string.agenda_widget_done).takeIf { event.done },
-                ).joinToString(", ")
-                testTag = "agendaItem"
-            },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // A11Y-03: 완료는 색 점 대신 체크 + 취소선(색만으로 구분하지 않음).
-        Text(
-            text = if (event.done) "✓" else "●",
-            modifier = GlanceModifier.width(14.dp),
-            style = TextStyle(color = color, fontSize = metrics.timeFontSp.sp),
-            maxLines = 1,
-        )
-        Text(
-            text = time,
-            modifier = GlanceModifier.width(metrics.timeWidth),
-            style = TextStyle(color = palette.subtle, fontSize = metrics.timeFontSp.sp),
-            maxLines = 1,
-        )
-        // EX-11 강조 일정은 제목을 일정 색 칸에 대비되는 굵은 글자로(칸은 글자 폭만큼).
-        Box(GlanceModifier.defaultWeight()) {
-            Text(
-                text = title,
-                modifier = GlanceModifier.emphasisBox(event),
-                style = TextStyle(
-                    color = when {
-                        event.showsEmphasis -> emphasisTextColor(event)
-                        event.done -> palette.subtle
-                        else -> palette.text
-                    },
-                    fontSize = metrics.itemFontSp.sp,
-                    fontWeight = if (event.showsEmphasis) FontWeight.Bold else null,
-                    textDecoration = if (event.done) TextDecoration.LineThrough else null,
-                ),
-                maxLines = 1,
-            )
-        }
-    }
 }

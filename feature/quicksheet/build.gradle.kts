@@ -16,6 +16,7 @@ roborazzi {
 dependencies {
     // 화면 모듈: :core:data(Room·EventWriter)만 쓴다. 노션 전송은 아웃박스 작업이 한다(PRD §7).
     implementation(project(":core:data"))
+    implementation(project(":core:designsystem"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

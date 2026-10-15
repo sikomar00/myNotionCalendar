@@ -28,10 +28,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
-import com.ysdoing.notioncal.core.data.DesignTokens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,6 +56,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import kotlin.math.roundToInt
+import com.ysdoing.notioncal.core.designsystem.NotionShapes
+import com.ysdoing.notioncal.core.designsystem.NotionTypography
+import com.ysdoing.notioncal.core.designsystem.notionColorScheme
 
 /**
  * WG-04 위젯별 설정. 위젯을 처음 놓을 때와 길게 눌러 다시 설정할 때 열린다.
@@ -93,7 +93,7 @@ class WidgetConfigActivity : ComponentActivity() {
         val deps = WidgetDependencies.from(this)
         val previewSize = widgetSize()
         setContent {
-            MaterialTheme(colorScheme = configColors(isSystemInDarkTheme())) {
+            MaterialTheme(colorScheme = notionColorScheme(isSystemInDarkTheme()), typography = NotionTypography, shapes = NotionShapes) {
                 Surface(Modifier.fillMaxSize()) {
                     ConfigScreen(deps, previewSize, onSaved = ::finishSaved)
                 }
@@ -285,28 +285,5 @@ class WidgetConfigActivity : ComponentActivity() {
                 )
             }
         }
-    }
-}
-
-/**
- * 위젯 설정 화면 색: 앱과 같은 노션 문서 색([DesignTokens]). :widget은 앱 테마 모듈에 의존할 수 없어 필요한 역할만 옮겨 둔다.
- */
-private fun configColors(dark: Boolean) = if (dark) {
-    with(DesignTokens.Dark) {
-        darkColorScheme(
-            primary = Color(ACCENT), onPrimary = Color(ON_ACCENT), secondaryContainer = Color(SELECTED), onSecondaryContainer = Color(INK),
-            background = Color(PAPER), onBackground = Color(INK), surface = Color(PAPER), onSurface = Color(INK),
-            surfaceVariant = Color(SURFACE_HIGHEST), onSurfaceVariant = Color(GRAPHITE), outline = Color(OUTLINE), outlineVariant = Color(RULE),
-            surfaceContainerHighest = Color(SURFACE_HIGHEST), surfaceContainerHigh = Color(SURFACE_HIGH), surfaceContainer = Color(SURFACE),
-        )
-    }
-} else {
-    with(DesignTokens.Light) {
-        lightColorScheme(
-            primary = Color(ACCENT), onPrimary = Color(ON_ACCENT), secondaryContainer = Color(SELECTED), onSecondaryContainer = Color(INK),
-            background = Color(PAPER), onBackground = Color(INK), surface = Color(PAPER), onSurface = Color(INK),
-            surfaceVariant = Color(SURFACE_HIGH), onSurfaceVariant = Color(GRAPHITE), outline = Color(OUTLINE), outlineVariant = Color(RULE),
-            surfaceContainerHighest = Color(SURFACE_HIGHEST), surfaceContainerHigh = Color(SURFACE_HIGH), surfaceContainer = Color(SURFACE),
-        )
     }
 }

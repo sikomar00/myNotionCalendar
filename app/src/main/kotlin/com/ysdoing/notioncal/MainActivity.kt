@@ -18,7 +18,7 @@ import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncTrigger
-import com.ysdoing.notioncal.feature.quicksheet.NotionCalTheme
+import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch

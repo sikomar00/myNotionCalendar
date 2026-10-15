@@ -43,6 +43,7 @@ android {
 
 dependencies {
     implementation(project(":core:data"))
+    implementation(project(":core:designsystem"))
     implementation(project(":core:sync"))
     implementation(project(":feature:diagnostics"))
     implementation(project(":feature:month"))

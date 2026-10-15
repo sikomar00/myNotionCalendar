@@ -1,4 +1,4 @@
-package com.ysdoing.notioncal.feature.quicksheet
+package com.ysdoing.notioncal.core.designsystem
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,11 +35,13 @@ fun NotionCalTheme(dynamicColor: Boolean = false, content: @Composable () -> Uni
     val scheme = when {
         dynamicColor && dark -> dynamicDarkColorScheme(context)
         dynamicColor -> dynamicLightColorScheme(context)
-        dark -> NotionDark
-        else -> NotionLight
+        else -> notionColorScheme(dark)
     }
     MaterialTheme(colorScheme = scheme, typography = NotionTypography, shapes = NotionShapes, content = content)
 }
+
+/** 노션 문서 색 구성(Material You를 끈 기본 색). 위젯 설정 화면도 같은 값을 쓴다. */
+fun notionColorScheme(dark: Boolean): ColorScheme = if (dark) NotionDark else NotionLight
 
 private fun c(argb: Long) = Color(argb)
 
@@ -92,7 +94,7 @@ private val NotionDark: ColorScheme = with(DesignTokens.Dark) {
 val NotionCalSans: FontFamily = FontFamily(
     listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold, FontWeight.ExtraBold).map { weight ->
         Font(
-            com.ysdoing.notioncal.core.data.R.font.app_sans,
+            R.font.app_sans,
             weight = weight,
             variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
         )
@@ -103,7 +105,7 @@ val NotionCalSans: FontFamily = FontFamily(
  * 모든 글자에 NotionCal Sans와 같은 폭 숫자(tnum). 한글은 Material 기본 자간(라틴 기준 0.1~0.5sp)이 헐거워 보여
  * 본문은 0, 제목은 살짝 좁힌다.
  */
-private val NotionTypography: Typography = Typography().let { base ->
+val NotionTypography: Typography = Typography().let { base ->
     fun TextStyle.notion(tracking: Float = 0f) = copy(fontFamily = NotionCalSans, fontFeatureSettings = "tnum", letterSpacing = tracking.sp)
     Typography(
         displayLarge = base.displayLarge.notion(-0.5f),
@@ -125,7 +127,7 @@ private val NotionTypography: Typography = Typography().let { base ->
 }
 
 /** 노션처럼 작은 둥근 모서리. 알약 모양(완전 둥근)은 Material 버튼 기본값으로만 남는다. */
-private val NotionShapes = Shapes(
+val NotionShapes = Shapes(
     extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(6.dp),
     medium = RoundedCornerShape(8.dp),

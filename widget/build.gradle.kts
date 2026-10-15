@@ -16,6 +16,7 @@ roborazzi {
 
 dependencies {
     implementation(project(":core:data"))
+    implementation(project(":core:designsystem"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
