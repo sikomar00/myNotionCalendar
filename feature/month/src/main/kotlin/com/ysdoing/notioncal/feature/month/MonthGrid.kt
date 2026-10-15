@@ -410,7 +410,7 @@ private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoli
 private fun EventChip(placed: PlacedEvent, modifier: Modifier = Modifier) {
     val event = placed.event
     val color = Color(NotionColors.argb(event.colorHex))
-    val textStyle = Modifier.alpha(if (event.done) 0.55f else 1f)
+    val textStyle = Modifier.alpha(barTextAlpha(event))
     val decoration = if (event.done) TextDecoration.LineThrough else null
     if (event.isMultiDay) {
         val shape = RoundedCornerShape(

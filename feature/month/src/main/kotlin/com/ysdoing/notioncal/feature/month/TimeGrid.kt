@@ -267,19 +267,22 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
     Column(
         modifier
             .clip(RoundedCornerShape(4.dp))
-            // EX-11 강조 일정은 불투명하게 칠하고 대비되는 굵은 글자(아래).
-            .background(color.copy(alpha = if (event.done) 0.35f else if (event.showsEmphasis) 1f else 0.85f))
+            // 월 막대와 같은 칠: 보통은 옅은 일정 색에 먹색 글자, EX-11 강조 일정은 불투명하게 칠하고 대비되는 굵은 글자.
+            // (예전 85% 일정 색 위 흰 글자는 노랑·하늘색에서 라이트 1.5:1·다크 2.1:1이었다.)
+            .background(barBackground(event, color))
             .clickable(onClick = onClick)
             .semantics { if (event.done) stateDescription = doneLabel }
             .padding(horizontal = 3.dp, vertical = 1.dp),
         verticalArrangement = Arrangement.Top,
     ) {
+        val textColor = if (event.showsEmphasis) event.emphasisTextColor() else MaterialTheme.colorScheme.onSurface
         Text(
             if (event.done) "$DONE_MARK${event.title}" else event.title,
+            modifier = Modifier.alpha(barTextAlpha(event)),
             fontSize = 10.sp,
             lineHeight = 12.sp,
             fontWeight = if (event.showsEmphasis) FontWeight.ExtraBold else FontWeight.Medium,
-            color = if (event.showsEmphasis) event.emphasisTextColor() else Color.White,
+            color = textColor,
             textDecoration = if (event.done) TextDecoration.LineThrough else null,
             // 겹쳐서 좁아진 블록에서 한글이 한 글자씩 줄바꿈되지 않게 한 줄로 자른다.
             maxLines = 1,
@@ -288,9 +291,10 @@ private fun TimedBlockChip(event: CalendarEvent, modifier: Modifier, onClick: ()
         )
         Text(
             time,
+            modifier = Modifier.alpha(barTextAlpha(event)),
             fontSize = 9.sp,
             lineHeight = 11.sp,
-            color = (if (event.showsEmphasis) event.emphasisTextColor() else Color.White).copy(alpha = 0.85f),
+            color = textColor,
             maxLines = 1,
             softWrap = false,
         )

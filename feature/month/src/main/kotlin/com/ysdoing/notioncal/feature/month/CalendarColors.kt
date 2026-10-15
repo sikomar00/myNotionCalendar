@@ -47,7 +47,7 @@ internal fun dayOfWeekColor(day: DayOfWeek): Color? = when (day) {
 }
 
 /**
- * 다른 달 날짜·공휴일 이름의 흐린 글자: 요일색 없이 기본 글자색 55%. 다크 4.9:1, 라이트 3.8:1로 3:1 이상을 지킨다
- * (같은 날짜가 제 달에도 나오는 보조 정보라 4.5:1 대신 3:1을 하한으로 둔다).
+ * 다른 달 날짜·공휴일 이름의 흐린 글자: 요일색 없이 기본 글자색 62%. 다크 6.1:1, 라이트 3.9:1로 3:1 이상을 지킨다
+ * (같은 날짜가 제 달에도 나오는 보조 정보라 4.5:1 대신 3:1을 하한으로 둔다). 55%는 라이트 실기기에서 3.2:1이었다.
  */
-internal const val OUTSIDE_MONTH_ALPHA = 0.55f
+internal const val OUTSIDE_MONTH_ALPHA = 0.62f

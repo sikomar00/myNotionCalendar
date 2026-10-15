@@ -488,8 +488,8 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
                     Box(
                         modifier = GlanceModifier
                             .fillMaxSize()
-                            // 완료 막대는 더 옅게(흐린 글자가 4.5:1을 넘도록).
-                            .background(ColorProvider(if (event.showsEmphasis) color else color.copy(alpha = if (event.done) 0.12f else 0.28f)))
+                            // 완료 막대는 더 옅게: 흐린 글자(흑연)가 노션 20색 모두에서 라이트 4.6:1·다크 5.5:1 이상(12%는 라이트 4.2:1).
+                            .background(ColorProvider(if (event.showsEmphasis) color else color.copy(alpha = if (event.done) 0.06f else 0.28f)))
                             .cornerRadius(3.dp)
                             .padding(horizontal = 3.dp)
                             .semantics { testTag = "chip" },
