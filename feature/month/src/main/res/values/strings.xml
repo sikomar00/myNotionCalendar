@@ -7,6 +7,7 @@
     <string name="month_pick_prev_year">이전 해</string>
     <string name="month_pick_next_year">다음 해</string>
     <string name="month_pick_year">%1$d년</string>
+    <string name="month_pick_choose_year">연도 목록에서 고르기</string>
     <string name="month_pick_month">%1$d월</string>
     <string name="month_cancel">취소</string>
     <string name="month_more">+%1$d</string>
