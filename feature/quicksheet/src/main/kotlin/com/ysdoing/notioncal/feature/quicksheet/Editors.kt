@@ -3,9 +3,12 @@ package com.ysdoing.notioncal.feature.quicksheet
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -171,7 +174,8 @@ fun AddForm(
                 color = MaterialTheme.colorScheme.primary,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // 1줄: 날짜·시간. 글꼴을 키워도 잘리지 않게 넘치면 다음 줄로 내린다.
+        ChipFlow {
             DateChip(shownDate, shownEnd) {
                 date = it
                 dateTouched = true
@@ -180,12 +184,17 @@ fun AddForm(
                 time = it
                 timeTouched = true
             }
-            if (onAddRepeated != null) RepeatChip(repeat, shownDate) { repeat = it }
-            if (sources.size > 1) {
-                sources.forEach { s ->
-                    FilterChip(selected = s.dataSourceId == (sourceId ?: sources.first().dataSourceId), onClick = { sourceId = s.dataSourceId }, label = {
-                        Text(s.name, maxLines = 1)
-                    })
+        }
+        // 2줄: 반복·DB 선택. DB가 많아도 화면 밖으로 밀려 잘리지 않게 가로로 스크롤한다.
+        if (onAddRepeated != null || sources.size > 1) {
+            ChipScrollRow {
+                if (onAddRepeated != null) RepeatChip(repeat, shownDate) { repeat = it }
+                if (sources.size > 1) {
+                    sources.forEach { s ->
+                        FilterChip(selected = s.dataSourceId == (sourceId ?: sources.first().dataSourceId), onClick = { sourceId = s.dataSourceId }, label = {
+                            Text(s.name, maxLines = 1)
+                        })
+                    }
                 }
             }
         }
@@ -301,7 +310,7 @@ fun EventEditorForm(
             },
             isError = item.titleHasMention && title.trim() != event.title,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        ChipFlow {
             DateChip(date) { date = it }
             TimeChip(time) { time = it }
         }
@@ -314,7 +323,7 @@ fun EventEditorForm(
             Text(stringResource(R.string.qs_done), Modifier.padding(end = 12.dp))
         }
         if (item.colorOptions.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ChipScrollRow {
                 item.colorOptions.forEach { option ->
                     FilterChip(
                         selected = option.id == optionId,
@@ -376,6 +385,26 @@ fun EventEditorForm(
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.qs_cancel)) } },
         )
     }
+}
+
+/** 칩 줄: 넘치면 다음 줄로 내린다(날짜·시간처럼 꼭 보여야 하는 칩). */
+@Composable
+private fun ChipFlow(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) { content() }
+}
+
+/** 칩 줄: 개수가 정해지지 않은 칩(DB·옵션)은 화면 밖으로 잘리지 않게 가로로 스크롤한다. */
+@Composable
+private fun ChipScrollRow(content: @Composable () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) { content() }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

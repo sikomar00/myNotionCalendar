@@ -1,9 +1,17 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -12,7 +20,9 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -27,8 +37,13 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.core.data.calendar.Recurrence
 import com.ysdoing.notioncal.core.data.calendar.RepeatFreq
@@ -74,7 +89,7 @@ internal fun RepeatChip(rule: RepeatRule?, start: LocalDate, onChange: (RepeatRu
     var open by rememberSaveable { mutableStateOf(false) }
     AssistChip(
         onClick = { open = true },
-        label = { Text(rule?.let { repeatSummary(it) } ?: stringResource(R.string.qs_repeat_none)) },
+        label = { Text(rule?.let { repeatSummary(it) } ?: stringResource(R.string.qs_repeat_none), maxLines = 1) },
     )
     if (open) {
         RepeatDialog(
@@ -109,8 +124,9 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.qs_repeat_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SingleChoiceSegmentedButtonRow {
+            // 작은 화면·큰 글꼴에서도 끝 조건까지 닿도록 내용을 스크롤한다.
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     val options = listOf(
                         RepeatFreq.DAILY to R.string.qs_repeat_freq_day,
                         RepeatFreq.WEEKLY to R.string.qs_repeat_freq_week,
@@ -118,17 +134,35 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
                         RepeatFreq.YEARLY to R.string.qs_repeat_freq_year,
                     )
                     options.forEachIndexed { index, (value, label) ->
+                        // 체크 아이콘 없이 색으로만 선택을 보인다(좁은 대화상자에서 글자가 줄바꿈되지 않게).
                         SegmentedButton(
                             selected = freq == value,
                             onClick = { freq = value },
                             shape = SegmentedButtonDefaults.itemShape(index, options.size),
-                        ) { Text(stringResource(label)) }
+                            icon = {},
+                        ) { Text(stringResource(label), maxLines = 1) }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { interval = (interval - 1).coerceAtLeast(1) }, enabled = interval > 1) { Text("−") }
-                    Text(stringResource(R.string.qs_repeat_interval, interval))
-                    TextButton(onClick = { interval = (interval + 1).coerceAtMost(Recurrence.MAX_INTERVAL) }, enabled = interval < Recurrence.MAX_INTERVAL) { Text("+") }
+                // 간격: "− 2주마다 +"처럼 단위가 함께 보인다.
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    val less = stringResource(R.string.qs_repeat_interval_less)
+                    val more = stringResource(R.string.qs_repeat_interval_more)
+                    OutlinedIconButton(
+                        onClick = { interval = (interval - 1).coerceAtLeast(1) },
+                        enabled = interval > 1,
+                        modifier = Modifier.semantics { contentDescription = less },
+                    ) { Text("−") }
+                    Text(
+                        intervalLabel(freq, interval),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    OutlinedIconButton(
+                        onClick = { interval = (interval + 1).coerceAtMost(Recurrence.MAX_INTERVAL) },
+                        enabled = interval < Recurrence.MAX_INTERVAL,
+                        modifier = Modifier.semantics { contentDescription = more },
+                    ) { Text("+") }
                 }
                 if (freq == RepeatFreq.WEEKLY) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -142,28 +176,39 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
                         }
                     }
                 }
-                SingleChoiceSegmentedButtonRow {
-                    SegmentedButton(selected = byCount, onClick = { byCount = true }, shape = SegmentedButtonDefaults.itemShape(0, 2)) {
-                        Text(stringResource(R.string.qs_repeat_by_count))
+                // 끝: 라디오 두 줄. 고르지 않은 줄의 입력은 흐리게 둔다.
+                Text(stringResource(R.string.qs_repeat_end_title), style = MaterialTheme.typography.labelLarge)
+                Column(Modifier.selectableGroup()) {
+                    EndOption(selected = byCount, label = stringResource(R.string.qs_repeat_by_count), onSelect = { byCount = true }) {
+                        OutlinedTextField(
+                            value = countText,
+                            onValueChange = { countText = it.filter(Char::isDigit).take(3) },
+                            modifier = Modifier.width(96.dp),
+                            enabled = byCount,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            suffix = { Text(stringResource(R.string.qs_repeat_count_suffix)) },
+                            isError = byCount && !valid,
+                        )
                     }
-                    SegmentedButton(selected = !byCount, onClick = { byCount = false }, shape = SegmentedButtonDefaults.itemShape(1, 2)) {
-                        Text(stringResource(R.string.qs_repeat_by_date))
+                    if (byCount) {
+                        Text(
+                            stringResource(R.string.qs_repeat_max, Recurrence.MAX),
+                            modifier = Modifier.padding(start = 48.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (valid) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        )
                     }
-                }
-                if (byCount) {
-                    OutlinedTextField(
-                        value = countText,
-                        onValueChange = { countText = it.filter(Char::isDigit).take(3) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        label = { Text(stringResource(R.string.qs_repeat_count_label)) },
-                        supportingText = { Text(stringResource(R.string.qs_repeat_max, Recurrence.MAX)) },
-                        isError = !valid,
-                    )
-                } else {
-                    val date = LocalDate.parse(until)
-                    TextButton(onClick = { pickingUntil = true }) {
-                        Text(stringResource(R.string.qs_repeat_until_button, date.year, date.monthValue, date.dayOfMonth))
+                    EndOption(selected = !byCount, label = stringResource(R.string.qs_repeat_by_date), onSelect = { byCount = false }) {
+                        val date = LocalDate.parse(until)
+                        AssistChip(
+                            onClick = {
+                                byCount = false
+                                pickingUntil = true
+                            },
+                            enabled = !byCount,
+                            label = { Text(stringResource(R.string.qs_repeat_until_date, date.year, date.monthValue, date.dayOfMonth), maxLines = 1) },
+                        )
                     }
                 }
             }
@@ -200,6 +245,31 @@ private fun RepeatDialog(initial: RepeatRule, start: LocalDate, onDone: (RepeatR
             },
             dismissButton = { TextButton(onClick = { pickingUntil = false }) { Text(stringResource(R.string.qs_cancel)) } },
         ) { DatePicker(state = state) }
+    }
+}
+
+/** "1일마다"·"2주마다"·"1개월마다"·"1년마다". */
+@Composable
+private fun intervalLabel(freq: RepeatFreq, interval: Int): String = when (freq) {
+    RepeatFreq.DAILY -> stringResource(R.string.qs_repeat_every_days, interval)
+    RepeatFreq.WEEKLY -> stringResource(R.string.qs_repeat_every_weeks, interval)
+    RepeatFreq.MONTHLY -> stringResource(R.string.qs_repeat_every_months, interval)
+    RepeatFreq.YEARLY -> stringResource(R.string.qs_repeat_every_years, interval)
+}
+
+/** 반복 끝 조건 한 줄: 줄 전체가 라디오 선택 영역이고, 오른쪽에 그 조건의 입력(횟수·날짜)이 붙는다. */
+@Composable
+private fun EndOption(selected: Boolean, label: String, onSelect: () -> Unit, trailing: @Composable () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null, modifier = Modifier.padding(horizontal = 12.dp))
+        Text(label, modifier = Modifier.weight(1f), maxLines = 1)
+        trailing()
     }
 }
 

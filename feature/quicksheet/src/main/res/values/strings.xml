@@ -39,12 +39,14 @@
     <string name="qs_repeat_freq_week">주</string>
     <string name="qs_repeat_freq_month">월</string>
     <string name="qs_repeat_freq_year">년</string>
-    <string name="qs_repeat_interval">%1$d마다</string>
     <string name="qs_repeat_by_count">횟수</string>
     <string name="qs_repeat_by_date">날짜까지</string>
-    <string name="qs_repeat_count_label">몇 번</string>
+    <string name="qs_repeat_end_title">끝</string>
+    <string name="qs_repeat_count_suffix">번</string>
+    <string name="qs_repeat_until_date">%1$d. %2$d. %3$d.</string>
+    <string name="qs_repeat_interval_less">간격 줄이기</string>
+    <string name="qs_repeat_interval_more">간격 늘리기</string>
     <string name="qs_repeat_max">최대 %1$d개</string>
-    <string name="qs_repeat_until_button">%1$d년 %2$d월 %3$d일까지</string>
     <string name="qs_repeat_confirm_title">반복 일정 %1$d개 만들기</string>
     <string name="qs_repeat_confirm_note">노션에 페이지 %1$d개가 따로 만들어집니다. 나중에 한꺼번에 바꾸거나 지울 수는 없습니다.</string>
     <string name="qs_repeat_create">%1$d개 만들기</string>
