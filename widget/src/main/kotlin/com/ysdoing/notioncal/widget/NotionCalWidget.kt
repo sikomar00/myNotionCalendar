@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.widget
 
 import android.content.Context
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -19,6 +20,49 @@ import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+
+/** 월 위젯과 통합 위젯(📅 탭, WG-11)이 함께 쓰는 세션. 첫 프레임부터 내용이 보이도록 초기값을 먼저 읽는다. */
+internal object MonthSession {
+    class Initial(
+        val settings: AppSettings,
+        val month: YearMonth,
+        val events: List<CalendarEvent>,
+        val sync: WidgetSync,
+        val holidays: Map<LocalDate, String>,
+    )
+
+    suspend fun load(deps: WidgetDependencies, config: WidgetConfig): Initial {
+        val settings = deps.settings().settings.first()
+        val month = NotionCalWidget.monthFor(config)
+        val from = NotionCalWidget.gridFrom(month, settings.weekStart)
+        val to = NotionCalWidget.gridTo(month, settings.weekStart)
+        return Initial(
+            settings = settings,
+            month = month,
+            events = deps.events().observeRange(from, to).first(),
+            sync = WidgetSync.observe(deps.syncStatus()).first(),
+            holidays = deps.holidays().observe(from, to).first(),
+        )
+    }
+
+    /** 이후 변경은 Flow가 반영한다. */
+    @Composable
+    fun Content(deps: WidgetDependencies, initial: Initial, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
+        val settings by remember { deps.settings().settings }.collectAsState(initial.settings)
+        val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initial.sync)
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
+        val today = LocalDate.now(APP_ZONE)
+        val month = YearMonth.from(today).plusMonths(config.monthOffset.toLong())
+        val sameGrid = month == initial.month && settings.weekStart == initial.settings.weekStart
+        val events by remember(month, settings.weekStart) {
+            deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart))
+        }.collectAsState(if (sameGrid) initial.events else emptyList())
+        val holidays by remember(month, settings.weekStart) {
+            deps.holidays().observe(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart))
+        }.collectAsState(if (sameGrid) initial.holidays else emptyMap())
+        WidgetContent(NotionCalWidget.uiState(month, today, settings, config, events, sync).copy(holidays = holidays), fontScale, framed)
+    }
+}
 
 /**
  * 월간 위젯(WG-01). Room만 읽는다(WG-02).
@@ -40,30 +84,12 @@ class NotionCalWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val deps = WidgetDependencies.from(context)
-        // 첫 프레임부터 내용이 보이도록 초기값을 먼저 읽는다. 이후 변경은 아래 Flow가 반영한다.
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
-        val initialSettings = deps.settings().settings.first()
-        val initialMonth = monthFor(initialConfig)
-        val initialEvents = deps.events().observeRange(gridFrom(initialMonth, initialSettings.weekStart), gridTo(initialMonth, initialSettings.weekStart)).first()
-        val initialSync = WidgetSync.observe(deps.syncStatus()).first()
-        val initialHolidays = deps.holidays().observe(gridFrom(initialMonth, initialSettings.weekStart), gridTo(initialMonth, initialSettings.weekStart)).first()
-
+        val initial = MonthSession.load(deps, initialConfig)
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
-            val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
-            val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
-            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
-            val today = LocalDate.now(APP_ZONE)
-            val month = YearMonth.from(today).plusMonths(config.monthOffset.toLong())
-            val initial = if (month == initialMonth && settings.weekStart == initialSettings.weekStart) initialEvents else emptyList()
-            val events by remember(month, settings.weekStart) {
-                deps.events().observeRange(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
-            }.collectAsState(initial)
-            val holidays by remember(month, settings.weekStart) {
-                deps.holidays().observe(gridFrom(month, settings.weekStart), gridTo(month, settings.weekStart))
-            }.collectAsState(if (month == initialMonth) initialHolidays else emptyMap())
-            WidgetContent(uiState(month, today, settings, config, events, sync).copy(holidays = holidays), fontScale ?: SystemFontScale.current(context))
+            MonthSession.Content(deps, initial, config, fontScale ?: SystemFontScale.current(context))
         }
     }
 

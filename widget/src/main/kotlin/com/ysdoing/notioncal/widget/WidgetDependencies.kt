@@ -15,6 +15,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import com.ysdoing.notioncal.core.data.HolidayRepository
+import com.ysdoing.notioncal.core.data.habit.HabitRepository
 
 /** Glance 위젯·리시버·액션은 Hilt가 직접 주입하지 않으므로 EntryPoint로 저장소를 꺼낸다. 모두 Room만 읽는다. */
 @EntryPoint
@@ -27,6 +28,9 @@ interface WidgetDependencies {
     fun syncStatus(): SyncStatusRepository
     fun holidays(): HolidayRepository
     fun syncRequester(): SyncRequester
+
+    /** HB-02·03 습관 보드와 체크(아웃박스로만 쓴다). */
+    fun habits(): HabitRepository
 
     companion object {
         fun from(context: Context): WidgetDependencies =

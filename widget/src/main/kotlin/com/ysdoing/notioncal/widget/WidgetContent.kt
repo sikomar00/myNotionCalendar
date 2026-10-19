@@ -102,20 +102,20 @@ fun WidgetContent(
     state: WidgetUiState,
     /** 기기 글꼴 크기. 위젯에서는 [SystemFontScale]이 알려 준 값을 넘긴다(세션 컨텍스트 값은 오래된 값일 수 있음). */
     systemFontScale: Float = LocalContext.current.applicationContext.resources.configuration.fontScale,
+    /** false면 바깥 배경·모서리를 그리지 않는다(통합 위젯 WG-11 안에 넣을 때 배경이 두 번 겹치지 않게). */
+    framed: Boolean = true,
 ) {
     val context = LocalContext.current
     val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale)
     val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val start = gridStart(state.month, state.weekStart)
+    val outer = if (framed) {
+        GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)
+    } else {
+        GlanceModifier.fillMaxSize()
+    }
 
-    Column(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .appWidgetBackground()
-            .cornerRadius(android.R.dimen.system_app_widget_background_radius)
-            .background(palette.background)
-            .padding(WidgetMetrics.PADDING),
-    ) {
+    Column(modifier = outer.padding(WidgetMetrics.PADDING)) {
         Header(state, metrics, palette)
         WeekdayRow(state.weekStart, metrics, palette)
         repeat(6) { week ->
@@ -548,7 +548,19 @@ class WidgetPalette private constructor(
     val error: ColorProvider,
     private val sunday: ColorProvider,
     private val saturday: ColorProvider,
+    /** HB-03 습관 칸의 빈 네모(안 한 날). */
+    val track: ColorProvider,
+    /** HB-03 잔디 농도(낮음·중간·모두). */
+    private val grass: List<ColorProvider>,
 ) {
+    /** HB-03 잔디: 그날 한 비율 [ratio](0~1)를 4단계(없음·절반 미만·모두 미만·모두)로. */
+    fun grassLevel(ratio: Float): ColorProvider = when {
+        ratio <= 0f -> track
+        ratio < 0.5f -> grass[0]
+        ratio < 1f -> grass[1]
+        else -> grass[2]
+    }
+
     /** EX-02 공휴일 색(일요일과 같다). */
     val holiday: ColorProvider get() = sunday
 
@@ -565,15 +577,16 @@ class WidgetPalette private constructor(
         val outside: Color,
         val divider: Color,
         val accent: Color,
+        val track: Color,
     )
 
     companion object {
         // 앱과 같은 화면 틀 색(DesignTokens). 다른 달 날짜(outside)만 위젯 전용 값(3:1 이상).
         private val LIGHT = with(DesignTokens.Light) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT))
+            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT), Color(SURFACE_HIGHEST))
         }
         private val DARK = with(DesignTokens.Dark) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT))
+            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT), Color(0xFF3A3A3A))
         }
         // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
         // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
@@ -592,11 +605,13 @@ class WidgetPalette private constructor(
                 Scheme(
                     c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral2_200),
                     c(android.R.color.system_neutral2_500), c(android.R.color.system_neutral2_800), c(android.R.color.system_accent1_200),
+                    c(android.R.color.system_neutral2_700),
                 )
             } else {
                 Scheme(
                     c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral2_700),
                     c(android.R.color.system_neutral2_400), c(android.R.color.system_neutral2_100), c(android.R.color.system_accent1_600),
+                    c(android.R.color.system_neutral2_200),
                 )
             }
         }
@@ -639,6 +654,8 @@ class WidgetPalette private constructor(
                 error = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 sunday = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 saturday = pair(SATURDAY_LIGHT, SATURDAY_DARK),
+                track = pick({ it.track }),
+                grass = listOf(0.35f, 0.65f, 1f).map { a -> pick({ it.accent.copy(alpha = a) }) },
             )
         }
     }

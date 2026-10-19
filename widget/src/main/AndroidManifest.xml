@@ -45,6 +45,32 @@
                 android:resource="@xml/split_widget_info" />
         </receiver>
 
+        <!-- HB-03 습관 위젯. -->
+        <receiver
+            android:name=".HabitWidgetReceiver"
+            android:exported="true"
+            android:label="@string/habit_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/habit_widget_info" />
+        </receiver>
+
+        <!-- WG-11 통합 탭 위젯(📅 일정 · ✅ 습관). -->
+        <receiver
+            android:name=".TabbedWidgetReceiver"
+            android:exported="true"
+            android:label="@string/tabbed_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tabbed_widget_info" />
+        </receiver>
+
         <receiver
             android:name=".DayChangeReceiver"
             android:exported="false">

@@ -70,7 +70,10 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    /** 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다. */
+    /**
+     * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
+     * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 설정 화면이 없다.
+     */
     private enum class Kind { MONTH, AGENDA, SPLIT }
 
     private val kind by lazy {
@@ -202,11 +205,8 @@ class WidgetConfigActivity : ComponentActivity() {
                     scope.launch {
                         deps.widgetConfigs().save(config)
                         val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-                        when (kind) {
-                            Kind.AGENDA -> AgendaWidget().update(this@WidgetConfigActivity, glanceId)
-                            Kind.SPLIT -> SplitWidget().update(this@WidgetConfigActivity, glanceId)
-                            Kind.MONTH -> NotionCalWidget().update(this@WidgetConfigActivity, glanceId)
-                        }
+                        // 통합 위젯(WG-11)도 월 미리보기·설정을 쓰고, 다시 그릴 때는 제 종류로 그린다.
+                        WidgetKinds.update(this@WidgetConfigActivity, glanceId)
                         onSaved()
                     }
                 },

@@ -10,6 +10,10 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.db.HabitEntity
+import com.ysdoing.notioncal.core.data.habit.HabitBoard
+import com.ysdoing.notioncal.core.data.habit.HabitStats
+import com.ysdoing.notioncal.core.data.habit.HabitSummary
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -24,6 +28,7 @@ object WidgetPreviews {
     val MONTH_SIZE = DpSize(358.dp, 380.dp)
     val AGENDA_SIZE = DpSize(358.dp, 152.dp)
     val SPLIT_SIZE = DpSize(358.dp, 168.dp)
+    val HABIT_SIZE = DpSize(358.dp, 168.dp)
 
     private const val TAG = "NotionCalWidget"
 
@@ -53,6 +58,21 @@ object WidgetPreviews {
     fun splitState(today: LocalDate = LocalDate.now(APP_ZONE)): SplitUiState =
         SplitWidget.uiState(today, AppSettings(weekStart = DayOfWeek.SUNDAY), WidgetConfig(0), sampleEvents(today))
 
+    /** 예시 습관(HB-03): 이어가는 중·하루 쉼·주 3회를 함께 보인다. */
+    fun habitState(today: LocalDate = LocalDate.now(APP_ZONE)): HabitWidgetState {
+        fun days(vararg back: Long) = back.map { today.minusDays(it) }.toSet()
+        val samples = listOf(
+            Triple(HabitEntity("preview-1", "preview", "명상", "🧘", 7, true, null, 1.0), days(0, 1, 2, 3, 4), 7),
+            Triple(HabitEntity("preview-2", "preview", "영양제 먹기", "💊", 7, true, null, 2.0), days(2, 3, 4, 5), 7),
+            Triple(HabitEntity("preview-3", "preview", "산책", "🚶", 3, true, null, 3.0), days(1, 3), 3),
+        )
+        val summaries = samples.map { (habit, done, target) ->
+            HabitSummary(habit, HabitStats.status(done, today, DayOfWeek.SUNDAY, target, null))
+        }
+        val board = HabitBoard(today, summaries, samples.associate { (habit, done, _) -> habit.pageId to done })
+        return HabitWidgetState(board, WidgetConfig(0), DayOfWeek.SUNDAY)
+    }
+
     /**
      * 위젯들의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
      * 모두 성공하면 true.
@@ -64,6 +84,8 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(NotionCalWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(AgendaWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(SplitWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(HabitWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(TabbedWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }
