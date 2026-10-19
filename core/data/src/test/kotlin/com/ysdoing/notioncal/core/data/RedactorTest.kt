@@ -49,4 +49,18 @@ JSON input: {"results":[{"properties":{"Name":{"title":[{"plain_text":"병원 �
         assertNotEquals(a, Redactor.maskTitle("회의"))
         assertFalse(a.contains("영어"))
     }
+
+    /** LD-06(SEC-02 확장): 따옴표 밖의 금액 표기도 가린다. 스택 위치의 줄 번호·오류 종류는 남는다. */
+    @Test
+    fun reportHidesAmounts() {
+        val scrubbed = Redactor.scrubReport(
+            "IllegalStateException: 합계 2,500,000원 예산 1.2만 남음 금액 -9800원 at LedgerMath.kt:123 (2026-10-19)",
+        )
+        assertFalse(scrubbed, scrubbed.contains("2,500,000"))
+        assertFalse(scrubbed, scrubbed.contains("1.2만"))
+        assertFalse(scrubbed, scrubbed.contains("9800"))
+        assertTrue(scrubbed, scrubbed.contains("LedgerMath.kt:123"))
+        assertTrue(scrubbed, scrubbed.contains("IllegalStateException"))
+        assertTrue(scrubbed, scrubbed.contains(Redactor.AMOUNT_MASK))
+    }
 }
