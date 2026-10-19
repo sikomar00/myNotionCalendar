@@ -69,4 +69,5 @@
     <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었어요. 동기화는 그대로 됩니다.</string>
     <string name="a11y_done">완료됨</string>
     <string name="month_day_holiday_a11y">%1$d월 %2$d일, %3$s, 일정 %4$d개</string>
+    <string name="month_weather_credit">날씨: Open-Meteo</string>
 </resources>

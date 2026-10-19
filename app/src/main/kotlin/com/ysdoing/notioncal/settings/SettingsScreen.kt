@@ -209,6 +209,22 @@ fun SettingsRoute(
             }
 
             HorizontalDivider()
+            Section(stringResource(R.string.settings_section_weather))
+            val weatherStatus by viewModel.weatherStatus.collectAsStateWithLifecycle()
+            WeatherSection(
+                settings,
+                weatherStatus,
+                WeatherSettingsActions(
+                    onEnable = viewModel::setWeatherEnabled,
+                    onMode = viewModel::setWeatherMode,
+                    onSearch = viewModel::searchRegions,
+                    onPickRegion = viewModel::pickRegion,
+                    onLocation = viewModel::useLocation,
+                    onMonthCells = viewModel::setWeatherMonthCells,
+                ),
+            )
+
+            HorizontalDivider()
             Section(stringResource(R.string.settings_section_dday))
             Text(
                 stringResource(R.string.settings_dday_note),

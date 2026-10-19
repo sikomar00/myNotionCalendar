@@ -45,6 +45,8 @@ import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.data.HolidayRepository
+import com.ysdoing.notioncal.core.data.weather.WeatherRepository
+import kotlinx.coroutines.flow.flatMapLatest
 
 /** 상단 상태줄·배너(PF-05 최소 형태). */
 data class SyncHeader(
@@ -90,6 +92,7 @@ class MonthViewModel @Inject constructor(
     private val health: AppHealth,
     private val writer: EventWriter,
     private val clock: Clock,
+    private val weatherRepository: WeatherRepository,
 ) : ViewModel() {
 
     private val _today = MutableStateFlow(today())
@@ -148,6 +151,19 @@ class MonthViewModel @Inject constructor(
         health.report(error)
         emit(SyncHeader())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncHeader())
+
+    /** WX-03 오늘부터 예보(날씨를 끄면 비어 있다). 화면은 Room만 읽는다. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val weather: StateFlow<MonthWeather> = combine(
+        _today.flatMapLatest { t -> weatherRepository.observeDays(t, t.plusDays(WEATHER_DAYS)) },
+        weatherRepository.observeStatus(),
+        settingsRepository.settings.map { it.weatherMonthCellIcons }.distinctUntilChanged(),
+    ) { days, status, cells -> MonthWeather(days, status.stale, cells) }
+        .catch { error ->
+            health.report(error)
+            emit(MonthWeather())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MonthWeather())
 
     private val rangeFlows = HashMap<Pair<LocalDate, LocalDate>, StateFlow<List<CalendarEvent>?>>()
     private val holidayFlows = HashMap<Pair<LocalDate, LocalDate>, StateFlow<Map<LocalDate, String>>>()
@@ -228,3 +244,6 @@ class MonthViewModel @Inject constructor(
 
     private fun today(): LocalDate = LocalDate.now(clock.withZone(APP_ZONE))
 }
+
+/** 예보는 10일치를 받는다(WX-01). 오늘 포함 범위. */
+private const val WEATHER_DAYS = 9L

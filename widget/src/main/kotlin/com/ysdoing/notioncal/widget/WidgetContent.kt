@@ -81,6 +81,8 @@ data class WidgetUiState(
     val sync: WidgetSync = WidgetSync(),
     /** EX-02 공휴일(날짜 → 이름). */
     val holidays: Map<LocalDate, String> = emptyMap(),
+    /** WX-04 머리의 오늘 날씨(위젯 설정에서 켠 위젯만). */
+    val weather: WidgetWeather = WidgetWeather(),
 )
 
 /**
@@ -159,6 +161,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                         maxLines = 1,
                     )
                     SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = false)
+                    todayWeather(state)?.let { WeatherChip(it, state.weather.stale, palette, metrics.chipFontSp, showTemps = false) }
                 }
             }
         } else {
@@ -183,6 +186,7 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                     maxLines = 1,
                 )
                 SyncBadge(state.sync, state.today, metrics.chipFontSp, palette, showTime = metrics.cellWidth * 7 >= SYNC_TIME_MIN_WIDTH * metrics.textScale)
+                todayWeather(state)?.let { WeatherChip(it, state.weather.stale, palette, metrics.chipFontSp, showTemps = metrics.mode == WidgetMode.LARGE) }
             }
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
@@ -195,6 +199,9 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
         HeaderButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
     }
 }
+
+/** WX-04: 위젯 설정에서 날씨를 켰고 오늘 예보가 있으면. */
+private fun todayWeather(state: WidgetUiState) = state.weather.days[state.today]?.takeIf { state.config.showWeather }
 
 /** 동기화 시각을 보일 최소 내용 폭(글자 배율 1 기준, 글자가 커지면 비례해 늘림). 모자라면 시각 없이 오류 점만 보인다. */
 private val SYNC_TIME_MIN_WIDTH = 340.dp

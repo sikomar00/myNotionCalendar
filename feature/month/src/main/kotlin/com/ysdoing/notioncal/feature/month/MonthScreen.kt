@@ -61,6 +61,12 @@ import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
 import kotlinx.coroutines.delay
+import com.ysdoing.notioncal.core.designsystem.WeatherBadge
+import com.ysdoing.notioncal.core.designsystem.WeatherCredit
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -114,6 +120,7 @@ fun MonthRoute(
     val today by viewModel.today.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val header by viewModel.header.collectAsStateWithLifecycle()
+    val weather by viewModel.weather.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         viewModel.onResume()
         onPauseOrDispose { }
@@ -186,7 +193,7 @@ fun MonthRoute(
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            SyncStatusLine(header)
+            SyncStatusLine(header, weather, today)
             Banner(header, onOpenSettings)
             WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
             SchemaBanner(header.schemaAlerts, onReconnect = onReconnect, onAcknowledge = viewModel::acknowledgeSchema)
@@ -217,6 +224,7 @@ fun MonthRoute(
                     }
                     CalendarView.AGENDA -> AgendaView(
                         initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, holidays = viewModel::holidaysBetween,
+                        weather = weather,
                         onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
                     )
                 }
@@ -321,13 +329,14 @@ private fun MonthPager(
         val events by flow.collectAsStateWithLifecycle()
         val visible = events.orEmpty()
         val holidays by remember(month, weekStart) { viewModel.holidaysFor(month, weekStart) }.collectAsStateWithLifecycle()
+        val weather by viewModel.weather.collectAsStateWithLifecycle()
         // 그리드는 스크롤할 내용이 없지만, 당겨서 새로고침이 제스처를 받도록 세로 스크롤 컨테이너에 넣는다.
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val height = maxHeight
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 TextZoom(zoom) {
                     MonthGrid(
-                        state = MonthGridState(month, weekStart, today, visible, holidays),
+                        state = MonthGridState(month, weekStart, today, visible, holidays, weather),
                         onDayClick = onDayClick,
                         onMove = viewModel::move,
                         modifier = Modifier.fillMaxWidth().height(height),
@@ -384,7 +393,9 @@ private fun PeriodPager(
         val events by flow.collectAsStateWithLifecycle()
         val visible = events.orEmpty()
         val holidays by remember(start, days) { viewModel.holidaysBetween(start, start.plusDays(days - 1L)) }.collectAsStateWithLifecycle()
+        val weather by viewModel.weather.collectAsStateWithLifecycle()
         TimeGrid(
+            weather = weather,
             start = start,
             days = days,
             today = today,
@@ -402,7 +413,7 @@ private fun PeriodPager(
 private val syncTimeFormat = DateTimeFormatter.ofPattern("M/d HH:mm")
 
 @Composable
-private fun SyncStatusLine(header: SyncHeader) {
+private fun SyncStatusLine(header: SyncHeader, weather: MonthWeather, today: LocalDate) {
     val text = when {
         header.syncing -> stringResource(R.string.month_syncing)
         header.lastSuccessAt != null -> stringResource(
@@ -412,12 +423,25 @@ private fun SyncStatusLine(header: SyncHeader) {
         else -> stringResource(R.string.month_never_synced)
     }
     val pending = if (header.pendingWrites > 0) stringResource(R.string.month_pending_writes, header.pendingWrites) else null
-    Text(
-        listOfNotNull(text, pending).joinToString(" · "),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            listOfNotNull(text, pending).joinToString(" · "),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        // WX-03 머리: 오늘 날씨(아이콘·최고·최저). WX-05 출처 링크를 함께 둔다.
+        weather.days[today]?.let { day ->
+            WeatherBadge(day, weather.stale, iconSize = 14.dp, fontSize = 11.sp)
+            val uri = LocalUriHandler.current
+            Text(
+                stringResource(R.string.month_weather_credit),
+                modifier = Modifier.padding(start = 6.dp).clickable { uri.openUri(WeatherCredit.SITE) },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
 }
 
 /** NS-05: 노션 반영 실패(되돌림)·충돌(노션 값 우선) 알림. 확인을 누르면 내용을 보여주고 읽음 처리한다. */

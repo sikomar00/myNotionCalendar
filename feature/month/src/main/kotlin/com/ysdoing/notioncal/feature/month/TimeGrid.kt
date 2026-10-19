@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -50,6 +51,7 @@ import com.ysdoing.notioncal.core.data.calendar.TimedLayout
 import com.ysdoing.notioncal.core.data.calendar.WeekLayout
 import com.ysdoing.notioncal.core.data.calendar.chipLabel
 import java.time.DayOfWeek
+import com.ysdoing.notioncal.core.designsystem.WeatherBadge
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -82,11 +84,13 @@ fun TimeGrid(
     /** EX-02 공휴일(날짜 → 이름). */
     holidays: Map<LocalDate, String> = emptyMap(),
     initialScrollHour: Int = 8,
+    /** WX-03 날짜 머리의 아이콘 + 최고·최저. */
+    weather: MonthWeather = MonthWeather(),
 ) {
     val dates = remember(start, days) { (0 until days).map { start.plusDays(it.toLong()) } }
     val density = LocalDensity.current
     Column(modifier.fillMaxSize()) {
-        DayHeaders(dates, today, holidays, onDayClick)
+        DayHeaders(dates, today, holidays, weather, onDayClick)
         AllDayLane(start, days, events, onEventClick)
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val scroll = rememberScrollState(initial = with(density) { (hourHeight * initialScrollHour.coerceIn(0, 20)).roundToPx() })
@@ -150,8 +154,15 @@ fun TimeGrid(
 }
 
 @Composable
-private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<LocalDate, String>, onDayClick: (LocalDate) -> Unit) {
+private fun DayHeaders(
+    dates: List<LocalDate>,
+    today: LocalDate,
+    holidays: Map<LocalDate, String>,
+    weather: MonthWeather,
+    onDayClick: (LocalDate) -> Unit,
+) {
     val anyHoliday = dates.any { it in holidays }
+    val anyWeather = dates.any { it in weather.days }
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Spacer(Modifier.width(GUTTER))
         dates.forEach { date ->
@@ -177,6 +188,12 @@ private fun DayHeaders(dates: List<LocalDate>, today: LocalDate, holidays: Map<L
                             else -> MaterialTheme.colorScheme.onSurface
                         },
                     )
+                }
+                // WX-03: 아이콘 아래 '21°/12°'. 예보가 있는 기간이면 모든 칸에 같은 높이로 자리를 둔다(없는 날은 비움).
+                if (anyWeather) {
+                    Box(Modifier.heightIn(min = 30.dp), contentAlignment = Alignment.Center) {
+                        weather.days[date]?.let { WeatherBadge(it, weather.stale, vertical = true, iconSize = 14.dp, fontSize = 9.sp) }
+                    }
                 }
                 // EX-02: 공휴일 이름(그 기간에 공휴일이 있으면 모든 칸에 같은 높이로 자리를 둔다).
                 if (anyHoliday) {

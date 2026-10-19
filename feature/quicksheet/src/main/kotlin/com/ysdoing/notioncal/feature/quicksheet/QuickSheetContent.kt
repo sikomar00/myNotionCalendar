@@ -108,6 +108,8 @@ fun QuickSheetContent(
                     listOfNotNull(dayTitle(start.date), holiday).joinToString(" · "),
                     style = MaterialTheme.typography.titleLarge,
                 )
+                val weather by viewModel.dayWeather.collectAsStateWithLifecycle()
+                if (!weather.isEmpty) DayWeatherStrip(weather)
                 AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) }, onAddRepeated = { viewModel.addAll(it) })
                 HorizontalDivider()
                 DayList(

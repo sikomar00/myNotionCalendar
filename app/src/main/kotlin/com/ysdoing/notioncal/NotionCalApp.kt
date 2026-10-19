@@ -31,6 +31,9 @@ class NotionCalApp : Application(), Configuration.Provider {
     lateinit var periodicSync: PeriodicSync
 
     @Inject
+    lateinit var weatherScheduler: com.ysdoing.notioncal.core.sync.WeatherScheduler
+
+    @Inject
     lateinit var widgetRefresher: WidgetRefresher
 
     @Inject
@@ -64,6 +67,7 @@ class NotionCalApp : Application(), Configuration.Provider {
         }
         periodicSync.start(appScope) // NS-06 주기 동기화
         reminderScheduler.start(appScope) // EX-01 일정 알림
+        weatherScheduler.start(appScope) // WX-01 3시간 주기 예보
         appScope.launch(Dispatchers.IO) { runCatching { QuickAdd.publishShortcut(this@NotionCalApp) } } // EX-06
         appScope.launch(Dispatchers.IO) { publishWidgetPreviews() } // WG-08
         appScope.launch(Dispatchers.IO) { // 업데이트 직후 첫 동기화는 전체 범위(§12 대조)

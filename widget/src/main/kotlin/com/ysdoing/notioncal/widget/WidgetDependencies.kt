@@ -40,6 +40,9 @@ interface WidgetDependencies {
     /** DD-03~05 고정한 디데이(Room만 읽는다). */
     fun ddays(): DdayRepository
 
+    /** WX-04 날씨 캐시(Room만 읽는다). */
+    fun weather(): com.ysdoing.notioncal.core.data.weather.WeatherRepository
+
     companion object {
         fun from(context: Context): WidgetDependencies =
             EntryPointAccessors.fromApplication(context.applicationContext, WidgetDependencies::class.java)

@@ -48,6 +48,7 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.weather.WeatherDay
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
@@ -74,8 +75,12 @@ data class SplitUiState(
     val agenda: AgendaUiState,
     /** EX-02 공휴일(달력 두 달 범위). */
     val holidays: Map<LocalDate, String> = emptyMap(),
+    /** WX-04 머리의 오늘 날씨 + 목록 날짜 머리 아이콘(위젯 설정에서 켠 위젯만). */
+    val weather: WidgetWeather = WidgetWeather(),
 ) {
     val config: WidgetConfig get() = agenda.config
+
+    fun weatherOn(date: LocalDate) = weather.days[date]?.takeIf { config.showWeather }
 }
 
 /**
@@ -118,7 +123,10 @@ class SplitWidget : GlanceAppWidget() {
                 val (from, to) = holidayRange(today, settings.weekStart)
                 deps.holidays().observe(from, to)
             }.collectAsState(if (today == initialToday && settings.weekStart == initialSettings.weekStart) initialHolidays else emptyMap())
-            SplitWidgetContent(uiState(today, settings, config, events, sync, holidays), fontScale ?: SystemFontScale.current(context))
+            val weather by remember(today, config.showWeather) {
+                if (config.showWeather) WidgetWeather.observe(deps.weather(), today) else kotlinx.coroutines.flow.flowOf(WidgetWeather())
+            }.collectAsState(WidgetWeather())
+            SplitWidgetContent(uiState(today, settings, config, events, sync, holidays).copy(weather = weather), fontScale ?: SystemFontScale.current(context))
         }
     }
 
@@ -294,6 +302,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
                     maxLines = 1,
                 )
                 SyncBadge(state.agenda.sync, state.today, metrics.titleFontSp * 0.65f, palette, showTime = false)
+                state.weatherOn(state.today)?.let { WeatherChip(it, state.weather.stale, palette, metrics.titleFontSp * 0.65f) }
             }
         }
         Row(GlanceModifier.fillMaxWidth().height(metrics.weekdayHeight), verticalAlignment = Alignment.CenterVertically) {
@@ -368,7 +377,7 @@ private fun DayList(state: SplitUiState, metrics: SplitMetrics, palette: WidgetP
     val days = state.agenda.days
     LazyColumn(GlanceModifier.fillMaxWidth().height(metrics.listHeight)) {
         days.forEach { day ->
-            item(itemId = day.date.toEpochDay()) { DayHeader(day.date, state.holidays[day.date], metrics, palette) }
+            item(itemId = day.date.toEpochDay()) { DayHeader(day.date, state.holidays[day.date], metrics, palette, state.weatherOn(day.date), state.weather.stale) }
             if (day.items.isEmpty() && day.date !in state.holidays) {
                 item(itemId = -day.date.toEpochDay() - 1) { WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "splitEmpty") }
             }
@@ -385,7 +394,7 @@ private fun DayList(state: SplitUiState, metrics: SplitMetrics, palette: WidgetP
 }
 
 @Composable
-private fun DayHeader(date: LocalDate, holiday: String?, metrics: SplitMetrics, palette: WidgetPalette) {
+private fun DayHeader(date: LocalDate, holiday: String?, metrics: SplitMetrics, palette: WidgetPalette, weather: WeatherDay? = null, stale: Boolean = false) {
     val context = LocalContext.current
     Row(
         modifier = GlanceModifier
@@ -414,6 +423,8 @@ private fun DayHeader(date: LocalDate, holiday: String?, metrics: SplitMetrics, 
                 maxLines = 1,
             )
         }
+        // WX-04: 날짜 머리에 일별 아이콘(기온은 머리에만, 좁은 목록이 넘치지 않게).
+        weather?.let { WeatherChip(it, stale, palette, metrics.timeFontSp, showTemps = false, iconSize = 12.dp) }
     }
 }
 

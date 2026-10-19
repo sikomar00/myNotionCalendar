@@ -58,6 +58,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import com.ysdoing.notioncal.core.data.dday.Dday
+import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import kotlin.math.roundToInt
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
@@ -229,6 +230,21 @@ class WidgetConfigActivity : ComponentActivity() {
                 ) { config = config.copy(lineSpacing = it) }
             }
 
+            // WX-04·05: 월간·'달력 + 일정' 위젯 머리에 오늘 날씨(위젯별 켜기). 날씨가 보이는 설정 화면이라 출처를 둔다.
+            if (kind == Kind.MONTH || kind == Kind.SPLIT) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.widget_config_weather))
+                        Text(
+                            stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = config.showWeather, onCheckedChange = { config = config.copy(showWeather = it) })
+                }
+                if (config.showWeather) WeatherAttribution()
+            }
             if (kind in CALENDAR_KINDS) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))

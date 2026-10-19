@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- EX-02: 폰의 공휴일 캘린더(구글 '대한민국의 휴일' 등)만 읽는다. 다른 캘린더 일정은 읽지 않는다. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- WX-02 대략 위치(앱 사용 중에만, 선택). 정확 위치·백그라운드 위치는 쓰지 않는다. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- EX-01 일정 알림(Android 13+ 런타임 권한). 정확한 알람(USE_EXACT_ALARM)·부팅 수신은 위젯 모듈 매니페스트에 있다. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

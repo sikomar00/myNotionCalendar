@@ -16,7 +16,8 @@
 
 # 모듈 규칙 (PRD §7)
 - `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`, `:core:designsystem`
-- `:core:sync` → `:core:notion`, `:core:data`
+- `:core:sync` → `:core:notion`, `:core:data`, `:core:weather`
+- `:core:weather` → 의존 없음(OkHttp·kotlinx.serialization만). 날씨 제공처(Open-Meteo 기본 모델)를 가둔다. `:core:sync`의 WeatherWorker만 부른다. 화면·위젯은 `:core:data`의 `WeatherRepository`(Room)만 읽는다.
 - `:widget` → `:core:data`, `:core:designsystem`만. `:core:notion` 의존 금지(위젯 네트워크 호출을 빌드 단계에서 차단).
 - `:core:designsystem` → `:core:data`만(Compose 테마·글꼴·모양, UI 전용, 네트워크·DB 없음). 화면 틀 색 값은 `:core:data`의 `DesignTokens`. 기준 문서는 DESIGN.md.
 - `:feature:*` → `:core:data`, `:core:designsystem`(+ 화면 간 공유는 `:feature:quicksheet`).

@@ -67,6 +67,7 @@ import com.ysdoing.notioncal.core.data.calendar.gridStart
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
+import com.ysdoing.notioncal.core.designsystem.WeatherBadge
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -78,6 +79,8 @@ data class MonthGridState(
     val events: List<CalendarEvent>,
     /** EX-02 공휴일(날짜 → 이름). 공휴일 표시를 끄면 비어 있다. */
     val holidays: Map<LocalDate, String> = emptyMap(),
+    /** WX-03 날씨: 오늘 칸(설정을 켜면 예보가 있는 모든 칸)에 아이콘. */
+    val weather: MonthWeather = MonthWeather(),
 )
 
 /**
@@ -126,6 +129,7 @@ fun MonthGrid(
                     today = state.today,
                     events = state.events,
                     holidays = state.holidays,
+                    weather = state.weather,
                     onDayClick = onDayClick,
                     drag = drag,
                     toGrid = { local -> Offset(local.x, headerHeight + week * weekHeight + local.y) },
@@ -169,6 +173,7 @@ private fun WeekRow(
     today: LocalDate,
     events: List<CalendarEvent>,
     holidays: Map<LocalDate, String>,
+    weather: MonthWeather,
     onDayClick: (LocalDate) -> Unit,
     drag: GridDrag?,
     toGrid: (Offset) -> Offset,
@@ -226,6 +231,18 @@ private fun WeekRow(
                     isHoliday = date in holidays,
                     modifier = Modifier.weight(1f).height(labelHeight),
                 )
+            }
+        }
+        // WX-03: 날짜 숫자 오른쪽 위에 하늘 아이콘(칸 높이는 그대로). 기온은 화면 위 머리에 둔다.
+        if (weather.enabled) {
+            Row(Modifier.fillMaxWidth().height(labelHeight)) {
+                repeat(7) { col ->
+                    val date = weekStart.plusDays(col.toLong())
+                    val day = weather.days[date]?.takeIf { weather.allMonthCells || date == today }
+                    Box(Modifier.weight(1f).fillMaxHeight().padding(top = 3.dp, end = 4.dp), contentAlignment = Alignment.TopEnd) {
+                        if (day != null) WeatherBadge(day, weather.stale, showTemps = false, iconSize = 12.dp)
+                    }
+                }
             }
         }
         if (hasHoliday) {

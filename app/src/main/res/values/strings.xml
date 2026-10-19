@@ -181,4 +181,18 @@
     <string name="settings_section_dday">디데이</string>
     <string name="settings_dday_note">고정한 일정의 남은 날을 디데이 위젯에 띄웁니다. 일정 편집 시트에서 \'디데이로 고정\'을 누르거나 여기서 일정을 찾아 고정합니다.</string>
     <string name="settings_open_dday">디데이 관리</string>
+    <string name="settings_section_weather">날씨</string>
+    <string name="settings_weather">날짜 옆에 날씨 보기</string>
+    <string name="settings_weather_note">10일 예보를 3시간마다 받아 주·3일·목록 보기 날짜 머리, 날짜 시트, 오늘 칸에 붙입니다.</string>
+    <string name="settings_weather_region">지역 직접 선택</string>
+    <string name="settings_weather_coarse">대략 위치</string>
+    <string name="settings_weather_place">예보 위치: %1$s</string>
+    <string name="settings_weather_no_place">예보 위치를 고르세요</string>
+    <string name="settings_weather_pick_region">지역 고르기</string>
+    <string name="settings_weather_region_hint">시·군·구 이름(예: 강남, 수원 장안)</string>
+    <string name="settings_weather_denied">위치 권한이 없어 지역 직접 선택을 씁니다.</string>
+    <string name="settings_weather_month_cells">월 보기에서 예보가 있는 모든 칸에 아이콘</string>
+    <string name="settings_weather_fetched">%1$s에 받은 예보</string>
+    <string name="settings_weather_cancel">닫기</string>
+    <string name="settings_weather_location_failed">위치를 읽지 못했습니다. 위치 서비스를 켜거나 지역을 직접 고르세요.</string>
 </resources>

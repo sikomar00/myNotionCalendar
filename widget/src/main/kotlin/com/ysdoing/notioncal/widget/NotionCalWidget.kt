@@ -60,7 +60,10 @@ internal object MonthSession {
         val holidays by remember(month, settings.weekStart) {
             deps.holidays().observe(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart))
         }.collectAsState(if (sameGrid) initial.holidays else emptyMap())
-        WidgetContent(NotionCalWidget.uiState(month, today, settings, config, events, sync).copy(holidays = holidays), fontScale, framed)
+        val weather by remember(today, config.showWeather) {
+            if (config.showWeather) WidgetWeather.observe(deps.weather(), today) else kotlinx.coroutines.flow.flowOf(WidgetWeather())
+        }.collectAsState(WidgetWeather())
+        WidgetContent(NotionCalWidget.uiState(month, today, settings, config, events, sync).copy(holidays = holidays, weather = weather), fontScale, framed)
     }
 }
 

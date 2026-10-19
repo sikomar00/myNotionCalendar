@@ -45,6 +45,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var reminderScheduler: ReminderScheduler
 
+    @Inject
+    lateinit var weatherScheduler: com.ysdoing.notioncal.core.sync.WeatherScheduler
+
     /** null: 실행 표지를 확인하는 중(수 ms), true: 안전 모드로 시작(PF-10), false: 정상 시작. */
     private var safeMode by mutableStateOf<Boolean?>(null)
 
@@ -97,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     syncRequester.request(SyncTrigger.APP_OPEN)
                     // EX-02: 공휴일은 하루 한 번 폰의 공휴일 캘린더에서 다시 읽는다.
                     holidayScheduler.requestIfStale()
+                    weatherScheduler.requestIfStale() // WX-01 앱을 열 때 3시간이 지났으면
                 }
             }
         }

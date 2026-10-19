@@ -30,6 +30,9 @@ import java.time.LocalTime
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.data.HolidayRepository
 import com.ysdoing.notioncal.core.data.dday.DdayRepository
+import com.ysdoing.notioncal.core.data.weather.WeatherDay
+import com.ysdoing.notioncal.core.data.weather.WeatherHour
+import com.ysdoing.notioncal.core.data.weather.WeatherRepository
 
 /** 시간 입력(시작·종료). 종일 일정이면 null. */
 data class TimeRange(val start: LocalTime, val end: LocalTime)
@@ -67,6 +70,7 @@ class QuickSheetViewModel @Inject constructor(
     private val writer: EventWriter,
     private val holidays: HolidayRepository,
     private val ddays: DdayRepository,
+    private val weather: WeatherRepository,
 ) : ViewModel() {
     private val date = MutableStateFlow<LocalDate?>(null)
 
@@ -84,6 +88,19 @@ class QuickSheetViewModel @Inject constructor(
         .flatMapLatest { d -> if (d == null) flowOf(emptyMap()) else holidays.observe(d, d) }
         .map { it.values.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** WX-03 그날 예보(하루 요약 + 3시간 간격). 날씨를 끄거나 예보가 없으면 비어 있다. */
+    val dayWeather: StateFlow<DayWeather> = date
+        .flatMapLatest { d ->
+            if (d == null) {
+                flowOf(DayWeather())
+            } else {
+                combine(weather.observeDays(d, d), weather.observeHoursOn(d), weather.observeStatus()) { days, hours, status ->
+                    DayWeather(days[d], hours, status.stale, status.fetchedAt)
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayWeather())
 
     /** 추가할 수 있는 DB(앱에서 켠 일정 DB). 습관 기록은 습관 화면·위젯에서만 만든다. */
     val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeCalendarSources()
@@ -144,4 +161,14 @@ class QuickSheetViewModel @Inject constructor(
             onTrashed()
         }
     }
+}
+
+/** 날짜 시트 위쪽 날씨(WX-03). [fetchedAt]은 받아온 시각(오래됐으면 함께 보인다). */
+data class DayWeather(
+    val day: WeatherDay? = null,
+    val hours: List<WeatherHour> = emptyList(),
+    val stale: Boolean = false,
+    val fetchedAt: java.time.Instant? = null,
+) {
+    val isEmpty: Boolean get() = day == null && hours.isEmpty()
 }

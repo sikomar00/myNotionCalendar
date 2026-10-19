@@ -20,12 +20,14 @@ abstract class NotionCalWidgetReceiverBase : GlanceAppWidgetReceiver() {
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
-        val pending = goAsync()
+        // GlanceAppWidgetReceiver가 이 브로드캐스트에서 이미 goAsync()를 불렀으면 null이 온다(위젯을 지울 때 NPE로 죽었다, 2026-10-20 실기기).
+        // 그때는 Glance가 잡은 비동기 결과가 프로세스를 붙잡고 있으므로 설정 지우기만 띄운다.
+        val pending: PendingResult? = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 WidgetDependencies.from(context).widgetConfigs().delete(appWidgetIds.toList())
             } finally {
-                pending.finish()
+                pending?.finish()
             }
         }
     }
