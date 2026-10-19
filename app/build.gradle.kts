@@ -47,6 +47,7 @@ dependencies {
     implementation(project(":core:sync"))
     implementation(project(":feature:diagnostics"))
     implementation(project(":feature:habit"))
+    implementation(project(":feature:ledger"))
     implementation(project(":feature:month"))
     implementation(project(":feature:quicksheet"))
     implementation(project(":widget"))

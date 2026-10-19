@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -18,11 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 
-/** 첫 화면의 하단 탭(사용자 결정 2026-10-19). 💰는 Phase 7에 붙인다. */
-enum class HomeTab { CALENDAR, HABIT }
+/** 첫 화면의 하단 탭(사용자 결정 2026-10-19): 📅 달력 · ✅ 습관 · 💰 가계부. */
+enum class HomeTab { CALENDAR, HABIT, LEDGER }
 
 /**
- * 하단 탭으로 달력과 습관을 오간다. 탭마다 저장 상태를 따로 두어(SaveableStateHolder) 습관 탭에 다녀와도 월 화면의
+ * 하단 탭으로 달력·습관·가계부를 오간다. 탭마다 저장 상태를 따로 두어(SaveableStateHolder) 습관 탭에 다녀와도 월 화면의
  * 보던 달·보기가 그대로다(ViewModel은 같은 화면 항목에 남는다). 아래 시스템 막대 인셋은 탭 막대가 맡고, 안쪽 화면의
  * Scaffold는 남은 인셋만 쓴다(consumeWindowInsets).
  */
@@ -32,6 +33,7 @@ fun HomeTabs(
     onTabChange: (HomeTab) -> Unit,
     calendar: @Composable () -> Unit,
     habit: @Composable () -> Unit,
+    ledger: @Composable () -> Unit,
 ) {
     val holder = rememberSaveableStateHolder()
     Scaffold(
@@ -51,6 +53,13 @@ fun HomeTabs(
                     label = { Text(stringResource(R.string.tab_habit)) },
                     modifier = Modifier.testTag("tabHabit"),
                 )
+                NavigationBarItem(
+                    selected = tab == HomeTab.LEDGER,
+                    onClick = { onTabChange(HomeTab.LEDGER) },
+                    icon = { Icon(Icons.Filled.ShoppingCart, contentDescription = null) },
+                    label = { Text(stringResource(R.string.tab_ledger)) },
+                    modifier = Modifier.testTag("tabLedger"),
+                )
             }
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -60,6 +69,7 @@ fun HomeTabs(
                 when (tab) {
                     HomeTab.CALENDAR -> calendar()
                     HomeTab.HABIT -> habit()
+                    HomeTab.LEDGER -> ledger()
                 }
             }
         }

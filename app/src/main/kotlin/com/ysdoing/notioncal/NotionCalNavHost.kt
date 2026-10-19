@@ -13,6 +13,7 @@ import com.ysdoing.notioncal.core.data.AppFailure
 import com.ysdoing.notioncal.feature.diagnostics.BatteryGuideCard
 import com.ysdoing.notioncal.feature.diagnostics.DiagnosticsRoute
 import com.ysdoing.notioncal.feature.habit.HabitRoute
+import com.ysdoing.notioncal.feature.ledger.LedgerRoute
 import com.ysdoing.notioncal.feature.month.MonthRoute
 import com.ysdoing.notioncal.feature.month.SearchRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
@@ -88,6 +89,7 @@ fun NotionCalNavHost(
                     )
                 },
                 habit = { HabitRoute(onOpenSettings = openSettings) },
+                ledger = { LedgerRoute(onOpenSettings = openSettings) },
             )
         }
         composable(Routes.SEARCH) {

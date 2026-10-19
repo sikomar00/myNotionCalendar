@@ -36,6 +36,7 @@ class HomeTabsTest {
                         Button(onClick = { month++ }) { Text("${month}월") }
                     },
                     habit = { Text("습관 화면") },
+                    ledger = { Text("가계부 화면") },
                 )
             }
         }
@@ -45,6 +46,9 @@ class HomeTabsTest {
         compose.onNodeWithTag("tabHabit").performClick()
         compose.onNodeWithText("습관 화면").assertExists()
         compose.onNodeWithText("11월").assertDoesNotExist()
+
+        compose.onNodeWithTag("tabLedger").performClick()
+        compose.onNodeWithText("가계부 화면").assertExists()
 
         compose.onNodeWithTag("tabCalendar").performClick()
         compose.onNodeWithText("11월").assertExists()
