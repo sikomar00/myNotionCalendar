@@ -17,6 +17,8 @@ data class MappingCandidates(
     val colors: List<PropertyOption>,
     /** select */
     val sorts: List<PropertyOption>,
+    /** relation(HB-01 ✅ 습관 기록의 '습관') */
+    val relations: List<PropertyOption> = emptyList(),
 )
 
 /** 등록 화면의 선택값. 모두 속성 ID다. */
@@ -45,6 +47,7 @@ object MappingSuggester {
             done = of("checkbox", "status"),
             colors = of("select", "status"),
             sorts = of("select"),
+            relations = of("relation"),
         )
     }
 

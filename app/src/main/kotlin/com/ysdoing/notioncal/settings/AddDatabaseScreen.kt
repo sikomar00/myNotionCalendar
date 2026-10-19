@@ -32,6 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -53,9 +56,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.sync.DatabaseInspection
+import com.ysdoing.notioncal.core.sync.MappingChoice
 import com.ysdoing.notioncal.core.sync.PropertyOption
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddDatabaseRoute(
     onDone: () -> Unit,
@@ -117,52 +123,140 @@ fun AddDatabaseRoute(
             }
             val choice = ui.choice
             if (choice == null) {
-                Text(stringResource(R.string.add_db_no_date), color = MaterialTheme.colorScheme.error)
+                // HB-01: 🌱 습관(날짜 없음, relation 있음) 링크를 넣었으면 ✅ 습관 기록 링크를 넣으라고 안내한다.
+                val message = if (inspection.looksLikeHabitDatabase) R.string.add_db_habit_link_hint else R.string.add_db_no_date
+                Text(stringResource(message), color = MaterialTheme.colorScheme.error)
                 return@Column
+            }
+            // HB-01: 📅 Calendar에도 relation이 있으므로 '습관 기록' 종류는 사용자가 고른다.
+            if (inspection.logSuggestion != null) {
+                Text(stringResource(R.string.add_db_kind), style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow {
+                    listOf(AddKind.CALENDAR to R.string.add_db_kind_calendar, AddKind.HABIT_LOG to R.string.add_db_kind_habit_log)
+                        .forEachIndexed { index, (kind, label) ->
+                            SegmentedButton(
+                                selected = ui.kind == kind,
+                                onClick = { viewModel.setKind(kind) },
+                                shape = SegmentedButtonDefaults.itemShape(index, 2),
+                                icon = {},
+                            ) { Text(stringResource(label), maxLines = 1) }
+                        }
+                }
+                if (ui.kind == AddKind.HABIT_LOG) {
+                    Text(
+                        stringResource(R.string.add_db_kind_habit_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Text(
                 stringResource(R.string.add_db_preset_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val c = inspection.candidates
-            PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, choice.titlePropId, allowNone = false) { id ->
-                id?.let { viewModel.updateChoice { ch -> ch.copy(titlePropId = it) } }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, choice.datePropId, allowNone = false) { id ->
-                id?.let { viewModel.updateChoice { ch -> ch.copy(datePropId = it) } }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_done_prop), c.done, choice.donePropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(donePropId = id) }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_color_prop), c.colors, choice.colorPropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(colorPropId = id) }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_sort_prop), c.sorts, choice.sortPropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(sortPropId = id) }
+            if (ui.kind == AddKind.HABIT_LOG) {
+                HabitFields(ui, inspection, viewModel)
+            } else {
+                CalendarFields(inspection, choice, viewModel)
             }
 
             Text(stringResource(R.string.add_db_color), style = MaterialTheme.typography.titleSmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NotionColors.palette.forEach { (name, hex) ->
-                    val selected = ui.colorHex == hex
-                    Box(
-                        Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(NotionColors.argb(hex)))
-                            .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                            .semantics {
-                                contentDescription = name
-                                this.selected = selected
-                            }
-                            .clickable { viewModel.setColor(hex) },
-                    )
-                }
+            ColorChoices(ui.colorHex, viewModel::setColor)
+            Button(onClick = viewModel::register, enabled = ui.canRegister, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(if (ui.kind == AddKind.HABIT_LOG) R.string.add_db_register_habit else R.string.add_db_register))
             }
-            Button(onClick = viewModel::register, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.add_db_register))
-            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarFields(inspection: DatabaseInspection, choice: MappingChoice, viewModel: AddDatabaseViewModel) {
+    val c = inspection.candidates
+    PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, choice.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateChoice { ch -> ch.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, choice.datePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateChoice { ch -> ch.copy(datePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_done_prop), c.done, choice.donePropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(donePropId = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_color_prop), c.colors, choice.colorPropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(colorPropId = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_sort_prop), c.sorts, choice.sortPropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(sortPropId = id) }
+    }
+}
+
+/** HB-01: ✅ 습관 기록(제목·날짜·습관 연결)과 연결이 가리키는 🌱 습관(이름·이모지·주 목표·진행 중·시작일·순서)의 매핑. */
+@Composable
+private fun HabitFields(ui: AddDatabaseUi, inspection: DatabaseInspection, viewModel: AddDatabaseViewModel) {
+    val log = ui.logChoice ?: return
+    val c = inspection.candidates
+    PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, log.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, log.datePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(datePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_link_prop), c.relations, log.linkPropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(linkPropId = it) } }
+    }
+    val habit = ui.habit
+    if (habit.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    when {
+        habit.noRelation -> Text(stringResource(R.string.add_db_habit_no_relation), color = MaterialTheme.colorScheme.error)
+        habit.error == NotionError.NotShared -> Text(stringResource(R.string.add_db_habit_not_shared), color = MaterialTheme.colorScheme.error)
+        habit.error != null -> Text(habit.error.text(), color = MaterialTheme.colorScheme.error)
+    }
+    val target = habit.inspection ?: return
+    Text(stringResource(R.string.add_db_habit_section, target.target.name), style = MaterialTheme.typography.titleMedium)
+    val choice = habit.choice
+    if (choice == null) {
+        Text(stringResource(R.string.add_db_habit_no_title), color = MaterialTheme.colorScheme.error)
+        return
+    }
+    val h = target.candidates
+    PropertyDropdown(stringResource(R.string.add_db_habit_name), h.titles, choice.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateHabitChoice { ch -> ch.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_emoji), h.texts, choice.emoji, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(emoji = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_target), h.numbers, choice.weeklyTarget, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(weeklyTarget = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_active), h.checkboxes, choice.active, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(active = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_start), h.dates, choice.startDate, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(startDate = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_order), h.numbers, choice.sortOrder, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(sortOrder = id) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        NotionColors.palette.forEach { (name, hex) ->
+            val selected = colorHex == hex
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Color(NotionColors.argb(hex)))
+                    .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
+                    .semantics {
+                        contentDescription = name
+                        this.selected = selected
+                    }
+                    .clickable { onSelect(hex) },
+            )
         }
     }
 }

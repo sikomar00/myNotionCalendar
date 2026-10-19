@@ -385,13 +385,27 @@ private fun SourceRow(
     onChooseColor: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    // HB-01: 습관 DB(✅ 기록·🌱 습관)는 달력에 나오지 않아 색·보기 속성 설정이 없다. 종류만 밝힌다.
+    val calendar = source.sourceKind == SourceKind.CALENDAR
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
-        val colorLabel = stringResource(R.string.settings_color_button, source.name)
-        IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
-            Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
+        if (calendar) {
+            // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
+            val colorLabel = stringResource(R.string.settings_color_button, source.name)
+            IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
+                Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
+            }
         }
-        Text(source.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(start = if (calendar) 0.dp else 12.dp)) {
+            Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val kindLabel = when (source.sourceKind) {
+                SourceKind.HABIT_LOG -> R.string.settings_kind_habit_log
+                SourceKind.HABIT -> R.string.settings_kind_habit
+                else -> null
+            }
+            kindLabel?.let {
+                Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
         if (SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }) {
             Icon(
@@ -400,11 +414,13 @@ private fun SourceRow(
                 tint = MaterialTheme.colorScheme.error,
             )
         }
-        // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로도 연다(디자인 리뷰 2026-10-16).
-        TextButton(onClick = onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) {
-            Text(stringResource(R.string.settings_color_emphasis))
+        if (calendar) {
+            // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로도 연다(디자인 리뷰 2026-10-16).
+            TextButton(onClick = onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) {
+                Text(stringResource(R.string.settings_color_emphasis))
+            }
+            TextButton(onClick = onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
         }
-        TextButton(onClick = onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
         Switch(checked = source.enabled, onCheckedChange = onToggle)
         IconButton(onClick = onDelete) {
             Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.settings_delete_database, source.name))
