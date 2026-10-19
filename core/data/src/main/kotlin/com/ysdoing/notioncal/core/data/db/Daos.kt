@@ -11,13 +11,13 @@ import java.time.LocalDate
 
 @Dao
 interface EventDao {
-    /** [from]~[to]와 겹치는 일정(기간 일정 포함). 꺼 둔 DB는 제외한다. */
+    /** [from]~[to]와 겹치는 일정(기간 일정 포함). 꺼 둔 DB와 일정 DB가 아닌 것(✅ 습관 기록 등)은 제외한다. */
     @Query(
         """
         SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors,
           d.emphasisPropId AS emphasisPropId, d.emphasisOptionIds AS emphasisOptionIds FROM events e
         JOIN data_sources d ON e.dataSourceId = d.dataSourceId
-        WHERE d.enabled = 1 AND e.startDate <= :to AND COALESCE(e.endDate, e.startDate) >= :from
+        WHERE d.enabled = 1 AND d.kind = 'CALENDAR' AND e.startDate <= :to AND COALESCE(e.endDate, e.startDate) >= :from
         ORDER BY e.startDate, d.position, e.sortKey IS NULL, e.sortKey, e.startTime IS NOT NULL, e.startTime, e.title
         """,
     )
@@ -32,7 +32,7 @@ interface EventDao {
         SELECT e.*, d.colorHex AS sourceColorHex, d.useOptionColors AS useOptionColors,
           d.emphasisPropId AS emphasisPropId, d.emphasisOptionIds AS emphasisOptionIds FROM events e
         JOIN data_sources d ON e.dataSourceId = d.dataSourceId
-        WHERE d.enabled = 1 AND e.title LIKE '%' || :pattern || '%' ESCAPE '\'
+        WHERE d.enabled = 1 AND d.kind = 'CALENDAR' AND e.title LIKE '%' || :pattern || '%' ESCAPE '\'
         ORDER BY COALESCE(e.endDate, e.startDate) < :today,
           CASE WHEN COALESCE(e.endDate, e.startDate) >= :today THEN e.startDate END ASC,
           CASE WHEN COALESCE(e.endDate, e.startDate) < :today THEN e.startDate END DESC,
@@ -98,8 +98,16 @@ interface DataSourceDao {
     @Query("SELECT * FROM data_sources ORDER BY position, name")
     fun observeAll(): Flow<List<DataSourceEntity>>
 
+    /** 종류별 목록(SourceKind 이름). 달력 화면·퀵 추가·위젯 설정은 CALENDAR만 쓴다. */
+    @Query("SELECT * FROM data_sources WHERE kind = :kind ORDER BY position, name")
+    fun observeByKind(kind: String): Flow<List<DataSourceEntity>>
+
     @Query("SELECT * FROM data_sources WHERE enabled = 1 ORDER BY position, name")
     suspend fun enabled(): List<DataSourceEntity>
+
+    /** HB-01: [habitSourceId](🌱 습관)를 짝으로 둔 ✅ 습관 기록 DB. */
+    @Query("SELECT * FROM data_sources WHERE linkDataSourceId = :habitSourceId")
+    suspend fun linkedTo(habitSourceId: String): List<DataSourceEntity>
 
     @Query("SELECT * FROM data_sources WHERE dataSourceId = :id")
     suspend fun get(id: String): DataSourceEntity?

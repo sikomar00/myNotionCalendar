@@ -103,7 +103,7 @@ class MonthViewModel @Inject constructor(
     private val filter = settingsRepository.settings.map { it.filter }.distinctUntilChanged()
 
     /** MV-09 필터 시트에 보일 켜 둔 DB와 색 기준 값. */
-    val filterSources: StateFlow<List<FilterSource>> = dataSourceRepository.observeAll()
+    val filterSources: StateFlow<List<FilterSource>> = dataSourceRepository.observeCalendarSources()
         .map { sources ->
             sources.filter { it.enabled }.map { source ->
                 FilterSource(

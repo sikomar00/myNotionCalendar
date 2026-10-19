@@ -32,10 +32,18 @@ class EventDaoTest {
     @After
     fun tearDown() = db.close()
 
-    private fun source(id: String, color: String = "#0B6E99", enabled: Boolean = true, position: Int = 0) = DataSourceEntity(
-        dataSourceId = id, databaseId = "db-$id", name = id, colorHex = color, titlePropId = "title", datePropId = "d",
+    private fun source(
+        id: String,
+        color: String = "#0B6E99",
+        enabled: Boolean = true,
+        position: Int = 0,
+        kind: SourceKind = SourceKind.CALENDAR,
+        link: String? = null,
+    ) = DataSourceEntity(
+        dataSourceId = id, databaseId = "db-$id", name = id, colorHex = color, titlePropId = "title",
+        datePropId = if (kind == SourceKind.HABIT) null else "d",
         donePropId = null, doneType = null, doneOption = null, undoneOption = null, colorPropId = null, sortPropId = null,
-        enabled = enabled, position = position,
+        enabled = enabled, position = position, kind = kind.name, linkDataSourceId = link,
     )
 
     private fun event(id: String, ds: String, start: String, end: String? = null, colorKey: String? = null, sortKey: Int? = null) =
@@ -93,5 +101,52 @@ class EventDaoTest {
         )
         DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None).delete("ds")
         assertEquals(emptyList<String>(), db.eventDao().pageIdsInRange("ds", LocalDate.of(1900, 1, 1), LocalDate.of(2999, 12, 31)))
+    }
+
+    /** Phase 6: ✅ 습관 기록 행(events의 다른 종류)은 달력·검색·일정 위젯 조회에 섞이지 않는다. */
+    @Test
+    fun habitLogRowsStayOutOfCalendarAndSearch() = runTest {
+        db.dataSourceDao().upsert(source("cal"))
+        db.dataSourceDao().upsert(source("log", kind = SourceKind.HABIT_LOG, link = "habits"))
+        db.eventDao().upsert(
+            listOf(event("meeting", "cal", "2026-10-19"), event("명상 2026-10-19", "log", "2026-10-19").copy(linkPageId = "h1")),
+        )
+        assertEquals(listOf("meeting"), ids("2026-10-01", "2026-10-31"))
+        assertEquals(emptyList<String>(), repo.search("명상", LocalDate.parse("2026-10-19")).map { it.pageId })
+        assertEquals(listOf("meeting"), repo.search("meeting", LocalDate.parse("2026-10-19")).map { it.pageId })
+    }
+
+    /** 화면의 DB 목록(필터·퀵 추가 칩·위젯 설정)은 일정 DB만, 설정 화면은 전체. */
+    @Test
+    fun calendarSourcesExcludeHabitDatabases() = runTest {
+        db.dataSourceDao().upsert(source("cal", position = 0))
+        db.dataSourceDao().upsert(source("log", position = 1, kind = SourceKind.HABIT_LOG, link = "habits"))
+        db.dataSourceDao().upsert(source("habits", position = 2, kind = SourceKind.HABIT))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+        assertEquals(listOf("cal"), repository.observeCalendarSources().first().map { it.dataSourceId })
+        assertEquals(listOf("cal", "log", "habits"), repository.observeAll().first().map { it.dataSourceId })
+    }
+
+    /** HB-01: 습관 기록과 🌱 습관은 한 쌍이라 켜기·끄기와 삭제를 함께 한다. 삭제하면 습관 캐시와 기록 캐시도 지운다. */
+    @Test
+    fun habitPairIsToggledAndDeletedTogether() = runTest {
+        db.dataSourceDao().upsert(source("cal"))
+        db.dataSourceDao().upsert(source("log", kind = SourceKind.HABIT_LOG, link = "habits"))
+        db.dataSourceDao().upsert(source("habits", kind = SourceKind.HABIT))
+        db.habitDao().insert(listOf(com.ysdoing.notioncal.core.data.db.HabitEntity("h1", "habits", "명상", null, 7, true, null, null)))
+        db.eventDao().upsert(listOf(event("r1", "log", "2026-10-19").copy(linkPageId = "h1"), event("c1", "cal", "2026-10-19")))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+
+        repository.setEnabled("habits", false)
+        assertEquals(false, db.dataSourceDao().get("log")!!.enabled)
+        repository.setEnabled("log", true)
+        assertEquals(true, db.dataSourceDao().get("habits")!!.enabled)
+
+        repository.delete("log")
+        assertEquals(null, db.dataSourceDao().get("log"))
+        assertEquals(null, db.dataSourceDao().get("habits"))
+        assertEquals(emptyList<Any>(), db.habitDao().forSource("habits"))
+        assertEquals(null, db.eventDao().get("r1"))
+        assertEquals("c1", db.eventDao().get("c1")!!.pageId)
     }
 }

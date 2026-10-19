@@ -61,6 +61,8 @@ import androidx.compose.ui.semantics.Role
 import com.ysdoing.notioncal.core.data.parseIdList
 import com.ysdoing.notioncal.core.data.selectableExtraProps
 import com.ysdoing.notioncal.core.data.AppSettings
+import com.ysdoing.notioncal.core.data.SourceKind
+import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.sync.ConnectionResult
@@ -192,7 +194,8 @@ fun SettingsRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            val enabled = sources.filter { it.enabled }
+            // WI-02 퀵 추가 기본 DB는 일정 DB 중에서만 고른다(습관 기록은 습관 화면에서 만든다).
+            val enabled = sources.filter { it.enabled && it.sourceKind == SourceKind.CALENDAR }
             if (enabled.size > 1) {
                 Text(stringResource(R.string.settings_default_database))
                 val current = settings.defaultDataSourceId?.takeIf { id -> enabled.any { it.dataSourceId == id } } ?: enabled.first().dataSourceId

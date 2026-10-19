@@ -132,7 +132,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
-            loaded = Loaded(settings, events, deps.dataSources().observeAll().first())
+            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first())
         }
         val data = loaded ?: return
 

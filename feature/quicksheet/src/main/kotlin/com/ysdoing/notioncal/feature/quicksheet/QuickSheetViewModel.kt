@@ -83,8 +83,8 @@ class QuickSheetViewModel @Inject constructor(
         .map { it.values.firstOrNull() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** 추가할 수 있는 DB(앱에서 켠 것). */
-    val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeAll()
+    /** 추가할 수 있는 DB(앱에서 켠 일정 DB). 습관 기록은 습관 화면·위젯에서만 만든다. */
+    val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeCalendarSources()
         .map { list -> list.filter { it.enabled } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
