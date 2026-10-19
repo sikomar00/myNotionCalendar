@@ -107,6 +107,9 @@ data class EventRow(
     val emphasisOptionIds: String? = null,
 )
 
+/** 습관 기록 한 건의 (습관 page ID, 날짜). */
+data class HabitLogRow(val habitId: String, val date: LocalDate)
+
 /** 동기화 기록(진단 화면·§3 지표). 오류 문구에 토큰·일정 제목을 넣지 않는다(SEC-02). */
 @Entity(tableName = "sync_log", indices = [Index("at")])
 data class SyncLogEntity(

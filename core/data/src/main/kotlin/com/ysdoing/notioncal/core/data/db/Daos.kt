@@ -42,6 +42,25 @@ interface EventDao {
     )
     suspend fun search(pattern: String, today: LocalDate, limit: Int): List<EventRow>
 
+    /** HB-04 습관 보드: 켜 둔 ✅ 습관 기록 DB의 (습관, 날짜). 같은 날 기록이 여러 개면 한 번만. */
+    @Query(
+        """
+        SELECT DISTINCT e.linkPageId AS habitId, e.startDate AS date FROM events e
+        JOIN data_sources d ON e.dataSourceId = d.dataSourceId
+        WHERE d.enabled = 1 AND d.kind = 'HABIT_LOG' AND e.linkPageId IS NOT NULL AND e.startDate BETWEEN :from AND :to
+        """,
+    )
+    fun observeHabitLogs(from: LocalDate, to: LocalDate): Flow<List<HabitLogRow>>
+
+    /** HB-02 해제: 그 습관·날짜의 기록 전부(노션에서 생긴 중복 포함, 아직 안 보낸 임시 행 포함). */
+    @Query(
+        """
+        SELECT e.pageId FROM events e JOIN data_sources d ON e.dataSourceId = d.dataSourceId
+        WHERE d.kind = 'HABIT_LOG' AND e.linkPageId = :habitId AND e.startDate = :date
+        """,
+    )
+    suspend fun habitLogIds(habitId: String, date: LocalDate): List<String>
+
     @Upsert
     suspend fun upsert(events: List<EventEntity>)
 

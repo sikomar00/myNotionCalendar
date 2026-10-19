@@ -3,7 +3,16 @@ package com.ysdoing.notioncal.core.sync
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.ysdoing.notioncal.core.data.DateValue
+import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.habit.HabitRepository
+import com.ysdoing.notioncal.core.data.db.HabitEntity
+import kotlinx.coroutines.test.TestScope
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
+import java.io.File
 import com.ysdoing.notioncal.core.data.EventWriter
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.SourceKind
@@ -40,6 +49,20 @@ class HabitOutboxTest {
     private lateinit var writer: EventWriter
 
     private fun processor() = OutboxProcessor(notion, notion, db, clock, WidgetRefresher.None, UnconfinedTestDispatcher())
+    private fun engine() = NotionSyncEngine(notion, db, clock, UnconfinedTestDispatcher(), WidgetRefresher.None)
+
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private fun TestScope.habits(): HabitRepository {
+        val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "settings.preferences_pb") }
+        return HabitRepository(db, writer, SettingsRepository(store, WidgetRefresher.None), clock)
+    }
+
+    private suspend fun seedMeditation() {
+        notion.seedHabit(FakeNotionStore.Habit("habit-meditate", "명상", start = "2026-10-01"))
+        db.habitDao().insert(listOf(HabitEntity("habit-meditate", HABITS, "명상", null, 7, true, LocalDate.of(2026, 10, 1), null)))
+    }
 
     @Before
     fun setUp() = runTest {
@@ -81,6 +104,38 @@ class HabitOutboxTest {
         val created = notion.pages.values.single { it.dataSourceId == FakeNotionStore.HABIT_LOG }
         assertEquals(null, db.eventDao().get(created.id))
         assertEquals(null, db.eventDao().get(tempId))
+    }
+
+    /** HB-02 완료 기준: 비행기 모드에서 체크 → 해제 → 체크 → 연결 후 노션에 기록 1개. */
+    @Test
+    fun offlineCheckUncheckCheckSendsOneLog() = runTest {
+        seedMeditation()
+        val repo = habits()
+        val today = LocalDate.of(2026, 10, 19)
+        notion.networkDown = true
+        repo.toggle("habit-meditate", today)
+        repo.toggle("habit-meditate", today)
+        repo.toggle("habit-meditate", today)
+        processor().process() // 연결 없음: 그대로 남는다
+        notion.networkDown = false
+        processor().process()
+
+        assertEquals(listOf("habit-meditate" to "2026-10-19"), notion.liveLogs())
+        assertEquals(1, notion.pages.values.count { it.dataSourceId == FakeNotionStore.HABIT_LOG })
+    }
+
+    /** HB-02 완료 기준: 노션에서 생긴 중복 2개인 날을 해제하면 둘 다 휴지통으로 간다. */
+    @Test
+    fun uncheckingDuplicatedDayTrashesBothInNotion() = runTest {
+        seedMeditation()
+        notion.seed("r1", "명상 2026-10-18", "2026-10-18", dataSourceId = LOG, habit = "habit-meditate")
+        notion.seed("r2", "명상 2026-10-18", "2026-10-18", dataSourceId = LOG, habit = "habit-meditate")
+        engine().sync(SyncTrigger.APP_OPEN)
+
+        habits().toggle("habit-meditate", LocalDate.of(2026, 10, 18))
+        processor().process()
+        assertTrue(notion.liveLogs().isEmpty())
+        assertTrue(notion.pages.getValue("r1").inTrash && notion.pages.getValue("r2").inTrash)
     }
 
     companion object {
