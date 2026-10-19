@@ -46,6 +46,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:sync"))
     implementation(project(":feature:diagnostics"))
+    implementation(project(":feature:habit"))
     implementation(project(":feature:month"))
     implementation(project(":feature:quicksheet"))
     implementation(project(":widget"))

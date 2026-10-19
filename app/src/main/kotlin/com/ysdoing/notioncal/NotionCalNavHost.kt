@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import com.ysdoing.notioncal.core.data.AppFailure
 import com.ysdoing.notioncal.feature.diagnostics.BatteryGuideCard
 import com.ysdoing.notioncal.feature.diagnostics.DiagnosticsRoute
+import com.ysdoing.notioncal.feature.habit.HabitRoute
 import com.ysdoing.notioncal.feature.month.MonthRoute
 import com.ysdoing.notioncal.feature.month.SearchRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
@@ -34,6 +35,7 @@ private object Routes {
  * [openDate]: 위젯에서 누른 날짜. 설정 화면에 있었더라도 월 화면으로 돌아와 그 날짜를 연다.
  * [safeMode]: 앞선 실행이 연달아 첫 화면 전에 끝났다. 월 화면 대신 진단 화면으로 시작한다(PF-10).
  * [failure]: 실행 중 DB를 열지 못하면 진단 화면으로 보낸다(PF-10).
+ * [openTab]: 위젯에서 연 하단 탭(습관 위젯 → 습관 탭).
  */
 @Composable
 fun NotionCalNavHost(
@@ -41,8 +43,22 @@ fun NotionCalNavHost(
     onOpenDateHandled: () -> Unit,
     safeMode: Boolean,
     failure: AppFailure?,
+    openTab: HomeTab? = null,
+    onOpenTabHandled: () -> Unit = {},
 ) {
     val nav = rememberNavController()
+    var tab by rememberSaveable { mutableStateOf(HomeTab.CALENDAR) }
+    // 위젯 날짜를 누르면 달력 탭에서 그 날짜를 연다.
+    LaunchedEffect(openDate) {
+        if (openDate != null) tab = HomeTab.CALENDAR
+    }
+    LaunchedEffect(openTab) {
+        if (openTab != null) {
+            tab = openTab
+            nav.popBackStack(Routes.MONTH, inclusive = false)
+            onOpenTabHandled()
+        }
+    }
     // MV-10: 검색 결과를 누르면 월 화면으로 돌아와 그 날짜를 연다(위젯 날짜와 같은 길).
     var searchDate by rememberSaveable { mutableStateOf<LocalDate?>(null) }
     LaunchedEffect(openDate) {
@@ -55,15 +71,23 @@ fun NotionCalNavHost(
     }
     NavHost(navController = nav, startDestination = if (safeMode) Routes.DIAGNOSTICS else Routes.MONTH) {
         composable(Routes.MONTH) {
-            MonthRoute(
-                onOpenSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } },
-                openDate = openDate ?: searchDate,
-                onOpenDateHandled = {
-                    if (openDate != null) onOpenDateHandled() else searchDate = null
+            val openSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } }
+            HomeTabs(
+                tab = tab,
+                onTabChange = { tab = it },
+                calendar = {
+                    MonthRoute(
+                        onOpenSettings = openSettings,
+                        openDate = openDate ?: searchDate,
+                        onOpenDateHandled = {
+                            if (openDate != null) onOpenDateHandled() else searchDate = null
+                        },
+                        onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
+                        onReconnect = { db, ds -> nav.navigate(Routes.reconnect(db, ds)) { launchSingleTop = true } },
+                        topBanner = { BatteryGuideCard() },
+                    )
                 },
-                onOpenSearch = { nav.navigate(Routes.SEARCH) { launchSingleTop = true } },
-                onReconnect = { db, ds -> nav.navigate(Routes.reconnect(db, ds)) { launchSingleTop = true } },
-                topBanner = { BatteryGuideCard() },
+                habit = { HabitRoute(onOpenSettings = openSettings) },
             )
         }
         composable(Routes.SEARCH) {

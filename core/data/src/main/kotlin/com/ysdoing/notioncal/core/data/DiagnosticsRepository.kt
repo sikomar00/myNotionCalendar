@@ -51,13 +51,14 @@ class DiagnosticsRepository @Inject constructor(
     }.combine(db.holidayDao().observeSource()) { diagnostics, holidays -> diagnostics.copy(holidaySource = holidays) }
 
     /**
-     * 노션에서 다시 받을 수 있는 것(일정 캐시, 동기화 기록, 충돌 기록)만 지우고 전체 재동기화를 요청한다.
+     * 노션에서 다시 받을 수 있는 것(일정·습관 기록 캐시, 🌱 습관 캐시, 동기화 기록, 충돌 기록)만 지우고 전체 재동기화를 요청한다.
      * 토큰·설정(DataStore), DB 등록, 위젯 설정, 아직 보내지 않은 쓰기와 그 일정은 남긴다.
      */
     suspend fun clearCache() {
         withContext(io) {
             db.withTransaction {
                 db.eventDao().deleteSynced()
+                db.habitDao().deleteAll()
                 db.syncLogDao().deleteAll()
                 db.conflictDao().deleteAll()
                 db.dataSourceDao().resetSyncCursors()

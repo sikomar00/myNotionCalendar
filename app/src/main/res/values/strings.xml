@@ -90,6 +90,8 @@
     <string name="add_db_no_date">이 DB에는 날짜 속성이 없어 달력에 표시할 수 없습니다.</string>
     <string name="settings_kind_habit_log">✅ 습관 기록 · 🌱 습관과 함께 켜고 지웁니다</string>
     <string name="settings_kind_habit">🌱 습관 · 습관 기록과 함께 켜고 지웁니다</string>
+    <string name="tab_calendar">달력</string>
+    <string name="tab_habit">습관</string>
     <string name="add_db_kind">종류</string>
     <string name="add_db_kind_calendar">일정</string>
     <string name="add_db_kind_habit_log">습관 기록</string>

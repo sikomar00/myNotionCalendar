@@ -50,12 +50,18 @@ class MainActivity : ComponentActivity() {
     /** 위젯 날짜 탭으로 받은 날짜(AppIntents.EXTRA_DATE). 화면이 처리하면 비운다. */
     private var openDate by mutableStateOf<LocalDate?>(null)
 
+    /** 습관 위젯에서 열었으면 습관 탭(AppIntents.EXTRA_TAB). */
+    private var openTab by mutableStateOf<HomeTab?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // targetSdk 37은 엣지 투 엣지가 기본이므로 인셋은 Scaffold로 처리한다(S25-08).
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val firstLaunch = savedInstanceState == null
-        if (firstLaunch) openDate = dateFrom(intent)
+        if (firstLaunch) {
+            openDate = dateFrom(intent)
+            openTab = tabFrom(intent)
+        }
         // PF-10: 실행 표지는 IO에서 확인한다. 프로세스 복원(회전·활동 유지 안 함)은 새 실행으로 세지 않는다.
         if (firstLaunch) lifecycleScope.launch { safeMode = health.onLaunchStarted() } else safeMode = false
         setContent {
@@ -70,6 +76,8 @@ class MainActivity : ComponentActivity() {
                         onOpenDateHandled = { openDate = null },
                         safeMode = safe,
                         failure = failure,
+                        openTab = openTab,
+                        onOpenTabHandled = { openTab = null },
                     )
                 }
             }
@@ -100,7 +108,11 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         dateFrom(intent)?.let { openDate = it }
+        tabFrom(intent)?.let { openTab = it }
     }
+
+    private fun tabFrom(intent: Intent?): HomeTab? =
+        HomeTab.HABIT.takeIf { intent?.getStringExtra(AppIntents.EXTRA_TAB) == AppIntents.TAB_HABIT }
 
     private fun dateFrom(intent: Intent?): LocalDate? =
         intent?.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
