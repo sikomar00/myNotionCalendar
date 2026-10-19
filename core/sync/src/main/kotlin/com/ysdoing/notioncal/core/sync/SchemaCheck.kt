@@ -29,6 +29,7 @@ internal object SchemaCheck {
             source.donePropId?.let { Triple(SchemaIssue.DONE, it, if (source.doneType == "STATUS") setOf("status") else setOf("checkbox")) },
             source.colorPropId?.let { Triple(SchemaIssue.COLOR, it, setOf("select", "status")) },
             source.sortPropId?.let { Triple(SchemaIssue.SORT, it, setOf("select")) },
+            source.linkPropId?.let { Triple(SchemaIssue.LINK, it, setOf("relation")) },
         )
         val issues = mutableListOf<SchemaIssue>()
         val names = mutableMapOf<String, String>()

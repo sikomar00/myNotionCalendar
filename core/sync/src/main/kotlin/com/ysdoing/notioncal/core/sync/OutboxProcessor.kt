@@ -117,6 +117,17 @@ class OutboxProcessor @Inject constructor(
         val existing = if (row.attempts > 0 && title != null) findCreated(row, source, title) else null
         val page = existing ?: writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
         db.withTransaction {
+            // HB-02: 보내는 사이 사용자가 지웠다(EventWriter.trash가 잠금 밖에서 임시 행과 이 작업을 지움). 만들어진 페이지를
+            // 반영하면 체크가 되살아나므로 반영하지 않고 휴지통 작업을 대신 쌓는다(같은 실행에서 이어 보낸다).
+            if (outbox.get(row.id) == null) {
+                outbox.insert(
+                    OutboxEntity(
+                        pageId = page.id, dataSourceId = source.dataSourceId, op = OutboxOp.TRASH.name, changes = "{}",
+                        baseValues = null, baseLastEdited = null, createdAt = clock.millis(),
+                    ),
+                )
+                return@withTransaction
+            }
             events.renamePage(row.pageId, page.id)
             outbox.renamePage(row.pageId, page.id)
             outbox.delete(row.id)
@@ -231,7 +242,9 @@ class OutboxProcessor @Inject constructor(
             return
         }
         val options = parseColorOptions(source.colorOptions)
-        var entity = remote.toEntity(source.dataSourceId).copy(pageId = pageId)
+        // 습관 연결을 매핑에서 뺀 동기화(NS-09)였다면 로컬에 있던 연결을 지우지 않는다.
+        val link = remote.linkPageId ?: events.get(pageId)?.linkPageId
+        var entity = remote.toEntity(source.dataSourceId).copy(pageId = pageId, linkPageId = link)
         remaining.forEach { entity = entity.applying(decodeChange(it.changes), options) }
         events.upsert(listOf(entity.copy(pendingOps = remaining.size)))
     }
@@ -312,4 +325,5 @@ internal fun EventChange.toPageWrite(catalog: List<ExtraProp> = emptyList()) = P
     setSelect = select != null,
     selectOptionId = select?.optionId,
     props = props.orEmpty().toPropertyWrites(catalog),
+    link = link,
 )

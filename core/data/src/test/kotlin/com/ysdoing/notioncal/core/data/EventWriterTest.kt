@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -136,5 +137,27 @@ class EventWriterTest {
         val event = db.eventDao().get("p1")!!
         assertEquals(false, event.isAllDay)
         assertEquals(start, event.startTime)
+    }
+
+    /** HB-02: 습관 체크는 relation(link)을 담은 CREATE다. 로컬 행에도 바로 습관 연결이 보인다. */
+    @Test
+    fun createWithLinkStoresLinkLocallyAndInOutbox() = runTest {
+        seed()
+        val id = writer.create("ds", "명상 2026-10-19", DateValue.allDay(LocalDate.of(2026, 10, 19)), link = "habit-meditate")
+        assertEquals("habit-meditate", db.eventDao().get(id)!!.linkPageId)
+        val change = OutboxJson.decodeFromString(EventChange.serializer(), db.outboxDao().all().single().changes)
+        assertEquals("habit-meditate", change.link)
+        assertEquals(EventChange(link = "h").mergedWith(EventChange(title = "x")).link, "h")
+        assertFalse(EventChange(link = "h").isEmpty)
+    }
+
+    /** 휴지통 작업이 거절(400)돼 되돌릴 때도 습관 연결이 남도록 사본에 담는다. */
+    @Test
+    fun trashSnapshotKeepsLink() = runTest {
+        seed()
+        db.eventDao().upsert(listOf(db.eventDao().get("p1")!!.copy(linkPageId = "habit-meditate")))
+        writer.trash("p1")
+        val snapshot = OutboxJson.decodeFromString(EventSnapshot.serializer(), db.outboxDao().all().single().baseValues!!)
+        assertEquals("habit-meditate", snapshot.toEntity().linkPageId)
     }
 }

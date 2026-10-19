@@ -29,10 +29,13 @@ class EventWriter @Inject constructor(
     private val events get() = db.eventDao()
     private val outbox get() = db.outboxDao()
 
-    /** WI-02: 새 일정. 노션 응답을 받기 전까지 임시 ID([TEMP_PREFIX])를 쓴다. */
-    suspend fun create(dataSourceId: String, title: String, date: DateValue): String {
+    /**
+     * WI-02: 새 일정. 노션 응답을 받기 전까지 임시 ID([TEMP_PREFIX])를 쓴다.
+     * HB-02: [link]를 주면 ✅ 습관 기록으로 만들어 relation에 그 🌱 습관을 건다.
+     */
+    suspend fun create(dataSourceId: String, title: String, date: DateValue, link: String? = null): String {
         val pageId = TEMP_PREFIX + UUID.randomUUID()
-        val change = EventChange(title = title.trim(), date = date, done = false)
+        val change = EventChange(title = title.trim(), date = date, done = false, link = link)
         db.withTransaction {
             val base = EventEntity(
                 pageId = pageId, dataSourceId = dataSourceId, title = "", startDate = LocalDate.parse(date.startDate),

@@ -1,0 +1,18 @@
+{
+  "object": "data_source",
+  "id": "bbbbbbbb-0000-4000-8000-000000000002",
+  "title": [{ "type": "text", "plain_text": "✅ 습관 기록" }],
+  "properties": {
+    "이름": { "id": "title", "name": "이름", "type": "title", "title": {} },
+    "날짜": { "id": "nAlJ", "name": "날짜", "type": "date", "date": {} },
+    "습관": {
+      "id": "sB%3Fg", "name": "습관", "type": "relation",
+      "relation": {
+        "database_id": "cccccccc-0000-4000-8000-0000000000db",
+        "data_source_id": "cccccccc-0000-4000-8000-000000000003",
+        "type": "dual_property",
+        "dual_property": { "synced_property_name": "기록", "synced_property_id": "gIrO" }
+      }
+    }
+  }
+}

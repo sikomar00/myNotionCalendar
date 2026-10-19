@@ -119,4 +119,23 @@ class NotionPageMapperTest {
         assertEquals("Untitled", plain.title)
         assertFalse(plain.titleHasMention)
     }
+
+    /** HB-02: ✅ 습관 기록의 '습관' relation이 가리키는 🌱 습관 page ID를 읽는다. 연결이 비면 null. */
+    @Test
+    fun habitLogReadsRelationTarget() {
+        val logMapping = PropertyMapping("title", "nAlJ", null, null, null, null, linkPropId = "sB%3Fg")
+        val schema = schema("data_source_habit_log.json")
+        val (linked, unlinked) = pages("query_habit_log.json").map { NotionPageMapper(logMapping, schema).map(it).event!! }
+        assertEquals("habit-meditate", linked.linkPageId)
+        assertEquals("명상 2026-10-19", linked.title)
+        assertEquals(LocalDate.of(2026, 10, 19), linked.startDate)
+        assertNull(unlinked.linkPageId)
+        // 연결 속성을 매핑하지 않으면(📅 Calendar 등) relation을 읽지 않는다.
+        val plain = NotionPageMapper(logMapping.copy(linkPropId = null), schema).map(pages("query_habit_log.json").first()).event!!
+        assertNull(plain.linkPageId)
+        // 스키마의 relation 대상(HB-01 등록 때 🌱 습관을 찾는 데 쓴다).
+        val relation = schema.properties.getValue("습관").relation!!
+        assertEquals("cccccccc-0000-4000-8000-000000000003", relation.dataSourceId)
+        assertEquals("cccccccc-0000-4000-8000-0000000000db", relation.databaseId)
+    }
 }

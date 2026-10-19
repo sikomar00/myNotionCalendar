@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -20,8 +21,10 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
- * 메모리 노션(읽기·쓰기). 📅 Calendar 구조(Name·Date·완료 checkbox·Ctgr select)를 흉내 낸다.
- * 실패 주입: [networkDown], [createTimesOutAfterCreating], [rejectNext].
+ * 메모리 노션(읽기·쓰기). data source마다 따로 둔다.
+ * - [CALENDAR]: 📅 Calendar 구조(Name·Date·완료 checkbox·Ctgr select + EX-07 추가 속성)
+ * - [HABIT_LOG]: ✅ 습관 기록(이름·날짜·습관 relation), [HABITS]: 🌱 습관(이름·이모지·주 목표·진행 중·시작일·순서)
+ * 실패 주입: [networkDown], [createTimesOutAfterCreating], [rejectNext], [afterCreate].
  */
 class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWriter {
     data class Page(
@@ -39,9 +42,25 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
         var inTrash: Boolean = false,
         val createdTime: Instant,
         var lastEdited: Instant,
+        val dataSourceId: String = CALENDAR,
+        /** ✅ 습관 기록의 '습관' relation(🌱 습관 page ID). */
+        var habit: String? = null,
+    )
+
+    /** 🌱 습관 1행. 빈 값은 null. */
+    data class Habit(
+        val id: String,
+        var name: String,
+        var emoji: String? = null,
+        var target: Double? = null,
+        var active: Boolean? = true,
+        var start: String? = null,
+        var order: Double? = null,
+        var inTrash: Boolean = false,
     )
 
     val pages = linkedMapOf<String, Page>()
+    val habits = linkedMapOf<String, Habit>()
 
     /** 노션에 실제로 보낸 쓰기 순서(오프라인 10건 순서 검증용). */
     val writeLog = mutableListOf<String>()
@@ -49,11 +68,14 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     var createTimesOutAfterCreating = false
     var rejectNext = false
 
+    /** 생성 요청이 노션에 반영된 뒤, 응답이 돌아가기 전에 실행한다(전송 중 해제 경쟁 재현). 한 번 쓰면 지운다. */
+    var afterCreate: (suspend (PageDto) -> Unit)? = null
+
     private val options = mapOf("opt-event" to ("Event" to "yellow"), "opt-learn" to ("Learn" to "blue"), "opt-habit" to ("Habit" to "red"))
 
     val schema: DataSourceDto = NotionJson.decodeFromString(
         DataSourceDto.serializer(),
-        """{"id":"ds","properties":{
+        """{"id":"$CALENDAR","properties":{
             "Name":{"id":"title","name":"Name","type":"title"},
             "Date":{"id":"dAtE","name":"Date","type":"date"},
             "완료":{"id":"dOnE","name":"완료","type":"checkbox"},
@@ -68,9 +90,45 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             "URL":{"id":"uRl","name":"URL","type":"url"}}}""",
     )
 
-    fun seed(id: String, title: String, start: String, optionId: String? = null, editedAt: Instant = Instant.parse("2026-10-01T00:00:00Z")) {
-        pages[id] = Page(id, title, start, optionId = optionId, createdTime = editedAt, lastEdited = editedAt)
+    var logSchema: DataSourceDto = NotionJson.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"$HABIT_LOG","properties":{
+            "이름":{"id":"title","name":"이름","type":"title"},
+            "날짜":{"id":"nAlJ","name":"날짜","type":"date"},
+            "습관":{"id":"rEl","name":"습관","type":"relation","relation":{"data_source_id":"$HABITS","database_id":"db-habits"}}}}""",
+    )
+
+    var habitSchema: DataSourceDto = NotionJson.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"$HABITS","properties":{
+            "이름":{"id":"title","name":"이름","type":"title"},
+            "이모지":{"id":"eMoJ","name":"이모지","type":"rich_text"},
+            "주 목표":{"id":"gOaL","name":"주 목표","type":"number"},
+            "진행 중":{"id":"aCtV","name":"진행 중","type":"checkbox"},
+            "시작일":{"id":"sTrT","name":"시작일","type":"date"},
+            "순서":{"id":"oRdR","name":"순서","type":"number"},
+            "기록":{"id":"gIrO","name":"기록","type":"relation","relation":{"data_source_id":"$HABIT_LOG","database_id":"db-log"}}}}""",
+    )
+
+    fun seed(
+        id: String,
+        title: String,
+        start: String,
+        optionId: String? = null,
+        editedAt: Instant = Instant.parse("2026-10-01T00:00:00Z"),
+        dataSourceId: String = CALENDAR,
+        habit: String? = null,
+    ) {
+        pages[id] = Page(id, title, start, optionId = optionId, createdTime = editedAt, lastEdited = editedAt, dataSourceId = dataSourceId, habit = habit)
     }
+
+    fun seedHabit(habit: Habit) {
+        habits[habit.id] = habit
+    }
+
+    /** ✅ 습관 기록에 남은(휴지통 아닌) 기록: (습관 ID, 날짜). */
+    fun liveLogs(): List<Pair<String?, String?>> =
+        pages.values.filter { it.dataSourceId == HABIT_LOG && !it.inTrash }.map { it.habit to it.start }
 
     /**
      * 노션 앱(또는 자동화)에서 고친 것처럼 바꾼다. [sameMinute]이면 last_edited_time을 그대로 둔다
@@ -91,17 +149,29 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto {
         if (networkDown) throw NotionException(NotionError.Network)
-        return schema
+        return when (dataSourceId) {
+            HABIT_LOG -> logSchema
+            HABITS -> habitSchema
+            else -> schema
+        }
     }
 
     override suspend fun pageOrNull(pageId: String): PageDto? {
         if (networkDown) throw NotionException(NotionError.Network)
-        return pages[pageId]?.toDto()
+        return pages[pageId]?.toDto() ?: habits[pageId]?.toDto()
     }
+
+    /** 마지막 queryAll 필터(날짜 범위 확인용). */
+    val queries = mutableListOf<Pair<String, JsonObject?>>()
 
     override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult {
         if (networkDown) throw NotionException(NotionError.Network)
-        val live = pages.values.filter { !it.inTrash }
+        queries += dataSourceId to filter
+        if (dataSourceId == HABITS) {
+            require(filter == null) { "🌱 습관은 필터 없이 전체 조회한다" }
+            return QueryResult(habits.values.filter { !it.inTrash }.map { it.toDto() }, complete = true)
+        }
+        val live = pages.values.filter { !it.inTrash && it.dataSourceId == dataSourceId }
         val result = when {
             filter?.containsKey("timestamp") == true -> {
                 val since = OffsetDateTime.parse(filter["last_edited_time"]!!.jsonObject["on_or_after"]!!.jsonPrimitive.content).toInstant()
@@ -132,7 +202,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     override suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto {
         guard()
         val id = "page-" + UUID.randomUUID().toString().take(8)
-        val page = Page(id, "", null, createdTime = now(), lastEdited = now())
+        val page = Page(id, "", null, createdTime = now(), lastEdited = now(), dataSourceId = dataSourceId)
         page.applyProperties(properties)
         pages[id] = page
         writeLog += "CREATE ${page.title}"
@@ -140,7 +210,12 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             createTimesOutAfterCreating = false
             throw NotionException(NotionError.Network) // 서버에는 만들어졌지만 응답을 못 받음
         }
-        return page.toDto()
+        val dto = page.toDto()
+        afterCreate?.let { hook ->
+            afterCreate = null
+            hook(dto)
+        }
+        return dto
     }
 
     override suspend fun updatePage(pageId: String, properties: JsonObject): PageDto {
@@ -163,11 +238,18 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     /** 실제 노션처럼 속성 이름 키를 받는다(인코딩된 ID 키는 무시된다). */
     private fun Page.applyProperties(props: JsonObject) {
+        if (dataSourceId == HABIT_LOG) {
+            props["이름"]?.jsonObject?.get("title")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonObject?.get("content")
+                ?.jsonPrimitive?.content?.let { title = it }
+            props["날짜"]?.jsonObject?.get("date")?.jsonObject?.let { d -> start = d["start"]?.jsonPrimitive?.contentOrNull }
+            props["습관"]?.jsonObject?.get("relation")?.jsonArray?.let { arr -> habit = arr.firstOrNull()?.jsonObject?.get("id")?.jsonPrimitive?.content }
+            return
+        }
         props["Name"]?.jsonObject?.get("title")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonObject?.get("content")
             ?.jsonPrimitive?.content?.let { title = it }
         props["Date"]?.jsonObject?.get("date")?.jsonObject?.let { d ->
             start = d["start"]?.jsonPrimitive?.contentOrNull
-            end = (d["end"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+            end = (d["end"] as? JsonPrimitive)?.contentOrNull
         }
         props["완료"]?.jsonObject?.get("checkbox")?.jsonPrimitive?.booleanOrNull?.let { done = it }
         props["Ctgr"]?.jsonObject?.let { c ->
@@ -179,18 +261,29 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             pri = if (select == null || select is JsonNull) null else select.jsonObject["id"]?.jsonPrimitive?.content
         }
         props["Tags"]?.jsonObject?.get("multi_select")?.jsonArray?.let { arr -> tags = arr.map { it.jsonObject["id"]!!.jsonPrimitive.content } }
-        props["Cost"]?.jsonObject?.let { c -> cost = (c["number"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.toDouble() }
-        props["URL"]?.jsonObject?.let { c -> link = (c["url"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull }
+        props["Cost"]?.jsonObject?.let { c -> cost = (c["number"] as? JsonPrimitive)?.contentOrNull?.toDouble() }
+        props["URL"]?.jsonObject?.let { c -> link = (c["url"] as? JsonPrimitive)?.contentOrNull }
     }
+
+    private fun str(value: String) = NotionJson.encodeToString(kotlinx.serialization.serializer<String>(), value)
 
     private fun Page.toDto(): PageDto {
         val date = start?.let { """{"start":"$it","end":${end?.let { e -> "\"$e\"" } ?: "null"}}""" } ?: "null"
+        val head = """"id":"$id","url":"https://www.notion.so/$id","created_time":"$createdTime","last_edited_time":"$lastEdited","in_trash":$inTrash"""
+        if (dataSourceId == HABIT_LOG) {
+            return NotionJson.decodeFromString(
+                PageDto.serializer(),
+                """{$head,"properties":{
+                    "이름":{"id":"title","type":"title","title":[{"plain_text":${str(title)}}]},
+                    "날짜":{"id":"nAlJ","type":"date","date":$date},
+                    "습관":{"id":"rEl","type":"relation","relation":[${habit?.let { """{"id":"$it"}""" } ?: ""}]}}}""",
+            )
+        }
         val select = optionId?.let { id -> options[id]?.let { (name, color) -> """{"id":"$id","name":"$name","color":"$color"}""" } } ?: "null"
         return NotionJson.decodeFromString(
             PageDto.serializer(),
-            """{"id":"$id","url":"https://www.notion.so/$id","created_time":"$createdTime","last_edited_time":"$lastEdited",
-              "in_trash":$inTrash,"properties":{
-                "Name":{"id":"title","type":"title","title":[{"plain_text":${NotionJson.encodeToString(kotlinx.serialization.serializer<String>(), title)}}]},
+            """{$head,"properties":{
+                "Name":{"id":"title","type":"title","title":[{"plain_text":${str(title)}}]},
                 "Date":{"id":"dAtE","type":"date","date":$date},
                 "완료":{"id":"dOnE","type":"checkbox","checkbox":$done},
                 "Ctgr":{"id":"cTgR","type":"select","select":$select},
@@ -199,5 +292,22 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
                 "Cost":{"id":"cOs","type":"number","number":${cost ?: "null"}},
                 "URL":{"id":"uRl","type":"url","url":${link?.let { "\"$it\"" } ?: "null"}}}}""",
         )
+    }
+
+    private fun Habit.toDto(): PageDto = NotionJson.decodeFromString(
+        PageDto.serializer(),
+        """{"id":"$id","url":"https://www.notion.so/$id","last_edited_time":"2026-10-19T00:00:00Z","in_trash":$inTrash,"properties":{
+            "이름":{"id":"title","type":"title","title":[{"plain_text":${str(name)}}]},
+            "이모지":{"id":"eMoJ","type":"rich_text","rich_text":[${emoji?.let { """{"plain_text":${str(it)}}""" } ?: ""}]},
+            "주 목표":{"id":"gOaL","type":"number","number":${target ?: "null"}},
+            "진행 중":{"id":"aCtV","type":"checkbox","checkbox":${active ?: false}},
+            "시작일":{"id":"sTrT","type":"date","date":${start?.let { """{"start":"$it"}""" } ?: "null"}},
+            "순서":{"id":"oRdR","type":"number","number":${order ?: "null"}}}}""",
+    )
+
+    companion object {
+        const val CALENDAR = "ds"
+        const val HABIT_LOG = "log"
+        const val HABITS = "habits"
     }
 }

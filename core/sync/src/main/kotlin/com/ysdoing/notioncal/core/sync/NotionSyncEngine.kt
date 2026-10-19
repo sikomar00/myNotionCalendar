@@ -197,6 +197,7 @@ private fun DataSourceEntity.toMapping(datePropId: String, dropped: Set<String>)
     doneType = doneType?.let { runCatching { DoneType.valueOf(it) }.getOrNull() }.takeUnless { SchemaIssue.DONE in dropped },
     colorPropId = colorPropId.takeUnless { SchemaIssue.COLOR in dropped },
     sortPropId = sortPropId.takeUnless { SchemaIssue.SORT in dropped },
+    linkPropId = linkPropId.takeUnless { SchemaIssue.LINK in dropped },
 )
 
 internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
@@ -216,6 +217,7 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     colorOptionId = colorOptionId,
     extraValues = encodeExtraValues(extraValues.mapValues { it.value.toPropValue() }),
     titleHasMention = titleHasMention,
+    linkPageId = linkPageId,
 )
 
 /** 색 기준 속성(select·status)의 옵션 목록 JSON. 속성이 없으면 null. */

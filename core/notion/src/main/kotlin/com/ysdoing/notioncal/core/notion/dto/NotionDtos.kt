@@ -57,6 +57,13 @@ data class StatusSchemaDto(
     val groups: List<StatusGroupDto> = emptyList(),
 )
 
+/** relation 속성의 대상 DB(HB-01: ✅ 습관 기록의 '습관' → 🌱 습관). */
+@Serializable
+data class RelationSchemaDto(
+    @SerialName("data_source_id") val dataSourceId: String? = null,
+    @SerialName("database_id") val databaseId: String? = null,
+)
+
 @Serializable
 data class PropertySchemaDto(
     val id: String,
@@ -65,6 +72,7 @@ data class PropertySchemaDto(
     val select: SelectSchemaDto? = null,
     val status: StatusSchemaDto? = null,
     @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
+    val relation: RelationSchemaDto? = null,
 )
 
 @Serializable

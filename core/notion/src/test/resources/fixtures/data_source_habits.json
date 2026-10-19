@@ -1,0 +1,22 @@
+{
+  "object": "data_source",
+  "id": "cccccccc-0000-4000-8000-000000000003",
+  "title": [{ "type": "text", "plain_text": "🌱 습관" }],
+  "properties": {
+    "이름": { "id": "title", "name": "이름", "type": "title", "title": {} },
+    "이모지": { "id": "eMoJ", "name": "이모지", "type": "rich_text", "rich_text": {} },
+    "주 목표": { "id": "gOaL", "name": "주 목표", "type": "number", "number": { "format": "number" } },
+    "진행 중": { "id": "aCtV", "name": "진행 중", "type": "checkbox", "checkbox": {} },
+    "시작일": { "id": "sTrT", "name": "시작일", "type": "date", "date": {} },
+    "순서": { "id": "oRdR", "name": "순서", "type": "number", "number": { "format": "number" } },
+    "기록": {
+      "id": "gIrO", "name": "기록", "type": "relation",
+      "relation": {
+        "database_id": "bbbbbbbb-0000-4000-8000-0000000000db",
+        "data_source_id": "bbbbbbbb-0000-4000-8000-000000000002",
+        "type": "dual_property",
+        "dual_property": { "synced_property_name": "습관", "synced_property_id": "sB%3Fg" }
+      }
+    }
+  }
+}

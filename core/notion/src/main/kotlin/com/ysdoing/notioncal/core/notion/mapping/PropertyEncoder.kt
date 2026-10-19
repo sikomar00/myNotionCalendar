@@ -29,6 +29,8 @@ data class PageWrite(
     val selectOptionId: String? = null,
     /** EX-07: 추가 속성. 키는 속성 ID. */
     val props: Map<String, PropertyWrite> = emptyMap(),
+    /** HB-02: relation에 걸 page ID 하나(✅ 습관 기록 → 🌱 습관). */
+    val link: String? = null,
 )
 
 /** EX-07 추가 속성 쓰기 하나. [type]은 [ExtraTypes] 값. */
@@ -93,6 +95,12 @@ class PropertyEncoder(
             putJsonObject(keyFor(colorPropId)) {
                 val id = write.selectOptionId
                 if (id == null) put("select", JsonNull) else putJsonObject("select") { put("id", id) }
+            }
+        }
+        val linkPropId = mapping.linkPropId
+        if (write.link != null && linkPropId != null) {
+            putJsonObject(keyFor(linkPropId)) {
+                put("relation", buildJsonArray { add(buildJsonObject { put("id", write.link) }) })
             }
         }
         write.props.forEach { (propId, prop) ->
