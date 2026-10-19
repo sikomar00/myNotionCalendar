@@ -23,6 +23,18 @@ class MoneyFormatTest {
         assertEquals("0원", MoneyFormat.full(0))
     }
 
+    /** 지출은 '-', 수입·환불은 '+'를 붙인다(사용자 요구 2026-10-19). 숨김이어도 부호는 남긴다(색으로도 드러나므로). */
+    @Test
+    fun signedForm() {
+        assertEquals("-1.2만", MoneyFormat.signed(-12_300))
+        assertEquals("+6.3만", MoneyFormat.signed(63_000))
+        assertEquals("-9,800", MoneyFormat.signed(-9_800))
+        assertEquals("0", MoneyFormat.signed(0))
+        assertEquals("-12,300원", MoneyFormat.signed(-12_300, full = true))
+        assertEquals("+650,155원", MoneyFormat.signed(650_155, full = true))
+        assertEquals("-●●●", MoneyFormat.signed(-12_300, hidden = true))
+    }
+
     /** LD-06 금액 숨김: 숫자 대신 같은 표시. */
     @Test
     fun hidden() {

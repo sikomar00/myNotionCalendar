@@ -26,4 +26,18 @@ object MoneyFormat {
     }
 
     fun full(value: Long, hidden: Boolean = false): String = if (hidden) HIDDEN else grouped(value) + "원"
+
+    /**
+     * 부호를 붙인 표기: 지출은 음수로 넘겨 '-1.2만', 수입·환불은 '+6.3만'(사용자 요구 2026-10-19). [full]이면 '-12,300원'.
+     * 숨김이어도 부호는 남긴다(색으로도 드러난다).
+     */
+    fun signed(value: Long, hidden: Boolean = false, full: Boolean = false): String {
+        val sign = when {
+            value < 0 -> "-"
+            value > 0 -> "+"
+            else -> ""
+        }
+        val a = abs(value)
+        return sign + if (full) full(a, hidden) else short(a, hidden)
+    }
 }

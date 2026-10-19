@@ -552,6 +552,8 @@ class WidgetPalette private constructor(
     val track: ColorProvider,
     /** LD-03 수입 초록(노션 초록, 라이트 5.4:1). */
     val income: ColorProvider,
+    /** 가계부 지출 금액(파랑, '-' 표기와 함께). */
+    val expense: ColorProvider,
     /** HB-03 잔디 농도(낮음·중간·모두). */
     private val grass: List<ColorProvider>,
 ) {
@@ -657,7 +659,8 @@ class WidgetPalette private constructor(
                 sunday = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 saturday = pair(SATURDAY_LIGHT, SATURDAY_DARK),
                 track = pick({ it.track }),
-                income = pair(Color(0xFF0F7B6C), Color(0xFF4DAB9A)),
+                income = pair(Color(DesignTokens.Light.INCOME), Color(DesignTokens.Dark.INCOME)),
+                expense = pair(Color(DesignTokens.Light.EXPENSE), Color(DesignTokens.Dark.EXPENSE)),
                 grass = listOf(0.35f, 0.65f, 1f).map { a -> pick({ it.accent.copy(alpha = a) }) },
             )
         }

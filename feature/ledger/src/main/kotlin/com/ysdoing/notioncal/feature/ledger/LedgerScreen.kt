@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.feature.ledger
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,14 +13,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +34,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +47,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -49,18 +56,24 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ysdoing.notioncal.core.data.DesignTokens
+import com.ysdoing.notioncal.core.data.ledger.DayEntry
 import com.ysdoing.notioncal.core.data.ledger.DayMoney
 import com.ysdoing.notioncal.core.data.ledger.DuplicateGroup
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.data.ledger.LedgerTx
 import com.ysdoing.notioncal.core.data.ledger.MoneyFormat
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
 
-/** 💰 탭(LD-03~10): 이번 달 요약·주 예산 줄·월 그리드, 중복·확인 필요·정리 대상 카드. '거래 추가'·날짜 탭은 LD-07 입력 시트. */
+/**
+ * 💰 탭(LD-03~10): 이번 달 요약·주 예산 줄·월 그리드, 중복·확인 필요·정리 대상 카드.
+ * 날짜를 누르면 그리드 아래에 그 날 거래 목록을 보이고, '거래 추가'·'이 날 추가'는 LD-07 입력 시트를 연다.
+ */
 @Composable
 fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltViewModel()) {
     val board by viewModel.board.collectAsStateWithLifecycle()
@@ -80,7 +93,6 @@ fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltVie
             onDelete = viewModel::trash,
             onConvert = viewModel::convertPlanned,
             onAdd = openInput,
-            onDayClick = openInput,
         ),
     )
 }
@@ -94,7 +106,6 @@ data class LedgerActions(
     val onDelete: (String) -> Unit = {},
     val onConvert: (String) -> Unit = {},
     val onAdd: ((LocalDate) -> Unit)? = null,
-    val onDayClick: ((LocalDate) -> Unit)? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,34 +116,50 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
             TopAppBar(
                 title = { Text(stringResource(R.string.ledger_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold) },
                 actions = {
+                    // '거래 추가'(오늘)는 위쪽 막대에 둔다. 떠 있는 버튼은 날짜 목록의 금액을 가렸다.
+                    val onAdd = actions.onAdd
+                    if (board?.registered == true && onAdd != null) {
+                        IconButton(onClick = { onAdd(board.today) }) {
+                            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.ledger_add))
+                        }
+                    }
                     IconButton(onClick = actions.onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.ledger_settings))
                     }
                 },
             )
         },
-        floatingActionButton = {
-            val onAdd = actions.onAdd
-            if (board?.registered == true && onAdd != null) {
-                FloatingActionButton(onClick = { onAdd(board.today) }) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.ledger_add))
-                }
-            }
-        },
     ) { padding ->
         when {
             board == null -> Unit
             !board.registered -> EmptyLedger(actions.onOpenSettings, Modifier.padding(padding))
-            // 아래 여백: '거래 추가' 버튼이 그리드 마지막 줄을 가리지 않게.
-            else -> LazyColumn(Modifier.padding(padding).fillMaxSize().testTag("ledgerList"), contentPadding = PaddingValues(bottom = 88.dp)) {
-                item { MonthNav(board.month, actions.onShiftMonth) }
-                item { Summary(board) }
-                item { WeekBudget(board) }
+            else -> {
+                // 고른 날(처음은 오늘). 달을 바꾸면 그 달 안에 오늘이 있을 때만 오늘을 고른다.
+                var selected by rememberSaveable(board.month) { mutableStateOf(board.today.takeIf { YearMonth.from(it) == board.month }) }
+                val listState = rememberLazyListState()
+                val scope = rememberCoroutineScope()
                 val s = board.summary
-                if (s.duplicates.isNotEmpty()) item { Duplicates(s.duplicates, actions) }
-                if (s.needsReview.isNotEmpty()) item { Review(s.needsReview, actions) }
-                if (s.matchedManual.isNotEmpty()) item { Matched(s.matchedManual.map { it.first }, actions) }
-                item { MonthGrid(board, actions.onDayClick) }
+                val gridIndex = 3 + listOf(s.duplicates, s.needsReview, s.matchedManual).count { it.isNotEmpty() }
+                LazyColumn(
+                    Modifier.padding(padding).fillMaxSize().testTag("ledgerList"),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                ) {
+                    item { MonthNav(board.month, actions.onShiftMonth) }
+                    item { Summary(board) }
+                    item { WeekBudget(board) }
+                    if (s.duplicates.isNotEmpty()) item { Duplicates(s.duplicates, actions) }
+                    if (s.needsReview.isNotEmpty()) item { Review(s.needsReview, actions) }
+                    if (s.matchedManual.isNotEmpty()) item { Matched(s.matchedManual.map { it.first }, actions) }
+                    item {
+                        MonthGrid(board, selected) { date ->
+                            selected = date
+                            // 그리드를 화면 위로 올려 아래의 날짜 목록이 보이게 한다.
+                            scope.launch { listState.animateScrollToItem(gridIndex) }
+                        }
+                    }
+                    selected?.let { date -> item { DayEntries(date, s.entries[date].orEmpty(), actions.onAdd) } }
+                }
             }
         }
     }
@@ -291,11 +318,12 @@ private fun Matched(rows: List<LedgerTx>, actions: LedgerActions) {
 }
 
 /**
- * LD-03 월 그리드: 지난 날·오늘 칸은 지출(진하게), 앞날 칸은 예정(흐리게 + 밑줄), 수입은 초록 '+'.
+ * LD-03 월 그리드: 지난 날·오늘 칸은 지출(파랑 '-'), 앞날 칸은 예정(흐리게 + 밑줄 '-'), 수입은 초록 '+'.
+ * 지출 '-'·파랑은 사용자 요구(2026-10-19).
  * 1만 미만은 그대로, 1만 이상은 만 단위.
  */
 @Composable
-private fun MonthGrid(board: LedgerBoard, onDayClick: ((LocalDate) -> Unit)?) {
+private fun MonthGrid(board: LedgerBoard, selected: LocalDate?, onDayClick: (LocalDate) -> Unit) {
     val start = board.gridStart
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp).testTag("ledgerGrid")) {
         Row(Modifier.fillMaxWidth()) {
@@ -314,7 +342,7 @@ private fun MonthGrid(board: LedgerBoard, onDayClick: ((LocalDate) -> Unit)?) {
             Row(Modifier.fillMaxWidth()) {
                 repeat(7) { col ->
                     val date = start.plusDays(week * 7L + col)
-                    DayCell(date, board, board.summary.days[date] ?: DayMoney(), onDayClick, Modifier.weight(1f))
+                    DayCell(date, board, board.summary.days[date] ?: DayMoney(), date == selected, onDayClick, Modifier.weight(1f))
                 }
             }
         }
@@ -322,7 +350,7 @@ private fun MonthGrid(board: LedgerBoard, onDayClick: ((LocalDate) -> Unit)?) {
 }
 
 @Composable
-private fun DayCell(date: LocalDate, board: LedgerBoard, money: DayMoney, onDayClick: ((LocalDate) -> Unit)?, modifier: Modifier) {
+private fun DayCell(date: LocalDate, board: LedgerBoard, money: DayMoney, isSelected: Boolean, onDayClick: (LocalDate) -> Unit, modifier: Modifier) {
     val inMonth = YearMonth.from(date) == board.month
     val future = date.isAfter(board.today)
     val amount = if (future) money.planned else money.spend
@@ -336,8 +364,12 @@ private fun DayCell(date: LocalDate, board: LedgerBoard, money: DayMoney, onDayC
     Column(
         modifier
             .heightIn(min = 52.dp)
-            .then(if (onDayClick != null) Modifier.clickable { onDayClick(date) } else Modifier)
-            .clearAndSetSemantics { contentDescription = description }
+            .then(if (isSelected) Modifier.background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.small) else Modifier)
+            .clickable { onDayClick(date) }
+            .clearAndSetSemantics {
+                contentDescription = description
+                selected = isSelected
+            }
             .testTag("ledgerDay")
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -355,21 +387,87 @@ private fun DayCell(date: LocalDate, board: LedgerBoard, money: DayMoney, onDayC
         )
         if (amount != 0L) {
             Text(
-                MoneyFormat.short(amount),
+                MoneyFormat.signed(-amount),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (future) null else FontWeight.SemiBold,
                 textDecoration = if (future) TextDecoration.Underline else null,
-                color = if (future) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                color = if (future) MaterialTheme.colorScheme.onSurfaceVariant else expenseColor(),
                 maxLines = 1,
             )
         }
         if (money.income != 0L) {
-            Text("+" + MoneyFormat.short(money.income), style = MaterialTheme.typography.labelSmall, color = incomeColor(), maxLines = 1)
+            Text(MoneyFormat.signed(money.income), style = MaterialTheme.typography.labelSmall, color = incomeColor(), maxLines = 1)
         }
     }
 }
 
-/** 수입 초록(노션 초록, 라이트 #0F7B6C 5.4:1, 다크 #4DAB9A). */
+private val isDark: Boolean
+    @Composable get() = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+/** 수입 초록(DesignTokens.INCOME). */
 @Composable
-private fun incomeColor(): Color =
-    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFF4DAB9A) else Color(0xFF0F7B6C)
+private fun incomeColor(): Color = Color(if (isDark) DesignTokens.Dark.INCOME else DesignTokens.Light.INCOME)
+
+/** 지출 파랑(DesignTokens.EXPENSE). */
+@Composable
+private fun expenseColor(): Color = Color(if (isDark) DesignTokens.Dark.EXPENSE else DesignTokens.Light.EXPENSE)
+
+/**
+ * 고른 날의 거래 목록: 그 날 칸 숫자를 이루는 행(시간 순). 지출 파랑 '-', 수입 초록 '+', 예정은 흐리게 + 밑줄.
+ * '이 날 추가'는 LD-07 입력 시트를 그 날짜로 연다.
+ */
+@Composable
+private fun DayEntries(date: LocalDate, entries: List<DayEntry>, onAdd: ((LocalDate) -> Unit)?) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("ledgerDayEntries")) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ledger_day_title, date.monthValue, date.dayOfMonth, date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            if (onAdd != null) TextButton(onClick = { onAdd(date) }) { Text(stringResource(R.string.ledger_day_add)) }
+        }
+        if (entries.isEmpty()) {
+            Text(stringResource(R.string.ledger_day_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        entries.forEach { entry -> EntryRow(entry) }
+    }
+}
+
+@Composable
+private fun EntryRow(entry: DayEntry) {
+    val tx = entry.tx
+    val planned = entry.kind == DayEntry.Kind.PLANNED
+    val note = listOfNotNull(
+        tx.category,
+        tx.payment,
+        stringResource(R.string.ledger_entry_planned).takeIf { planned },
+        stringResource(R.string.ledger_entry_manual).takeIf { tx.manual },
+    ).joinToString(" · ")
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            tx.time.orEmpty(),
+            modifier = Modifier.width(48.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(Modifier.weight(1f)) {
+            Text(tx.title.ifBlank { stringResource(R.string.ledger_untitled) }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (note.isNotEmpty()) {
+                Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Text(
+            MoneyFormat.signed(entry.value, full = true),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = if (planned) null else FontWeight.SemiBold,
+            textDecoration = if (planned) TextDecoration.Underline else null,
+            color = when (entry.kind) {
+                DayEntry.Kind.PLANNED -> MaterialTheme.colorScheme.onSurfaceVariant
+                DayEntry.Kind.INCOME -> incomeColor()
+                DayEntry.Kind.SPEND -> expenseColor()
+            },
+        )
+    }
+}

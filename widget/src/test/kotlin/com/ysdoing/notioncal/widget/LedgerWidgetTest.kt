@@ -84,6 +84,10 @@ class LedgerWidgetTest {
         onNode(hasContentDescriptionEqualTo("10월 19일, 지출 12,300원")).assertExists()
         onNode(hasContentDescriptionEqualTo("10월 24일, 예정 50,000원")).assertExists()
         onNode(hasTestTag("ledgerTitle")).assert(hasClickAction())
+        // 지출은 '-'(파랑), 예정도 '-', 수입은 '+'.
+        onNode(hasTextEqualTo("-1.2만")).assertExists()
+        onNode(hasTextEqualTo("-5만")).assertExists()
+        onNode(hasTextEqualTo("+250만")).assertExists()
     }
 
     /** 6주가 안 들어가면 들어가는 만큼 주를 보이되 이번 주를 맨 아래에 둔다(최근 쓴 돈부터). */

@@ -135,6 +135,27 @@ class LedgerMathTest {
         assertEquals(listOf(manual.pageId to imported.pageId), s.matchedManual.map { it.first.pageId to it.second.pageId })
     }
 
+    /**
+     * 💰 탭 날짜 목록: 그 날 칸 숫자를 이루는 행만 시간 순으로(중복 나머지·짝 맞은 앱입력·이체·제외 그룹은 빠짐).
+     * 값은 지출 −, 수입·환불 +로 칸 합계와 같다.
+     */
+    @Test
+    fun dayEntriesMatchCellTotals() {
+        val s = summary(export15())
+        val day17 = s.entries.getValue(d(17))
+        assertEquals(listOf("회사", "쿠팡", "쿠팡", "스타벅스"), day17.map { it.tx.title })
+        assertEquals(listOf(2_500_000L, -32_300L, 12_000L, -5_600L), day17.map { it.value })
+        assertEquals(-s.days.getValue(d(17)).spend, day17.filter { it.kind == DayEntry.Kind.SPEND }.sumOf { it.value })
+        assertEquals(listOf("GS25", "김밥천국"), s.entries.getValue(d(16)).map { it.tx.title }) // 이체·적금 빠짐
+
+        val manual = tx(d(19), "12:10", Flow.OUT, "식비", "점심", -9_000, payment = null, manual = true)
+        val imported = tx(d(19), "12:11", Flow.OUT, "식비", "백반집", -9_000)
+        val plan = tx(d(24), null, Flow.OUT, "온라인쇼핑", "운동화", -50_000, payment = null, planned = true)
+        val s2 = summary(listOf(manual, imported, imported.copy(pageId = "dup", createdAt = 99), plan), today = d(21))
+        assertEquals(listOf("백반집"), s2.entries.getValue(d(19)).map { it.tx.title })
+        assertEquals(DayEntry.Kind.PLANNED to -50_000L, s2.entries.getValue(d(24)).single().let { it.kind to it.value })
+    }
+
     /** LD-04: 일요일 시작 주 10/18~10/24의 예산 키는 그 주 월요일(10/19)의 ISO 주 '2026-W43'. */
     @Test
     fun weekKeysFollowWeekStartAndIsoWeekOfMonday() {

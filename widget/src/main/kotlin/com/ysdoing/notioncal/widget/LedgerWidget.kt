@@ -322,7 +322,10 @@ private fun WeekLine(board: LedgerBoard, metrics: LedgerMetrics, palette: Widget
     Spacer(GlanceModifier.height(4.dp))
 }
 
-/** LD-03 하루 칸: 지난 날·오늘은 지출(진하게), 앞날은 예정(흐리게 + 밑줄), 수입이 있으면 금액 대신 초록 '+'(지출이 없을 때). */
+/**
+ * LD-03 하루 칸: 지난 날·오늘은 지출(파랑 '-'), 앞날은 예정(흐리게 + 밑줄 '-'), 지출이 없고 수입이 있으면 초록 '+'.
+ * 지출 '-'·파랑은 사용자 요구(2026-10-19). 환불이 더 큰 날은 파랑 '+'.
+ */
 @Composable
 private fun androidx.glance.layout.RowScope.DayCell(
     date: LocalDate, board: LedgerBoard, money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette, hidden: Boolean,
@@ -361,9 +364,9 @@ private fun androidx.glance.layout.RowScope.DayCell(
         )
         when {
             amount != 0L -> Text(
-                text = MoneyFormat.short(amount, hidden),
+                text = MoneyFormat.signed(-amount, hidden),
                 style = TextStyle(
-                    color = if (future) palette.subtle else palette.text,
+                    color = if (future) palette.subtle else palette.expense,
                     fontSize = metrics.amountFontSp.sp,
                     fontWeight = if (future) null else FontWeight.Medium,
                     textDecoration = if (future) TextDecoration.Underline else null,
@@ -371,7 +374,7 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 maxLines = 1,
             )
             money.income != 0L -> Text(
-                text = "+" + MoneyFormat.short(money.income, hidden),
+                text = MoneyFormat.signed(money.income, hidden),
                 style = TextStyle(color = palette.income, fontSize = metrics.amountFontSp.sp),
                 maxLines = 1,
             )

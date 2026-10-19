@@ -124,15 +124,31 @@ class LedgerScreenTest {
         assertEquals(listOf("manual"), deleted)
     }
 
-    /** LD-07: '거래 추가'는 오늘, 날짜 칸은 그 날짜로 입력 시트를 연다. */
+    /**
+     * 날짜를 누르면 그 날 거래 목록(지출 '-', 수입 '+')을 그리드 아래에 보인다(처음은 오늘).
+     * '거래 추가'는 오늘, '이 날 추가'는 고른 날로 LD-07 입력 시트를 연다.
+     */
     @Test
-    fun addButtonAndDayClickOpenInput() {
+    fun dayTapShowsEntriesAndAddOpensInput() {
+        val rows = listOf(tx("a", 19, -12_300, "점심"), tx("b", 19, 30_000, "용돈", flow = Flow.IN), tx("c", 20, -9_800, "저녁"))
         val opened = mutableListOf<LocalDate>()
-        compose.setContent { MaterialTheme { LedgerScreen(board(listOf(tx("a", 19, -12_300))), LedgerActions(onAdd = { opened += it }, onDayClick = { opened += it })) } }
-        compose.onNodeWithContentDescription("거래 추가").performClick()
+        compose.setContent { MaterialTheme { LedgerScreen(board(rows), LedgerActions(onAdd = { opened += it })) } }
+        compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerDayEntries"))
+        compose.onNodeWithText("10월 21일(수)").assertExists()
+        compose.onNodeWithText("이 날 거래가 없습니다").assertExists()
+
         compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerGrid"))
-        compose.onNodeWithContentDescription("10월 19일, 지출 12,300원").performClick()
-        assertEquals(listOf(today, d(19)), opened)
+        compose.onNodeWithContentDescription("10월 19일, 지출 12,300원, 수입 30,000원").performClick()
+        compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerDayEntries"))
+        compose.onNodeWithText("10월 19일(월)").assertExists()
+        compose.onNodeWithText("점심").assertExists()
+        compose.onNodeWithText("-12,300원").assertExists()
+        compose.onNodeWithText("+30,000원").assertExists()
+        compose.onNodeWithText("저녁").assertDoesNotExist()
+
+        compose.onNodeWithText("이 날 추가").performClick()
+        compose.onNodeWithContentDescription("거래 추가").performClick()
+        assertEquals(listOf(d(19), today), opened)
     }
 
     @Test

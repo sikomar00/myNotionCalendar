@@ -47,4 +47,9 @@
     <string name="ledger_input_cancel">취소</string>
     <string name="ledger_input_no_ledger">등록한 가계부가 없습니다. 설정 → DB 추가에서 거래내역 DB를 등록하세요.</string>
     <string name="ledger_add">거래 추가</string>
+    <string name="ledger_day_title">%1$d월 %2$d일(%3$s)</string>
+    <string name="ledger_day_add">이 날 추가</string>
+    <string name="ledger_day_empty">이 날 거래가 없습니다</string>
+    <string name="ledger_entry_planned">예정</string>
+    <string name="ledger_entry_manual">앱입력</string>
 </resources>

@@ -68,6 +68,13 @@ data class LedgerRules(
 
 data class DayMoney(val spend: Long = 0, val planned: Long = 0, val income: Long = 0)
 
+/**
+ * 💰 탭 날짜 목록의 한 줄: 그 날 칸 숫자를 이루는 거래. [value]는 화면 부호(지출 −, 수입·환불 +, 원 단위).
+ */
+data class DayEntry(val tx: LedgerTx, val kind: Kind, val value: Long) {
+    enum class Kind { SPEND, PLANNED, INCOME }
+}
+
 /** LD-08 같은 키의 거래 묶음. [keep]은 먼저 만든 행, [extra]는 합계에서 뺀(정리하면 휴지통으로 갈) 나머지. */
 data class DuplicateGroup(val keep: LedgerTx, val extra: List<LedgerTx>)
 
@@ -75,6 +82,8 @@ data class DuplicateGroup(val keep: LedgerTx, val extra: List<LedgerTx>)
 data class LedgerSummary(
     val month: YearMonth,
     val days: Map<LocalDate, DayMoney>,
+    /** 날짜별 [days]를 이루는 거래(시간 순). */
+    val entries: Map<LocalDate, List<DayEntry>>,
     val monthSpend: Long,
     val monthPlanned: Long,
     val monthIncome: Long,
@@ -161,16 +170,20 @@ object LedgerMath {
         fun incomeOf(tx: LedgerTx) = -sign * tx.amount
 
         val days = HashMap<LocalDate, DayMoney>()
-        fun add(date: LocalDate, f: (DayMoney) -> DayMoney) {
-            days[date] = f(days[date] ?: DayMoney())
+        val entries = HashMap<LocalDate, MutableList<DayEntry>>()
+        fun add(tx: LedgerTx, entry: DayEntry, f: (DayMoney) -> DayMoney) {
+            days[tx.date] = f(days[tx.date] ?: DayMoney())
+            entries.getOrPut(tx.date) { mutableListOf() } += entry
         }
         actual.forEach { tx ->
             when {
-                isSpend(tx) -> add(tx.date) { it.copy(spend = it.spend + spendOf(tx)) }
-                tx.flow == Flow.IN -> add(tx.date) { it.copy(income = it.income + incomeOf(tx)) }
+                isSpend(tx) -> add(tx, DayEntry(tx, DayEntry.Kind.SPEND, -spendOf(tx))) { it.copy(spend = it.spend + spendOf(tx)) }
+                tx.flow == Flow.IN -> add(tx, DayEntry(tx, DayEntry.Kind.INCOME, incomeOf(tx))) { it.copy(income = it.income + incomeOf(tx)) }
             }
         }
-        planned.filter(::isSpend).forEach { tx -> add(tx.date) { it.copy(planned = it.planned + spendOf(tx)) } }
+        planned.filter(::isSpend).forEach { tx ->
+            add(tx, DayEntry(tx, DayEntry.Kind.PLANNED, -spendOf(tx))) { it.copy(planned = it.planned + spendOf(tx)) }
+        }
 
         fun inMonth(date: LocalDate) = YearMonth.from(date) == month
         val wStart = today.with(TemporalAdjusters.previousOrSame(weekStart))
@@ -194,6 +207,7 @@ object LedgerMath {
         return LedgerSummary(
             month = month,
             days = days,
+            entries = entries.mapValues { (_, list) -> list.sortedWith(compareBy<DayEntry> { it.tx.time ?: "99:99" }.thenBy { it.tx.createdAt }) },
             monthSpend = monthSpend,
             monthPlanned = monthPlanned,
             monthIncome = monthIncome,

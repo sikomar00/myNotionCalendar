@@ -31,6 +31,10 @@ object DesignTokens {
         const val SURFACE_HIGH = 0xFFF1F1EF
         const val SURFACE_HIGHEST = 0xFFEBEBEA
         const val ERROR = 0xFFC62828
+        /** 가계부 지출 금액(토요일 파랑과 같은 값, 5.8:1). 사용자 요구(2026-10-19)로 '파랑은 누르는 것에만'의 예외. */
+        const val EXPENSE = 0xFF1565C0
+        /** 가계부 수입 금액(노션 초록, 5.4:1). */
+        const val INCOME = 0xFF0F7B6C
     }
 
     object Dark {
@@ -49,5 +53,7 @@ object DesignTokens {
         const val SURFACE_HIGH = 0xFF252525
         const val SURFACE_HIGHEST = 0xFF2F2F2F
         const val ERROR = 0xFFFF6B6B
+        const val EXPENSE = 0xFF5B9BF8
+        const val INCOME = 0xFF4DAB9A
     }
 }
