@@ -11,9 +11,10 @@ import com.ysdoing.notioncal.core.data.calendar.gridStart
 import com.ysdoing.notioncal.core.data.db.LedgerDupKeepEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.Flow as DataFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.Clock
@@ -23,6 +24,9 @@ import java.time.YearMonth
 import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** LD-07 저장 결과. */
+enum class LedgerAddResult { SAVED, INVALID_AMOUNT, NO_LEDGER }
 
 /** 💰 탭·가계부 위젯이 그리는 것. [registered]가 false면 거래내역 DB를 아직 등록하지 않았다. */
 data class LedgerBoard(
@@ -56,7 +60,7 @@ class LedgerRepository @Inject constructor(
      * 규칙(부호·예산 그룹)은 첫 번째로 켠 거래내역 DB의 설정을 쓴다.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observeBoard(month: YearMonth, today: LocalDate): Flow<LedgerBoard> =
+    fun observeBoard(month: YearMonth, today: LocalDate): DataFlow<LedgerBoard> =
         settings.settings.map { it.weekStart }.distinctUntilChanged().flatMapLatest { weekStart ->
             val gridFrom = gridStart(month, weekStart)
             val weekFrom = today.with(TemporalAdjusters.previousOrSame(weekStart))
@@ -95,6 +99,34 @@ class LedgerRepository @Inject constructor(
         val groups: List<com.ysdoing.notioncal.core.data.db.CategoryGroupEntity>,
     )
 
+    /**
+     * LD-07 빠른 입력. [amount]는 양수(원). 앞날이면 '예정', 오늘·지난 날이면 '앱입력'을 켠다. 부호는 등록한 양식(지출 음수)을
+     * 따르고, 오늘이면 지금 시각(HH:MM)을 넣는다. 내용이 비면 대분류(또는 타입)를 제목으로 쓴다. 노션에는 아웃박스로 간다.
+     */
+    suspend fun add(date: LocalDate, amount: Long, flow: Flow, category: String?, title: String): LedgerAddResult {
+        if (amount <= 0) return LedgerAddResult.INVALID_AMOUNT
+        val source = db.dataSourceDao().enabled().firstOrNull { it.kind == SourceKind.LEDGER.name } ?: return LedgerAddResult.NO_LEDGER
+        val today = today()
+        val planned = date.isAfter(today)
+        val sign = if ((flow == Flow.OUT) == source.spendNegative) -1L else 1L
+        val time = if (date == today) clock.instant().atZone(APP_ZONE).toLocalTime().format(HH_MM) else null
+        val name = title.trim().ifEmpty { category?.takeIf { it.isNotBlank() } ?: flow.notionName }
+        writer.create(
+            source.dataSourceId, name, com.ysdoing.notioncal.core.data.DateValue.allDay(date),
+            ledger = LedgerValue(amount = sign * amount, flow = flow.name, category = category, time = time, planned = planned, manual = !planned),
+        )
+        return LedgerAddResult.SAVED
+    }
+
+    /** LD-07 대분류 칩: 최근 쓴 순, 그다음 카테고리 마스터의 나머지(지출이면 수입 그룹 제외, 수입이면 수입 그룹만). */
+    suspend fun categoryChoices(flow: Flow): List<String> {
+        val recent = dao.recentCategories(flow.name, RECENT_CATEGORIES)
+        val master = dao.observeCategoryGroups().first()
+            .filter { (it.groupName == INCOME_GROUP) == (flow == Flow.IN) }
+            .map { it.category }
+        return (recent + master).distinct()
+    }
+
     /** LD-08 정리: 먼저 만든 행만 남기고 나머지를 휴지통으로(아웃박스). 자동으로는 하지 않는다. */
     suspend fun resolveDuplicates(group: DuplicateGroup) {
         group.extra.forEach { writer.trash(it.pageId) }
@@ -114,4 +146,10 @@ class LedgerRepository @Inject constructor(
     /** LD-09 확인 필요 → 실제로 전환: 예정을 끄고 앱입력으로 둔다(가져온 거래와 짝이 생기면 LD-10이 정리한다). */
     suspend fun convertPlannedToActual(pageId: String) =
         writer.update(pageId, EventChange(ledger = LedgerValue(planned = false, manual = true)))
+
+    private companion object {
+        const val RECENT_CATEGORIES = 12
+        const val INCOME_GROUP = "수입"
+        val HH_MM: java.time.format.DateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    }
 }

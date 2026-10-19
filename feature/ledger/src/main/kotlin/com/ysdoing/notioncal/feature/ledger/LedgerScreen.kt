@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,8 +16,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -56,10 +60,12 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.abs
 
-/** 💰 탭(LD-03~09): 이번 달 요약·주 예산 줄·월 그리드, 중복·확인 필요·정리 대상 카드. [onDayClick]은 LD-07 입력(B 묶음). */
+/** 💰 탭(LD-03~10): 이번 달 요약·주 예산 줄·월 그리드, 중복·확인 필요·정리 대상 카드. '거래 추가'·날짜 탭은 LD-07 입력 시트. */
 @Composable
-fun LedgerRoute(onOpenSettings: () -> Unit, onDayClick: ((LocalDate) -> Unit)? = null, viewModel: LedgerViewModel = hiltViewModel()) {
+fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltViewModel()) {
     val board by viewModel.board.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val openInput: (LocalDate) -> Unit = { date -> context.startActivity(ledgerInputIntent(context, date)) }
     LifecycleResumeEffect(Unit) {
         viewModel.onResume()
         onPauseOrDispose { }
@@ -73,7 +79,8 @@ fun LedgerRoute(onOpenSettings: () -> Unit, onDayClick: ((LocalDate) -> Unit)? =
             onKeepBoth = viewModel::keepBoth,
             onDelete = viewModel::trash,
             onConvert = viewModel::convertPlanned,
-            onDayClick = onDayClick,
+            onAdd = openInput,
+            onDayClick = openInput,
         ),
     )
 }
@@ -86,6 +93,7 @@ data class LedgerActions(
     val onKeepBoth: (DuplicateGroup) -> Unit = {},
     val onDelete: (String) -> Unit = {},
     val onConvert: (String) -> Unit = {},
+    val onAdd: ((LocalDate) -> Unit)? = null,
     val onDayClick: ((LocalDate) -> Unit)? = null,
 )
 
@@ -103,11 +111,20 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
                 },
             )
         },
+        floatingActionButton = {
+            val onAdd = actions.onAdd
+            if (board?.registered == true && onAdd != null) {
+                FloatingActionButton(onClick = { onAdd(board.today) }) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.ledger_add))
+                }
+            }
+        },
     ) { padding ->
         when {
             board == null -> Unit
             !board.registered -> EmptyLedger(actions.onOpenSettings, Modifier.padding(padding))
-            else -> LazyColumn(Modifier.padding(padding).fillMaxSize().testTag("ledgerList")) {
+            // 아래 여백: '거래 추가' 버튼이 그리드 마지막 줄을 가리지 않게.
+            else -> LazyColumn(Modifier.padding(padding).fillMaxSize().testTag("ledgerList"), contentPadding = PaddingValues(bottom = 88.dp)) {
                 item { MonthNav(board.month, actions.onShiftMonth) }
                 item { Summary(board) }
                 item { WeekBudget(board) }

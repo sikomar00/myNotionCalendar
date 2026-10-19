@@ -57,6 +57,7 @@
     <string name="ledger_widget_week_left">이번 주 %1$s 남음 · %2$d일</string>
     <string name="ledger_widget_week_over">이번 주 %1$s 초과 · %2$d일</string>
     <string name="ledger_widget_week_spend">이번 주 지출 %1$s</string>
+    <string name="ledger_widget_add">거래 추가</string>
     <string name="ledger_widget_day">%1$d월 %2$d일</string>
     <string name="ledger_widget_day_spend">지출 %1$s</string>
     <string name="ledger_widget_day_planned">예정 %1$s</string>

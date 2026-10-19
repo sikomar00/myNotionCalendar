@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          LD-07 위젯 위에 뜨는 반투명 가계부 입력 시트. 같은 앱의 PendingIntent로만 열므로 exported=false.
+          퀵 시트처럼 taskAffinity를 비우고 최근 앱 목록에 남기지 않는다. 금액 칸에 바로 자판을 띄운다.
+        -->
+        <activity
+            android:name=".LedgerInputActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotionCal.LedgerInput"
+            android:windowSoftInputMode="stateVisible|adjustResize">
+            <intent-filter>
+                <action android:name="com.ysdoing.notioncal.action.LEDGER_INPUT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

@@ -491,7 +491,7 @@ One UI 9.0(Android 17) 대응의 핵심은 삼성 절전 정책, 타깃 37 동�
 
 ## 10. 데이터 모델
 
-로컬 DB는 Room 테이블로 나누고, 노션 페이지 1개는 `events` 1행이다(습관 기록 행·거래 행도 `events` 행이고, 종류는 소속 DB의 `data_sources.kind`로 가린다). 아래 '(추가)'와 새 테이블은 Phase 6\~8에서 스키마 버전을 올리며 붙인다(현재 v9, PF-09 마이그레이션 테스트 필수). 폰 캘린더 일정도 Room에 복사해 위젯이 Room만 읽게 한다.
+로컬 DB는 Room 테이블로 나누고, 노션 페이지 1개는 `events` 1행이다(습관 기록 행·거래 행도 `events` 행이고, 종류는 소속 DB의 `data_sources.kind`로 가린다). 아래 '(추가)'와 새 테이블은 Phase 6\~8에서 스키마 버전을 올리며 붙인다(현재 v10, PF-09 마이그레이션 테스트 필수). 폰 캘린더 일정도 Room에 복사해 위젯이 Room만 읽게 한다.
 
 | 테이블 | 주요 필드 | 용도 |
 | --- | --- | --- |
@@ -516,6 +516,8 @@ One UI 9.0(Android 17) 대응의 핵심은 삼성 절전 정책, 타깃 37 동�
 
 - v9(Phase 6, 2026-10-19)에서 붙인 것: data\_sources.kind·linkPropId·linkDataSourceId·habitPropIds와 datePropId nullable, events.linkPageId와 (linkPageId, startDate) 인덱스, habits, widget\_configs.selectedTab. events에 role 열은 두지 않고 `data_sources.kind`를 조인한다(달력·검색·일정 위젯·알림은 `kind = 'CALENDAR'`만 읽는다). 날짜 없는 DB는 일정 매핑이 없어 동기화(🌱 전체 조회 따로)·'노션과 비교'·아웃박스가 일정 경로를 건너뛴다.
 
+- v10(Phase 7, 2026-10-19)에서 붙인 것: data\_sources.rolePropIds(JSON: 거래 금액·타입·대분류·시간·결제수단·예정·앱입력, 예산 기간유형·기간값·그룹·금액, 카테고리 그룹)·spendNegative(기본 1)·budgetGroup(기본 '전체'), events.createdTime·amount·flow·category·txTime·payment·planned·manual, budgets·category\_groups(캐시, 날짜 없는 전체 조회)·ledger\_dup\_keeps(앱 상태, KEEP 목록), widget\_configs.hideAmounts(LD-06). 위 표의 amountPropId 등 개별 열 대신 rolePropIds 하나로, txKey 열 대신 계산 때 키를 만든다. 합계는 Room이 범위 행만 읽고 `LedgerMath`(Kotlin)가 낸다(2,000건 월 합계 중앙값 11ms).
+
 - 캐시와 앱 상태: 노션에서 다시 받을 수 있는 테이블(events·habits·budgets·category\_groups·weather\_\*)은 캐시다. 사용자가 앱에서만 정한 값(data\_sources·widget\_configs·outbox·dday\_pins·ledger\_dup\_keeps)은 앱 상태라서 DB 복구(PF-09, RecoveringOpenHelperFactory의 KEEP 목록) 때 지킨다.
 - DataStore(일반): 주 시작 요일, 기본 DB, 동기화 주기, 테마, 알림 설정, 날씨 지역·위치 방식(WX-02).
 - DataStore(암호화, SEC-01): 노션 토큰만.
@@ -533,6 +535,7 @@ One UI 9.0(Android 17) 대응의 핵심은 삼성 절전 정책, 타깃 37 동�
 ### 진행 현황 (2026-10-19)
 
 - 2026-10-19 Phase 6 완료(HB-01~05, WG-11 📅·✅ 탭, SEC-05). DB v9, 새 모듈 `:feature:habit`, 첫 화면 하단 탭(달력 · 습관), 습관 위젯·통합 탭 위젯. `gradlew test lint` 통과(lint 0건), S25 실기기: ✅ 습관 기록 링크로 두 DB 한 쌍 등록 → 습관 5개 동기화, 앱·위젯 체크로 노션에 '영양제먹기 2026-10-19'(날짜·습관 연결) 생성, 해제로 휴지통 확인, 위젯 체크 반영 22~45ms·탭 전환 3ms, 통합 위젯 월 이동 뒤 탭 유지, 습관 위젯 2×2·4×2·4×4와 통합 위젯 4×4·4×2 두 탭 잘림 없음(`docs/shots/phase6_*`), 콜드 스타트(디버그, am start -W) 299~795ms, StrictMode 경고 0줄. 실기기 미검증: 비행기 모드 체크→해제→체크·노션 중복 2개 해제(테스트로만), 노션에서 '진행 중' 해제 반영(테스트로만), 재부팅·재배치 뒤 탭 유지(Room 저장은 테스트로만), 자동 백업에서 Room 제외(규칙 파일 테스트로만), 습관 8개·글꼴 최대(치수 테스트로만), 다크 모드 외 테마.
+- 2026-10-19 Phase 7 완료(LD-01~10, WG-11 💰 탭). DB v10, 새 모듈 `:feature:ledger`, 하단 탭(달력 · 습관 · 가계부), 가계부 위젯·통합 위젯 💰 탭, LD-07 입력 시트(`LedgerInputActivity`). 지출 = 타입 '지출'이면서 그룹이 '금융/자산'·'이체/기타'가 아닌 행(사용자 결정). `gradlew test lint assembleDebug` 통과(lint 0건), S25 실기기: 거래내역 1,770건 병합 뒤 세 DB 한 묶음 등록(예산·카테고리 자동 찾기), 10월 지출 461,530원·수입 650,155원·월 예산 73.8만·주 예산 10만 남음이 노션 기준 계산과 같음, 7월 중복 3건·둘 다 유지, 위젯 4×4·통합 💰 탭 88ms·금액 숨김, 위젯 '+' → 1,000원 저장 → 두 위젯 즉시 반영 → 노션에 금액 -1000·지출·생활·시간·앱입력 행 생성, 같은 거래(가져온 행)를 넣자 '정리 대상 1건'·합계 1건분, 앱입력 삭제 → 노션 휴지통, 💰 탭 '+'로 시트 열림, StrictMode 경고 0줄(`docs/shots/phase7_*`). 실기기 미검증: 비행기 모드 저장 → 연결 후 생성(LedgerSyncTest로만), 4×2 가계부 위젯 단독 배치(치수·RemoteViews 테스트로만), 날짜 칸 탭 입력(위젯·화면 테스트로만), '노션과 비교'의 가계부 월 합계(NotionComparer 테스트로만), 짝 없는 현금 앱입력 유지(테스트로만), 다크 모드 외 테마.
 - Phase 0~5 완료. 각 Phase는 `gradlew test lint` 통과와 S25 실기기 확인을 거쳤다(스크린샷: `docs/shots/`, 지표: `docs/metrics.md`).
 - 범위에서 뺀 항목(사용자 결정): WI-06 '내일로' 버튼, CAL-01~03 폰 캘린더 표시. EX-02 공휴일은 폰의 공휴일 캘린더를 읽는다.
 - P2로 미룬 P1: WI-08 음성 입력, S25-12 태블릿 확인.
@@ -672,17 +675,17 @@ Phase 8을 진행해. 대상: DD-01~05, WX-01~05, EX-12, EX-08 시험.
 - [x] 업데이트: 이전 버전 DB 파일로 시작해도 실행되고, 토큰·설정·미전송 아웃박스가 유지된다. (완료: MigrationTest v1→v7·DatabaseRecoveryTest, 실기기에서 개발 중 v4→v7 덮어 설치 동안 토큰·설정 유지. 미전송 아웃박스 유지는 테스트로만 확인)
 - [ ] 삼성 절전: 앱을 절전 목록에 넣은 상태와 뺀 상태에서 24시간 동안 주기 동기화 횟수를 sync\_log로 비교한다. (미검증: 24시간 비교 측정을 하지 않았다)
 
-추가 기능 시나리오(Phase 6 완료, 7\~8 미착수)
+추가 기능 시나리오(Phase 6·7 완료, 8 미착수)
 
 - [x] 습관: 오프라인에서 체크→해제→체크 → 연결 후 노션에 기록 1개. 노션에서 같은 기록을 하나 더 만들어도 위젯 상태가 같고, 해제하면 둘 다 휴지통으로 간다(HB-02). (완료: HabitOutboxTest·HabitRepositoryTest. 실기기에서는 온라인 체크→노션 생성, 해제→휴지통만 확인, 비행기 모드·중복 2개는 미검증)
 - [x] 습관: 노션에서 '진행 중'을 끈 습관이 다음 동기화 후 위젯에서 사라지고, 다시 켜면 이전 기록과 함께 돌아온다(HB-04). (완료: HabitSyncTest, 실기기 미검증)
 - [x] 통합 위젯: 탭을 누르면 0.5초 안에 바뀌고, 위젯 두 개가 서로 다른 탭을 기억한다(WG-11). (완료: 실기기 탭 전환 3ms, 위젯별 저장은 WidgetConfigRepositoryTest. 두 위젯 동시 배치는 미검증)
 - [x] 습관: 연속 5일 → 1일 공백 → 4일 공백에서 문구가 '5일째' → '어제 쉼 · 오늘 하면 이어짐' → '4일 쉼 · 오늘 다시'로 바뀐다(HB-04). (완료: HabitStatsTest)
-- [x] 달력 분리: 습관 행이 월 화면·월간 위젯에 나타나지 않는다(kind 조건). (완료: EventDaoTest, 실기기 월 화면에 습관 기록 없음. 거래 행은 Phase 7)
-- [ ] 가계부 중복: 같은 CSV를 두 번 병합해도 월 합계가 그대로이고 '중복 N건'이 뜬다(LD-08).
-- [ ] 가계부 예정: 반영 기준일 앞뒤에서 예정 행이 한 번만 세어진다(LD-09). 앱입력과 같은 거래를 병합하면 한 건만 남는다(LD-10).
-- [ ] 가계부 주: 10/18(일)\~10/24(토) 거래가 한 주로 묶이고 예산 '2026-W43'을 읽는다. 9/27\~10/3처럼 두 달에 걸친 주도 맞다(LD-04).
-- [ ] 가계부 대조: '노션과 비교'의 월 합계 차이 0원(§3).
+- [x] 달력 분리: 습관 행이 월 화면·월간 위젯에 나타나지 않는다(kind 조건). (완료: EventDaoTest, 실기기 월 화면에 습관 기록 없음. 거래 행은 LedgerSyncTest로만 확인)
+- [x] 가계부 중복: 같은 CSV를 두 번 병합해도 월 합계가 그대로이고 '중복 N건'이 뜬다(LD-08). (완료: LedgerMathTest.mergingSameCsvTwiceDoesNotChangeTotals·LedgerRepositoryTest, 실기기 7월 '중복 3건'·둘 다 유지)
+- [x] 가계부 예정: 반영 기준일 앞뒤에서 예정 행이 한 번만 세어진다(LD-09). 앱입력과 같은 거래를 병합하면 한 건만 남는다(LD-10). (완료: LedgerMathTest·LedgerSyncTest.offlineInputReachesNotionAndMatchesLaterImport, 실기기 앱입력 1,000원 + 같은 가져온 행 → 합계 1건분·'정리 대상 1건'. 실기기 예정 행 전환은 미검증)
+- [x] 가계부 주: 10/18(일)\~10/24(토) 거래가 한 주로 묶이고 예산 '2026-W43'을 읽는다. 9/27\~10/3처럼 두 달에 걸친 주도 맞다(LD-04). (완료: LedgerMathTest.weekKeysFollowWeekStartAndIsoWeekOfMonday·weekBudgetUsesSundayWeek, 실기기 이번 주 예산 10만 남음이 노션 W43 행과 같음)
+- [x] 가계부 대조: '노션과 비교'의 월 합계 차이 0원(§3). (완료: LedgerSyncTest.comparerChecksLedgerMonthTotals. 실기기 '노션과 비교'는 미검증, 대신 💰 탭 값을 노션 기준 계산과 맞춰 봄)
 - [ ] 디데이: 자정 넘김 1분 안에 D-1 → D-Day, 기간 일정 진행 중 표기(DD-02).
 - [ ] 날씨: 비행기 모드에서 마지막 예보와 받아온 시각이 보이고, 위치 권한 거부 상태에서 지역 선택으로 동작한다(WX-01·02).
 - [x] 백업: 자동 백업 대상에 Room 파일이 없다(SEC-05). (완료: BackupRulesTest — data\_extraction\_rules·backup\_rules에 notioncal.db·-wal·-shm·-journal 제외. 실제 백업 실행은 미검증)

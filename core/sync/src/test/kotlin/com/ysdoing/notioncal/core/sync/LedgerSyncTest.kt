@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.core.sync
 
 import android.content.Context
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.BudgetPropIds
@@ -12,11 +13,15 @@ import com.ysdoing.notioncal.core.data.LedgerPropIds
 import com.ysdoing.notioncal.core.data.LedgerValue
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.SchemaIssue
+import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import com.ysdoing.notioncal.core.data.ledger.Flow
+import com.ysdoing.notioncal.core.data.ledger.LedgerAddResult
+import com.ysdoing.notioncal.core.data.ledger.LedgerRepository
 import com.ysdoing.notioncal.core.notion.NotionJson
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.sync.FakeNotionStore.Companion.BUDGET
@@ -30,18 +35,25 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Clock
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 
 /** LD-01·02·05 가계부 동기화: 거래 값, 예산·카테고리 전체 조회, 스키마 점검, '노션과 비교' 월 합계, 거래 쓰기. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class LedgerSyncTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private lateinit var db: NotionCalDatabase
     private var now = Instant.parse("2026-10-19T03:00:00Z")
     private val clock = object : Clock() {
@@ -156,6 +168,34 @@ class LedgerSyncTest {
         assertEquals(false, db.eventDao().get("p1")!!.planned)
         processor().process()
         assertEquals(false to true, notion.pages.getValue("p1").planned to notion.pages.getValue("p1").manual)
+    }
+
+    /**
+     * LD-07·10 완료 기준: 비행기 모드에서 저장 → 바로 합계에 들어가고, 연결되면 노션에 앱입력 행이 생긴다.
+     * 같은 거래가 CSV 병합으로 다음 날 들어오면 한 건분만 세고 앱입력은 정리 대상이 된다.
+     */
+    @Test
+    fun offlineInputReachesNotionAndMatchesLaterImport() = runTest {
+        val store = PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "settings.preferences_pb") }
+        val ledger = LedgerRepository(db, EventWriter(db, clock, WidgetRefresher.None, OutboxRequester.None), SettingsRepository(store, WidgetRefresher.None), clock)
+        val today = LocalDate.of(2026, 10, 19)
+        notion.networkDown = true
+        assertEquals(LedgerAddResult.SAVED, ledger.add(today, 9_000, Flow.OUT, "식비", "점심"))
+        assertEquals(9_000L, ledger.observeBoard(YearMonth.of(2026, 10), today).first().summary.monthSpend)
+        processor().process() // 연결 없음: 아웃박스에 남는다
+        assertTrue(notion.pages.values.none { it.dataSourceId == LEDGER })
+
+        notion.networkDown = false
+        processor().process()
+        val page = notion.pages.values.single { it.dataSourceId == LEDGER }
+        assertEquals(listOf(-9_000L, "지출", "식비", "12:00", false, true), listOf(page.amount, page.flow, page.category, page.time, page.planned, page.manual))
+
+        notion.seedTx("bank", "김밥천국", "2026-10-20", -9_000, time = "12:01")
+        now = now.plusSeconds(900)
+        engine().sync(SyncTrigger.PERIODIC)
+        val summary = ledger.observeBoard(YearMonth.of(2026, 10), today).first().summary
+        assertEquals(9_000L, summary.monthSpend)
+        assertEquals(listOf(page.id to "bank"), summary.matchedManual.map { it.first.pageId to it.second.pageId })
     }
 
     companion object {

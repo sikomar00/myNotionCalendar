@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
+import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasClickAction
 import androidx.glance.testing.unit.hasContentDescriptionEqualTo
@@ -16,6 +17,7 @@ import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasText
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
+import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTab
 import com.ysdoing.notioncal.core.data.WidgetTheme
@@ -95,6 +97,19 @@ class LedgerWidgetTest {
         onAllNodes(hasTestTag("ledgerDay")).assertCountEquals(rows * 7)
         onNode(hasContentDescriptionEqualTo("10월 24일, 예정 50,000원")).assertExists() // 이번 주 토요일이 마지막 칸
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
+    }
+
+    /** LD-07: 머리줄 '+'는 오늘, 날짜 칸은 그 날짜로 입력 시트를 연다(위젯은 네트워크 없이 인텐트만). */
+    @Test
+    fun addButtonAndDayCellsOpenInputSheet() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("ledgerAdd")).assert(hasStartActivityClickAction(ledgerInputIntent(context, today)))
+        onNode(hasContentDescriptionEqualTo("10월 24일, 예정 50,000원"))
+            .assert(hasStartActivityClickAction(ledgerInputIntent(context, LocalDate.of(2026, 10, 24))))
+        assertEquals(AppIntents.ACTION_LEDGER_INPUT, ledgerInputIntent(context, today).action)
+        assertEquals(today.toString(), ledgerInputIntent(context, today).getStringExtra(AppIntents.EXTRA_DATE))
     }
 
     @Test

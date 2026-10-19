@@ -180,4 +180,53 @@ class LedgerRepositoryTest {
         println("LD-02 월 합계(2,000건): 중앙값 ${"%.1f".format(median)}ms")
         assertTrue("월 합계 중앙값 ${median}ms", median < 50.0)
     }
+
+    /** LD-07: 오늘·지난 날은 앱입력, 앞날은 예정. 지출은 음수(양식 설정), 오늘이면 지금 시각(HH:MM). 내용이 비면 대분류. */
+    @Test
+    fun addWritesLedgerRowThroughOutbox() = runTest {
+        val repo = repository()
+        assertEquals(LedgerAddResult.SAVED, repo.add(today, 9_000, Flow.OUT, "식비", ""))
+        assertEquals(LedgerAddResult.SAVED, repo.add(today.plusDays(3), 50_000, Flow.OUT, "온라인쇼핑", "운동화"))
+        assertEquals(LedgerAddResult.SAVED, repo.add(today.minusDays(1), 300_000, Flow.IN, "급여", "알바비"))
+        val changes = db.outboxDao().all().map { OutboxJson.decodeFromString(EventChange.serializer(), it.changes) }
+        assertEquals(listOf("CREATE", "CREATE", "CREATE"), db.outboxDao().all().map { it.op })
+
+        val (lunch, shoes, pay) = changes
+        assertEquals("식비", lunch.title)
+        assertEquals(-9_000L, lunch.ledger!!.amount)
+        assertEquals("OUT", lunch.ledger.flow)
+        assertEquals("12:00", lunch.ledger.time) // 서울 12:00(clock 03:00Z)
+        assertEquals(false to true, lunch.ledger.planned to lunch.ledger.manual)
+        assertEquals(true to false, shoes.ledger!!.planned to shoes.ledger.manual)
+        assertEquals(null, shoes.ledger.time)
+        assertEquals(300_000L, pay.ledger!!.amount)
+        assertEquals("알바비", pay.title)
+
+        // 저장 즉시 Room에 반영돼 합계에 들어간다(위젯 즉시 반영).
+        val board = repo.observeBoard(october, today).first()
+        assertEquals(9_000L, board.summary.monthSpend)
+        assertEquals(50_000L, board.summary.monthPlanned)
+    }
+
+    @Test
+    fun addNeedsRegisteredLedgerAndPositiveAmount() = runTest {
+        val repo = repository()
+        assertEquals(LedgerAddResult.INVALID_AMOUNT, repo.add(today, 0, Flow.OUT, "식비", ""))
+        db.dataSourceDao().setEnabled("ledger", false)
+        assertEquals(LedgerAddResult.NO_LEDGER, repo.add(today, 1_000, Flow.OUT, "식비", ""))
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    /** LD-07 대분류 칩: 최근 쓴 순, 그다음 카테고리 마스터의 나머지(지출은 수입 그룹 제외). */
+    @Test
+    fun categoryChipsRecentFirst() = runTest {
+        db.ledgerDao().insertCategoryGroups(
+            listOf(CategoryGroupEntity("c3", "category", "교통", "생활비"), CategoryGroupEntity("c4", "category", "급여", "수입")),
+        )
+        db.eventDao().upsert(
+            listOf(tx("old", LocalDate.of(2026, 10, 1), -1_000, category = "저축"), tx("new", LocalDate.of(2026, 10, 20), -2_000, category = "교통")),
+        )
+        assertEquals(listOf("교통", "저축", "식비"), repository().categoryChoices(Flow.OUT))
+        assertEquals(listOf("급여"), repository().categoryChoices(Flow.IN))
+    }
 }

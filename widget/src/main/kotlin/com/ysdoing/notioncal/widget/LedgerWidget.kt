@@ -86,6 +86,8 @@ data class LedgerMetrics(
         val PADDING_H = 8.dp
         val PADDING_V = 4.dp
         val BAR = 6.dp
+        /** LD-07 머리줄 '+' 버튼 너비(누르기 쉬운 폭). */
+        val ADD_WIDTH = 40.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): LedgerMetrics {
             val scale = config.fontScale / 100f
@@ -181,6 +183,17 @@ internal fun ledgerTabIntent(context: Context): Intent =
         .putExtra(AppIntents.EXTRA_TAB, AppIntents.TAB_LEDGER)
         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+/**
+ * LD-07 입력 시트 인텐트. :widget은 :feature:ledger에 의존할 수 없어 action 문자열로 연다.
+ * 날짜마다 다른 data URI를 붙여 PendingIntent가 서로 덮어쓰지 않게 한다.
+ */
+internal fun ledgerInputIntent(context: Context, date: LocalDate): Intent =
+    Intent(AppIntents.ACTION_LEDGER_INPUT)
+        .setPackage(context.packageName)
+        .setData("notioncal://ledger/add/$date".toUri())
+        .putExtra(AppIntents.EXTRA_DATE, date.toString())
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+
 /** 가계부 위젯 화면. 위젯·통합 위젯·미리보기가 같은 코드를 쓴다. 비트맵 없이 레이아웃·배경색만 쓴다(PF-07). */
 @Composable
 fun LedgerWidgetContent(
@@ -219,6 +232,18 @@ fun LedgerWidgetContent(
                     style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
                     maxLines = 1,
                 )
+                val add = context.getString(R.string.ledger_widget_add)
+                Box(
+                    GlanceModifier.width(LedgerMetrics.ADD_WIDTH).height(metrics.headerHeight)
+                        .clickable(actionStartActivity(ledgerInputIntent(context, board.today)))
+                        .semantics {
+                            contentDescription = add
+                            testTag = "ledgerAdd"
+                        },
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    WidgetIcon(R.drawable.ic_widget_add, palette.accent, (metrics.headerHeight * 0.7f).coerceAtMost(24.dp))
+                }
             }
             if (metrics.showSummary) {
                 Text(
@@ -314,7 +339,7 @@ private fun androidx.glance.layout.RowScope.DayCell(
         money.income.takeIf { it != 0L && !hidden }?.let { context.getString(R.string.ledger_widget_day_income, MoneyFormat.full(it)) },
     ).joinToString(", ")
     Column(
-        GlanceModifier.defaultWeight().height(metrics.cellHeight).semantics {
+        GlanceModifier.defaultWeight().height(metrics.cellHeight).clickable(actionStartActivity(ledgerInputIntent(context, date))).semantics {
             contentDescription = description
             testTag = "ledgerDay"
         },

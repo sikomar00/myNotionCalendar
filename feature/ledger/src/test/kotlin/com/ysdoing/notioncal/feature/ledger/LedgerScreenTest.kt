@@ -33,8 +33,9 @@ class LedgerScreenTest {
 
     private val today = LocalDate.of(2026, 10, 21)
     private fun d(day: Int) = LocalDate.of(2026, 10, day)
-    private fun tx(id: String, day: Int, amount: Long, title: String = id, flow: Flow = Flow.OUT, planned: Boolean = false, created: Long = 0) =
-        LedgerTx(id, d(day), "12:00", amount, flow, "식비", title, "토스뱅크 통장", planned, manual = false, createdAt = created)
+    private fun tx(
+        id: String, day: Int, amount: Long, title: String = id, flow: Flow = Flow.OUT, planned: Boolean = false, created: Long = 0, manual: Boolean = false,
+    ) = LedgerTx(id, d(day), "12:00", amount, flow, "식비", title, if (manual) null else "토스뱅크 통장", planned, manual, createdAt = created)
 
     private fun board(rows: List<LedgerTx>, budgets: List<BudgetRow> = emptyList(), registered: Boolean = true): LedgerBoard {
         val s = LedgerMath.summarize(rows, mapOf("식비" to "생활비"), emptySet(), today, DayOfWeek.SUNDAY, YearMonth.of(2026, 10), budgets, LedgerRules())
@@ -105,6 +106,33 @@ class LedgerScreenTest {
         assertEquals(listOf("first"), kept)
         assertEquals(listOf("old-plan"), deleted)
         assertEquals(listOf("old-plan"), converted)
+    }
+
+    /** LD-10: 앱입력 + 같은 거래(±1일·같은 금액)가 들어오면 한 건분만 세고 앱입력을 정리 대상으로, 짝 없는 현금은 계속 센다. */
+    @Test
+    fun matchedManualIsCountedOnceAndCanBeDeleted() {
+        val rows = listOf(
+            tx("manual", 19, -9_000, "점심", manual = true),
+            tx("cash", 19, -7_000, "시장(현금)", manual = true),
+            tx("bank", 20, -9_000, "김밥천국"),
+        )
+        val deleted = mutableListOf<String>()
+        compose.setContent { MaterialTheme { LedgerScreen(board(rows), LedgerActions(onDelete = { deleted += it })) } }
+        compose.onNodeWithText("16,000원").assertExists() // 9,000 + 현금 7,000
+        compose.onNodeWithText("정리 대상 1건").assertExists()
+        compose.onNodeWithText("삭제").performClick()
+        assertEquals(listOf("manual"), deleted)
+    }
+
+    /** LD-07: '거래 추가'는 오늘, 날짜 칸은 그 날짜로 입력 시트를 연다. */
+    @Test
+    fun addButtonAndDayClickOpenInput() {
+        val opened = mutableListOf<LocalDate>()
+        compose.setContent { MaterialTheme { LedgerScreen(board(listOf(tx("a", 19, -12_300))), LedgerActions(onAdd = { opened += it }, onDayClick = { opened += it })) } }
+        compose.onNodeWithContentDescription("거래 추가").performClick()
+        compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerGrid"))
+        compose.onNodeWithContentDescription("10월 19일, 지출 12,300원").performClick()
+        assertEquals(listOf(today, d(19)), opened)
     }
 
     @Test

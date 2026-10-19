@@ -63,4 +63,7 @@ object AppIntents {
     const val MODE_DAY = "day"
     const val MODE_ADD = "add"
     const val MODE_EDIT = "edit"
+
+    /** LD-07 가계부 빠른 입력(위젯 '+'·날짜 탭, 💰 탭). EXTRA_DATE로 날짜를 넘긴다. */
+    const val ACTION_LEDGER_INPUT = "com.ysdoing.notioncal.action.LEDGER_INPUT"
 }

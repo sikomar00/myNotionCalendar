@@ -35,4 +35,16 @@
     <string name="ledger_empty_title">등록한 가계부가 없습니다</string>
     <string name="ledger_empty_body">노션 💰 자금 관리의 거래내역 DB 링크를 설정 → DB 추가에 넣고 종류를 가계부로 고르면 예산·카테고리 마스터와 함께 등록됩니다.</string>
     <string name="ledger_open_settings">설정 열기</string>
+    <string name="ledger_input_title">%1$d월 %2$d일(%3$s) · %4$s</string>
+    <string name="ledger_input_actual">앱입력</string>
+    <string name="ledger_input_planned">예정</string>
+    <string name="ledger_input_out">지출</string>
+    <string name="ledger_input_in">수입</string>
+    <string name="ledger_input_amount">금액</string>
+    <string name="ledger_input_won">원</string>
+    <string name="ledger_input_memo">내용(선택)</string>
+    <string name="ledger_input_save">저장</string>
+    <string name="ledger_input_cancel">취소</string>
+    <string name="ledger_input_no_ledger">등록한 가계부가 없습니다. 설정 → DB 추가에서 거래내역 DB를 등록하세요.</string>
+    <string name="ledger_add">거래 추가</string>
 </resources>
