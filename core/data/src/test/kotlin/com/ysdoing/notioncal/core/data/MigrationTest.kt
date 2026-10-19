@@ -7,6 +7,7 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.sqlite.execSQL
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import com.ysdoing.notioncal.core.data.db.HabitEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -239,6 +240,55 @@ class MigrationTest {
             assertEquals(null, source.emphasisPropId)
             assertEquals(null, source.emphasisOptionIds)
             assertEquals(500L, source.lastSyncAt)
+        } finally {
+            db.close()
+        }
+    }
+
+    /**
+     * v8 → v9(해빗 트래커): 기존 DB는 일정(CALENDAR) 종류, 일정에는 습관 연결이 없고, 위젯은 📅 탭이다.
+     * datePropId가 nullable이 되어 날짜 없는 🌱 습관 DB를 저장할 수 있고 habits 표를 쓸 수 있다.
+     */
+    @Test
+    fun v8ToV9AddsHabitColumnsAndTable() = runTest {
+        helper.createDatabase(8).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position, colorOptions, propCatalog, extraPropIds, useOptionColors, mappedPropNames, schemaIssues,
+                   emphasisPropId, emphasisOptionIds)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', 'dOnE', 'CHECKBOX', NULL, NULL, NULL, NULL, 1, 500, 500, 0,
+                   NULL, NULL, NULL, 1, NULL, NULL, 'pRi', '["pri-1"]')""",
+            )
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime, colorOptionId, pendingOps, extraValues, titleHasMention)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, NULL, NULL, '', 0, NULL, 1, NULL, 0)""",
+            )
+            db.execSQL(
+                """INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell,
+                   lineSpacing, hideDone, showPhoneCal) VALUES (7, 2, '', 'DARK', 80, 100, 0, 'NORMAL', 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(9).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val source = db.dataSourceDao().get("ds")!!
+            assertEquals(SourceKind.CALENDAR, source.sourceKind)
+            assertEquals("dAtE", source.datePropId)
+            assertEquals("pRi", source.emphasisPropId)
+            assertEquals(null, source.linkPropId)
+            val event = db.eventDao().get("p1")!!
+            assertEquals(null, event.linkPageId)
+            assertEquals(1, event.pendingOps)
+            val widget = WidgetConfigRepository(db.widgetConfigDao()).get(7)
+            assertEquals(WidgetTab.CALENDAR, widget.selectedTab)
+            assertEquals(2, widget.monthOffset)
+
+            db.dataSourceDao().upsert(source.copy(dataSourceId = "habits", datePropId = null, kind = SourceKind.HABIT.name))
+            assertEquals(null, db.dataSourceDao().get("habits")!!.datePropId)
+            db.habitDao().insert(listOf(HabitEntity("h1", "habits", "명상", "🧘", 7, true, LocalDate.of(2026, 10, 19), 1.0)))
+            assertEquals(listOf("h1"), db.habitDao().observeActive().first().map { it.pageId })
         } finally {
             db.close()
         }

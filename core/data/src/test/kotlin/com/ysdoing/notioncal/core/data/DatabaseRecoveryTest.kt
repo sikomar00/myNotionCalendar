@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.EventEntity
+import com.ysdoing.notioncal.core.data.db.HabitEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.OutboxEntity
 import com.ysdoing.notioncal.core.data.db.RecoveringOpenHelperFactory
@@ -64,7 +65,23 @@ class DatabaseRecoveryTest {
                 colorPropId = "c", sortPropId = null, lastSyncAt = 500, lastFullSyncAt = 500,
             ),
         )
-        db.widgetConfigDao().upsert(WidgetConfigEntity(appWidgetId = 7, monthOffset = 1, fontScale = 120))
+        // HB-01: 습관 기록·🌱 습관 등록(앱 상태)과 습관 캐시(지워도 됨).
+        db.dataSourceDao().upsert(
+            DataSourceEntity(
+                dataSourceId = "log", databaseId = "db-log", name = "✅ 습관 기록", colorHex = "#0F7B6C", titlePropId = "title",
+                datePropId = "d", donePropId = null, doneType = null, doneOption = null, undoneOption = null,
+                colorPropId = null, sortPropId = null, kind = SourceKind.HABIT_LOG.name, linkPropId = "rel", linkDataSourceId = "habits",
+            ),
+        )
+        db.dataSourceDao().upsert(
+            DataSourceEntity(
+                dataSourceId = "habits", databaseId = "db-habits", name = "🌱 습관", colorHex = "#0F7B6C", titlePropId = "title",
+                datePropId = null, donePropId = null, doneType = null, doneOption = null, undoneOption = null,
+                colorPropId = null, sortPropId = null, kind = SourceKind.HABIT.name, habitPropIds = """{"emoji":"emo"}""",
+            ),
+        )
+        db.habitDao().insert(listOf(HabitEntity("h1", "habits", "명상", null, 7, true, null, null)))
+        db.widgetConfigDao().upsert(WidgetConfigEntity(appWidgetId = 7, monthOffset = 1, fontScale = 120, selectedTab = "HABIT"))
         db.eventDao().upsert(listOf(event("p-synced", 0), event("local-new", 1)))
         db.outboxDao().insert(
             OutboxEntity(pageId = "local-new", dataSourceId = "ds", op = "CREATE", changes = """{"title":"x"}""",
@@ -105,14 +122,25 @@ class DatabaseRecoveryTest {
             assertNull(source.lastFullSyncAt)
 
             assertEquals(120, db.widgetConfigDao().get(7)!!.fontScale)
+            assertEquals("HABIT", db.widgetConfigDao().get(7)!!.selectedTab)
+
+            // 습관 등록의 새 열(v9)도 그대로 돌아오고, 습관 캐시는 비워진다(다음 동기화가 다시 채움).
+            val log = db.dataSourceDao().get("log")!!
+            assertEquals(SourceKind.HABIT_LOG, log.sourceKind)
+            assertEquals("rel", log.linkPropId)
+            assertEquals("habits", log.linkDataSourceId)
+            val habits = db.dataSourceDao().get("habits")!!
+            assertNull(habits.datePropId)
+            assertEquals(HabitPropIds(emoji = "emo"), HabitPropIds.parse(habits.habitPropIds))
+            assertTrue(db.habitDao().forSource("habits").isEmpty())
 
             assertNull(db.eventDao().get("p-synced")) // 캐시는 비워짐
             assertEquals(1, db.eventDao().get("local-new")!!.pendingOps) // 미전송 일정은 남음
 
-            val log = db.syncLogDao().observeLatest().first()!!
-            assertEquals("CACHE_RESET", log.trigger)
-            assertEquals(RecoveringOpenHelperFactory.RESULT_RECOVERED, log.result)
-            assertEquals(9_000L, log.at)
+            val entry = db.syncLogDao().observeLatest().first()!!
+            assertEquals("CACHE_RESET", entry.trigger)
+            assertEquals(RecoveringOpenHelperFactory.RESULT_RECOVERED, entry.result)
+            assertEquals(9_000L, entry.at)
         } finally {
             db.close()
         }

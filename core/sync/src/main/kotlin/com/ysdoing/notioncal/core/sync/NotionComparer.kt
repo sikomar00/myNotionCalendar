@@ -60,8 +60,10 @@ class NotionComparer @Inject constructor(
                 skipped += source.name
                 continue
             }
-            val mapper = NotionPageMapper(source.toMapping(report.droppedRoles), schema)
-            val filter = QueryFilters.dateRange(source.datePropId, from.minusDays(NotionSyncEngine.LOOKBACK_DAYS), to)
+            // 날짜 없는 DB(🌱 습관)는 달력 범위 대조 대상이 아니다.
+            val mapping = source.toMapping(report.droppedRoles) ?: continue
+            val mapper = NotionPageMapper(mapping, schema)
+            val filter = QueryFilters.dateRange(mapping.datePropId, from.minusDays(NotionSyncEngine.LOOKBACK_DAYS), to)
             val remote = reader.queryAll(source.dataSourceId, filter).pages
                 .mapNotNull { mapper.map(it).event?.toEntity(source.dataSourceId) }
                 .filter { it.overlaps(from, to) && it.pageId !in pending }

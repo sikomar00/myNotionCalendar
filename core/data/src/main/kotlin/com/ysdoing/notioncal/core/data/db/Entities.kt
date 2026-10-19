@@ -16,7 +16,8 @@ data class DataSourceEntity(
     /** "#RRGGBB". 일정에 색 기준 값이 없을 때 쓰는 DB 색. */
     val colorHex: String,
     val titlePropId: String,
-    val datePropId: String,
+    /** 날짜 속성 ID. 날짜 없는 DB(🌱 습관, HB-01)는 null이다(v9). */
+    val datePropId: String?,
     val donePropId: String?,
     /** "CHECKBOX" 또는 "STATUS". 완료 속성을 안 쓰면 null. */
     val doneType: String?,
@@ -47,12 +48,23 @@ data class DataSourceEntity(
     val emphasisPropId: String? = null,
     /** EX-11 강조할 옵션 ID 목록(JSON 배열, v8). 예: 우선순위 '1st'. */
     val emphasisOptionIds: String? = null,
+    /**
+     * DB 종류(v9, PRD §10의 role). [com.ysdoing.notioncal.core.data.SourceKind] 이름: CALENDAR(일정), HABIT(🌱 습관),
+     * HABIT_LOG(✅ 습관 기록). 달력·검색·일정 위젯은 CALENDAR만 읽는다. 모르는 값은 건너뛴다.
+     */
+    @ColumnInfo(defaultValue = "CALENDAR") val kind: String = "CALENDAR",
+    /** HABIT_LOG: 습관을 가리키는 relation 속성 ID(v9). */
+    val linkPropId: String? = null,
+    /** HABIT_LOG: 짝인 🌱 습관 data source ID(v9). 켜기·끄기·삭제를 함께 한다. */
+    val linkDataSourceId: String? = null,
+    /** HABIT: 이모지·주 목표·진행 중·시작일·순서 속성 ID(JSON [com.ysdoing.notioncal.core.data.HabitPropIds], v9). */
+    val habitPropIds: String? = null,
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
 @Entity(
     tableName = "events",
-    indices = [Index("startDate"), Index("dataSourceId", "startDate")],
+    indices = [Index("startDate"), Index("dataSourceId", "startDate"), Index("linkPageId", "startDate")],
 )
 data class EventEntity(
     @PrimaryKey val pageId: String,
@@ -80,6 +92,8 @@ data class EventEntity(
     val extraValues: String? = null,
     /** 제목에 노션 언급(@)이 있다(v7). 앱에서 제목을 바꾸면 언급이 글자로 바뀌므로 편집 화면이 경고한다. */
     @ColumnInfo(defaultValue = "0") val titleHasMention: Boolean = false,
+    /** ✅ 습관 기록 행이 가리키는 🌱 습관 page ID(relation, v9). 일정 행은 null. */
+    val linkPageId: String? = null,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */
@@ -117,3 +131,21 @@ data class HolidayEntity(
     val source: String,
 )
 
+
+/**
+ * 🌱 습관 1개 = 1행(HB-01, v9). 노션에서 날짜 없이 전체 조회해 DB별로 통째로 바꾸는 캐시다(DB 복구 때 남기지 않는다).
+ * 값이 비면 기본값: 주 목표 7, 진행 중 true, 시작일 없음, 순서 없음(이름순).
+ */
+@Entity(tableName = "habits", indices = [Index("dataSourceId")])
+data class HabitEntity(
+    @PrimaryKey val pageId: String,
+    val dataSourceId: String,
+    val name: String,
+    val emoji: String?,
+    /** 1~7. */
+    val weeklyTarget: Int,
+    val active: Boolean,
+    val startDate: LocalDate?,
+    val sortOrder: Double?,
+    val url: String = "",
+)

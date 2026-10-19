@@ -79,10 +79,16 @@ class OutboxProcessor @Inject constructor(
                     outbox.delete(row.id)
                     continue
                 }
+                val mapping = source.toMapping()
+                if (mapping == null) {
+                    // 날짜 없는 DB(🌱 습관)에는 앱이 쓰지 않는다(HB-09 전).
+                    outbox.delete(row.id)
+                    continue
+                }
                 try {
                     val schema = schemas.getOrPut(source.dataSourceId) { reader.dataSource(source.dataSourceId) }
-                    val mapper = NotionPageMapper(source.toMapping(), schema)
-                    val encoder = PropertyEncoder(source.toMapping(), source.doneOption, source.undoneOption, schema)
+                    val mapper = NotionPageMapper(mapping, schema)
+                    val encoder = PropertyEncoder(mapping, source.doneOption, source.undoneOption, schema)
                     when (OutboxOp.valueOf(row.op)) {
                         OutboxOp.CREATE -> create(row, source, mapper, encoder)
                         OutboxOp.UPDATE -> update(row, source, mapper, encoder)

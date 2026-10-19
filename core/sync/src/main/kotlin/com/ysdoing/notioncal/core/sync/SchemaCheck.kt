@@ -25,7 +25,7 @@ internal object SchemaCheck {
         val byId = schema.properties.values.associateBy { it.id }
         val roles = listOfNotNull(
             Triple(SchemaIssue.TITLE, source.titlePropId, setOf("title")),
-            Triple(SchemaIssue.DATE, source.datePropId, setOf("date")),
+            source.datePropId?.let { Triple(SchemaIssue.DATE, it, setOf("date")) },
             source.donePropId?.let { Triple(SchemaIssue.DONE, it, if (source.doneType == "STATUS") setOf("status") else setOf("checkbox")) },
             source.colorPropId?.let { Triple(SchemaIssue.COLOR, it, setOf("select", "status")) },
             source.sortPropId?.let { Triple(SchemaIssue.SORT, it, setOf("select")) },

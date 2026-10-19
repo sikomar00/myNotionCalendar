@@ -111,7 +111,8 @@ class NotionSyncEngine @Inject constructor(
         val issues = SchemaIssue.merge(SchemaIssue.parse(source.schemaIssues), report.issues)
         sources.setSchemaState(source.dataSourceId, SchemaIssue.encodeNames(report.names), SchemaIssue.encode(issues))
         if (report.blocksSync) return 0 // 제목·날짜가 없으면 조회할 수 없다. 캐시는 그대로 둔다.
-        val mapper = NotionPageMapper(source.toMapping(report.droppedRoles), schema)
+        val mapping = source.toMapping(report.droppedRoles) ?: return 0
+        val mapper = NotionPageMapper(mapping, schema)
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
         sources.setColorOptions(source.dataSourceId, colorOptionsJson(schema, source.colorPropId))
         // EX-07: 보기·편집할 수 있는 속성 목록. 처음 받는 DB(앱 업데이트 직후 포함)는 기존 일정에도 값을 채우려고 전체 조회한다.
@@ -130,11 +131,11 @@ class NotionSyncEngine @Inject constructor(
         }
         if (fullDue) {
             val (from, to) = fullRange(today)
-            pulled += reconcile(source, mapper, from, to)
+            pulled += reconcile(source, mapping.datePropId, mapper, from, to)
             sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
         } else if (trigger == SyncTrigger.APP_OPEN || trigger == SyncTrigger.PULL_TO_REFRESH) {
             val month = YearMonth.from(today)
-            pulled += reconcile(source, mapper, month.atDay(1), month.atEndOfMonth())
+            pulled += reconcile(source, mapping.datePropId, mapper, month.atDay(1), month.atEndOfMonth())
         }
         // 조회 시작 전 시각을 기준으로 남겨, 동기화 도중 바뀐 페이지는 다음 증분에서 받는다.
         sources.setLastSyncAt(source.dataSourceId, now.toEpochMilli())
@@ -142,9 +143,9 @@ class NotionSyncEngine @Inject constructor(
     }
 
     /** [from]~[to] 범위를 조회해 upsert하고, 로컬에만 남은 항목은 단건 재조회로 확인한 뒤 정리한다. */
-    private suspend fun reconcile(source: DataSourceEntity, mapper: NotionPageMapper, from: LocalDate, to: LocalDate): Int {
+    private suspend fun reconcile(source: DataSourceEntity, datePropId: String, mapper: NotionPageMapper, from: LocalDate, to: LocalDate): Int {
         val queryFrom = from.minusDays(LOOKBACK_DAYS)
-        val result = reader.queryAll(source.dataSourceId, QueryFilters.dateRange(source.datePropId, queryFrom, to))
+        val result = reader.queryAll(source.dataSourceId, QueryFilters.dateRange(datePropId, queryFrom, to))
         val mapped = result.pages.map(mapper::map)
         apply(source, mapped)
         if (!result.complete) return mapped.size // 1만 건 제한에 걸리면 삭제 판단을 하지 않는다.
@@ -186,8 +187,10 @@ class NotionSyncEngine @Inject constructor(
     }
 }
 
-/** [dropped]: 스키마에서 사라져 이번 동기화에서 뺄 선택 역할(NS-09). */
-internal fun DataSourceEntity.toMapping(dropped: Set<String> = emptySet()) = PropertyMapping(
+/** [dropped]: 스키마에서 사라져 이번 동기화에서 뺄 선택 역할(NS-09). 날짜 속성이 없는 DB(🌱 습관)는 일정 매핑이 없다(null). */
+internal fun DataSourceEntity.toMapping(dropped: Set<String> = emptySet()): PropertyMapping? = datePropId?.let { date -> toMapping(date, dropped) }
+
+private fun DataSourceEntity.toMapping(datePropId: String, dropped: Set<String>) = PropertyMapping(
     titlePropId = titlePropId,
     datePropId = datePropId,
     donePropId = donePropId.takeUnless { SchemaIssue.DONE in dropped },

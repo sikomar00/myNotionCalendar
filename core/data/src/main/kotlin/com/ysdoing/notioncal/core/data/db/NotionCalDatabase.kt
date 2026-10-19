@@ -20,6 +20,9 @@ import java.time.LocalDate
  * - 6: holidays 추가 (EX-02, 테이블 추가만이라 AutoMigration)
  * - 7: events.titleHasMention (제목 언급 편집 경고, AutoMigration)
  * - 8: data_sources.emphasisPropId·emphasisOptionIds (EX-11 우선순위 강조, AutoMigration)
+ * - 9: 해빗 트래커(HB-01·02, WG-11). data_sources.kind(기본 CALENDAR)·linkPropId·linkDataSourceId·habitPropIds,
+ *      datePropId nullable(🌱 습관은 날짜 없음, AutoMigration이 표를 다시 만든다), events.linkPageId + 인덱스,
+ *      habits 추가, widget_configs.selectedTab(기본 CALENDAR)
  */
 @Database(
     entities = [
@@ -30,10 +33,11 @@ import java.time.LocalDate
         OutboxEntity::class,
         ConflictEntity::class,
         HolidayEntity::class,
+        HabitEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {
@@ -44,6 +48,7 @@ abstract class NotionCalDatabase : RoomDatabase() {
     abstract fun outboxDao(): OutboxDao
     abstract fun conflictDao(): ConflictDao
     abstract fun holidayDao(): HolidayDao
+    abstract fun habitDao(): HabitDao
 
     companion object {
         const val NAME = "notioncal.db"

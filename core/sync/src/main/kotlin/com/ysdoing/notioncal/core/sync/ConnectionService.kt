@@ -103,7 +103,8 @@ class ConnectionService @Inject constructor(
         val (doneOption, undoneOption) = doneProp?.let(MappingSuggester::statusOptions) ?: (null to null)
         val existing = dataSourceDao.get(inspection.dataSourceId)
         val mappingChanged = existing != null &&
-            MappingChoice(existing.titlePropId, existing.datePropId, existing.donePropId, existing.colorPropId, existing.sortPropId) != choice
+            (existing.titlePropId != choice.titlePropId || existing.datePropId != choice.datePropId || existing.donePropId != choice.donePropId ||
+                existing.colorPropId != choice.colorPropId || existing.sortPropId != choice.sortPropId)
         dataSourceDao.upsert(
             DataSourceEntity(
                 dataSourceId = inspection.dataSourceId,
