@@ -32,15 +32,16 @@ class EventWriter @Inject constructor(
     /**
      * WI-02: 새 일정. 노션 응답을 받기 전까지 임시 ID([TEMP_PREFIX])를 쓴다.
      * HB-02: [link]를 주면 ✅ 습관 기록으로 만들어 relation에 그 🌱 습관을 건다.
+     * LD-07: [ledger]를 주면 거래내역 행(금액·타입·대분류·예정·앱입력)으로 만든다.
      */
-    suspend fun create(dataSourceId: String, title: String, date: DateValue, link: String? = null): String {
+    suspend fun create(dataSourceId: String, title: String, date: DateValue, link: String? = null, ledger: LedgerValue? = null): String {
         val pageId = TEMP_PREFIX + UUID.randomUUID()
-        val change = EventChange(title = title.trim(), date = date, done = false, link = link)
+        val change = EventChange(title = title.trim(), date = date, done = false, link = link, ledger = ledger)
         db.withTransaction {
             val base = EventEntity(
                 pageId = pageId, dataSourceId = dataSourceId, title = "", startDate = LocalDate.parse(date.startDate),
                 endDate = null, startTime = null, endTime = null, isAllDay = true, done = false, colorKey = null,
-                sortKey = null, url = "", lastEditedTime = clock.millis(), pendingOps = 1,
+                sortKey = null, url = "", lastEditedTime = clock.millis(), pendingOps = 1, createdTime = clock.millis(),
             )
             events.upsert(listOf(base.applying(change, emptyList())))
             outbox.insert(row(pageId, dataSourceId, OutboxOp.CREATE, change, base = null, baseLastEdited = null))

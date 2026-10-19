@@ -31,6 +31,8 @@ import com.ysdoing.notioncal.core.notion.mapping.PropertyEncoder
 import com.ysdoing.notioncal.core.notion.mapping.QueryFilters
 import com.ysdoing.notioncal.core.notion.mapping.RemoteEvent
 import com.ysdoing.notioncal.core.notion.mapping.WriteDate
+import com.ysdoing.notioncal.core.notion.mapping.LedgerWrite
+import com.ysdoing.notioncal.core.data.ledger.Flow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -326,4 +328,14 @@ internal fun EventChange.toPageWrite(catalog: List<ExtraProp> = emptyList()) = P
     selectOptionId = select?.optionId,
     props = props.orEmpty().toPropertyWrites(catalog),
     link = link,
+    ledger = ledger?.let { tx ->
+        LedgerWrite(
+            amount = tx.amount,
+            flow = tx.flow?.let { name -> Flow.entries.firstOrNull { it.name == name }?.notionName },
+            category = tx.category,
+            time = tx.time,
+            planned = tx.planned,
+            manual = tx.manual,
+        )
+    },
 )

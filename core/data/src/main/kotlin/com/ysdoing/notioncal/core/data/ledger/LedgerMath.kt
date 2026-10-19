@@ -9,8 +9,8 @@ import java.time.temporal.TemporalAdjusters
 import kotlin.math.abs
 
 /** 거래 타입(노션 '타입': 지출·수입·이체). */
-enum class Flow {
-    OUT, IN, TRANSFER;
+enum class Flow(val notionName: String) {
+    OUT("지출"), IN("수입"), TRANSFER("이체");
 
     companion object {
         /** 노션 select 이름 → 타입. 모르는 값은 null(합계에 넣지 않는다). */

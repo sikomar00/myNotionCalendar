@@ -24,6 +24,7 @@ import java.util.UUID
  * 메모리 노션(읽기·쓰기). data source마다 따로 둔다.
  * - [CALENDAR]: 📅 Calendar 구조(Name·Date·완료 checkbox·Ctgr select + EX-07 추가 속성)
  * - [HABIT_LOG]: ✅ 습관 기록(이름·날짜·습관 relation), [HABITS]: 🌱 습관(이름·이모지·주 목표·진행 중·시작일·순서)
+ * - [LEDGER]: 💰 거래내역(내용·날짜·시간·금액·타입·대분류·결제수단·예정·앱입력), [BUDGET]: 예산, [CATEGORY]: 카테고리 마스터
  * 실패 주입: [networkDown], [createTimesOutAfterCreating], [rejectNext], [afterCreate].
  */
 class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWriter {
@@ -45,7 +46,22 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
         val dataSourceId: String = CALENDAR,
         /** ✅ 습관 기록의 '습관' relation(🌱 습관 page ID). */
         var habit: String? = null,
+        /** 💰 거래내역 값. */
+        var amount: Long? = null,
+        var flow: String? = null,
+        var category: String? = null,
+        var time: String? = null,
+        var payment: String? = null,
+        var planned: Boolean = false,
+        var manual: Boolean = false,
     )
+
+    data class Budget(val id: String, var type: String, var value: String, var group: String?, var amount: Long?, var inTrash: Boolean = false)
+
+    data class Category(val id: String, var name: String, var group: String?, var inTrash: Boolean = false)
+
+    val budgets = linkedMapOf<String, Budget>()
+    val categories = linkedMapOf<String, Category>()
 
     /** 🌱 습관 1행. 빈 값은 null. */
     data class Habit(
@@ -110,6 +126,48 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             "기록":{"id":"gIrO","name":"기록","type":"relation","relation":{"data_source_id":"$HABIT_LOG","database_id":"db-log"}}}}""",
     )
 
+    var ledgerSchema: DataSourceDto = NotionJson.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"$LEDGER","properties":{
+            "내용":{"id":"title","name":"내용","type":"title"},
+            "날짜":{"id":"nAlJ","name":"날짜","type":"date"},
+            "시간":{"id":"tIme","name":"시간","type":"rich_text"},
+            "금액":{"id":"aMt","name":"금액","type":"number"},
+            "타입":{"id":"fLw","name":"타입","type":"select","select":{"options":[{"id":"o1","name":"지출"},{"id":"o2","name":"수입"},{"id":"o3","name":"이체"}]}},
+            "대분류":{"id":"cAt","name":"대분류","type":"select","select":{"options":[{"id":"c1","name":"식비"}]}},
+            "결제수단":{"id":"pAy","name":"결제수단","type":"select","select":{"options":[]}},
+            "예정":{"id":"pLn","name":"예정","type":"checkbox"},
+            "앱입력":{"id":"mAn","name":"앱입력","type":"checkbox"}}}""",
+    )
+
+    var budgetSchema: DataSourceDto = NotionJson.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"$BUDGET","properties":{
+            "예산명":{"id":"title","name":"예산명","type":"title"},
+            "기간유형":{"id":"tYp","name":"기간유형","type":"select","select":{"options":[{"id":"m","name":"월"},{"id":"w","name":"주"}]}},
+            "기간값":{"id":"vAl","name":"기간값","type":"rich_text"},
+            "그룹":{"id":"gRp","name":"그룹","type":"select","select":{"options":[{"id":"g1","name":"전체"},{"id":"g2","name":"생활비"}]}},
+            "예산금액":{"id":"aMt","name":"예산금액","type":"number"}}}""",
+    )
+
+    var categorySchema: DataSourceDto = NotionJson.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"$CATEGORY","properties":{
+            "대분류":{"id":"title","name":"대분류","type":"title"},
+            "그룹":{"id":"gRp","name":"그룹","type":"select","select":{"options":[]}}}}""",
+    )
+
+    /** 거래내역 한 행(뱅크샐러드 CSV에서 가져온 것처럼). */
+    fun seedTx(
+        id: String, title: String, date: String, amount: Long, flow: String = "지출", category: String? = "식비", time: String? = "12:00",
+        payment: String? = "토스뱅크 통장", planned: Boolean = false, manual: Boolean = false, createdAt: Instant = Instant.parse("2026-10-01T00:00:00Z"),
+    ) {
+        pages[id] = Page(
+            id, title, date, createdTime = createdAt, lastEdited = createdAt, dataSourceId = LEDGER,
+            amount = amount, flow = flow, category = category, time = time, payment = payment, planned = planned, manual = manual,
+        )
+    }
+
     fun seed(
         id: String,
         title: String,
@@ -152,13 +210,16 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
         return when (dataSourceId) {
             HABIT_LOG -> logSchema
             HABITS -> habitSchema
+            LEDGER -> ledgerSchema
+            BUDGET -> budgetSchema
+            CATEGORY -> categorySchema
             else -> schema
         }
     }
 
     override suspend fun pageOrNull(pageId: String): PageDto? {
         if (networkDown) throw NotionException(NotionError.Network)
-        return pages[pageId]?.toDto() ?: habits[pageId]?.toDto()
+        return pages[pageId]?.toDto() ?: habits[pageId]?.toDto() ?: budgets[pageId]?.toDto() ?: categories[pageId]?.toDto()
     }
 
     /** 마지막 queryAll 필터(날짜 범위 확인용). */
@@ -167,6 +228,11 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult {
         if (networkDown) throw NotionException(NotionError.Network)
         queries += dataSourceId to filter
+        if (dataSourceId == BUDGET || dataSourceId == CATEGORY) {
+            require(filter == null) { "예산·카테고리 마스터는 필터 없이 전체 조회한다" }
+            val rows = if (dataSourceId == BUDGET) budgets.values.filter { !it.inTrash }.map { it.toDto() } else categories.values.filter { !it.inTrash }.map { it.toDto() }
+            return QueryResult(rows, complete = true)
+        }
         if (dataSourceId == HABITS) {
             require(filter == null) { "🌱 습관은 필터 없이 전체 조회한다" }
             return QueryResult(habits.values.filter { !it.inTrash }.map { it.toDto() }, complete = true)
@@ -238,6 +304,24 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     /** 실제 노션처럼 속성 이름 키를 받는다(인코딩된 ID 키는 무시된다). */
     private fun Page.applyProperties(props: JsonObject) {
+        if (dataSourceId == LEDGER) {
+            props["내용"]?.jsonObject?.get("title")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonObject?.get("content")
+                ?.jsonPrimitive?.content?.let { title = it }
+            props["날짜"]?.jsonObject?.get("date")?.jsonObject?.let { d -> start = d["start"]?.jsonPrimitive?.contentOrNull }
+            props["금액"]?.jsonObject?.get("number")?.jsonPrimitive?.contentOrNull?.let { amount = it.toDouble().toLong() }
+            fun select(key: String): String? = props[key]?.jsonObject?.let { o ->
+                val s = o["select"]
+                if (s == null || s is JsonNull) null else s.jsonObject["name"]?.jsonPrimitive?.content
+            }
+            if ("타입" in props) flow = select("타입")
+            if ("대분류" in props) category = select("대분류")
+            props["시간"]?.jsonObject?.get("rich_text")?.jsonArray?.let { arr ->
+                time = arr.firstOrNull()?.jsonObject?.get("text")?.jsonObject?.get("content")?.jsonPrimitive?.content
+            }
+            props["예정"]?.jsonObject?.get("checkbox")?.jsonPrimitive?.booleanOrNull?.let { planned = it }
+            props["앱입력"]?.jsonObject?.get("checkbox")?.jsonPrimitive?.booleanOrNull?.let { manual = it }
+            return
+        }
         if (dataSourceId == HABIT_LOG) {
             props["이름"]?.jsonObject?.get("title")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonObject?.get("content")
                 ?.jsonPrimitive?.content?.let { title = it }
@@ -270,6 +354,22 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     private fun Page.toDto(): PageDto {
         val date = start?.let { """{"start":"$it","end":${end?.let { e -> "\"$e\"" } ?: "null"}}""" } ?: "null"
         val head = """"id":"$id","url":"https://www.notion.so/$id","created_time":"$createdTime","last_edited_time":"$lastEdited","in_trash":$inTrash"""
+        if (dataSourceId == LEDGER) {
+            fun sel(v: String?) = v?.let { """{"name":${str(it)}}""" } ?: "null"
+            return NotionJson.decodeFromString(
+                PageDto.serializer(),
+                """{$head,"properties":{
+                    "내용":{"id":"title","type":"title","title":[{"plain_text":${str(title)}}]},
+                    "날짜":{"id":"nAlJ","type":"date","date":$date},
+                    "시간":{"id":"tIme","type":"rich_text","rich_text":[${time?.let { """{"plain_text":${str(it)}}""" } ?: ""}]},
+                    "금액":{"id":"aMt","type":"number","number":${amount ?: "null"}},
+                    "타입":{"id":"fLw","type":"select","select":${sel(flow)}},
+                    "대분류":{"id":"cAt","type":"select","select":${sel(category)}},
+                    "결제수단":{"id":"pAy","type":"select","select":${sel(payment)}},
+                    "예정":{"id":"pLn","type":"checkbox","checkbox":$planned},
+                    "앱입력":{"id":"mAn","type":"checkbox","checkbox":$manual}}}""",
+            )
+        }
         if (dataSourceId == HABIT_LOG) {
             return NotionJson.decodeFromString(
                 PageDto.serializer(),
@@ -305,7 +405,27 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
             "순서":{"id":"oRdR","type":"number","number":${order ?: "null"}}}}""",
     )
 
+    private fun Budget.toDto(): PageDto = NotionJson.decodeFromString(
+        PageDto.serializer(),
+        """{"id":"$id","last_edited_time":"2026-10-19T00:00:00Z","in_trash":$inTrash,"properties":{
+            "예산명":{"id":"title","type":"title","title":[{"plain_text":${str("$value ${group.orEmpty()}")}}]},
+            "기간유형":{"id":"tYp","type":"select","select":{"name":${str(type)}}},
+            "기간값":{"id":"vAl","type":"rich_text","rich_text":[{"plain_text":${str(value)}}]},
+            "그룹":{"id":"gRp","type":"select","select":${group?.let { """{"name":${str(it)}}""" } ?: "null"}},
+            "예산금액":{"id":"aMt","type":"number","number":${amount ?: "null"}}}}""",
+    )
+
+    private fun Category.toDto(): PageDto = NotionJson.decodeFromString(
+        PageDto.serializer(),
+        """{"id":"$id","last_edited_time":"2026-10-19T00:00:00Z","in_trash":$inTrash,"properties":{
+            "대분류":{"id":"title","type":"title","title":[{"plain_text":${str(name)}}]},
+            "그룹":{"id":"gRp","type":"select","select":${group?.let { """{"name":${str(it)}}""" } ?: "null"}}}}""",
+    )
+
     companion object {
+        const val LEDGER = "ledger"
+        const val BUDGET = "budget"
+        const val CATEGORY = "category"
         const val CALENDAR = "ds"
         const val HABIT_LOG = "log"
         const val HABITS = "habits"

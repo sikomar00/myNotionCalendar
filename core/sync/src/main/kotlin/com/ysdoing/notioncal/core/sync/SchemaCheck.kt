@@ -1,6 +1,9 @@
 package com.ysdoing.notioncal.core.sync
 
+import com.ysdoing.notioncal.core.data.BudgetPropIds
+import com.ysdoing.notioncal.core.data.CategoryPropIds
 import com.ysdoing.notioncal.core.data.HabitPropIds
+import com.ysdoing.notioncal.core.data.LedgerPropIds
 import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.sourceKind
@@ -13,6 +16,7 @@ import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
  * - 완료·색·정렬 속성이 없거나 종류가 바뀜 → 그 매핑만 빼고 동기화한다(완료 아님·DB 색).
  * - ✅ 습관 기록의 '습관'(relation)이 없거나 바뀜 → 연결을 빼고 읽는다(체크는 HabitRepository가 막는다).
  * - 🌱 습관(날짜 없음)은 제목만 필수이고, 이모지·주 목표·진행 중·시작일·순서는 빠지면 기본값을 쓴다.
+ * - 💰 거래내역은 금액(number)·타입(select)이, 예산은 기간유형·기간값이 없으면 동기화를 멈춘다(LD-01). 나머지는 빼고 읽는다.
  */
 internal object SchemaCheck {
     data class Report(
@@ -24,6 +28,31 @@ internal object SchemaCheck {
         val droppedRoles: Set<String>,
     ) {
         val blocksSync: Boolean get() = issues.any { it.blocksSync }
+    }
+
+    /** 가계부 종류의 역할별 속성(ID, 허용 유형). */
+    private fun roleProps(source: DataSourceEntity): List<Triple<String, String, Set<String>>> = when (source.sourceKind) {
+        SourceKind.LEDGER -> LedgerPropIds.parse(source.rolePropIds).let { p ->
+            listOfNotNull(
+                Triple(SchemaIssue.AMOUNT, p.amount.orEmpty(), setOf("number")),
+                Triple(SchemaIssue.FLOW, p.flow.orEmpty(), setOf("select")),
+                p.category?.let { Triple(SchemaIssue.CATEGORY, it, setOf("select")) },
+                p.time?.let { Triple(SchemaIssue.TIME, it, setOf("rich_text")) },
+                p.payment?.let { Triple(SchemaIssue.PAYMENT, it, setOf("select")) },
+                p.planned?.let { Triple(SchemaIssue.PLANNED, it, setOf("checkbox")) },
+                p.manual?.let { Triple(SchemaIssue.MANUAL, it, setOf("checkbox")) },
+            )
+        }
+        SourceKind.BUDGET -> BudgetPropIds.parse(source.rolePropIds).let { p ->
+            listOfNotNull(
+                Triple(SchemaIssue.PERIOD_TYPE, p.periodType.orEmpty(), setOf("select")),
+                Triple(SchemaIssue.PERIOD_VALUE, p.periodValue.orEmpty(), setOf("rich_text")),
+                p.group?.let { Triple(SchemaIssue.GROUP, it, setOf("select")) },
+                p.amount?.let { Triple(SchemaIssue.AMOUNT, it, setOf("number")) },
+            )
+        }
+        SourceKind.CATEGORY -> listOfNotNull(CategoryPropIds.parse(source.rolePropIds).group?.let { Triple(SchemaIssue.GROUP, it, setOf("select")) })
+        else -> emptyList()
     }
 
     fun check(source: DataSourceEntity, schema: DataSourceDto, previousNames: Map<String, String>): Report {
@@ -41,7 +70,7 @@ internal object SchemaCheck {
             habit?.active?.let { Triple(SchemaIssue.ACTIVE, it, setOf("checkbox")) },
             habit?.startDate?.let { Triple(SchemaIssue.START, it, setOf("date")) },
             habit?.sortOrder?.let { Triple(SchemaIssue.ORDER, it, setOf("number")) },
-        )
+        ) + roleProps(source)
         val issues = mutableListOf<SchemaIssue>()
         val names = mutableMapOf<String, String>()
         val dropped = mutableSetOf<String>()

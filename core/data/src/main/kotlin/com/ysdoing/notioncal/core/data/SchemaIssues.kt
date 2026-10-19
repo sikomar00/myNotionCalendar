@@ -38,7 +38,20 @@ data class SchemaIssue(
         const val ACTIVE = "ACTIVE"
         const val START = "START"
         const val ORDER = "ORDER"
-        val REQUIRED_ROLES = setOf(TITLE, DATE)
+
+        /** LD-01·05 가계부 속성(거래내역·예산·카테고리 마스터). */
+        const val AMOUNT = "AMOUNT"
+        const val FLOW = "FLOW"
+        const val CATEGORY = "CATEGORY"
+        const val TIME = "TIME"
+        const val PAYMENT = "PAYMENT"
+        const val PLANNED = "PLANNED"
+        const val MANUAL = "MANUAL"
+        const val PERIOD_TYPE = "PERIOD_TYPE"
+        const val PERIOD_VALUE = "PERIOD_VALUE"
+        const val GROUP = "GROUP"
+        /** 가계부는 금액·타입(LD-01)과 예산 기간(LD-05)이 없으면 계산할 수 없어 동기화를 멈춘다. */
+        val REQUIRED_ROLES = setOf(TITLE, DATE, "AMOUNT", "FLOW", "PERIOD_TYPE", "PERIOD_VALUE")
 
         const val MISSING = "MISSING"
         const val TYPE_CHANGED = "TYPE_CHANGED"

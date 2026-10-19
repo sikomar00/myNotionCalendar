@@ -31,6 +31,8 @@ data class PageWrite(
     val props: Map<String, PropertyWrite> = emptyMap(),
     /** HB-02: relation에 걸 page ID 하나(✅ 습관 기록 → 🌱 습관). */
     val link: String? = null,
+    /** LD-07·09 가계부 값. */
+    val ledger: LedgerWrite? = null,
 )
 
 /** EX-07 추가 속성 쓰기 하나. [type]은 [ExtraTypes] 값. */
@@ -103,6 +105,22 @@ class PropertyEncoder(
                 put("relation", buildJsonArray { add(buildJsonObject { put("id", write.link) }) })
             }
         }
+        val ledger = mapping.ledger
+        val tx = write.ledger
+        if (ledger != null && tx != null) {
+            ledger.amountPropId?.let { id -> tx.amount?.let { putJsonObject(keyFor(id)) { put("number", it) } } }
+            ledger.flowPropId?.let { id -> tx.flow?.let { putSelectName(keyFor(id), it) } }
+            ledger.categoryPropId?.let { id -> tx.category?.let { putSelectName(keyFor(id), it) } }
+            ledger.timePropId?.let { id ->
+                tx.time?.let { time ->
+                    putJsonObject(keyFor(id)) {
+                        put("rich_text", buildJsonArray { if (time.isNotBlank()) add(buildJsonObject { putJsonObject("text") { put("content", time) } }) })
+                    }
+                }
+            }
+            ledger.plannedPropId?.let { id -> tx.planned?.let { putJsonObject(keyFor(id)) { put("checkbox", it) } } }
+            ledger.manualPropId?.let { id -> tx.manual?.let { putJsonObject(keyFor(id)) { put("checkbox", it) } } }
+        }
         write.props.forEach { (propId, prop) ->
             val value = prop.value
             when (prop.type) {
@@ -123,6 +141,11 @@ class PropertyEncoder(
                 }
             }
         }
+    }
+
+    /** select를 옵션 이름으로 쓴다(없는 이름이면 노션이 옵션을 만든다). 빈 이름은 값을 비운다. */
+    private fun kotlinx.serialization.json.JsonObjectBuilder.putSelectName(key: String, name: String) {
+        putJsonObject(key) { if (name.isBlank()) put("select", JsonNull) else putJsonObject("select") { put("name", name.trim()) } }
     }
 
     private fun offset(instant: Instant): String =

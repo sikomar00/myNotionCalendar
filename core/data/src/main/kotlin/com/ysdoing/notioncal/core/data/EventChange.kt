@@ -72,6 +72,29 @@ data class ExtraProp(
 )
 
 /**
+ * LD-07·09 거래 값(바뀐 것만). [flow]는 [com.ysdoing.notioncal.core.data.ledger.Flow] 이름(OUT·IN·TRANSFER).
+ * [category]가 빈 문자열이면 대분류를 비운다.
+ */
+@Serializable
+data class LedgerValue(
+    val amount: Long? = null,
+    val flow: String? = null,
+    val category: String? = null,
+    val time: String? = null,
+    val planned: Boolean? = null,
+    val manual: Boolean? = null,
+) {
+    fun mergedWith(later: LedgerValue) = LedgerValue(
+        amount = later.amount ?: amount,
+        flow = later.flow ?: flow,
+        category = later.category ?: category,
+        time = later.time ?: time,
+        planned = later.planned ?: planned,
+        manual = later.manual ?: manual,
+    )
+}
+
+/**
  * 쓰기 1건에서 바뀐 필드만 담는다(PRD §8.5-6: 바뀐 속성만 전송). [props]는 EX-07 추가 속성(키는 속성 ID).
  * [link]는 HB-02 ✅ 습관 기록을 만들 때 거는 🌱 습관 page ID다. 기록은 고치지 않으므로 충돌 판정(ChangeField)에는 넣지 않는다.
  */
@@ -83,6 +106,8 @@ data class EventChange(
     val select: SelectValue? = null,
     val props: Map<String, PropValue>? = null,
     val link: String? = null,
+    /** LD-07·09 거래 값. 기록은 거래 쓰기만 하므로 충돌 판정(ChangeField)에는 넣지 않는다. */
+    val ledger: LedgerValue? = null,
 ) {
     fun mergedWith(later: EventChange) = EventChange(
         title = later.title ?: title,
@@ -91,9 +116,15 @@ data class EventChange(
         select = later.select ?: select,
         props = if (props == null && later.props == null) null else props.orEmpty() + later.props.orEmpty(),
         link = later.link ?: link,
+        ledger = when {
+            ledger == null -> later.ledger
+            later.ledger == null -> ledger
+            else -> ledger.mergedWith(later.ledger)
+        },
     )
 
-    val isEmpty: Boolean get() = title == null && date == null && done == null && select == null && props.isNullOrEmpty() && link == null
+    val isEmpty: Boolean
+        get() = title == null && date == null && done == null && select == null && props.isNullOrEmpty() && link == null && ledger == null
 }
 
 /** 색 기준 select 옵션(data_sources.colorOptions JSON). */
@@ -202,6 +233,16 @@ fun EventEntity.applying(change: EventChange, colorOptions: List<ColorOption>): 
     }
     change.props?.let { props -> next = next.copy(extraValues = encodeExtraValues(parseExtraValues(next.extraValues) + props)) }
     change.link?.let { next = next.copy(linkPageId = it) }
+    change.ledger?.let { tx ->
+        next = next.copy(
+            amount = tx.amount ?: next.amount,
+            flow = tx.flow ?: next.flow,
+            category = tx.category?.let { c -> c.ifBlank { null } } ?: next.category.takeIf { tx.category == null },
+            txTime = tx.time?.ifBlank { null } ?: next.txTime.takeIf { tx.time == null },
+            planned = tx.planned ?: next.planned,
+            manual = tx.manual ?: next.manual,
+        )
+    }
     return next
 }
 

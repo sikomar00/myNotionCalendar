@@ -2,7 +2,18 @@ package com.ysdoing.notioncal.core.sync
 
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.ColorOption
+import com.ysdoing.notioncal.core.data.BudgetPropIds
+import com.ysdoing.notioncal.core.data.CategoryPropIds
 import com.ysdoing.notioncal.core.data.HabitPropIds
+import com.ysdoing.notioncal.core.data.LedgerPropIds
+import com.ysdoing.notioncal.core.data.db.BudgetEntity
+import com.ysdoing.notioncal.core.data.db.CategoryGroupEntity
+import com.ysdoing.notioncal.core.data.ledger.Flow
+import com.ysdoing.notioncal.core.notion.mapping.BudgetMapping
+import com.ysdoing.notioncal.core.notion.mapping.BudgetPageMapper
+import com.ysdoing.notioncal.core.notion.mapping.CategoryMapping
+import com.ysdoing.notioncal.core.notion.mapping.CategoryPageMapper
+import com.ysdoing.notioncal.core.notion.mapping.LedgerMapping
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.db.HabitEntity
 import com.ysdoing.notioncal.core.data.sourceKind
@@ -124,6 +135,7 @@ class NotionSyncEngine @Inject constructor(
         sources.setSchemaState(source.dataSourceId, SchemaIssue.encodeNames(report.names), SchemaIssue.encode(issues))
         if (report.blocksSync) return 0 // 제목·날짜가 없으면 조회할 수 없다. 캐시는 그대로 둔다.
         if (kind == SourceKind.HABIT) return syncHabits(source, report.droppedRoles, now)
+        if (kind == SourceKind.BUDGET || kind == SourceKind.CATEGORY) return syncLedgerTable(source, kind, report.droppedRoles, now)
         val mapping = source.toMapping(report.droppedRoles) ?: return 0
         val mapper = NotionPageMapper(mapping, schema)
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
@@ -177,6 +189,39 @@ class NotionSyncEngine @Inject constructor(
         sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
         widgetRefresher.requestUpdate()
         return habits.size
+    }
+
+    /** LD-01·05: 예산·카테고리 마스터 전체 조회 → 표를 통째로 바꾼다(날짜 없는 DB, 행이 수십 개). */
+    private suspend fun syncLedgerTable(source: DataSourceEntity, kind: SourceKind, dropped: Set<String>, now: Instant): Int {
+        fun keep(role: String, id: String?) = id.takeUnless { role in dropped }
+        val result = reader.queryAll(source.dataSourceId, null)
+        val dao = db.ledgerDao()
+        val count = if (kind == SourceKind.BUDGET) {
+            val ids = BudgetPropIds.parse(source.rolePropIds)
+            val mapper = BudgetPageMapper(
+                BudgetMapping(
+                    titlePropId = source.titlePropId,
+                    periodTypePropId = ids.periodType,
+                    periodValuePropId = ids.periodValue,
+                    groupPropId = keep(SchemaIssue.GROUP, ids.group),
+                    amountPropId = keep(SchemaIssue.AMOUNT, ids.amount),
+                ),
+            )
+            val rows = result.pages.mapNotNull(mapper::map).map {
+                BudgetEntity(it.pageId, source.dataSourceId, it.periodType, it.periodKey, it.group, it.amount)
+            }
+            if (result.complete) dao.replaceBudgets(source.dataSourceId, rows) else dao.insertBudgets(rows)
+            rows.size
+        } else {
+            val mapper = CategoryPageMapper(CategoryMapping(source.titlePropId, keep(SchemaIssue.GROUP, CategoryPropIds.parse(source.rolePropIds).group)))
+            val rows = result.pages.mapNotNull(mapper::map).map { CategoryGroupEntity(it.pageId, source.dataSourceId, it.category, it.group) }
+            if (result.complete) dao.replaceCategoryGroups(source.dataSourceId, rows) else dao.insertCategoryGroups(rows)
+            rows.size
+        }
+        sources.setLastSyncAt(source.dataSourceId, now.toEpochMilli())
+        sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
+        widgetRefresher.requestUpdate()
+        return count
     }
 
     /** 검증 메모 6: 기록 조회 범위. 시작일이 없는 습관이 있으면 [HABIT_LOG_DAYS]일 전부터. */
@@ -246,7 +291,23 @@ private fun DataSourceEntity.toMapping(datePropId: String, dropped: Set<String>)
     colorPropId = colorPropId.takeUnless { SchemaIssue.COLOR in dropped },
     sortPropId = sortPropId.takeUnless { SchemaIssue.SORT in dropped },
     linkPropId = linkPropId.takeUnless { SchemaIssue.LINK in dropped },
+    ledger = if (sourceKind == SourceKind.LEDGER) ledgerMapping(dropped) else null,
 )
+
+/** LD-01 거래내역 매핑. 스키마에서 빠진 선택 속성은 뺀다(NS-09). */
+private fun DataSourceEntity.ledgerMapping(dropped: Set<String>): LedgerMapping {
+    val ids = LedgerPropIds.parse(rolePropIds)
+    fun keep(role: String, id: String?) = id.takeUnless { role in dropped }
+    return LedgerMapping(
+        amountPropId = ids.amount,
+        flowPropId = ids.flow,
+        categoryPropId = keep(SchemaIssue.CATEGORY, ids.category),
+        timePropId = keep(SchemaIssue.TIME, ids.time),
+        paymentPropId = keep(SchemaIssue.PAYMENT, ids.payment),
+        plannedPropId = keep(SchemaIssue.PLANNED, ids.planned),
+        manualPropId = keep(SchemaIssue.MANUAL, ids.manual),
+    )
+}
 
 internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     pageId = pageId,
@@ -266,6 +327,14 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     extraValues = encodeExtraValues(extraValues.mapValues { it.value.toPropValue() }),
     titleHasMention = titleHasMention,
     linkPageId = linkPageId,
+    createdTime = createdTime?.toEpochMilli() ?: 0,
+    amount = ledger?.amount,
+    flow = ledger?.flow?.let(Flow::ofName)?.name,
+    category = ledger?.category,
+    txTime = ledger?.time,
+    payment = ledger?.payment,
+    planned = ledger?.planned ?: false,
+    manual = ledger?.manual ?: false,
 )
 
 internal fun RemoteHabit.toEntity(dataSourceId: String) = HabitEntity(
