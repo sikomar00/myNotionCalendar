@@ -2,6 +2,13 @@ package com.ysdoing.notioncal.core.sync
 
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.ColorOption
+import com.ysdoing.notioncal.core.data.HabitPropIds
+import com.ysdoing.notioncal.core.data.SourceKind
+import com.ysdoing.notioncal.core.data.db.HabitEntity
+import com.ysdoing.notioncal.core.data.sourceKind
+import com.ysdoing.notioncal.core.notion.mapping.HabitMapping
+import com.ysdoing.notioncal.core.notion.mapping.HabitPageMapper
+import com.ysdoing.notioncal.core.notion.mapping.RemoteHabit
 import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.encodeExtraValues
 import com.ysdoing.notioncal.core.data.encodePropCatalog
@@ -48,6 +55,9 @@ data class SyncOutcome(val pulled: Int, val error: NotionError?)
  * 2. 이후에는 last_edited_time 증분 조회(2분 겹침).
  * 3. 삭제 감지: 하루 1회 전체 범위, 앱 열기·새로고침 때는 현재 달을 조회해 로컬 ID와 대조한다.
  *    대조에서 빠진 항목은 바로 지우지 않고 단건 재조회로 확인한다(날짜 필터의 기간 일정 처리가 문서에 없음).
+ *
+ * 🌱 습관(HB-01)은 날짜가 없어 매번 필터 없이 전체 조회해 통째로 바꾼다. ✅ 습관 기록은 일정과 같은 방식이되 범위가
+ * max(가장 이른 습관 시작일, 오늘-[HABIT_LOG_DAYS]일)~오늘이다(긴 연속·연속 달성 주를 세려고). 습관을 먼저 받는다.
  */
 @Singleton
 class NotionSyncEngine @Inject constructor(
@@ -68,6 +78,7 @@ class NotionSyncEngine @Inject constructor(
             var failures = 0
             var lastError: NotionError? = null
             val targets = sources.enabled().filter { onlyDataSourceId == null || it.dataSourceId == onlyDataSourceId }
+                .sortedBy { if (it.sourceKind == SourceKind.HABIT) 0 else 1 } // 기록 범위가 습관 시작일을 쓴다
             // 등록한 DB가 없으면 기록하지 않는다("마지막 동기화" 시각이 거짓으로 뜨지 않게).
             if (targets.isEmpty()) return@withContext SyncOutcome(0, null)
             for (source in targets) {
@@ -103,6 +114,7 @@ class NotionSyncEngine @Inject constructor(
     }
 
     private suspend fun syncSource(source: DataSourceEntity, trigger: SyncTrigger): Int {
+        val kind = source.sourceKind ?: return 0 // 이 버전이 모르는 종류(뒤 Phase의 가계부 등)는 건드리지 않는다.
         val now = clock.instant()
         val today = now.atZone(DateCodec.SEOUL).toLocalDate()
         val schema = reader.dataSource(source.dataSourceId)
@@ -111,6 +123,7 @@ class NotionSyncEngine @Inject constructor(
         val issues = SchemaIssue.merge(SchemaIssue.parse(source.schemaIssues), report.issues)
         sources.setSchemaState(source.dataSourceId, SchemaIssue.encodeNames(report.names), SchemaIssue.encode(issues))
         if (report.blocksSync) return 0 // 제목·날짜가 없으면 조회할 수 없다. 캐시는 그대로 둔다.
+        if (kind == SourceKind.HABIT) return syncHabits(source, report.droppedRoles, now)
         val mapping = source.toMapping(report.droppedRoles) ?: return 0
         val mapper = NotionPageMapper(mapping, schema)
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
@@ -130,7 +143,7 @@ class NotionSyncEngine @Inject constructor(
             pulled += changed.size
         }
         if (fullDue) {
-            val (from, to) = fullRange(today)
+            val (from, to) = if (kind == SourceKind.HABIT_LOG) habitLogRange(source, today) else fullRange(today)
             pulled += reconcile(source, mapping.datePropId, mapper, from, to)
             sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
         } else if (trigger == SyncTrigger.APP_OPEN || trigger == SyncTrigger.PULL_TO_REFRESH) {
@@ -140,6 +153,38 @@ class NotionSyncEngine @Inject constructor(
         // 조회 시작 전 시각을 기준으로 남겨, 동기화 도중 바뀐 페이지는 다음 증분에서 받는다.
         sources.setLastSyncAt(source.dataSourceId, now.toEpochMilli())
         return pulled
+    }
+
+    /** HB-01: 🌱 습관 전체 조회 → 그 DB의 습관을 통째로 바꾼다(노션에서 지운 습관도 빠진다). */
+    private suspend fun syncHabits(source: DataSourceEntity, dropped: Set<String>, now: Instant): Int {
+        val ids = HabitPropIds.parse(source.habitPropIds)
+        fun keep(role: String, id: String?) = id.takeUnless { role in dropped }
+        val mapper = HabitPageMapper(
+            HabitMapping(
+                titlePropId = source.titlePropId,
+                emojiPropId = keep(SchemaIssue.EMOJI, ids.emoji),
+                weeklyTargetPropId = keep(SchemaIssue.TARGET, ids.weeklyTarget),
+                activePropId = keep(SchemaIssue.ACTIVE, ids.active),
+                startDatePropId = keep(SchemaIssue.START, ids.startDate),
+                sortOrderPropId = keep(SchemaIssue.ORDER, ids.sortOrder),
+            ),
+        )
+        val result = reader.queryAll(source.dataSourceId, null)
+        val habits = result.pages.mapNotNull(mapper::map).map { it.toEntity(source.dataSourceId) }
+        // 1만 건 제한에 걸리면 지우기는 하지 않는다.
+        if (result.complete) db.habitDao().replaceForSource(source.dataSourceId, habits) else db.habitDao().insert(habits)
+        sources.setLastSyncAt(source.dataSourceId, now.toEpochMilli())
+        sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
+        widgetRefresher.requestUpdate()
+        return habits.size
+    }
+
+    /** 검증 메모 6: 기록 조회 범위. 시작일이 없는 습관이 있으면 [HABIT_LOG_DAYS]일 전부터. */
+    private suspend fun habitLogRange(source: DataSourceEntity, today: LocalDate): Pair<LocalDate, LocalDate> {
+        val floor = today.minusDays(HABIT_LOG_DAYS)
+        val starts = source.linkDataSourceId?.let { db.habitDao().forSource(it) }.orEmpty().map { it.startDate }
+        val earliest = if (starts.isEmpty() || starts.any { it == null }) floor else maxOf(starts.filterNotNull().min(), floor)
+        return minOf(earliest, today) to today
     }
 
     /** [from]~[to] 범위를 조회해 upsert하고, 로컬에만 남은 항목은 단건 재조회로 확인한 뒤 정리한다. */
@@ -178,6 +223,9 @@ class NotionSyncEngine @Inject constructor(
         const val LOOKBACK_DAYS = 31L
         val INCREMENTAL_OVERLAP: Duration = Duration.ofMinutes(2)
         val FULL_RECONCILE_INTERVAL: Duration = Duration.ofHours(24)
+
+        /** ✅ 습관 기록을 받아 두는 최대 기간(일). */
+        const val HABIT_LOG_DAYS = 400L
 
         /** 보이는 범위: 이번 달 ±2개월(NS-03 기본값). */
         fun fullRange(today: LocalDate): Pair<LocalDate, LocalDate> {
@@ -218,6 +266,18 @@ internal fun RemoteEvent.toEntity(dataSourceId: String) = EventEntity(
     extraValues = encodeExtraValues(extraValues.mapValues { it.value.toPropValue() }),
     titleHasMention = titleHasMention,
     linkPageId = linkPageId,
+)
+
+internal fun RemoteHabit.toEntity(dataSourceId: String) = HabitEntity(
+    pageId = pageId,
+    dataSourceId = dataSourceId,
+    name = name,
+    emoji = emoji,
+    weeklyTarget = weeklyTarget,
+    active = active,
+    startDate = startDate,
+    sortOrder = sortOrder,
+    url = url,
 )
 
 /** 색 기준 속성(select·status)의 옵션 목록 JSON. 속성이 없으면 null. */

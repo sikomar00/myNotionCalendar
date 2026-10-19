@@ -31,6 +31,13 @@ data class SchemaIssue(
 
         /** HB-02 ✅ 습관 기록의 '습관' relation. 없거나 relation이 아니면 체크(기록 생성)를 막는다. */
         const val LINK = "LINK"
+
+        /** HB-01 🌱 습관 속성(모두 선택, 없으면 기본값). */
+        const val EMOJI = "EMOJI"
+        const val TARGET = "TARGET"
+        const val ACTIVE = "ACTIVE"
+        const val START = "START"
+        const val ORDER = "ORDER"
         val REQUIRED_ROLES = setOf(TITLE, DATE)
 
         const val MISSING = "MISSING"
