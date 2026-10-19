@@ -14,7 +14,7 @@
     <string name="settings_testing">확인 중…</string>
     <string name="settings_connected">연결됨: %1$s</string>
     <string name="settings_connected_unnamed">연결됨</string>
-    <string name="settings_section_databases">일정 DB</string>
+    <string name="settings_section_databases">노션 DB</string>
     <string name="settings_add_database">DB 추가</string>
     <string name="settings_no_databases">등록된 DB가 없습니다.</string>
     <string name="settings_delete_database">%1$s 등록 삭제</string>
@@ -97,7 +97,7 @@
     <string name="add_db_kind_habit_log">습관 기록</string>
     <string name="add_db_kind_habit_note">✅ 습관 기록을 고르면 습관 연결이 가리키는 🌱 습관 DB를 함께 등록합니다. 달력에는 나오지 않고 습관 화면·위젯에 쓰입니다.</string>
     <string name="add_db_link_prop">습관 연결 (relation)</string>
-    <string name="add_db_habit_section">🌱 %1$s</string>
+    <string name="add_db_habit_section">함께 등록: %1$s</string>
     <string name="add_db_habit_name">이름</string>
     <string name="add_db_habit_emoji">이모지 (텍스트)</string>
     <string name="add_db_habit_target">주 목표 (숫자, 비면 7)</string>
