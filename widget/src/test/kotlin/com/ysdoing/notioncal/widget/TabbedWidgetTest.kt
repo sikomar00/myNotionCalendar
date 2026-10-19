@@ -45,7 +45,8 @@ class TabbedWidgetTest {
     private fun Tabbed(tab: WidgetTab, config: WidgetConfig = WidgetConfig(1, selectedTab = tab), fontScale: Float = 1f) {
         TabbedWidgetContent(config, systemFontScale = fontScale) { selected ->
             when (selected) {
-                WidgetTab.CALENDAR, WidgetTab.LEDGER -> WidgetContent(WidgetSamples.state(config = config), systemFontScale = fontScale, framed = false)
+                WidgetTab.LEDGER -> LedgerWidgetContent(LedgerWidgetState(LedgerWidgetTest.board(), config), systemFontScale = fontScale, framed = false)
+                WidgetTab.CALENDAR -> WidgetContent(WidgetSamples.state(config = config), systemFontScale = fontScale, framed = false)
                 WidgetTab.HABIT -> HabitWidgetContent(HabitWidgetTest.state(config = config), systemFontScale = fontScale, framed = false, showHeader = false)
             }
         }
@@ -101,7 +102,7 @@ class TabbedWidgetTest {
                 render(size) { HabitWidgetContent(HabitWidgetTest.state(8, config), systemFontScale = 1.3f) }
             }
             for (size in listOf(medium, large)) {
-                for (tab in listOf(WidgetTab.CALENDAR, WidgetTab.HABIT)) render(size) { Tabbed(tab, config.copy(selectedTab = tab), fontScale = 1.3f) }
+                for (tab in WidgetTab.entries) render(size) { Tabbed(tab, config.copy(selectedTab = tab), fontScale = 1.3f) }
             }
         }
     }

@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
     /** 위젯 날짜 탭으로 받은 날짜(AppIntents.EXTRA_DATE). 화면이 처리하면 비운다. */
     private var openDate by mutableStateOf<LocalDate?>(null)
 
-    /** 습관 위젯에서 열었으면 습관 탭(AppIntents.EXTRA_TAB). */
+    /** 습관·가계부 위젯에서 열었으면 그 탭(AppIntents.EXTRA_TAB). */
     private var openTab by mutableStateOf<HomeTab?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,8 +111,11 @@ class MainActivity : ComponentActivity() {
         tabFrom(intent)?.let { openTab = it }
     }
 
-    private fun tabFrom(intent: Intent?): HomeTab? =
-        HomeTab.HABIT.takeIf { intent?.getStringExtra(AppIntents.EXTRA_TAB) == AppIntents.TAB_HABIT }
+    private fun tabFrom(intent: Intent?): HomeTab? = when (intent?.getStringExtra(AppIntents.EXTRA_TAB)) {
+        AppIntents.TAB_HABIT -> HomeTab.HABIT
+        AppIntents.TAB_LEDGER -> HomeTab.LEDGER
+        else -> null
+    }
 
     private fun dateFrom(intent: Intent?): LocalDate? =
         intent?.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }

@@ -42,7 +42,12 @@ class HabitWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = HabitWidget()
 }
 
-/** WG-11 통합 탭 위젯(📅 일정 · ✅ 습관). */
+/** LD-03 가계부 달력 위젯. */
+class LedgerWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = LedgerWidget()
+}
+
+/** WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). */
 class TabbedWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = TabbedWidget()
 }

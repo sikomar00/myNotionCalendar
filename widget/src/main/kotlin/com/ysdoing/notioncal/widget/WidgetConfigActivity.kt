@@ -55,6 +55,8 @@ import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
+import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import kotlin.math.roundToInt
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
@@ -74,14 +76,20 @@ class WidgetConfigActivity : ComponentActivity() {
      * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
      * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 설정 화면이 없다.
      */
-    private enum class Kind { MONTH, AGENDA, SPLIT }
+    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER }
 
     private val kind by lazy {
         when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
             AgendaWidgetReceiver::class.java.name -> Kind.AGENDA
             SplitWidgetReceiver::class.java.name -> Kind.SPLIT
+            LedgerWidgetReceiver::class.java.name -> Kind.LEDGER
             else -> Kind.MONTH
         }
+    }
+
+    /** WG-11 통합 위젯: 월 위젯 설정에 💰 탭의 금액 숨김(LD-06)을 더한다. */
+    private val tabbed by lazy {
+        AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className == TabbedWidgetReceiver::class.java.name
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -135,7 +143,8 @@ class WidgetConfigActivity : ComponentActivity() {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first())
+            val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
+            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger)
         }
         val data = loaded ?: return
 
@@ -147,8 +156,10 @@ class WidgetConfigActivity : ComponentActivity() {
             Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge)
             Preview(data, config, previewSize)
 
-            Section(stringResource(R.string.widget_config_sources))
-            SourcePicker(data.sources, config.dataSourceIds) { config = config.copy(dataSourceIds = it) }
+            if (kind != Kind.LEDGER) {
+                Section(stringResource(R.string.widget_config_sources))
+                SourcePicker(data.sources, config.dataSourceIds) { config = config.copy(dataSourceIds = it) }
+            }
 
             Section(stringResource(R.string.widget_config_theme))
             Choice(
@@ -195,9 +206,25 @@ class WidgetConfigActivity : ComponentActivity() {
                 ) { config = config.copy(lineSpacing = it) }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
-                Switch(checked = config.hideDone, onCheckedChange = { config = config.copy(hideDone = it) })
+            if (kind != Kind.LEDGER) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
+                    Switch(checked = config.hideDone, onCheckedChange = { config = config.copy(hideDone = it) })
+                }
+            }
+            // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
+            if (kind == Kind.LEDGER || tabbed) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.widget_config_hide_amounts))
+                        Text(
+                            stringResource(R.string.widget_config_hide_amounts_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = config.hideAmounts, onCheckedChange = { config = config.copy(hideAmounts = it) })
+                }
             }
 
             Button(
@@ -215,7 +242,12 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
-    private data class Loaded(val settings: AppSettings, val events: List<CalendarEvent>, val sources: List<DataSourceEntity>)
+    private data class Loaded(
+        val settings: AppSettings,
+        val events: List<CalendarEvent>,
+        val sources: List<DataSourceEntity>,
+        val ledger: LedgerBoard? = null,
+    )
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
     @Composable
@@ -235,6 +267,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 Kind.MONTH -> {
                     val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+                }
+                Kind.LEDGER -> {
+                    val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
                 }
             }
         }

@@ -16,6 +16,7 @@ internal object WidgetKinds {
         SplitWidgetReceiver::class.java.name -> SplitWidget()
         HabitWidgetReceiver::class.java.name -> HabitWidget()
         TabbedWidgetReceiver::class.java.name -> TabbedWidget()
+        LedgerWidgetReceiver::class.java.name -> LedgerWidget()
         else -> NotionCalWidget()
     }
 

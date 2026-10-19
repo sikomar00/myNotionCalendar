@@ -58,7 +58,20 @@
                 android:resource="@xml/habit_widget_info" />
         </receiver>
 
-        <!-- WG-11 통합 탭 위젯(📅 일정 · ✅ 습관). -->
+        <!-- LD-03 가계부 달력 위젯. -->
+        <receiver
+            android:name=".LedgerWidgetReceiver"
+            android:exported="true"
+            android:label="@string/ledger_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/ledger_widget_info" />
+        </receiver>
+
+        <!-- WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). -->
         <receiver
             android:name=".TabbedWidgetReceiver"
             android:exported="true"

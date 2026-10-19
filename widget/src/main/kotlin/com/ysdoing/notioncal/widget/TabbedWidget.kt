@@ -49,8 +49,8 @@ import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTab
 
 /**
- * WG-11 통합 탭 위젯: 위쪽 탭 버튼(📅 일정 · ✅ 습관)으로 내용을 바꾼다. 📅 탭은 월간 위젯([WidgetContent]), ✅ 탭은
- * 습관 위젯([HabitWidgetContent]) 내용을 그대로 쓰고, 탭 줄을 뺀 크기를 안쪽에 알려 각자 크기 단계를 정한다.
+ * WG-11 통합 탭 위젯: 위쪽 탭 버튼(📅 일정 · ✅ 습관 · 💰 가계부)으로 내용을 바꾼다. 📅 탭은 월간 위젯([WidgetContent]),
+ * ✅ 탭은 습관 위젯([HabitWidgetContent]), 💰 탭은 가계부 위젯([LedgerWidgetContent]) 내용을 그대로 쓰고, 탭 줄을 뺀 크기를 안쪽에 알려 각자 크기 단계를 정한다.
  * 고른 탭은 위젯마다 저장하고(widget_configs.selectedTab) 그 위젯만 다시 그린다. 좌우 밀기는 위젯 라이브러리가 지원하지 않는다.
  */
 class TabbedWidget : GlanceAppWidget() {
@@ -73,6 +73,7 @@ class TabbedWidget : GlanceAppWidget() {
         // 검증 메모 11: 두 탭의 초기값을 미리 읽어 탭을 바꿀 때 빈 화면이 나오지 않게 한다.
         val month = MonthSession.load(deps, initialConfig)
         val habits = HabitSession.load(deps)
+        val ledger = LedgerSession.load(deps)
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val fontScale by SystemFontScale.flow.collectAsState()
@@ -82,8 +83,7 @@ class TabbedWidget : GlanceAppWidget() {
                 when (tab) {
                     WidgetTab.CALENDAR -> MonthSession.Content(deps, month, config, scale, framed = false)
                     WidgetTab.HABIT -> HabitSession.Content(deps, habits, config, scale, framed = false, showHeader = false)
-                    // 💰 탭은 가계부 위젯 단계에서 붙인다. 그 전에는 탭 줄에 없고, 저장된 값이 와도 📅을 그린다.
-                    WidgetTab.LEDGER -> MonthSession.Content(deps, month, config, scale, framed = false)
+                    WidgetTab.LEDGER -> LedgerSession.Content(deps, ledger, config, scale, framed = false)
                 }
             }
         }
@@ -104,7 +104,7 @@ class TabbedWidget : GlanceAppWidget() {
     }
 }
 
-/** 통합 위젯 틀: 탭 줄 + 고른 탭 내용. 탭 줄 자식은 2개(💰는 Phase 7). */
+/** 통합 위젯 틀: 탭 줄 + 고른 탭 내용. 탭 줄 자식은 3개(📅·✅·💰). */
 @Composable
 fun TabbedWidgetContent(
     config: WidgetConfig,
@@ -122,7 +122,7 @@ fun TabbedWidgetContent(
             .background(palette.background),
     ) {
         Row(GlanceModifier.fillMaxWidth().height(tabHeight).padding(horizontal = 6.dp)) {
-            listOf(WidgetTab.CALENDAR, WidgetTab.HABIT).forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
+            WidgetTab.entries.forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
         }
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             // 검증 메모 11: 안쪽 내용은 LocalSize로 크기 단계를 정하므로 탭 줄을 뺀 크기를 알려 준다.
@@ -137,7 +137,13 @@ fun TabbedWidgetContent(
 @Composable
 private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fontSp: Float, palette: WidgetPalette) {
     val context = LocalContext.current
-    val label = context.getString(if (tab == WidgetTab.CALENDAR) R.string.tabbed_widget_tab_calendar else R.string.tabbed_widget_tab_habit)
+    val label = context.getString(
+        when (tab) {
+            WidgetTab.CALENDAR -> R.string.tabbed_widget_tab_calendar
+            WidgetTab.HABIT -> R.string.tabbed_widget_tab_habit
+            WidgetTab.LEDGER -> R.string.tabbed_widget_tab_ledger
+        },
+    )
     Column(
         modifier = GlanceModifier
             .defaultWeight()

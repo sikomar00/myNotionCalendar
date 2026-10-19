@@ -54,6 +54,7 @@ object AppIntents {
     /** 첫 화면에서 열 하단 탭. [TAB_HABIT]이면 습관 탭(습관 위젯 머리줄). */
     const val EXTRA_TAB = "com.ysdoing.notioncal.extra.TAB"
     const val TAB_HABIT = "habit"
+    const val TAB_LEDGER = "ledger"
 
     /** 퀵 시트(WI-01·02·05). EXTRA_MODE = day|add|edit */
     const val ACTION_QUICK_SHEET = "com.ysdoing.notioncal.action.QUICK_SHEET"

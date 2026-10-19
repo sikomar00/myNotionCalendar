@@ -548,8 +548,10 @@ class WidgetPalette private constructor(
     val error: ColorProvider,
     private val sunday: ColorProvider,
     private val saturday: ColorProvider,
-    /** HB-03 습관 칸의 빈 네모(안 한 날). */
+    /** HB-03 습관 칸의 빈 네모(안 한 날), LD-04 예산 막대 바탕. */
     val track: ColorProvider,
+    /** LD-03 수입 초록(노션 초록, 라이트 5.4:1). */
+    val income: ColorProvider,
     /** HB-03 잔디 농도(낮음·중간·모두). */
     private val grass: List<ColorProvider>,
 ) {
@@ -655,6 +657,7 @@ class WidgetPalette private constructor(
                 sunday = pair(SUNDAY_LIGHT, SUNDAY_DARK),
                 saturday = pair(SATURDAY_LIGHT, SATURDAY_DARK),
                 track = pick({ it.track }),
+                income = pair(Color(0xFF0F7B6C), Color(0xFF4DAB9A)),
                 grass = listOf(0.35f, 0.65f, 1f).map { a -> pick({ it.accent.copy(alpha = a) }) },
             )
         }

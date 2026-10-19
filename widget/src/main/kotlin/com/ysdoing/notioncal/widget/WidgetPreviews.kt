@@ -11,6 +11,12 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.HabitEntity
+import com.ysdoing.notioncal.core.data.ledger.BudgetRow
+import com.ysdoing.notioncal.core.data.ledger.Flow
+import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
+import com.ysdoing.notioncal.core.data.ledger.LedgerMath
+import com.ysdoing.notioncal.core.data.ledger.LedgerRules
+import com.ysdoing.notioncal.core.data.ledger.LedgerTx
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
@@ -58,6 +64,20 @@ object WidgetPreviews {
     fun splitState(today: LocalDate = LocalDate.now(APP_ZONE)): SplitUiState =
         SplitWidget.uiState(today, AppSettings(weekStart = DayOfWeek.SUNDAY), WidgetConfig(0), sampleEvents(today))
 
+    /** 예시 거래(LD-03): 지출·환불 없는 며칠, 수입 한 번, 앞날 예정 한 번. 개인 금액이 아니다. */
+    fun ledgerState(today: LocalDate = LocalDate.now(APP_ZONE)): LedgerWidgetState {
+        fun tx(id: String, back: Long, amount: Long, flow: Flow = Flow.OUT, planned: Boolean = false) =
+            LedgerTx("preview-$id", today.minusDays(back), "12:00", amount, flow, "식비", "예시", null, planned, manual = false, createdAt = 0)
+        val rows = listOf(
+            tx("1", 0, -12_300), tx("2", 1, -8_500), tx("3", 2, -32_000), tx("4", 4, -4_800),
+            tx("5", 3, 2_500_000, Flow.IN), tx("6", -2, -50_000, planned = true),
+        )
+        val month = YearMonth.from(today)
+        val budgets = listOf(BudgetRow(LedgerMath.MONTH, LedgerMath.monthKey(month), "전체", 1_000_000), BudgetRow(LedgerMath.WEEK, LedgerMath.weekKey(today, DayOfWeek.SUNDAY), "전체", 150_000))
+        val summary = LedgerMath.summarize(rows, mapOf("식비" to "생활비"), emptySet(), today, DayOfWeek.SUNDAY, month, budgets, LedgerRules(), asOf = today)
+        return LedgerWidgetState(LedgerBoard(month, today, DayOfWeek.SUNDAY, summary, registered = true), WidgetConfig(0))
+    }
+
     /** 예시 습관(HB-03): 이어가는 중·하루 쉼·주 3회를 함께 보인다. */
     fun habitState(today: LocalDate = LocalDate.now(APP_ZONE)): HabitWidgetState {
         fun days(vararg back: Long) = back.map { today.minusDays(it) }.toSet()
@@ -86,6 +106,7 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(SplitWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(HabitWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(TabbedWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(LedgerWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }
