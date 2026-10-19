@@ -82,6 +82,8 @@ class TabbedWidget : GlanceAppWidget() {
                 when (tab) {
                     WidgetTab.CALENDAR -> MonthSession.Content(deps, month, config, scale, framed = false)
                     WidgetTab.HABIT -> HabitSession.Content(deps, habits, config, scale, framed = false, showHeader = false)
+                    // 💰 탭은 가계부 위젯 단계에서 붙인다. 그 전에는 탭 줄에 없고, 저장된 값이 와도 📅을 그린다.
+                    WidgetTab.LEDGER -> MonthSession.Content(deps, month, config, scale, framed = false)
                 }
             }
         }
@@ -120,7 +122,7 @@ fun TabbedWidgetContent(
             .background(palette.background),
     ) {
         Row(GlanceModifier.fillMaxWidth().height(tabHeight).padding(horizontal = 6.dp)) {
-            WidgetTab.entries.forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
+            listOf(WidgetTab.CALENDAR, WidgetTab.HABIT).forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
         }
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             // 검증 메모 11: 안쪽 내용은 LocalSize로 크기 단계를 정하므로 탭 줄을 뺀 크기를 알려 준다.

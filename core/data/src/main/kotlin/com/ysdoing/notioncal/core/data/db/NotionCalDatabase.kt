@@ -23,6 +23,9 @@ import java.time.LocalDate
  * - 9: 해빗 트래커(HB-01·02, WG-11). data_sources.kind(기본 CALENDAR)·linkPropId·linkDataSourceId·habitPropIds,
  *      datePropId nullable(🌱 습관은 날짜 없음, AutoMigration이 표를 다시 만든다), events.linkPageId + 인덱스,
  *      habits 추가, widget_configs.selectedTab(기본 CALENDAR)
+ * - 10: 가계부(LD-01~10, WG-11 💰). data_sources.rolePropIds·spendNegative(기본 1)·budgetGroup(기본 전체),
+ *      events.createdTime·amount·flow·category·txTime·payment·planned·manual, widget_configs.hideAmounts,
+ *      budgets·category_groups(캐시)·ledger_dup_keeps(앱 상태) 추가
  */
 @Database(
     entities = [
@@ -34,10 +37,13 @@ import java.time.LocalDate
         ConflictEntity::class,
         HolidayEntity::class,
         HabitEntity::class,
+        BudgetEntity::class,
+        CategoryGroupEntity::class,
+        LedgerDupKeepEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {
@@ -49,6 +55,7 @@ abstract class NotionCalDatabase : RoomDatabase() {
     abstract fun conflictDao(): ConflictDao
     abstract fun holidayDao(): HolidayDao
     abstract fun habitDao(): HabitDao
+    abstract fun ledgerDao(): LedgerDao
 
     companion object {
         const val NAME = "notioncal.db"

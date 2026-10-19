@@ -31,6 +31,8 @@ data class WidgetConfigEntity(
     val showPhoneCal: Boolean = false,
     /** WG-11 통합 위젯에서 고른 탭("CALENDAR"·"HABIT", v9). 다른 위젯은 쓰지 않는다. */
     @ColumnInfo(defaultValue = "CALENDAR") val selectedTab: String = "CALENDAR",
+    /** LD-06 가계부 금액 숨김(●●●, v10). */
+    @ColumnInfo(defaultValue = "0") val hideAmounts: Boolean = false,
 )
 
 @Dao

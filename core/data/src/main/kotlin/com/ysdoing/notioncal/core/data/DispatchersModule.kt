@@ -9,6 +9,7 @@ import androidx.room.Room
 import com.ysdoing.notioncal.core.data.db.DataSourceDao
 import com.ysdoing.notioncal.core.data.db.EventDao
 import com.ysdoing.notioncal.core.data.db.HabitDao
+import com.ysdoing.notioncal.core.data.db.LedgerDao
 import com.ysdoing.notioncal.core.data.db.HolidayDao
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.RecoveringOpenHelperFactory
@@ -85,6 +86,9 @@ object DataModule {
 
     @Provides
     fun provideHabitDao(db: NotionCalDatabase): HabitDao = db.habitDao()
+
+    @Provides
+    fun provideLedgerDao(db: NotionCalDatabase): LedgerDao = db.ledgerDao()
 
     @Provides
     @Singleton

@@ -59,6 +59,15 @@ data class DataSourceEntity(
     val linkDataSourceId: String? = null,
     /** HABIT: 이모지·주 목표·진행 중·시작일·순서 속성 ID(JSON [com.ysdoing.notioncal.core.data.HabitPropIds], v9). */
     val habitPropIds: String? = null,
+    /**
+     * LEDGER·BUDGET·CATEGORY 속성 ID(JSON, v10). 거래내역은 [com.ysdoing.notioncal.core.data.LedgerPropIds],
+     * 예산은 [com.ysdoing.notioncal.core.data.BudgetPropIds], 카테고리 마스터는 [com.ysdoing.notioncal.core.data.CategoryPropIds].
+     */
+    val rolePropIds: String? = null,
+    /** LEDGER: 지출이 음수인 양식(뱅크샐러드 원본, LD-02 설정값, v10). */
+    @ColumnInfo(defaultValue = "1") val spendNegative: Boolean = true,
+    /** LEDGER: 예산과 비교할 그룹(LD-01·05, v10). '전체'면 지출 전부. */
+    @ColumnInfo(defaultValue = "전체") val budgetGroup: String = "전체",
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
@@ -94,6 +103,22 @@ data class EventEntity(
     @ColumnInfo(defaultValue = "0") val titleHasMention: Boolean = false,
     /** ✅ 습관 기록 행이 가리키는 🌱 습관 page ID(relation, v9). 일정 행은 null. */
     val linkPageId: String? = null,
+    /** 노션 created_time(epoch ms, v10). LD-08 중복 중 먼저 만든 행을 고를 때 쓴다. 앱이 만든 임시 행은 만든 시각. */
+    @ColumnInfo(defaultValue = "0") val createdTime: Long = 0,
+    /** LD-02 거래 금액(원, 노션 부호 그대로, v10). 거래 행이 아니면 null. */
+    val amount: Long? = null,
+    /** 거래 타입(OUT·IN·TRANSFER, [com.ysdoing.notioncal.core.data.ledger.Flow] 이름, v10). */
+    val flow: String? = null,
+    /** 대분류(select 이름, v10). */
+    val category: String? = null,
+    /** 시간(HH:MM, v10). */
+    val txTime: String? = null,
+    /** 결제수단(select 이름, v10). LD-08 중복 키에 들어간다. */
+    val payment: String? = null,
+    /** LD-09 예정(v10). */
+    @ColumnInfo(defaultValue = "0") val planned: Boolean = false,
+    /** LD-10 앱입력(v10). */
+    @ColumnInfo(defaultValue = "0") val manual: Boolean = false,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */

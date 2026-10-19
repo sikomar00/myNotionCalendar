@@ -81,6 +81,9 @@ class DatabaseRecoveryTest {
             ),
         )
         db.habitDao().insert(listOf(HabitEntity("h1", "habits", "명상", null, 7, true, null, null)))
+        // LD-08 '둘 다 유지'는 앱 상태라 남고, 예산 캐시는 비워진다.
+        db.ledgerDao().insertDupKeep(com.ysdoing.notioncal.core.data.db.LedgerDupKeepEntity("t1", "t2", 5))
+        db.ledgerDao().insertBudgets(listOf(com.ysdoing.notioncal.core.data.db.BudgetEntity("b1", "budget", "월", "2026-10", "전체", 1)))
         db.widgetConfigDao().upsert(WidgetConfigEntity(appWidgetId = 7, monthOffset = 1, fontScale = 120, selectedTab = "HABIT"))
         db.eventDao().upsert(listOf(event("p-synced", 0), event("local-new", 1)))
         db.outboxDao().insert(
@@ -133,6 +136,8 @@ class DatabaseRecoveryTest {
             assertNull(habits.datePropId)
             assertEquals(HabitPropIds(emoji = "emo"), HabitPropIds.parse(habits.habitPropIds))
             assertTrue(db.habitDao().forSource("habits").isEmpty())
+            assertEquals(listOf("t1" to "t2"), db.ledgerDao().observeDupKeeps().first().map { it.pageIdA to it.pageIdB })
+            assertTrue(db.ledgerDao().observeBudgets().first().isEmpty())
 
             assertNull(db.eventDao().get("p-synced")) // 캐시는 비워짐
             assertEquals(1, db.eventDao().get("local-new")!!.pendingOps) // 미전송 일정은 남음

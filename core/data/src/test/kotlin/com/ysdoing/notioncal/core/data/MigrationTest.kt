@@ -7,7 +7,9 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.sqlite.execSQL
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
+import com.ysdoing.notioncal.core.data.db.BudgetEntity
 import com.ysdoing.notioncal.core.data.db.HabitEntity
+import com.ysdoing.notioncal.core.data.db.LedgerDupKeepEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -289,6 +291,51 @@ class MigrationTest {
             assertEquals(null, db.dataSourceDao().get("habits")!!.datePropId)
             db.habitDao().insert(listOf(HabitEntity("h1", "habits", "명상", "🧘", 7, true, LocalDate.of(2026, 10, 19), 1.0)))
             assertEquals(listOf("h1"), db.habitDao().observeActive().first().map { it.pageId })
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v9 → v10(가계부): 기존 DB는 지출 음수·예산 그룹 '전체', 일정은 거래 값 없음, 위젯은 금액 보임. 새 표를 쓸 수 있다. */
+    @Test
+    fun v9ToV10AddsLedgerColumnsAndTables() = runTest {
+        helper.createDatabase(9).use { db ->
+            db.execSQL(
+                """INSERT INTO data_sources (dataSourceId, databaseId, name, colorHex, titlePropId, datePropId,
+                   donePropId, doneType, doneOption, undoneOption, colorPropId, sortPropId, enabled, lastSyncAt,
+                   lastFullSyncAt, position, colorOptions, propCatalog, extraPropIds, useOptionColors, mappedPropNames, schemaIssues,
+                   emphasisPropId, emphasisOptionIds, kind, linkPropId, linkDataSourceId, habitPropIds)
+                   VALUES ('ds', 'db', 'Calendar', '#0B6E99', 'title', 'dAtE', NULL, NULL, NULL, NULL, NULL, NULL, 1, 500, 500, 0,
+                   NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL, 'CALENDAR', NULL, NULL, NULL)""",
+            )
+            db.execSQL(
+                """INSERT INTO events (pageId, dataSourceId, title, startDate, endDate, startTime, endTime, isAllDay,
+                   done, colorKey, sortKey, url, lastEditedTime, colorOptionId, pendingOps, extraValues, titleHasMention, linkPageId)
+                   VALUES ('p1', 'ds', '회의', '2026-10-13', NULL, NULL, NULL, 1, 0, NULL, NULL, '', 0, NULL, 0, NULL, 0, NULL)""",
+            )
+            db.execSQL(
+                """INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell,
+                   lineSpacing, hideDone, showPhoneCal, selectedTab) VALUES (7, 0, '', 'DARK', 80, 100, 0, 'NORMAL', 0, 0, 'HABIT')""",
+            )
+        }
+        helper.runMigrationsAndValidate(10).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val source = db.dataSourceDao().get("ds")!!
+            assertEquals(true, source.spendNegative)
+            assertEquals("전체", source.budgetGroup)
+            assertEquals(null, source.rolePropIds)
+            val event = db.eventDao().get("p1")!!
+            assertEquals(null, event.amount)
+            assertEquals(false, event.planned)
+            assertEquals(0L, event.createdTime)
+            val widget = WidgetConfigRepository(db.widgetConfigDao()).get(7)
+            assertEquals(WidgetTab.HABIT, widget.selectedTab)
+            assertEquals(false, widget.hideAmounts)
+
+            db.ledgerDao().replaceBudgets("budget", listOf(BudgetEntity("b1", "budget", "월", "2026-10", "전체", 1_000_000)))
+            db.ledgerDao().insertDupKeep(LedgerDupKeepEntity("a", "b", 1))
+            assertEquals(listOf("a" to "b"), db.ledgerDao().observeDupKeeps().first().map { it.pageIdA to it.pageIdB })
         } finally {
             db.close()
         }

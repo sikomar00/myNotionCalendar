@@ -119,6 +119,14 @@ data class EventSnapshot(
     val lastEditedTime: Long,
     val extraValues: String? = null,
     val linkPageId: String? = null,
+    val createdTime: Long = 0,
+    val amount: Long? = null,
+    val flow: String? = null,
+    val category: String? = null,
+    val txTime: String? = null,
+    val payment: String? = null,
+    val planned: Boolean = false,
+    val manual: Boolean = false,
 )
 
 /** outbox JSON 직렬화. 모르는 키는 무시해 이후 필드 추가에도 이전 행을 읽을 수 있게 한다. */
@@ -130,6 +138,7 @@ val OutboxJson: Json = Json {
 fun EventEntity.snapshot() = EventSnapshot(
     pageId, dataSourceId, title, startDate.toString(), endDate?.toString(), startTime, endTime, isAllDay, done,
     colorKey, colorOptionId, sortKey, url, lastEditedTime, extraValues, linkPageId,
+    createdTime, amount, flow, category, txTime, payment, planned, manual,
 )
 
 fun EventSnapshot.toEntity() = EventEntity(
@@ -149,6 +158,14 @@ fun EventSnapshot.toEntity() = EventEntity(
     colorOptionId = colorOptionId,
     extraValues = extraValues,
     linkPageId = linkPageId,
+    createdTime = createdTime,
+    amount = amount,
+    flow = flow,
+    category = category,
+    txTime = txTime,
+    payment = payment,
+    planned = planned,
+    manual = manual,
 )
 
 fun EventEntity.dateValue() = DateValue(startDate.toString(), endDate?.toString(), startTime, endTime)

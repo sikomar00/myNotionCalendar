@@ -13,8 +13,8 @@ enum class WidgetTheme { SYSTEM, LIGHT, DARK, MATERIAL_YOU }
 
 enum class LineSpacing { COMPACT, NORMAL, WIDE }
 
-/** WG-11 통합 위젯의 탭. 💰(LEDGER)는 Phase 7에 붙인다. */
-enum class WidgetTab { CALENDAR, HABIT }
+/** WG-11 통합 위젯의 탭(📅 일정 · ✅ 습관 · 💰 가계부). */
+enum class WidgetTab { CALENDAR, HABIT, LEDGER }
 
 /** 위젯 하나의 설정(WG-04)과 보고 있는 달(WI-04). */
 data class WidgetConfig(
@@ -30,6 +30,8 @@ data class WidgetConfig(
     val hideDone: Boolean = false,
     /** WG-11 통합 위젯에서 고른 탭. 저장 때 다른 값과 함께 쓰이므로 모델에 둬야 월 이동·설정 저장 뒤에도 남는다. */
     val selectedTab: WidgetTab = WidgetTab.CALENDAR,
+    /** LD-06 가계부 금액 숨김(●●●, 막대만). */
+    val hideAmounts: Boolean = false,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -48,6 +50,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     lineSpacing = runCatching { LineSpacing.valueOf(lineSpacing) }.getOrDefault(LineSpacing.NORMAL),
     hideDone = hideDone,
     selectedTab = runCatching { WidgetTab.valueOf(selectedTab) }.getOrDefault(WidgetTab.CALENDAR),
+    hideAmounts = hideAmounts,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -61,6 +64,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     lineSpacing = lineSpacing.name,
     hideDone = hideDone,
     selectedTab = selectedTab.name,
+    hideAmounts = hideAmounts,
 )
 
 @Singleton
