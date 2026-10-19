@@ -57,15 +57,15 @@ import java.util.Locale
 /** LD-03 가계부 위젯 한 개가 그릴 것. Room에서 읽은 값만 담는다. */
 data class LedgerWidgetState(val board: LedgerBoard, val config: WidgetConfig)
 
-/** 크기 단계: 4×4 이상 6주 그리드 / 4×2 이번 주 한 줄. */
+/** 크기 단계: 6주가 들어가면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주(4×2는 보통 1~2주). */
 enum class LedgerWidgetMode { LARGE, COMPACT }
 
 fun ledgerWidgetMode(size: DpSize): LedgerWidgetMode = if (size.height >= 250.dp) LedgerWidgetMode.LARGE else LedgerWidgetMode.COMPACT
 
 /**
  * 가계부 위젯 치수. 줄 높이는 다른 위젯과 같은 실측 규칙(글자 칸 = 글자 크기 × [WidgetMetrics.TEXT_BOX], 기기 글꼴 상한
- * [WidgetMetrics.MAX_SYSTEM_TEXT_SCALE])으로 정한다. 6주가 칸 안에 들어가지 않으면 이번 주 한 줄로 바꾸고, 그래도 모자라면
- * 요약 줄·요일 줄을 뺀다(칸이 잘리지 않게, LD-03 '글꼴 최대에서 칸 넘침 0').
+ * [WidgetMetrics.MAX_SYSTEM_TEXT_SCALE])으로 정한다. 6주가 칸 안에 들어가지 않으면 들어가는 만큼의 주를 이번 주가 맨 아래에
+ * 오도록 보이고(최근 쓴 돈부터), 한 주도 모자라면 요약 줄·요일 줄을 뺀다(칸이 잘리지 않게, LD-03 '글꼴 최대에서 칸 넘침 0').
  */
 data class LedgerMetrics(
     val mode: LedgerWidgetMode,
@@ -107,13 +107,11 @@ data class LedgerMetrics(
             var mode = ledgerWidgetMode(size)
             var summary = true
             var weekdays = true
-            var rows = if (mode == LedgerWidgetMode.LARGE) 6 else 1
-            if (rows == 6 && content(summary, weekdays) / 6 < cellNeeded) {
-                mode = LedgerWidgetMode.COMPACT
-                rows = 1
-            }
             if (content(summary, weekdays) < cellNeeded) summary = false
             if (content(summary, weekdays) < cellNeeded) weekdays = false
+            val fit = (content(summary, weekdays) / cellNeeded).toInt().coerceIn(1, 6)
+            val rows = if (mode == LedgerWidgetMode.LARGE && fit == 6) 6 else minOf(fit, 5)
+            if (rows < 6) mode = LedgerWidgetMode.COMPACT
             val cell = maxOf(cellNeeded, content(summary, weekdays) / rows)
             return LedgerMetrics(
                 mode = mode,
@@ -244,7 +242,8 @@ fun LedgerWidgetContent(
                 }
             }
         }
-        val firstDay = if (metrics.rows == 6) board.gridStart else s.weekStart
+        // 6주면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주.
+        val firstDay = if (metrics.rows == 6) board.gridStart else s.weekStart.minusWeeks(metrics.rows - 1L)
         repeat(metrics.rows) { week ->
             Row(GlanceModifier.fillMaxWidth().height(metrics.cellHeight)) {
                 repeat(7) { col ->

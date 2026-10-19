@@ -84,13 +84,25 @@ class LedgerWidgetTest {
         onNode(hasTestTag("ledgerTitle")).assert(hasClickAction())
     }
 
+    /** 6주가 안 들어가면 들어가는 만큼 주를 보이되 이번 주를 맨 아래에 둔다(최근 쓴 돈부터). */
     @Test
-    fun mediumShowsThisWeekOnly() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun mediumShowsRecentWeeksEndingThisWeek() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(MEDIUM)
+        val rows = LedgerMetrics.of(MEDIUM, WidgetConfig(1), 1f).rows
+        assertTrue(rows in 1..5)
         provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
-        onAllNodes(hasTestTag("ledgerDay")).assertCountEquals(7)
+        onAllNodes(hasTestTag("ledgerDay")).assertCountEquals(rows * 7)
+        onNode(hasContentDescriptionEqualTo("10월 24일, 예정 50,000원")).assertExists() // 이번 주 토요일이 마지막 칸
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
+    }
+
+    @Test
+    fun weekRowsFillAvailableHeight() {
+        val tall = LedgerMetrics.of(DpSize(358.dp, 240.dp), WidgetConfig(1), 1f)
+        val short = LedgerMetrics.of(DpSize(358.dp, 130.dp), WidgetConfig(1), 1f)
+        assertTrue("$tall", tall.rows > short.rows)
+        assertEquals(1, short.rows)
     }
 
     /** LD-06: 금액 숨김이면 숫자 대신 ●●●, 주 예산 막대는 남는다. 낭독에도 금액을 읽지 않는다. */

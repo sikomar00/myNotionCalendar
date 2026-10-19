@@ -22,8 +22,8 @@ android {
 
     defaultConfig {
         applicationId = "com.ysdoing.notioncal"
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.4.0"
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
