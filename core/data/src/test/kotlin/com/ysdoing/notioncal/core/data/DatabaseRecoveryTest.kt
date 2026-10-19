@@ -85,6 +85,9 @@ class DatabaseRecoveryTest {
         db.ledgerDao().insertDupKeep(com.ysdoing.notioncal.core.data.db.LedgerDupKeepEntity("t1", "t2", 5))
         db.ledgerDao().insertBudgets(listOf(com.ysdoing.notioncal.core.data.db.BudgetEntity("b1", "budget", "월", "2026-10", "전체", 1)))
         db.widgetConfigDao().upsert(WidgetConfigEntity(appWidgetId = 7, monthOffset = 1, fontScale = 120, selectedTab = "HABIT"))
+        // DD-01 디데이 고정은 앱 상태라 남고, 날씨 예보 캐시는 비워진다.
+        db.ddayDao().upsert(com.ysdoing.notioncal.core.data.db.DdayPinEntity("p-synced", countMode = "UP"))
+        db.weatherDao().upsertDays(listOf(com.ysdoing.notioncal.core.data.db.WeatherDayEntity(java.time.LocalDate.of(2026, 10, 19), 0, 1.0, 0.0, 0, 1)))
         db.eventDao().upsert(listOf(event("p-synced", 0), event("local-new", 1)))
         db.outboxDao().insert(
             OutboxEntity(pageId = "local-new", dataSourceId = "ds", op = "CREATE", changes = """{"title":"x"}""",
@@ -138,6 +141,8 @@ class DatabaseRecoveryTest {
             assertTrue(db.habitDao().forSource("habits").isEmpty())
             assertEquals(listOf("t1" to "t2"), db.ledgerDao().observeDupKeeps().first().map { it.pageIdA to it.pageIdB })
             assertTrue(db.ledgerDao().observeBudgets().first().isEmpty())
+            assertEquals(listOf("p-synced" to "UP"), db.ddayDao().all().map { it.pageId to it.countMode })
+            assertEquals(null, db.weatherDao().observeFetchedAt().first())
 
             assertNull(db.eventDao().get("p-synced")) // 캐시는 비워짐
             assertEquals(1, db.eventDao().get("local-new")!!.pendingOps) // 미전송 일정은 남음

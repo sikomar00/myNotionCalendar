@@ -116,6 +116,14 @@ data class PageDto(
     @SerialName("last_edited_time") val lastEditedTime: String,
     @SerialName("in_trash") val inTrash: Boolean = false,
     val properties: JsonObject = JsonObject(emptyMap()),
+    /** 소속 data source(DD-01: 캐시에 없는 고정 일정을 받을 때 어느 DB 매핑을 쓸지). */
+    val parent: PageParentDto? = null,
+)
+
+@Serializable
+data class PageParentDto(
+    val type: String = "",
+    @SerialName("data_source_id") val dataSourceId: String? = null,
 )
 
 @Serializable

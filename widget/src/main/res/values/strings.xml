@@ -84,4 +84,20 @@
     <string name="widget_config_spacing_wide">넓게</string>
     <string name="widget_config_hide_done">완료 항목 숨기기</string>
     <string name="widget_config_save">저장</string>
+    <string name="dday_small_widget_label">디데이(1칸)</string>
+    <string name="dday_small_widget_description">고정한 디데이 하나를 크게 보여줍니다</string>
+    <string name="dday_wide_widget_label">디데이(2칸)</string>
+    <string name="dday_wide_widget_description">고정한 디데이 하나와 제목·날짜를 보여줍니다</string>
+    <string name="dday_list_widget_label">디데이 목록</string>
+    <string name="dday_list_widget_description">고정한 디데이를 가까운 순으로 보여줍니다</string>
+    <string name="dday_widget_title">디데이</string>
+    <string name="dday_widget_add">디데이 고정하기</string>
+    <string name="dday_widget_empty">디데이 없음</string>
+    <string name="dday_widget_list_empty">고정한 디데이가 없습니다. +를 눌러 고정하세요</string>
+    <string name="dday_widget_untitled">(제목 없음)</string>
+    <string name="dday_widget_date">%1$d월 %2$d일</string>
+    <string name="widget_config_dday">보여 줄 디데이</string>
+    <string name="widget_config_dday_nearest">가장 가까운 디데이</string>
+    <string name="widget_config_dday_none">고정한 디데이가 없습니다. 앱의 설정 → 디데이에서 고정하세요.</string>
+    <string name="dday_widget_preview_number">D-12</string>
 </resources>

@@ -94,6 +94,7 @@ fun SettingsRoute(
     onBack: () -> Unit,
     onAddDatabase: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenDday: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val tokenSaved by viewModel.tokenSaved.collectAsStateWithLifecycle()
@@ -206,6 +207,15 @@ fun SettingsRoute(
                     }
                 }
             }
+
+            HorizontalDivider()
+            Section(stringResource(R.string.settings_section_dday))
+            Text(
+                stringResource(R.string.settings_dday_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedButton(onClick = onOpenDday) { Text(stringResource(R.string.settings_open_dday)) }
 
             HorizontalDivider()
             Section(stringResource(R.string.settings_section_reminders))

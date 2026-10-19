@@ -163,6 +163,7 @@ class RecoveringOpenHelperFactory(
             "widget_configs" to null,
             "outbox" to null,
             "ledger_dup_keeps" to null,
+            "dday_pins" to null,
             "events" to Where("pendingOps", "pendingOps > 0"),
         )
 

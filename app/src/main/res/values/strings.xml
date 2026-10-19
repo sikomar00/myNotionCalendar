@@ -178,4 +178,7 @@
     <string name="quick_add_tile">노션 일정 추가</string>
     <string name="quick_add_short">빠른 추가</string>
     <string name="quick_add_long">노션 일정 빠른 추가</string>
+    <string name="settings_section_dday">디데이</string>
+    <string name="settings_dday_note">고정한 일정의 남은 날을 디데이 위젯에 띄웁니다. 일정 편집 시트에서 \'디데이로 고정\'을 누르거나 여기서 일정을 찾아 고정합니다.</string>
+    <string name="settings_open_dday">디데이 관리</string>
 </resources>

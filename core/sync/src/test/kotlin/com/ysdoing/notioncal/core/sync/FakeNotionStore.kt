@@ -353,7 +353,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     private fun Page.toDto(): PageDto {
         val date = start?.let { """{"start":"$it","end":${end?.let { e -> "\"$e\"" } ?: "null"}}""" } ?: "null"
-        val head = """"id":"$id","url":"https://www.notion.so/$id","created_time":"$createdTime","last_edited_time":"$lastEdited","in_trash":$inTrash"""
+        val head = """"id":"$id","url":"https://www.notion.so/$id","created_time":"$createdTime","last_edited_time":"$lastEdited","in_trash":$inTrash,"parent":{"type":"data_source_id","data_source_id":"$dataSourceId"}"""
         if (dataSourceId == LEDGER) {
             fun sel(v: String?) = v?.let { """{"name":${str(it)}}""" } ?: "null"
             return NotionJson.decodeFromString(

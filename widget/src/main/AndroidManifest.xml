@@ -71,6 +71,45 @@
                 android:resource="@xml/ledger_widget_info" />
         </receiver>
 
+        <!-- DD-03 디데이 1×1. -->
+        <receiver
+            android:name=".DdaySmallWidgetReceiver"
+            android:exported="true"
+            android:label="@string/dday_small_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dday_small_widget_info" />
+        </receiver>
+
+        <!-- DD-04 디데이 2×1. -->
+        <receiver
+            android:name=".DdayWideWidgetReceiver"
+            android:exported="true"
+            android:label="@string/dday_wide_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dday_wide_widget_info" />
+        </receiver>
+
+        <!-- DD-05 디데이 목록. -->
+        <receiver
+            android:name=".DdayListWidgetReceiver"
+            android:exported="true"
+            android:label="@string/dday_list_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dday_list_widget_info" />
+        </receiver>
+
         <!-- WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). -->
         <receiver
             android:name=".TabbedWidgetReceiver"

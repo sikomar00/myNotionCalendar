@@ -28,6 +28,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- EX-12 바로 여는 링크(notioncal://today·habit·ledger·date/…·dday). 화면만 열고 쓰기는 하지 않는다. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
         </activity>
 
         <!-- PF-04: Sentry는 NotionCalApp에서 DSN이 있을 때만 백그라운드로 초기화한다. -->

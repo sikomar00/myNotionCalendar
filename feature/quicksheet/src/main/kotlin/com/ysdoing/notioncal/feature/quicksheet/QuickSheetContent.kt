@@ -78,12 +78,15 @@ fun QuickSheetContent(
                 Text(stringResource(R.string.qs_edit_title), style = MaterialTheme.typography.titleLarge)
             }
             val current = item
+            val pinnedIds by viewModel.pinnedDdays.collectAsStateWithLifecycle()
             if (current != null) {
                 val back = { if (start is QuickSheetStart.Edit) onFinished() else editing = null }
                 EventEditorForm(
                     item = current,
                     onSave = { change -> viewModel.save(pageId, change, onSaved = back) },
                     onDelete = { viewModel.trash(pageId, onTrashed = back) },
+                    pinned = pageId in pinnedIds,
+                    onPinChange = { viewModel.setDdayPinned(pageId, it) },
                 )
             }
             return@Column

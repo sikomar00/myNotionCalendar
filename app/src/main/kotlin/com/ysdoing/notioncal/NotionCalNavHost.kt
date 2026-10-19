@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.ysdoing.notioncal.core.data.AppFailure
+import com.ysdoing.notioncal.feature.dday.DdayRoute
 import com.ysdoing.notioncal.feature.diagnostics.BatteryGuideCard
 import com.ysdoing.notioncal.feature.diagnostics.DiagnosticsRoute
 import com.ysdoing.notioncal.feature.habit.HabitRoute
@@ -30,6 +31,7 @@ private object Routes {
     fun reconnect(databaseId: String, dataSourceId: String) = "settings/add/$databaseId/$dataSourceId"
     const val DIAGNOSTICS = "diagnostics"
     const val SEARCH = "search"
+    const val DDAY = "settings/dday"
 }
 
 /**
@@ -46,6 +48,8 @@ fun NotionCalNavHost(
     failure: AppFailure?,
     openTab: HomeTab? = null,
     onOpenTabHandled: () -> Unit = {},
+    openDday: Boolean = false,
+    onOpenDdayHandled: () -> Unit = {},
 ) {
     val nav = rememberNavController()
     var tab by rememberSaveable { mutableStateOf(HomeTab.CALENDAR) }
@@ -64,6 +68,12 @@ fun NotionCalNavHost(
     var searchDate by rememberSaveable { mutableStateOf<LocalDate?>(null) }
     LaunchedEffect(openDate) {
         if (openDate != null) nav.popBackStack(Routes.MONTH, inclusive = false)
+    }
+    LaunchedEffect(openDday) {
+        if (openDday) {
+            nav.navigate(Routes.DDAY) { launchSingleTop = true }
+            onOpenDdayHandled()
+        }
     }
     LaunchedEffect(failure) {
         if (failure != null && nav.currentDestination?.route != Routes.DIAGNOSTICS) {
@@ -106,7 +116,11 @@ fun NotionCalNavHost(
                 onBack = { nav.popBackStack() },
                 onAddDatabase = { nav.navigate(Routes.ADD_DATABASE) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) { launchSingleTop = true } },
+                onOpenDday = { nav.navigate(Routes.DDAY) { launchSingleTop = true } },
             )
+        }
+        composable(Routes.DDAY) {
+            DdayRoute(onBack = { nav.popBackStack() })
         }
         composable(Routes.ADD_DATABASE) {
             AddDatabaseRoute(onDone = { nav.popBackStack() })

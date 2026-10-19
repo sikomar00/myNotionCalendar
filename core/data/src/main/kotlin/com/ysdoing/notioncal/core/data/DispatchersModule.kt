@@ -91,6 +91,15 @@ object DataModule {
     fun provideLedgerDao(db: NotionCalDatabase): LedgerDao = db.ledgerDao()
 
     @Provides
+    fun provideDdayRemovedNotice(settings: SettingsRepository): DdayRemovedNotice = DdayRemovedNotice { settings.addDdayRemovedNotice(it) }
+
+    @Provides
+    fun provideDdayDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.DdayDao = db.ddayDao()
+
+    @Provides
+    fun provideWeatherDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.WeatherDao = db.weatherDao()
+
+    @Provides
     @Singleton
     @SettingsStore
     fun provideSettingsStore(

@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -56,6 +57,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
+import com.ysdoing.notioncal.core.data.dday.Dday
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import kotlin.math.roundToInt
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
@@ -76,13 +78,15 @@ class WidgetConfigActivity : ComponentActivity() {
      * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
      * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 설정 화면이 없다.
      */
-    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER }
+    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST }
 
     private val kind by lazy {
         when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
             AgendaWidgetReceiver::class.java.name -> Kind.AGENDA
             SplitWidgetReceiver::class.java.name -> Kind.SPLIT
             LedgerWidgetReceiver::class.java.name -> Kind.LEDGER
+            DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> Kind.DDAY
+            DdayListWidgetReceiver::class.java.name -> Kind.DDAY_LIST
             else -> Kind.MONTH
         }
     }
@@ -144,7 +148,8 @@ class WidgetConfigActivity : ComponentActivity() {
             }
             config = saved
             val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger)
+            val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
+            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays)
         }
         val data = loaded ?: return
 
@@ -156,7 +161,25 @@ class WidgetConfigActivity : ComponentActivity() {
             Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge)
             Preview(data, config, previewSize)
 
-            if (kind != Kind.LEDGER) {
+            // DD-03·04: 위젯마다 보여 줄 디데이(고르지 않으면 가장 가까운 디데이).
+            if (kind == Kind.DDAY) {
+                Section(stringResource(R.string.widget_config_dday))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = config.ddayPageId == null, onClick = { config = config.copy(ddayPageId = null) })
+                    Text(stringResource(R.string.widget_config_dday_nearest))
+                }
+                data.ddays.forEach { dday ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = config.ddayPageId == dday.pageId, onClick = { config = config.copy(ddayPageId = dday.pageId) })
+                        Text(listOfNotNull(dday.label?.text, dday.title).joinToString(" · "))
+                    }
+                }
+                if (data.ddays.isEmpty()) {
+                    Text(stringResource(R.string.widget_config_dday_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            if (kind in CALENDAR_KINDS) {
                 Section(stringResource(R.string.widget_config_sources))
                 SourcePicker(data.sources, config.dataSourceIds) { config = config.copy(dataSourceIds = it) }
             }
@@ -206,7 +229,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 ) { config = config.copy(lineSpacing = it) }
             }
 
-            if (kind != Kind.LEDGER) {
+            if (kind in CALENDAR_KINDS) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
                     Switch(checked = config.hideDone, onCheckedChange = { config = config.copy(hideDone = it) })
@@ -247,6 +270,7 @@ class WidgetConfigActivity : ComponentActivity() {
         val events: List<CalendarEvent>,
         val sources: List<DataSourceEntity>,
         val ledger: LedgerBoard? = null,
+        val ddays: List<Dday> = emptyList(),
     )
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
@@ -272,6 +296,12 @@ class WidgetConfigActivity : ComponentActivity() {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
                 }
+                Kind.DDAY, Kind.DDAY_LIST -> {
+                    val state = DdayWidgetState(data.ddays, config, today)
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) {
+                        if (kind == Kind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
+                    }.remoteViews
+                }
             }
         }
         AndroidView(
@@ -284,6 +314,11 @@ class WidgetConfigActivity : ComponentActivity() {
             },
             modifier = Modifier.width(size.width).height(size.height),
         )
+    }
+
+    private companion object {
+        /** 일정 DB 고르기·완료 숨김을 쓰는 위젯. */
+        val CALENDAR_KINDS = setOf(Kind.MONTH, Kind.AGENDA, Kind.SPLIT)
     }
 
     @Composable

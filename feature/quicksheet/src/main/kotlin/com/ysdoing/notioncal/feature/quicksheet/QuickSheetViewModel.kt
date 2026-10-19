@@ -29,6 +29,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.data.HolidayRepository
+import com.ysdoing.notioncal.core.data.dday.DdayRepository
 
 /** 시간 입력(시작·종료). 종일 일정이면 null. */
 data class TimeRange(val start: LocalTime, val end: LocalTime)
@@ -65,6 +66,7 @@ class QuickSheetViewModel @Inject constructor(
     settings: SettingsRepository,
     private val writer: EventWriter,
     private val holidays: HolidayRepository,
+    private val ddays: DdayRepository,
 ) : ViewModel() {
     private val date = MutableStateFlow<LocalDate?>(null)
 
@@ -127,9 +129,18 @@ class QuickSheetViewModel @Inject constructor(
         }
     }
 
+    /** DD-01 고정한 디데이(편집 시트의 '디데이로 고정' 상태). */
+    val pinnedDdays: StateFlow<Set<String>> = ddays.observePinnedIds()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    fun setDdayPinned(pageId: String, pinned: Boolean) {
+        viewModelScope.launch { if (pinned) ddays.pin(pageId) else ddays.unpin(pageId) }
+    }
+
     fun trash(pageId: String, onTrashed: () -> Unit = {}) {
         viewModelScope.launch {
             writer.trash(pageId)
+            ddays.unpin(pageId) // DD-01: 앱에서 지운 일정은 고정도 바로 푼다.
             onTrashed()
         }
     }

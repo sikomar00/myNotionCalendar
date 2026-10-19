@@ -47,6 +47,21 @@ class LedgerWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = LedgerWidget()
 }
 
+/** DD-03 디데이 1×1(위젯 선택 목록에 따로 보이도록 리시버를 나눈다. 그리는 코드는 [DdayWidget] 하나). */
+class DdaySmallWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = DdayWidget()
+}
+
+/** DD-04 디데이 2×1. */
+class DdayWideWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = DdayWidget()
+}
+
+/** DD-05 디데이 목록. */
+class DdayListWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = DdayListWidget()
+}
+
 /** WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). */
 class TabbedWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = TabbedWidget()

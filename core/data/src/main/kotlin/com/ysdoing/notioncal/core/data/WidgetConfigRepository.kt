@@ -32,6 +32,10 @@ data class WidgetConfig(
     val selectedTab: WidgetTab = WidgetTab.CALENDAR,
     /** LD-06 가계부 금액 숨김(●●●, 막대만). */
     val hideAmounts: Boolean = false,
+    /** DD-03·04 디데이 위젯이 보여 줄 고정 일정. null이면 가장 가까운 디데이. */
+    val ddayPageId: String? = null,
+    /** WX-04 머리에 오늘 날씨. */
+    val showWeather: Boolean = false,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -51,6 +55,8 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     hideDone = hideDone,
     selectedTab = runCatching { WidgetTab.valueOf(selectedTab) }.getOrDefault(WidgetTab.CALENDAR),
     hideAmounts = hideAmounts,
+    ddayPageId = ddayPageId,
+    showWeather = showWeather,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -65,6 +71,8 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     hideDone = hideDone,
     selectedTab = selectedTab.name,
     hideAmounts = hideAmounts,
+    ddayPageId = ddayPageId,
+    showWeather = showWeather,
 )
 
 @Singleton

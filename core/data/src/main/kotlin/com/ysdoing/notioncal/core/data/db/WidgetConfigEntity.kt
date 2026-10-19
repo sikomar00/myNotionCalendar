@@ -33,6 +33,10 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "CALENDAR") val selectedTab: String = "CALENDAR",
     /** LD-06 가계부 금액 숨김(●●●, v10). */
     @ColumnInfo(defaultValue = "0") val hideAmounts: Boolean = false,
+    /** DD-03·04 디데이 위젯이 보여 줄 고정 일정(v11). */
+    val ddayPageId: String? = null,
+    /** WX-04 머리에 오늘 날씨(v11). */
+    @ColumnInfo(defaultValue = "0") val showWeather: Boolean = false,
 )
 
 @Dao

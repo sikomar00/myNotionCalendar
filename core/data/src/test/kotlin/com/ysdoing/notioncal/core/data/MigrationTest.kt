@@ -340,4 +340,32 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v10 → v11(디데이·날씨): 위젯은 디데이 없음·날씨 끔, 디데이 고정·예보 표를 쓸 수 있다. */
+    @Test
+    fun v10ToV11AddsDdayAndWeather() = runTest {
+        helper.createDatabase(10).use { db ->
+            db.execSQL(
+                """INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell,
+                   lineSpacing, hideDone, showPhoneCal, selectedTab, hideAmounts) VALUES (7, 0, '', 'DARK', 80, 100, 0, 'NORMAL', 0, 0, 'LEDGER', 1)""",
+            )
+        }
+        helper.runMigrationsAndValidate(11).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = WidgetConfigRepository(db.widgetConfigDao()).get(7)
+            assertEquals(WidgetTab.LEDGER, widget.selectedTab)
+            assertEquals(true, widget.hideAmounts)
+            assertEquals(null, widget.ddayPageId)
+            assertEquals(false, widget.showWeather)
+
+            db.ddayDao().upsert(com.ysdoing.notioncal.core.data.db.DdayPinEntity("p1"))
+            assertEquals(listOf("p1" to "DOWN"), db.ddayDao().all().map { it.pageId to it.countMode })
+            val day = java.time.LocalDate.of(2026, 10, 19)
+            db.weatherDao().upsertDays(listOf(com.ysdoing.notioncal.core.data.db.WeatherDayEntity(day, 0, 21.0, 12.0, 10, 5)))
+            assertEquals(1, db.weatherDao().observeDays(day, day).first().size)
+        } finally {
+            db.close()
+        }
+    }
 }

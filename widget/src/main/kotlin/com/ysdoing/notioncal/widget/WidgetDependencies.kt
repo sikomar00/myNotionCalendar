@@ -16,6 +16,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import com.ysdoing.notioncal.core.data.HolidayRepository
 import com.ysdoing.notioncal.core.data.habit.HabitRepository
+import com.ysdoing.notioncal.core.data.dday.DdayRepository
 import com.ysdoing.notioncal.core.data.ledger.LedgerRepository
 
 /** Glance 위젯·리시버·액션은 Hilt가 직접 주입하지 않으므로 EntryPoint로 저장소를 꺼낸다. 모두 Room만 읽는다. */
@@ -35,6 +36,9 @@ interface WidgetDependencies {
 
     /** LD-03 가계부 보드(Room만 읽는다). */
     fun ledger(): LedgerRepository
+
+    /** DD-03~05 고정한 디데이(Room만 읽는다). */
+    fun ddays(): DdayRepository
 
     companion object {
         fun from(context: Context): WidgetDependencies =

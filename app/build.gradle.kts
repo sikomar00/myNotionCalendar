@@ -22,8 +22,8 @@ android {
 
     defaultConfig {
         applicationId = "com.ysdoing.notioncal"
-        versionCode = 5
-        versionName = "0.4.0"
+        versionCode = 6
+        versionName = "0.5.0"
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
@@ -45,6 +45,7 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:designsystem"))
     implementation(project(":core:sync"))
+    implementation(project(":feature:dday"))
     implementation(project(":feature:diagnostics"))
     implementation(project(":feature:habit"))
     implementation(project(":feature:ledger"))

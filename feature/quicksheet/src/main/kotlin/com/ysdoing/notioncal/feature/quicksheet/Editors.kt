@@ -18,6 +18,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -297,6 +298,9 @@ fun EventEditorForm(
     onSave: (EventChange) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    /** DD-01 디데이로 고정했는지. null이면 고정 줄을 숨긴다. 누르면 바로 고정·해제한다(저장과 따로). */
+    pinned: Boolean? = null,
+    onPinChange: (Boolean) -> Unit = {},
 ) {
     val event = item.event
     val context = LocalContext.current
@@ -362,6 +366,14 @@ fun EventEditorForm(
                 value = propEdits[prop.id] ?: item.extraValues[prop.id] ?: PropValue(),
                 onChange = { propEdits = propEdits + (prop.id to it) },
                 key = "${event.pageId}/${prop.id}",
+            )
+        }
+        if (pinned != null) {
+            FilterChip(
+                selected = pinned,
+                onClick = { onPinChange(!pinned) },
+                label = { Text(stringResource(if (pinned) R.string.qs_dday_pinned else R.string.qs_dday_pin)) },
+                modifier = Modifier.testTag("ddayPin"),
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

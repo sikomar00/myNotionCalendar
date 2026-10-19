@@ -23,6 +23,7 @@ import com.ysdoing.notioncal.core.notion.mapping.RemoteHabit
 import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.encodeExtraValues
 import com.ysdoing.notioncal.core.data.encodePropCatalog
+import com.ysdoing.notioncal.core.data.DdayRemovedNotice
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.OutboxJson
 import com.ysdoing.notioncal.core.data.SyncTrigger
@@ -77,8 +78,12 @@ class NotionSyncEngine @Inject constructor(
     private val clock: Clock,
     @IoDispatcher private val io: CoroutineDispatcher,
     private val widgetRefresher: WidgetRefresher,
+    private val ddayNotice: DdayRemovedNotice = DdayRemovedNotice.None,
 ) {
     private val mutex = Mutex()
+
+    /** 이번 동기화에서 만든 DB별 매퍼(DD-01 고정 일정 한 건 조회에 다시 쓴다). */
+    private val runMappers = HashMap<String, NotionPageMapper>()
     private val sources get() = db.dataSourceDao()
     private val events get() = db.eventDao()
 
@@ -92,6 +97,9 @@ class NotionSyncEngine @Inject constructor(
                 .sortedBy { if (it.sourceKind == SourceKind.HABIT) 0 else 1 } // 기록 범위가 습관 시작일을 쓴다
             // 등록한 DB가 없으면 기록하지 않는다("마지막 동기화" 시각이 거짓으로 뜨지 않게).
             if (targets.isEmpty()) return@withContext SyncOutcome(0, null)
+            runMappers.clear()
+            // DD-01: 범위 대조가 지운 고정 일정의 제목을 알리려고 먼저 적어 둔다.
+            val pinTitles = db.ddayDao().all().associate { it.pageId to events.get(it.pageId)?.title }
             for (source in targets) {
                 try {
                     pulled += syncSource(source, trigger)
@@ -100,6 +108,13 @@ class NotionSyncEngine @Inject constructor(
                     lastError = e.error
                     // 토큰 문제는 모든 DB에 같으므로 나머지를 부르지 않는다.
                     if (e.error == NotionError.Unauthorized) break
+                }
+            }
+            if (lastError != NotionError.Unauthorized) {
+                try {
+                    pulled += syncPins(trigger, pinTitles)
+                } catch (e: NotionException) {
+                    lastError = lastError ?: e.error
                 }
             }
             val result = when {
@@ -138,6 +153,7 @@ class NotionSyncEngine @Inject constructor(
         if (kind == SourceKind.BUDGET || kind == SourceKind.CATEGORY) return syncLedgerTable(source, kind, report.droppedRoles, now)
         val mapping = source.toMapping(report.droppedRoles) ?: return 0
         val mapper = NotionPageMapper(mapping, schema)
+        if (kind == SourceKind.CALENDAR) runMappers[source.dataSourceId] = mapper
         // 편집 시트의 색 기준 선택지(WI-05). 노션에서 옵션을 바꿔도 다음 동기화에 반영된다.
         sources.setColorOptions(source.dataSourceId, colorOptionsJson(schema, source.colorPropId))
         // EX-07: 보기·편집할 수 있는 속성 목록. 처음 받는 DB(앱 업데이트 직후 포함)는 기존 일정에도 값을 채우려고 전체 조회한다.
@@ -222,6 +238,50 @@ class NotionSyncEngine @Inject constructor(
         sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
         widgetRefresher.requestUpdate()
         return count
+    }
+
+    /**
+     * DD-01 고정 일정 맞추기.
+     * - 범위 대조가 지운 고정(휴지통) → 고정을 풀고 알린다.
+     * - 앱 열기·새로고침 때는 이번 달 밖 고정 일정(범위 밖 포함)을 한 건씩 확인해 날짜를 받고, 휴지통이면 푼다.
+     *   주기 동기화는 증분 조회가 날짜 변경을 따라가므로 한 건 조회를 하지 않는다.
+     */
+    private suspend fun syncPins(trigger: SyncTrigger, pinTitles: Map<String, String?>): Int {
+        val pins = db.ddayDao().all()
+        if (pins.isEmpty()) return 0
+        val thorough = trigger == SyncTrigger.APP_OPEN || trigger == SyncTrigger.PULL_TO_REFRESH
+        val month = YearMonth.from(clock.instant().atZone(DateCodec.SEOUL).toLocalDate())
+        val pending = db.outboxDao().pageIds().toHashSet()
+        val removed = mutableListOf<String>()
+        var fetched = 0
+        for (pin in pins) {
+            if (pin.pageId in pending) continue
+            val row = events.get(pin.pageId)
+            if (row == null && pinTitles[pin.pageId] != null) {
+                // 이번 범위 대조가 단건 재조회로 확인하고 지웠다.
+                db.ddayDao().delete(pin.pageId)
+                removed += pinTitles.getValue(pin.pageId)!!
+                continue
+            }
+            if (!thorough) continue
+            if (row != null && YearMonth.from(row.startDate) == month) continue // 이번 달은 범위 대조가 본다
+            val page = reader.pageOrNull(pin.pageId)
+            val sourceId = row?.dataSourceId ?: page?.parent?.dataSourceId
+            val mapper = sourceId?.let { runMappers[it] } ?: continue // 이번에 동기화하지 못한 DB는 다음에
+            val mapped = page?.let(mapper::map)
+            val event = mapped?.event
+            if (event == null) {
+                if (row != null) events.delete(listOf(pin.pageId))
+                db.ddayDao().delete(pin.pageId)
+                (row?.title ?: pinTitles[pin.pageId])?.let { removed += it }
+            } else {
+                events.upsert(listOf(event.toEntity(sourceId)))
+                fetched++
+            }
+        }
+        if (removed.isNotEmpty()) ddayNotice.add(removed)
+        if (removed.isNotEmpty() || fetched > 0) widgetRefresher.requestUpdate()
+        return fetched
     }
 
     /** 검증 메모 6: 기록 조회 범위. 시작일이 없는 습관이 있으면 [HABIT_LOG_DAYS]일 전부터. */

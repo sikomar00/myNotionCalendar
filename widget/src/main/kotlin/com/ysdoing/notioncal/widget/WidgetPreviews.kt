@@ -11,6 +11,9 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.HabitEntity
+import com.ysdoing.notioncal.core.data.dday.Dday
+import com.ysdoing.notioncal.core.data.dday.DdayMath
+import com.ysdoing.notioncal.core.data.dday.DdayMode
 import com.ysdoing.notioncal.core.data.ledger.BudgetRow
 import com.ysdoing.notioncal.core.data.ledger.Flow
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
@@ -93,6 +96,18 @@ object WidgetPreviews {
         return HabitWidgetState(board, WidgetConfig(0), DayOfWeek.SUNDAY)
     }
 
+    /** 예시 디데이(DD-03~05): 앞날·진행 중·기념일. 개인 일정이 아니다. */
+    fun ddayState(today: LocalDate = LocalDate.now(APP_ZONE)): DdayWidgetState {
+        fun dday(id: String, title: String, start: LocalDate, end: LocalDate? = null, mode: DdayMode = DdayMode.DOWN) =
+            Dday("preview-$id", title, start, end, mode, DdayMath.DEFAULT_HIDE_AFTER_DAYS, null, DdayMath.label(start, end, today, mode))
+        val ddays = listOf(
+            dday("1", "시험", today.plusDays(12)),
+            dday("2", "여행", today.minusDays(1), today.plusDays(1)),
+            dday("3", "기념일", today.minusDays(99), mode = DdayMode.DAYS),
+        ).sortedBy { it.label!!.sortKey }
+        return DdayWidgetState(ddays, WidgetConfig(0, ddayPageId = "preview-1"), today)
+    }
+
     /**
      * 위젯들의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
      * 모두 성공하면 true.
@@ -107,6 +122,9 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(HabitWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(TabbedWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(LedgerWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(DdaySmallWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }

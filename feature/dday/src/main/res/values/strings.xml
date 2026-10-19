@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dday_title">디데이</string>
+    <string name="dday_back">뒤로</string>
+    <string name="dday_pinned">고정한 디데이</string>
+    <string name="dday_empty">고정한 디데이가 없습니다. 일정 편집 시트에서 \'디데이로 고정\'을 누르거나 아래에서 일정을 찾아 고정하세요.</string>
+    <string name="dday_find">일정 찾아 고정</string>
+    <string name="dday_find_hint">일정 제목</string>
+    <string name="dday_pin_chip">고정</string>
+    <string name="dday_pinned_chip">고정됨</string>
+    <string name="dday_unpin">%1$s 고정 해제</string>
+    <string name="dday_waiting">동기화 대기</string>
+    <string name="dday_untitled">(제목 없음)</string>
+    <string name="dday_hidden">지난 지 오래돼 위젯에서 숨김</string>
+    <string name="dday_mode_down">D-N · D+N</string>
+    <string name="dday_mode_up">계속 D+N</string>
+    <string name="dday_mode_days">N일째</string>
+    <string name="dday_removed_notice">노션에서 지워져 고정을 풀었습니다: %1$s</string>
+    <string name="dday_dismiss">확인</string>
+</resources>
