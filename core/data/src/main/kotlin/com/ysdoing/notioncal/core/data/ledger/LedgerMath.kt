@@ -117,8 +117,9 @@ object LedgerMath {
         month: YearMonth,
         budgets: List<BudgetRow>,
         rules: LedgerRules,
+        /** LD-09 반영 기준일. Room이 DB 전체에서 구한 값을 넘긴다(기본: [rows] 안에서). */
+        asOf: LocalDate? = rows.filter { it.imported }.maxOfOrNull { it.date },
     ): LedgerSummary {
-        val asOf = rows.filter { it.imported }.maxOfOrNull { it.date }
 
         // LD-08 중복: 가져온 거래만, 먼저 만든 행을 대표로.
         val duplicates = mutableListOf<DuplicateGroup>()
