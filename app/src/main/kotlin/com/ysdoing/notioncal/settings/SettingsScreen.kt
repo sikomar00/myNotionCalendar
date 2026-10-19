@@ -400,6 +400,9 @@ private fun SourceRow(
             val kindLabel = when (source.sourceKind) {
                 SourceKind.HABIT_LOG -> R.string.settings_kind_habit_log
                 SourceKind.HABIT -> R.string.settings_kind_habit
+                SourceKind.LEDGER -> R.string.settings_kind_ledger
+                SourceKind.BUDGET -> R.string.settings_kind_budget
+                SourceKind.CATEGORY -> R.string.settings_kind_category
                 else -> null
             }
             kindLabel?.let {

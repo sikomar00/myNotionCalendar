@@ -40,7 +40,25 @@ data class DatabaseInspection(
     val logSuggestion: HabitLogChoice? = null,
     /** 날짜 없이 relation만 있다: 🌱 습관 링크를 넣은 것으로 보고 ✅ 습관 기록 링크를 안내한다. */
     val looksLikeHabitDatabase: Boolean = false,
+    /** LD-01 '가계부(거래내역)'로 쓸 때의 추천 매핑(금액·타입이 없으면 null). */
+    val ledgerSuggestion: LedgerChoice? = null,
+    /** LD-01 가계부로 쓸 수 없는 이유(금액이 number가 아님 등). 금액처럼 보이는 속성이 있을 때만 보인다. */
+    val ledgerProblem: LedgerProblem? = null,
+    /** 노션의 부모 페이지 ID(같은 페이지의 예산·카테고리 마스터 찾기). */
+    val parentPageId: String? = null,
 )
+
+/** LD-01 예산·카테고리 마스터 찾기 결과. 못 찾은 쪽은 null이고 등록 화면이 링크 칸을 보인다. */
+data class LedgerCompanions(val budget: CompanionInspection?, val category: CompanionInspection?)
+
+sealed interface CompanionResult {
+    data class Ok(val inspection: CompanionInspection) : CompanionResult
+    data object InvalidLink : CompanionResult
+
+    /** 예산이면 기간유형·기간값, 카테고리면 제목이 없어 쓸 수 없다. */
+    data object Unusable : CompanionResult
+    data class Failed(val error: NotionError) : CompanionResult
+}
 
 sealed interface InspectResult {
     data class Ok(val inspection: DatabaseInspection) : InspectResult
@@ -75,9 +93,13 @@ class ConnectionService @Inject constructor(
 
     suspend fun inspect(link: String, preferredDataSourceId: String? = null): InspectResult = withContext(io) {
         val parsedId = NotionLinkParser.databaseId(link) ?: return@withContext InspectResult.InvalidLink
-        // 🌱 습관 다시 연결(NS-09): 짝인 ✅ 습관 기록으로 연다(두 DB를 한 화면에서 함께 맞춘다).
-        val pairedLog = preferredDataSourceId?.let { dataSourceDao.get(it) }?.takeIf { it.sourceKind == SourceKind.HABIT }
-            ?.let { dataSourceDao.linkedTo(it.dataSourceId).firstOrNull() }
+        // 🌱 습관·예산·카테고리 마스터 다시 연결(NS-09): 짝인 ✅ 습관 기록·거래내역으로 연다(한 화면에서 함께 맞춘다).
+        val preferredRow = preferredDataSourceId?.let { dataSourceDao.get(it) }
+        val pairedLog = when (preferredRow?.sourceKind) {
+            SourceKind.HABIT -> dataSourceDao.linkedTo(preferredRow.dataSourceId).firstOrNull()
+            SourceKind.BUDGET, SourceKind.CATEGORY -> preferredRow.linkDataSourceId?.let { dataSourceDao.get(it) }
+            else -> null
+        }
         val databaseId = pairedLog?.databaseId ?: parsedId
         val preferred = pairedLog?.dataSourceId ?: preferredDataSourceId
         try {
@@ -106,6 +128,10 @@ class ConnectionService @Inject constructor(
                     logSuggestion = existing?.takeIf { it.sourceKind == SourceKind.HABIT_LOG }?.let { keepValidLog(it, schema) }
                         ?: HabitSuggester.suggestLog(schema),
                     looksLikeHabitDatabase = HabitSuggester.looksLikeHabitDatabase(schema),
+                    ledgerSuggestion = LedgerSuggester.suggestLedger(schema),
+                    ledgerProblem = LedgerSuggester.problem(schema)
+                        ?.takeIf { schema.properties.values.any { p -> p.name.trim() in setOf("금액", "Amount") } },
+                    parentPageId = database.parent?.pageId,
                 ),
             )
         } catch (e: NotionException) {
@@ -178,6 +204,83 @@ class ConnectionService @Inject constructor(
         } catch (e: NotionException) {
             HabitInspectResult.Failed(e.error)
         }
+    }
+
+    /** LD-01: 거래내역과 같은 페이지의 자식 DB에서 예산·카테고리 마스터를 찾는다. 찾지 못하거나 읽을 수 없으면 그쪽은 null. */
+    suspend fun findLedgerCompanions(ledger: DatabaseInspection): LedgerCompanions = withContext(io) {
+        val pageId = ledger.parentPageId ?: return@withContext LedgerCompanions(null, null)
+        val children = try {
+            client.childDatabases(pageId)
+        } catch (e: NotionException) {
+            return@withContext LedgerCompanions(null, null)
+        }
+        val (budgetId, categoryId) = LedgerSuggester.pickCompanions(children.filterNot { it.first == ledger.databaseId })
+        LedgerCompanions(
+            budget = budgetId?.let { (inspectCompanionDatabase(it, budget = true) as? CompanionResult.Ok)?.inspection },
+            category = categoryId?.let { (inspectCompanionDatabase(it, budget = false) as? CompanionResult.Ok)?.inspection },
+        )
+    }
+
+    /** LD-01: 자동으로 못 찾았을 때 사용자가 넣은 예산·카테고리 마스터 링크를 조회한다. */
+    suspend fun inspectCompanion(link: String, budget: Boolean): CompanionResult = withContext(io) {
+        val databaseId = NotionLinkParser.databaseId(link) ?: return@withContext CompanionResult.InvalidLink
+        inspectCompanionDatabase(databaseId, budget)
+    }
+
+    private suspend fun inspectCompanionDatabase(databaseId: String, budget: Boolean): CompanionResult = try {
+        val database = client.database(databaseId)
+        val dataSourceId = database.dataSources.firstOrNull()?.id ?: throw NotionException(NotionError.NotShared)
+        val schema = client.dataSource(dataSourceId)
+        val name = database.title.joinToString("") { it.plainText }.ifBlank { schema.title.joinToString("") { it.plainText } }
+        val budgetChoice = if (budget) LedgerSuggester.suggestBudget(schema) else null
+        val categoryChoice = if (budget) null else LedgerSuggester.suggestCategory(schema)
+        if (budgetChoice == null && categoryChoice == null) {
+            CompanionResult.Unusable
+        } else {
+            CompanionResult.Ok(
+                CompanionInspection(
+                    target = HabitTarget(dataSourceId, database.id, name),
+                    candidates = LedgerSuggester.candidates(schema),
+                    budget = budgetChoice,
+                    category = categoryChoice,
+                    groupOptions = LedgerSuggester.groupOptions(schema, budgetChoice?.group),
+                ),
+            )
+        }
+    } catch (e: NotionException) {
+        CompanionResult.Failed(e.error)
+    }
+
+    /** LD-01: 거래내역·예산·카테고리 마스터를 한 묶음으로 저장하고 셋 다 동기화를 요청한다(예산·카테고리 먼저). */
+    suspend fun registerLedger(
+        ledger: DatabaseInspection,
+        ledgerChoice: LedgerChoice,
+        budget: CompanionInspection,
+        budgetChoice: BudgetChoice,
+        category: CompanionInspection,
+        categoryChoice: CategoryChoice,
+        budgetGroup: String,
+        spendNegative: Boolean,
+        colorHex: String,
+    ) = withContext(io) {
+        val ids = listOf(ledger.dataSourceId, budget.target.dataSourceId, category.target.dataSourceId)
+        val (ledgerRow, budgetRow, categoryRow) = ledgerRows(
+            ledger = HabitTarget(ledger.dataSourceId, ledger.databaseId, ledger.name),
+            ledgerChoice = ledgerChoice,
+            budget = budget.target,
+            budgetChoice = budgetChoice,
+            category = category.target,
+            categoryChoice = categoryChoice,
+            budgetGroup = budgetGroup,
+            spendNegative = spendNegative,
+            colorHex = colorHex,
+            existing = ids.mapNotNull { id -> dataSourceDao.get(id)?.let { id to it } }.toMap(),
+            nextPosition = dataSourceDao.nextPosition(),
+        )
+        listOf(ledgerRow, budgetRow, categoryRow).forEach { dataSourceDao.upsert(it) }
+        scheduler.request(SyncTrigger.APP_OPEN, categoryRow.dataSourceId)
+        scheduler.request(SyncTrigger.APP_OPEN, budgetRow.dataSourceId)
+        scheduler.request(SyncTrigger.APP_OPEN, ledgerRow.dataSourceId)
     }
 
     /** HB-01: ✅ 습관 기록과 🌱 습관을 한 쌍으로 저장하고 두 DB 모두 동기화를 요청한다(습관을 먼저). */

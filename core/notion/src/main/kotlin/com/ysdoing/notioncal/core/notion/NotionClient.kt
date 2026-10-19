@@ -59,6 +59,18 @@ class NotionClient @Inject constructor(
 
     suspend fun database(databaseId: String): DatabaseDto = call { api.database(databaseId) }
 
+    /** LD-01: 페이지의 자식 DB(ID, 제목). 다음 쪽까지 끝까지 받는다. */
+    suspend fun childDatabases(pageId: String): List<Pair<String, String>> {
+        val found = mutableListOf<Pair<String, String>>()
+        var cursor: String? = null
+        do {
+            val page = call { api.blockChildren(pageId, cursor) }
+            page.results.forEach { block -> block.childDatabase?.let { found += block.id to it.title } }
+            cursor = if (page.hasMore) page.nextCursor else null
+        } while (cursor != null)
+        return found
+    }
+
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
 
     override suspend fun pageOrNull(pageId: String): PageDto? = try {

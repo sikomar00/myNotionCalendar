@@ -149,4 +149,23 @@ class EventDaoTest {
         assertEquals(null, db.eventDao().get("r1"))
         assertEquals("c1", db.eventDao().get("c1")!!.pageId)
     }
+
+    /** LD-01: 거래내역·예산·카테고리 마스터는 한 묶음으로 켜고 끄고 지운다(어느 쪽에서 해도). 예산·카테고리 캐시도 지운다. */
+    @Test
+    fun ledgerTrioIsToggledAndDeletedTogether() = runTest {
+        db.dataSourceDao().upsert(source("ledger", kind = SourceKind.LEDGER))
+        db.dataSourceDao().upsert(source("budget", kind = SourceKind.BUDGET, link = "ledger"))
+        db.dataSourceDao().upsert(source("category", kind = SourceKind.CATEGORY, link = "ledger"))
+        db.dataSourceDao().upsert(source("cal"))
+        db.ledgerDao().insertBudgets(listOf(com.ysdoing.notioncal.core.data.db.BudgetEntity("b1", "budget", "월", "2026-10", "전체", 1)))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+
+        repository.setEnabled("budget", false)
+        assertEquals(listOf(false, false, false, true), listOf("ledger", "budget", "category", "cal").map { db.dataSourceDao().get(it)!!.enabled })
+
+        repository.delete("category")
+        assertEquals(listOf(null, null, null), listOf("ledger", "budget", "category").map { db.dataSourceDao().get(it) })
+        assertEquals(emptyList<Any>(), db.ledgerDao().observeBudgets().first())
+        assertEquals("cal", db.dataSourceDao().get("cal")!!.dataSourceId)
+    }
 }

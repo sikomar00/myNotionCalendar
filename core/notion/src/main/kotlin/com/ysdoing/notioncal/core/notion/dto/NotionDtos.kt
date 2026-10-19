@@ -24,11 +24,37 @@ data class DataSourceRefDto(
     val name: String = "",
 )
 
+/** DB의 부모(LD-01: 거래내역과 같은 페이지의 예산·카테고리 마스터를 찾는다). */
+@Serializable
+data class ParentRefDto(
+    val type: String = "",
+    @SerialName("page_id") val pageId: String? = null,
+)
+
 @Serializable
 data class DatabaseDto(
     val id: String,
     val title: List<RichTextDto> = emptyList(),
     @SerialName("data_sources") val dataSources: List<DataSourceRefDto> = emptyList(),
+    val parent: ParentRefDto? = null,
+)
+
+@Serializable
+data class ChildDatabaseDto(val title: String = "")
+
+/** 블록 하나. 앱은 자식 DB(child_database)만 쓴다. */
+@Serializable
+data class BlockDto(
+    val id: String,
+    val type: String = "",
+    @SerialName("child_database") val childDatabase: ChildDatabaseDto? = null,
+)
+
+@Serializable
+data class BlockListDto(
+    val results: List<BlockDto> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
 )
 
 @Serializable

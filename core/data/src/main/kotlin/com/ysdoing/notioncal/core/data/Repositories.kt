@@ -146,12 +146,13 @@ class DataSourceRepository @Inject constructor(
         widgetRefresher.requestUpdate()
     }
 
-    /** [id]와 짝(✅ 습관 기록 ↔ 🌱 습관)의 ID. 일정 DB면 자기 자신만. */
+    /** [id]와 짝(✅ 습관 기록 ↔ 🌱 습관, 거래내역 ↔ 예산·카테고리 마스터)의 ID. 일정 DB면 자기 자신만. */
     private suspend fun pairOf(id: String): List<String> {
         val source = dataSourceDao.get(id) ?: return listOf(id)
         return when (source.sourceKind) {
             SourceKind.HABIT_LOG -> listOfNotNull(id, source.linkDataSourceId)
-            SourceKind.HABIT -> listOf(id) + dataSourceDao.linkedTo(id).map { it.dataSourceId }
+            SourceKind.HABIT, SourceKind.LEDGER -> listOf(id) + dataSourceDao.linkedTo(id).map { it.dataSourceId }
+            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.let { pairOf(it) } ?: listOf(id)
             else -> listOf(id)
         }
     }
@@ -186,6 +187,8 @@ class DataSourceRepository @Inject constructor(
             pairOf(id).forEach { target ->
                 eventDao.deleteForSource(target)
                 db.habitDao().deleteForSource(target)
+                db.ledgerDao().deleteBudgets(target)
+                db.ledgerDao().deleteCategoryGroups(target)
                 dataSourceDao.deleteRow(target)
             }
         }

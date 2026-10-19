@@ -59,6 +59,8 @@ class DiagnosticsRepository @Inject constructor(
             db.withTransaction {
                 db.eventDao().deleteSynced()
                 db.habitDao().deleteAll()
+                db.ledgerDao().deleteAllBudgets()
+                db.ledgerDao().deleteAllCategoryGroups()
                 db.syncLogDao().deleteAll()
                 db.conflictDao().deleteAll()
                 db.dataSourceDao().resetSyncCursors()

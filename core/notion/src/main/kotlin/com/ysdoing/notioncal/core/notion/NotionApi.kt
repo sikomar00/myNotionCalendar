@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.notion
 
+import com.ysdoing.notioncal.core.notion.dto.BlockListDto
 import com.ysdoing.notioncal.core.notion.dto.CreatePageDto
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.DatabaseDto
@@ -24,6 +25,14 @@ interface NotionApi {
 
     @GET("v1/data_sources/{id}")
     suspend fun dataSource(@Path("id") dataSourceId: String): DataSourceDto
+
+    /** LD-01 페이지의 자식 블록(자식 DB 찾기). */
+    @GET("v1/blocks/{id}/children")
+    suspend fun blockChildren(
+        @Path("id") blockId: String,
+        @retrofit2.http.Query("start_cursor") startCursor: String?,
+        @retrofit2.http.Query("page_size") pageSize: Int = 100,
+    ): BlockListDto
 
     @GET("v1/pages/{id}")
     suspend fun page(@Path("id") pageId: String): PageDto
