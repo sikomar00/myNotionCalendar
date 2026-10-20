@@ -12,6 +12,7 @@ import com.ysdoing.notioncal.core.sync.CompareReport
 import com.ysdoing.notioncal.core.sync.Mismatch
 import com.ysdoing.notioncal.core.sync.NotionComparer
 import com.ysdoing.notioncal.core.sync.NotionSyncEngine
+import com.ysdoing.notioncal.core.sync.PhoneCalendarMirror
 import com.ysdoing.notioncal.feature.diagnostics.DebugAction
 import com.ysdoing.notioncal.feature.diagnostics.DebugMenu
 import dagger.Module
@@ -34,6 +35,7 @@ object DebugMenuModule {
         sync: SyncRequester,
         engine: NotionSyncEngine,
         comparer: NotionComparer,
+        mirror: PhoneCalendarMirror,
     ): DebugMenu = DebugMenu {
         if (!BuildConfig.DEBUG) return@DebugMenu emptyList()
         listOf(
@@ -45,6 +47,14 @@ object DebugMenuModule {
                 } catch (e: NotionException) {
                     "비교하지 못했습니다: ${e.error::class.simpleName}"
                 }
+            },
+            // EX-08 시험: 노션 일정을 폰 캘린더(로컬 계정 '노션 캘린더')에 복사해 S25 나우 브리프에 뜨는지 본다.
+            DebugAction("폰 캘린더 미러 켜기(시험)") {
+                mirror.enable()?.let { "노션 캘린더에 앞으로 30일 일정 ${it}건을 복사했습니다. 삼성 캘린더와 나우 브리프를 확인하세요." }
+                    ?: "캘린더 읽기·쓰기 권한이 필요합니다(설정 → 애플리케이션 → 노션 월간 → 권한 → 캘린더)."
+            },
+            DebugAction("폰 캘린더 미러 끄기(삭제)") {
+                "노션 캘린더 ${mirror.disable()}개를 지웠습니다."
             },
             DebugAction("테스트 크래시") {
                 // 화면 코드 바깥(메인 루프)에서 던져 실제 크래시처럼 수집되게 한다.
