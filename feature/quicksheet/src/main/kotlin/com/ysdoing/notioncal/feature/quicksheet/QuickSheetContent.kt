@@ -104,10 +104,11 @@ fun QuickSheetContent(
                 LaunchedEffect(start.date) { viewModel.showDay(start.date) }
                 val events by viewModel.dayEvents.collectAsStateWithLifecycle()
                 val holiday by viewModel.dayHoliday.collectAsStateWithLifecycle()
-                Text(
-                    listOfNotNull(dayTitle(start.date), holiday).joinToString(" · "),
-                    style = MaterialTheme.typography.titleLarge,
-                )
+                // 공휴일 이름은 날짜 옆에 따로(일요일 빨강), 가운뎃점으로 잇지 않는다.
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(dayTitle(start.date), style = MaterialTheme.typography.titleLarge)
+                    holiday?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error) }
+                }
                 val weather by viewModel.dayWeather.collectAsStateWithLifecycle()
                 if (!weather.isEmpty) DayWeatherStrip(weather)
                 AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) }, onAddRepeated = { viewModel.addAll(it) })

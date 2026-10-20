@@ -269,11 +269,10 @@ fun DayList(
                             else -> MaterialTheme.colorScheme.onSurface
                         },
                     )
-                    Text(
-                        listOfNotNull(timeText(event), if (event.pending) stringResource(R.string.qs_pending) else null).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(timeText(event), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (event.pending) Text(stringResource(R.string.qs_pending), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

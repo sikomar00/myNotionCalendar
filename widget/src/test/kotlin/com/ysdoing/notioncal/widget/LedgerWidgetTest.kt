@@ -78,7 +78,10 @@ class LedgerWidgetTest {
         provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
         onNode(hasTextEqualTo("10월 지출 2.2만")).assertExists()
         onNode(hasTextEqualTo("10/20까지 반영")).assertExists()
-        onNode(hasTextEqualTo("예정 5만 · 수입 +250만 · 예산 92.8만 남음")).assertExists()
+        // 위쪽 줄은 가운뎃점 대신 띄워 놓은 세 덩이(DESIGN.md).
+        onNode(hasTextEqualTo("예정 5만")).assertExists()
+        onNode(hasTextEqualTo("수입 +250만")).assertExists()
+        onNode(hasTextEqualTo("예산 92.8만 남음")).assertExists()
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
         onAllNodes(hasTestTag("ledgerDay")).assertCountEquals(42)
         onNode(hasContentDescriptionEqualTo("10월 19일, 지출 12,300원")).assertExists()

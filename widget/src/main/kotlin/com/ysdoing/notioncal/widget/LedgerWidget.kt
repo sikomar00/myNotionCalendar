@@ -246,12 +246,13 @@ fun LedgerWidgetContent(
                 }
             }
             if (metrics.showSummary) {
-                Text(
-                    text = summaryLine(context, board, hidden),
-                    modifier = GlanceModifier.fillMaxWidth().height(metrics.lineHeight),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
-                    maxLines = 1,
-                )
+                // 예정·수입·예산을 가운뎃점 대신 사이를 띄운 세 덩이로(DESIGN.md). 자식 5개(Glance 10개 제한 안).
+                Row(GlanceModifier.fillMaxWidth().height(metrics.lineHeight), verticalAlignment = Alignment.CenterVertically) {
+                    summaryParts(context, board, hidden).forEachIndexed { i, part ->
+                        if (i > 0) Spacer(GlanceModifier.width(8.dp))
+                        Text(text = part, style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp), maxLines = 1)
+                    }
+                }
             }
             WeekLine(board, metrics, palette, hidden)
         }
@@ -280,7 +281,7 @@ fun LedgerWidgetContent(
     }
 }
 
-private fun summaryLine(context: Context, board: LedgerBoard, hidden: Boolean): String {
+private fun summaryParts(context: Context, board: LedgerBoard, hidden: Boolean): List<String> {
     val s = board.summary
     val budget = s.monthRemaining?.let { r ->
         if (r >= 0) context.getString(R.string.ledger_widget_month_left, MoneyFormat.short(r, hidden))
@@ -290,7 +291,7 @@ private fun summaryLine(context: Context, board: LedgerBoard, hidden: Boolean): 
         context.getString(R.string.ledger_widget_planned, MoneyFormat.short(s.monthPlanned, hidden)),
         context.getString(R.string.ledger_widget_income, MoneyFormat.short(s.monthIncome, hidden)),
         budget,
-    ).joinToString(" · ")
+    )
 }
 
 /** LD-04 주 예산 줄과 막대. 넘으면 경고색 + '초과' 글자. 금액을 숨겨도 막대는 남긴다(LD-06). */

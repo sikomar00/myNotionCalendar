@@ -80,14 +80,15 @@ fun WeatherBadge(
     }
 }
 
-/** WX-05 출처 줄: 'Weather data by Open-Meteo.com · CC BY 4.0'(두 링크). */
+/** WX-05 출처 줄: 'Weather data by Open-Meteo.com (CC BY 4.0)'(두 링크). */
 @Composable
 fun WeatherAttribution(modifier: Modifier = Modifier) {
     val link = TextLinkStyles(SpanStyle(color = MaterialTheme.colorScheme.primary))
     val text = buildAnnotatedString {
         withLink(LinkAnnotation.Url(WeatherCredit.SITE, link)) { append(WeatherCredit.TEXT) }
-        append(" · ")
+        append(" (")
         withLink(LinkAnnotation.Url(WeatherCredit.LICENSE_URL, link)) { append(WeatherCredit.LICENSE) }
+        append(")")
     }
     Text(text, modifier = modifier, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

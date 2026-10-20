@@ -6,11 +6,6 @@
     <string name="ledger_prev">이전 달</string>
     <string name="ledger_next">다음 달</string>
     <string name="ledger_month_spend">%1$d월 지출</string>
-    <string name="ledger_planned">예정 %1$s</string>
-    <string name="ledger_income">수입 +%1$s</string>
-    <string name="ledger_month_left">월 예산 %1$s 남음</string>
-    <string name="ledger_month_over">월 예산 %1$s 초과</string>
-    <string name="ledger_no_budget">예산 없음</string>
     <string name="ledger_as_of">%1$d/%2$d까지 반영</string>
     <string name="ledger_as_of_none">가져온 거래 없음</string>
     <string name="ledger_week_left">이번 주 %1$s 남음 · %2$d일</string>
@@ -35,7 +30,7 @@
     <string name="ledger_empty_title">등록한 가계부가 없습니다</string>
     <string name="ledger_empty_body">노션 💰 자금 관리의 거래내역 DB 링크를 설정 → DB 추가에 넣고 종류를 가계부로 고르면 예산·카테고리 마스터와 함께 등록됩니다.</string>
     <string name="ledger_open_settings">설정 열기</string>
-    <string name="ledger_input_title">%1$d월 %2$d일(%3$s) · %4$s</string>
+    <string name="ledger_input_title">%1$d월 %2$d일(%3$s)</string>
     <string name="ledger_input_actual">앱입력</string>
     <string name="ledger_input_planned">예정</string>
     <string name="ledger_input_out">지출</string>
@@ -52,4 +47,10 @@
     <string name="ledger_day_empty">이 날 거래가 없습니다</string>
     <string name="ledger_entry_planned">예정</string>
     <string name="ledger_entry_manual">앱입력</string>
+    <string name="ledger_stat_planned">예정</string>
+    <string name="ledger_stat_income">수입</string>
+    <string name="ledger_stat_budget">월 예산</string>
+    <string name="ledger_stat_left">월 예산 남음</string>
+    <string name="ledger_stat_over">월 예산 초과</string>
+    <string name="ledger_stat_none">없음</string>
 </resources>

@@ -77,7 +77,7 @@ object DebugMenuModule {
 /** 결과 대화상자 문구. 불일치는 앞 [SHOWN]건만 날짜·제목·다른 필드로 보인다. */
 internal fun describeComparison(report: CompareReport, syncError: NotionError?): String = buildString {
     appendLine("범위 ${report.from} ~ ${report.to}")
-    appendLine("노션 ${report.remoteCount}건 · 앱 ${report.localCount}건")
+    appendLine("노션 ${report.remoteCount}건, 앱 ${report.localCount}건")
     if (syncError != null) appendLine("먼저 한 동기화가 실패했습니다(${syncError::class.simpleName}).")
     if (report.skippedSources.isNotEmpty()) appendLine("비교 못 한 DB: ${report.skippedSources.joinToString()}")
     appendLine()

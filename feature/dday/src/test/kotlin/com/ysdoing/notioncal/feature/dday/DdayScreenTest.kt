@@ -44,7 +44,8 @@ class DdayScreenTest {
         }
         compose.onNodeWithText("D-12").assertExists()
         compose.onNodeWithText("10/31 토").assertExists()
-        compose.onNodeWithText("10/9 금 · 지난 지 오래돼 위젯에서 숨김").assertExists()
+        compose.onNodeWithText("10/9 금").assertExists()
+        compose.onNodeWithText("지난 지 오래돼 위젯에서 숨김").assertExists()
         compose.onNodeWithContentDescription("기말고사 고정 해제").performClick()
         assertEquals(listOf("exam"), unpinned)
         compose.onAllNodes(androidx.compose.ui.test.hasText("N일째"))[0].performClick()

@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -172,7 +173,8 @@ class WidgetConfigActivity : ComponentActivity() {
                 data.ddays.forEach { dday ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = config.ddayPageId == dday.pageId, onClick = { config = config.copy(ddayPageId = dday.pageId) })
-                        Text(listOfNotNull(dday.label?.text, dday.title).joinToString(" · "))
+                        dday.label?.let { Text(it.text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp)) }
+                        Text(dday.title.orEmpty())
                     }
                 }
                 if (data.ddays.isEmpty()) {
@@ -339,7 +341,8 @@ class WidgetConfigActivity : ComponentActivity() {
 
     @Composable
     private fun Section(title: String) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        // 구역 제목은 먹색 굵은 글자(화면 틀에 강조색을 쓰지 않음, DESIGN.md).
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 
     @Composable

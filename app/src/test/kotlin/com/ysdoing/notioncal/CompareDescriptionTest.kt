@@ -15,7 +15,7 @@ class CompareDescriptionTest {
     @Test
     fun matchShowsCountsAndZero() {
         val text = describeComparison(CompareReport(from, to, 93, 93, emptyList()), syncError = null)
-        assertEquals("범위 2026-08-01 ~ 2026-12-31\n노션 93건 · 앱 93건\n\n불일치 0건 ✓", text)
+        assertEquals("범위 2026-08-01 ~ 2026-12-31\n노션 93건, 앱 93건\n\n불일치 0건 ✓", text)
     }
 
     @Test

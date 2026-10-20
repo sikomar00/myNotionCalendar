@@ -25,7 +25,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -56,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import com.ysdoing.notioncal.core.data.DesignTokens
 import com.ysdoing.notioncal.core.data.ledger.DayEntry
 import com.ysdoing.notioncal.core.data.ledger.DayMoney
@@ -192,33 +194,49 @@ private fun MonthNav(month: YearMonth, onShift: (Long) -> Unit) {
     }
 }
 
-/** LD-03 위쪽 줄: 이번 달 지출·예정·수입·월 예산 남음, '10/8까지 반영'. */
+/**
+ * LD-03 위쪽: 이번 달 지출(크게)과 '10/8까지 반영', 아래 세 칸(예정·수입·월 예산). 칸은 라벨 위·값 아래로 나눠
+ * 가운뎃점으로 잇지 않는다(DESIGN.md). 예산을 넘으면 라벨이 '월 예산 초과'로 바뀌고 경고색(색만으로 구분하지 않음).
+ */
 @Composable
 private fun Summary(board: LedgerBoard) {
     val s = board.summary
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).testTag("ledgerSummary")) {
-        Text(stringResource(R.string.ledger_month_spend, board.month.monthValue), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(MoneyFormat.full(s.monthSpend), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.ledger_planned, MoneyFormat.short(s.monthPlanned)), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(stringResource(R.string.ledger_income, MoneyFormat.short(s.monthIncome)), style = MaterialTheme.typography.bodyMedium, color = incomeColor())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ledger_month_spend, board.month.monthValue),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                s.asOf?.let { stringResource(R.string.ledger_as_of, it.monthValue, it.dayOfMonth) } ?: stringResource(R.string.ledger_as_of_none),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("ledgerAsOf"),
+            )
         }
-        val remaining = s.monthRemaining
-        Text(
+        Text(MoneyFormat.full(s.monthSpend), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Stat(stringResource(R.string.ledger_stat_planned), MoneyFormat.short(s.monthPlanned), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+            Stat(stringResource(R.string.ledger_stat_income), "+" + MoneyFormat.short(s.monthIncome), incomeColor(), Modifier.weight(1f))
+            val remaining = s.monthRemaining
             when {
-                remaining == null -> stringResource(R.string.ledger_no_budget)
-                remaining >= 0 -> stringResource(R.string.ledger_month_left, MoneyFormat.short(remaining))
-                else -> stringResource(R.string.ledger_month_over, MoneyFormat.short(-remaining))
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (remaining != null && remaining < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            s.asOf?.let { stringResource(R.string.ledger_as_of, it.monthValue, it.dayOfMonth) } ?: stringResource(R.string.ledger_as_of_none),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.testTag("ledgerAsOf"),
-        )
+                remaining == null -> Stat(stringResource(R.string.ledger_stat_budget), stringResource(R.string.ledger_stat_none), MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f))
+                remaining >= 0 -> Stat(stringResource(R.string.ledger_stat_left), MoneyFormat.short(remaining), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                else -> Stat(stringResource(R.string.ledger_stat_over), MoneyFormat.short(-remaining), MaterialTheme.colorScheme.error, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** 요약 한 칸: 흑연 라벨 위, 값 아래. 낭독은 '예정 5만'처럼 한 번에. */
+@Composable
+private fun Stat(label: String, value: String, color: Color, modifier: Modifier) {
+    Column(modifier.clearAndSetSemantics { contentDescription = "$label $value" }) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = color)
     }
 }
 
@@ -241,12 +259,14 @@ private fun WeekBudget(board: LedgerBoard) {
         )
         if (budget != null && budget > 0 && remaining != null) {
             Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { ((budget - remaining).toFloat() / budget).coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.outlineVariant,
-            )
+            // 위젯 막대와 같은 모양: 둥근 트랙 위에 쓴 만큼 채운다(Material 진행 막대의 틈·끝 점 없이).
+            val used = ((budget - remaining).toFloat() / budget).coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(MaterialTheme.colorScheme.outlineVariant)) {
+                Box(
+                    Modifier.fillMaxWidth(used).fillMaxHeight().clip(RoundedCornerShape(3.dp))
+                        .background(if (over) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary),
+                )
+            }
         }
     }
 }
@@ -439,12 +459,13 @@ private fun DayEntries(date: LocalDate, entries: List<DayEntry>, onAdd: ((LocalD
 private fun EntryRow(entry: DayEntry) {
     val tx = entry.tx
     val planned = entry.kind == DayEntry.Kind.PLANNED
-    val note = listOfNotNull(
+    // 대분류·결제수단·상태는 가운뎃점 대신 사이를 띄워 늘어놓는다(DESIGN.md).
+    val notes = listOfNotNull(
         tx.category,
         tx.payment,
         stringResource(R.string.ledger_entry_planned).takeIf { planned },
         stringResource(R.string.ledger_entry_manual).takeIf { tx.manual },
-    ).joinToString(" · ")
+    )
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
             tx.time.orEmpty(),
@@ -454,8 +475,14 @@ private fun EntryRow(entry: DayEntry) {
         )
         Column(Modifier.weight(1f)) {
             Text(tx.title.ifBlank { stringResource(R.string.ledger_untitled) }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (note.isNotEmpty()) {
-                Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (notes.isNotEmpty()) {
+                Text(
+                    notes.joinToString(NOTE_GAP),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         Text(
@@ -471,3 +498,6 @@ private fun EntryRow(entry: DayEntry) {
         )
     }
 }
+
+/** 한 줄 안에서 덩이를 나누는 띄움(가운뎃점 대신, 전각 공백 하나). */
+private const val NOTE_GAP = "\u3000"

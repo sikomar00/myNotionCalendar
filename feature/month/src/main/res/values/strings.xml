@@ -21,7 +21,7 @@
     <string name="month_onboarding_title">노션 DB를 연결하세요</string>
     <string name="month_onboarding_body">설정에서 내부 연결 토큰을 입력하고 일정 DB 링크를 등록하면 이 달력에 표시됩니다.</string>
     <string name="month_pending_writes">전송 대기 %1$d건</string>
-    <string name="month_write_issues">노션 반영 실패 %1$d건 · 충돌 %2$d건</string>
+    <string name="month_write_issues">노션 반영 실패 %1$d건, 충돌 %2$d건</string>
     <string name="month_write_issues_show">내용 보기</string>
     <string name="month_write_issues_title">노션 반영 결과</string>
     <string name="month_write_issues_ack">모두 확인</string>

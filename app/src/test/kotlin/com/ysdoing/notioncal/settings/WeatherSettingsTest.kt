@@ -62,6 +62,6 @@ class WeatherSettingsTest {
         }
         compose.onNodeWithText("예보 위치: 서울 종로구").assertExists()
         compose.onNodeWithText("10/19 12:00에 받은 예보").assertExists()
-        compose.onNodeWithText("Weather data by Open-Meteo.com · CC BY 4.0").assertExists()
+        compose.onNodeWithText("Weather data by Open-Meteo.com (CC BY 4.0)").assertExists()
     }
 }

@@ -287,7 +287,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
             Text(
                 text = context.getString(R.string.widget_month_short, month.monthValue),
                 style = TextStyle(
-                    color = if (showWeek) palette.accent else palette.text,
+                    color = palette.text, // 제목은 먹색(한 단어만 색칠하지 않음, DESIGN.md). 오늘은 칠한 네모가 강조한다.
                     fontSize = metrics.titleFontSp.sp,
                     fontWeight = FontWeight.Bold,
                 ),

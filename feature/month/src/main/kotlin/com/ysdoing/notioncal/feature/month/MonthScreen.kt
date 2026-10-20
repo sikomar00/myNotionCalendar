@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Arrangement
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -424,12 +425,11 @@ private fun SyncStatusLine(header: SyncHeader, weather: MonthWeather, today: Loc
     }
     val pending = if (header.pendingWrites > 0) stringResource(R.string.month_pending_writes, header.pendingWrites) else null
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            listOfNotNull(text, pending).joinToString(" · "),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOfNotNull(text, pending).forEach {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+        }
         // WX-03 머리: 오늘 날씨(아이콘·최고·최저). WX-05 출처 링크를 함께 둔다.
         weather.days[today]?.let { day ->
             WeatherBadge(day, weather.stale, iconSize = 14.dp, fontSize = 11.sp)

@@ -178,11 +178,10 @@ private fun PinRow(dday: Dday, actions: DdayActions) {
             )
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(dday.title ?: stringResource(R.string.dday_untitled), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                val note = listOfNotNull(
-                    dday.start?.let(::dateText),
-                    stringResource(R.string.dday_hidden).takeIf { dday.label?.hidden == true },
-                ).joinToString(" · ")
-                if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                dday.start?.let { Text(dateText(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (dday.label?.hidden == true) {
+                    Text(stringResource(R.string.dday_hidden), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             IconButton(onClick = { actions.onUnpin(dday.pageId) }) {
                 Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.dday_unpin, dday.title.orEmpty()))

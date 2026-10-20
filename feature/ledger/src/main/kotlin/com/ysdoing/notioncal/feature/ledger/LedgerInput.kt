@@ -126,7 +126,13 @@ fun LedgerInputContent(
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
         val kind = stringResource(if (date.isAfter(today)) R.string.ledger_input_planned else R.string.ledger_input_actual)
-        Text(stringResource(R.string.ledger_input_title, date.monthValue, date.dayOfMonth, weekday, kind), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        // 날짜 옆 작은 꼬리표로 '예정'·'앱입력'을 보인다(가운뎃점으로 잇지 않음).
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.ledger_input_title, date.monthValue, date.dayOfMonth, weekday), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Text(kind, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         SingleChoiceSegmentedButtonRow {
             listOf(Flow.OUT to R.string.ledger_input_out, Flow.IN to R.string.ledger_input_in).forEachIndexed { index, (value, label) ->
                 SegmentedButton(

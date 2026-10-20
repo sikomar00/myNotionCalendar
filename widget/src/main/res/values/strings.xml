@@ -38,7 +38,7 @@
     <string name="habit_widget_done">함</string>
     <string name="habit_widget_not_done">안 함</string>
     <string name="habit_widget_grass">%1$d월 습관 잔디, 모두 한 날 %2$d일</string>
-    <string name="tabbed_widget_label">노션 일정 · 습관 · 가계부</string>
+    <string name="tabbed_widget_label">노션 일정·습관·가계부</string>
     <string name="tabbed_widget_description">위쪽 탭으로 이번 달 일정·습관·가계부를 바꿔 봅니다</string>
     <string name="tabbed_widget_tab_calendar">📅 일정</string>
     <string name="tabbed_widget_tab_habit">✅ 습관</string>

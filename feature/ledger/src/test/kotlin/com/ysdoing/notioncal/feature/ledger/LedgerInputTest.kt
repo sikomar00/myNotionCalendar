@@ -58,11 +58,12 @@ class LedgerInputTest {
     @Test
     fun incomeToggleAndPlannedHeader() {
         show(date = today.plusDays(5))
-        compose.onNodeWithText("10월 24일(토) · 예정").assertExists()
+        compose.onNodeWithText("10월 24일(토)").assertExists()
+        compose.onNodeWithText("예정").assertExists()
         compose.onNodeWithText("수입").performClick()
         compose.onNodeWithTag("ledgerAmount").performTextInput("300000")
         compose.onNodeWithText("저장").performClick()
         assertEquals(Flow.IN, saved.single()[1])
-        compose.onNodeWithText("10월 24일(토) · 예정").assertExists()
+        compose.onNodeWithText("예정").assertExists()
     }
 }

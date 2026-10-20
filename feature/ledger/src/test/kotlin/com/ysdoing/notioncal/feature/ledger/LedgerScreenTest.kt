@@ -54,9 +54,10 @@ class LedgerScreenTest {
         compose.setContent { MaterialTheme { LedgerScreen(board(rows, budgets), LedgerActions()) } }
 
         compose.onNodeWithText("22,100원").assertExists() // 이번 달 지출
-        compose.onNodeWithText("예정 5만").assertExists()
-        compose.onNodeWithText("수입 +250만").assertExists()
-        compose.onNodeWithText("월 예산 92.8만 남음").assertExists() // 100만 − 2.21만 − 5만(예정)
+        // 요약은 라벨 위·값 아래 세 칸. 낭독은 칸마다 '예정 5만'처럼 한 번에 읽는다.
+        compose.onNodeWithContentDescription("예정 5만").assertExists()
+        compose.onNodeWithContentDescription("수입 +250만").assertExists()
+        compose.onNodeWithContentDescription("월 예산 남음 92.8만").assertExists() // 100만 − 2.21만 − 5만(예정)
         compose.onNodeWithText("10/20까지 반영").assertExists()
         compose.onNodeWithText("이번 주 2.8만 남음 · 4일").assertExists() // 10만 − 2.21만 − 5만
         compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerGrid"))

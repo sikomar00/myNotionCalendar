@@ -36,6 +36,6 @@ class DayWeatherStripTest {
         compose.onNodeWithContentDescription("맑음, 최고 21도 최저 12도, 오래된 예보").assertExists()
         compose.onNodeWithContentDescription("15시, 구름 조금, 17도").assertExists()
         compose.onNodeWithText("10/18 22:00 받은 예보").assertExists()
-        compose.onNodeWithText("Weather data by Open-Meteo.com · CC BY 4.0").assertExists()
+        compose.onNodeWithText("Weather data by Open-Meteo.com (CC BY 4.0)").assertExists()
     }
 }

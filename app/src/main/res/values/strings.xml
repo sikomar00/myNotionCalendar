@@ -88,11 +88,11 @@
     <string name="add_db_color">DB 색</string>
     <string name="add_db_register">등록</string>
     <string name="add_db_no_date">이 DB에는 날짜 속성이 없어 달력에 표시할 수 없습니다.</string>
-    <string name="settings_kind_habit_log">✅ 습관 기록 · 🌱 습관과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_habit">🌱 습관 · 습관 기록과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_ledger">💰 거래내역 · 예산·카테고리 마스터와 함께 켜고 지웁니다</string>
-    <string name="settings_kind_budget">💰 예산 · 거래내역과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_category">💰 카테고리 마스터 · 거래내역과 함께 켜고 지웁니다</string>
+    <string name="settings_kind_habit_log">🌱 습관과 함께 켜고 지웁니다</string>
+    <string name="settings_kind_habit">✅ 습관 기록과 함께 켜고 지웁니다</string>
+    <string name="settings_kind_ledger">💰 예산·카테고리 마스터와 함께 켜고 지웁니다</string>
+    <string name="settings_kind_budget">💰 거래내역과 함께 켜고 지웁니다</string>
+    <string name="settings_kind_category">💰 거래내역과 함께 켜고 지웁니다</string>
     <string name="tab_calendar">달력</string>
     <string name="tab_habit">습관</string>
     <string name="tab_ledger">가계부</string>
@@ -107,7 +107,7 @@
     <string name="add_db_ledger_payment">결제수단 (선택, 중복 판별)</string>
     <string name="add_db_ledger_planned">예정 (체크박스)</string>
     <string name="add_db_ledger_manual">앱입력 (체크박스)</string>
-    <string name="add_db_ledger_companions">함께 등록: 예산 · 카테고리 마스터</string>
+    <string name="add_db_ledger_companions">함께 등록: 예산, 카테고리 마스터</string>
     <string name="add_db_ledger_budget">예산</string>
     <string name="add_db_ledger_category_db">카테고리 마스터</string>
     <string name="add_db_ledger_found">%1$s: %2$s</string>
@@ -168,8 +168,8 @@
     <string name="reminder_today">오늘</string>
     <string name="reminder_tomorrow">내일</string>
     <string name="reminder_date">%1$d월 %2$d일</string>
-    <string name="reminder_all_day">종일 · %1$s</string>
-    <string name="reminder_timed">%1$s %2$s · %3$s</string>
+    <string name="reminder_all_day">%1$s 종일</string>
+    <string name="reminder_timed">%1$s %2$s, %3$s</string>
     <string name="reminder_now">지금</string>
     <string name="reminder_in_minutes">%1$d분 후</string>
     <string name="reminder_in_hours">%1$d시간 후</string>
