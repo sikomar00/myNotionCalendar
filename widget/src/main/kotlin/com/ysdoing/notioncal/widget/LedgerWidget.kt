@@ -350,19 +350,25 @@ private fun androidx.glance.layout.RowScope.DayCell(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val isToday = date == board.today
-        Text(
-            text = date.dayOfMonth.toString(),
-            style = TextStyle(
-                color = when {
-                    isToday -> palette.accent
-                    inMonth -> palette.text
-                    else -> palette.outside
-                },
-                fontSize = metrics.dateFontSp.sp,
-                fontWeight = if (isToday) FontWeight.Bold else null,
-            ),
-            maxLines = 1,
-        )
+        // 오늘은 칠한 네모(DESIGN.md 원칙 3). 월·분할 위젯과 같은 모양.
+        Box(
+            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(6.dp).padding(horizontal = 4.dp) else GlanceModifier,
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = date.dayOfMonth.toString(),
+                style = TextStyle(
+                    color = when {
+                        isToday -> palette.todayText
+                        inMonth -> palette.text
+                        else -> palette.outside
+                    },
+                    fontSize = metrics.dateFontSp.sp,
+                    fontWeight = if (isToday) FontWeight.Bold else null,
+                ),
+                maxLines = 1,
+            )
+        }
         when {
             amount != 0L -> Text(
                 text = MoneyFormat.signed(-amount, hidden),

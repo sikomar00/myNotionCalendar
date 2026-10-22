@@ -2,7 +2,7 @@ package com.ysdoing.notioncal.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -362,18 +362,23 @@ private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         NotionColors.palette.forEach { (name, hex) ->
             val selected = colorHex == hex
+            // 눈에 보이는 원은 36dp, 누르는 영역은 48dp.
             Box(
                 Modifier
-                    .size(36.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color(NotionColors.argb(hex)))
-                    .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                    .semantics {
-                        contentDescription = name
-                        this.selected = selected
-                    }
-                    .clickable { onSelect(hex) },
-            )
+                    .selectable(selected = selected, role = Role.RadioButton) { onSelect(hex) }
+                    .semantics { contentDescription = name },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(NotionColors.argb(hex)))
+                        .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier),
+                )
+            }
         }
     }
 }

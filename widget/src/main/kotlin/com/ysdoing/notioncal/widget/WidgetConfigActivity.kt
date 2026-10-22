@@ -8,6 +8,9 @@ import android.widget.RemoteViews
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -166,13 +170,13 @@ class WidgetConfigActivity : ComponentActivity() {
             // DD-03·04: 위젯마다 보여 줄 디데이(고르지 않으면 가장 가까운 디데이).
             if (kind == Kind.DDAY) {
                 Section(stringResource(R.string.widget_config_dday))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = config.ddayPageId == null, onClick = { config = config.copy(ddayPageId = null) })
+                Row(Modifier.selectableRow(config.ddayPageId == null) { config = config.copy(ddayPageId = null) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = config.ddayPageId == null, onClick = null)
                     Text(stringResource(R.string.widget_config_dday_nearest))
                 }
                 data.ddays.forEach { dday ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = config.ddayPageId == dday.pageId, onClick = { config = config.copy(ddayPageId = dday.pageId) })
+                    Row(Modifier.selectableRow(config.ddayPageId == dday.pageId) { config = config.copy(ddayPageId = dday.pageId) }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = config.ddayPageId == dday.pageId, onClick = null)
                         dday.label?.let { Text(it.text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp)) }
                         Text(dday.title.orEmpty())
                     }
@@ -234,7 +238,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
             // WX-04·05: 월간·'달력 + 일정' 위젯 머리에 오늘 날씨(위젯별 켜기). 날씨가 보이는 설정 화면이라 출처를 둔다.
             if (kind == Kind.MONTH || kind == Kind.SPLIT) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.toggleRow(config.showWeather) { config = config.copy(showWeather = it) }, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.widget_config_weather))
                         Text(
@@ -243,19 +247,19 @@ class WidgetConfigActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = config.showWeather, onCheckedChange = { config = config.copy(showWeather = it) })
+                    Switch(checked = config.showWeather, onCheckedChange = null)
                 }
                 if (config.showWeather) WeatherAttribution()
             }
             if (kind in CALENDAR_KINDS) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.toggleRow(config.hideDone) { config = config.copy(hideDone = it) }, verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
-                    Switch(checked = config.hideDone, onCheckedChange = { config = config.copy(hideDone = it) })
+                    Switch(checked = config.hideDone, onCheckedChange = null)
                 }
             }
             // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
             if (kind == Kind.LEDGER || tabbed) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.toggleRow(config.hideAmounts) { config = config.copy(hideAmounts = it) }, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.widget_config_hide_amounts))
                         Text(
@@ -264,7 +268,7 @@ class WidgetConfigActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(checked = config.hideAmounts, onCheckedChange = { config = config.copy(hideAmounts = it) })
+                    Switch(checked = config.hideAmounts, onCheckedChange = null)
                 }
             }
 
@@ -345,20 +349,26 @@ class WidgetConfigActivity : ComponentActivity() {
         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 
+    /** 라벨까지 줄 전체가 눌리게 한다(최소 높이 48dp). 안쪽 컨트롤은 onChange를 null로 둔다. */
+    private fun Modifier.toggleRow(checked: Boolean, role: Role = Role.Switch, onChange: (Boolean) -> Unit) =
+        heightIn(min = 48.dp).toggleable(value = checked, role = role, onValueChange = onChange)
+
+    private fun Modifier.selectableRow(selected: Boolean, onClick: () -> Unit) =
+        heightIn(min = 48.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+
     @Composable
     private fun SourcePicker(sources: List<DataSourceEntity>, selected: Set<String>, onChange: (Set<String>) -> Unit) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = selected.isEmpty(), onCheckedChange = { if (it) onChange(emptySet()) })
+        Row(Modifier.toggleRow(selected.isEmpty(), Role.Checkbox) { if (it) onChange(emptySet()) }, verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = selected.isEmpty(), onCheckedChange = null)
             Text(stringResource(R.string.widget_config_sources_all))
         }
         sources.forEach { source ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = source.dataSourceId in selected,
-                    onCheckedChange = { checked ->
-                        onChange(if (checked) selected + source.dataSourceId else selected - source.dataSourceId)
-                    },
-                )
+            val checked = source.dataSourceId in selected
+            Row(
+                Modifier.toggleRow(checked, Role.Checkbox) { on -> onChange(if (on) selected + source.dataSourceId else selected - source.dataSourceId) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = checked, onCheckedChange = null)
                 Text(source.name)
             }
         }

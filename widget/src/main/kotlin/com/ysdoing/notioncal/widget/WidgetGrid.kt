@@ -135,7 +135,7 @@ private fun DateLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHol
                 modifier = GlanceModifier
                     .padding(horizontal = if (metrics.mode == WidgetMode.SMALL) 0.dp else 4.dp)
                     .background(palette.todayBackground)
-                    .cornerRadius(8.dp),
+                    .cornerRadius(6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -25,6 +26,7 @@ import com.ysdoing.notioncal.core.designsystem.WeatherCredit
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Arrangement
 import java.time.Instant
@@ -56,7 +58,7 @@ internal fun SyncStatusLine(header: SyncHeader, weather: MonthWeather, today: Lo
             val uri = LocalUriHandler.current
             Text(
                 stringResource(R.string.month_weather_credit),
-                modifier = Modifier.padding(start = 6.dp).clickable { uri.openUri(WeatherCredit.SITE) },
+                modifier = Modifier.minimumInteractiveComponentSize().clickable(role = Role.Button) { uri.openUri(WeatherCredit.SITE) }.padding(start = 6.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -97,7 +99,7 @@ internal fun WriteIssuesBanner(header: SyncHeader, onAcknowledge: () -> Unit) {
                             "REMOTE_DELETED" -> stringResource(R.string.month_issue_remote_deleted)
                             else -> stringResource(R.string.month_issue_conflict, issue.localValue.orEmpty(), issue.remoteValue.orEmpty())
                         }
-                        Text("• ${issue.title.ifBlank { "(제목 없음)" }}: $what", style = MaterialTheme.typography.bodySmall)
+                        Text("• ${issue.title.ifBlank { stringResource(R.string.month_issue_untitled) }}: $what", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             },

@@ -160,7 +160,7 @@ internal fun ColorDialog(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Box(Modifier.size(32.dp).clip(CircleShape).background(Color(NotionColors.argb(color))), contentAlignment = Alignment.Center) {
-                                    if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
+                                    if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(NotionColors.onColor(color)))
                                 }
                             }
                         }
