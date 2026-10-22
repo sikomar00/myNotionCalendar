@@ -368,4 +368,22 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v11 → v12(노션 보기 위젯): 기존 데이터는 그대로고 보기·행 표를 쓸 수 있다. */
+    @Test
+    fun v11ToV12AddsViewTables() = runTest {
+        helper.createDatabase(11).use { db ->
+            db.execSQL("INSERT INTO dday_pins (pageId, sortOrder, countMode, hideAfterDays) VALUES ('p1', 0, 'DOWN', 7)")
+        }
+        helper.runMigrationsAndValidate(12).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            assertEquals(listOf("p1"), db.ddayDao().all().map { it.pageId })
+            val view = com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity("v1", "ds1", "할 일", "table")
+            db.viewDao().replace(view, listOf(com.ysdoing.notioncal.core.data.db.ViewRowEntity("v1", 0, "pg", "https://n", "a")))
+            assertEquals(listOf("pg"), db.viewDao().rows("v1").map { it.pageId })
+        } finally {
+            db.close()
+        }
+    }
 }

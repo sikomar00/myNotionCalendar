@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.notion.dto.ParentDto
 import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
 import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
+import com.ysdoing.notioncal.core.notion.dto.ViewDto
 import dagger.Lazy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -50,7 +51,7 @@ interface NotionWriter {
 class NotionClient @Inject constructor(
     private val apiLazy: Lazy<NotionApi>,
     private val json: Json,
-) : NotionReader, NotionWriter {
+) : NotionReader, NotionWriter, ViewReader {
     constructor(api: NotionApi, json: Json) : this(Lazy { api }, json)
 
     private val api: NotionApi get() = apiLazy.get()
@@ -73,14 +74,12 @@ class NotionClient @Inject constructor(
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
 
-    /** VW 9-A 시험용 원본 호출. 9-B에서 DTO를 쓰는 `ViewReader`로 바꾼다. */
-    suspend fun viewsRaw(dataSourceId: String): JsonObject = call { api.views(dataSourceId) }
+    override suspend fun viewIds(dataSourceId: String): List<String> = call { api.views(dataSourceId) }.results.map { it.id }
 
-    suspend fun viewRaw(viewId: String): JsonObject = call { api.view(viewId) }
+    override suspend fun view(viewId: String): ViewDto = call { api.view(viewId) }
 
-    suspend fun dataSourceQueryRaw(dataSourceId: String, body: JsonObject): JsonObject = call { api.queryRaw(dataSourceId, body) }
-
-    suspend fun viewQueryRaw(viewId: String): JsonObject = call { api.createViewQuery(viewId, JsonObject(emptyMap())) }
+    override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int): List<PageDto> =
+        call { api.query(dataSourceId, QueryRequestDto(filter = viewFilter(view), sorts = view.sorts, pageSize = limit)) }.results
 
     override suspend fun pageOrNull(pageId: String): PageDto? = try {
         call { api.page(pageId) }

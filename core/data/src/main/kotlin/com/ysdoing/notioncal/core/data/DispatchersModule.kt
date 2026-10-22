@@ -100,6 +100,9 @@ object DataModule {
     fun provideWeatherDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.WeatherDao = db.weatherDao()
 
     @Provides
+    fun provideViewDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.ViewDao = db.viewDao()
+
+    @Provides
     @Singleton
     @SettingsStore
     fun provideSettingsStore(

@@ -1,15 +1,11 @@
 package com.ysdoing.notioncal
 
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.DebugFlags
-import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncTrigger
-import com.ysdoing.notioncal.core.data.db.DataSourceDao
-import com.ysdoing.notioncal.core.notion.NotionClient
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.sync.CompareReport
@@ -22,11 +18,8 @@ import com.ysdoing.notioncal.feature.diagnostics.DebugMenu
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 
 /**
  * 진단 화면의 디버그 도구(게이트 4: PF-04 테스트 크래시, PF-05 인증 실패, PF-10 초기화 실패).
@@ -43,10 +36,6 @@ object DebugMenuModule {
         engine: NotionSyncEngine,
         comparer: NotionComparer,
         mirror: PhoneCalendarMirror,
-        client: NotionClient,
-        sources: DataSourceDao,
-        @ApplicationContext context: Context,
-        @IoDispatcher io: CoroutineDispatcher,
     ): DebugMenu = DebugMenu {
         if (!BuildConfig.DEBUG) return@DebugMenu emptyList()
         listOf(
@@ -66,16 +55,6 @@ object DebugMenuModule {
             },
             DebugAction("폰 캘린더 미러 끄기(삭제)") {
                 "노션 캘린더 ${mirror.disable()}개를 지웠습니다."
-            },
-            // VW 9-A 시험: 노션 보기 API 응답의 모양(값은 가림)을 filesDir/view_probe.json에 저장한다.
-            DebugAction("보기 API 시험(VW)") {
-                try {
-                    val (shape, summary) = probeViews(client, sources)
-                    withContext(io) { context.filesDir.resolve("view_probe.json").writeText(shape.toString()) }
-                    "$summary. 모양을 view_probe.json에 저장했습니다(값은 가림)."
-                } catch (e: NotionException) {
-                    "보기 API 실패: ${e.error::class.simpleName}"
-                }
             },
             DebugAction("테스트 크래시") {
                 // 화면 코드 바깥(메인 루프)에서 던져 실제 크래시처럼 수집되게 한다.

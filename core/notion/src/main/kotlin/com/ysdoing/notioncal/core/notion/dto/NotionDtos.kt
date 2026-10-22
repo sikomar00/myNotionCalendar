@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.notion.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
 // Notion-Version 2026-03-11 응답 중 앱이 쓰는 필드만 정의한다. 나머지는 ignoreUnknownKeys로 무시한다.
@@ -142,6 +143,7 @@ data class QueryResponseDto(
 @Serializable
 data class QueryRequestDto(
     val filter: JsonObject? = null,
+    val sorts: JsonArray? = null,
     @SerialName("start_cursor") val startCursor: String? = null,
     @SerialName("page_size") val pageSize: Int = 100,
 )

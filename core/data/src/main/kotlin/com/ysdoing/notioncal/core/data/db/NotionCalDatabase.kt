@@ -28,6 +28,7 @@ import java.time.LocalDate
  *      budgets·category_groups(캐시)·ledger_dup_keeps(앱 상태) 추가
  * - 11: 디데이·날씨(DD-01~05, WX-01~05). dday_pins(앱 상태)·weather_days·weather_hours(캐시) 추가,
  *      widget_configs.ddayPageId·showWeather(기본 0)
+ * - 12: 노션 보기 위젯(VW-01). view_snapshots(등록한 보기+설정)·view_rows(행 스냅샷, 캐시) 추가, AutoMigration
  */
 @Database(
     entities = [
@@ -45,10 +46,12 @@ import java.time.LocalDate
         DdayPinEntity::class,
         WeatherDayEntity::class,
         WeatherHourEntity::class,
+        ViewSnapshotEntity::class,
+        ViewRowEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {
@@ -63,6 +66,7 @@ abstract class NotionCalDatabase : RoomDatabase() {
     abstract fun ledgerDao(): LedgerDao
     abstract fun ddayDao(): DdayDao
     abstract fun weatherDao(): WeatherDao
+    abstract fun viewDao(): ViewDao
 
     companion object {
         const val NAME = "notioncal.db"

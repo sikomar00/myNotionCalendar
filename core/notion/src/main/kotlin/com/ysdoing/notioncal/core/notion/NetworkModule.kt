@@ -31,6 +31,9 @@ object NetworkModule {
     fun provideNotionReader(client: NotionClient): NotionReader = client
 
     @Provides
+    fun provideViewReader(client: NotionClient): ViewReader = client
+
+    @Provides
     fun provideNotionWriter(client: NotionClient): NotionWriter = client
 
     @Provides
