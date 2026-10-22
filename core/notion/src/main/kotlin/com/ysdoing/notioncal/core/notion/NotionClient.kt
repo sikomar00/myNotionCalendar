@@ -73,6 +73,15 @@ class NotionClient @Inject constructor(
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
 
+    /** VW 9-A 시험용 원본 호출. 9-B에서 DTO를 쓰는 `ViewReader`로 바꾼다. */
+    suspend fun viewsRaw(dataSourceId: String): JsonObject = call { api.views(dataSourceId) }
+
+    suspend fun viewRaw(viewId: String): JsonObject = call { api.view(viewId) }
+
+    suspend fun dataSourceQueryRaw(dataSourceId: String, body: JsonObject): JsonObject = call { api.queryRaw(dataSourceId, body) }
+
+    suspend fun viewQueryRaw(viewId: String): JsonObject = call { api.createViewQuery(viewId, JsonObject(emptyMap())) }
+
     override suspend fun pageOrNull(pageId: String): PageDto? = try {
         call { api.page(pageId) }
     } catch (e: NotionException) {
