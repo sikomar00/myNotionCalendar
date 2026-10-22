@@ -102,6 +102,7 @@ class LedgerScreenTest {
         compose.onNodeWithText("둘 다 유지").performClick()
         compose.onNodeWithText("확인 필요 1건").assertExists()
         compose.onNodeWithText("삭제").performClick()
+        compose.onNodeWithText("휴지통으로 보내기").performClick()
         compose.onNodeWithText("실제로 전환").performClick()
         assertEquals(listOf("second"), resolved)
         assertEquals(listOf("first"), kept)
@@ -122,6 +123,8 @@ class LedgerScreenTest {
         compose.onNodeWithText("16,000원").assertExists() // 9,000 + 현금 7,000
         compose.onNodeWithText("정리 대상 1건").assertExists()
         compose.onNodeWithText("삭제").performClick()
+        assertEquals(emptyList<String>(), deleted) // 확인 전에는 지우지 않는다
+        compose.onNodeWithText("휴지통으로 보내기").performClick()
         assertEquals(listOf("manual"), deleted)
     }
 

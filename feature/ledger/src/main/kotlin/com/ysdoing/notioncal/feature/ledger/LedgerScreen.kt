@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -306,11 +307,32 @@ private fun Review(rows: List<LedgerTx>, actions: LedgerActions) {
             Column(Modifier.padding(top = 8.dp)) {
                 TxLine(tx)
                 Row {
-                    TextButton(onClick = { actions.onDelete(tx.pageId) }) { Text(stringResource(R.string.ledger_delete)) }
+                    DeleteButton(tx, actions.onDelete)
                     TextButton(onClick = { actions.onConvert(tx.pageId) }) { Text(stringResource(R.string.ledger_convert)) }
                 }
             }
         }
+    }
+}
+
+/** 삭제는 노션 휴지통으로 가지만, 한 번 눌러 바로 사라지지 않게 확인을 받는다(퀵 시트와 같은 문구). */
+@Composable
+private fun DeleteButton(tx: LedgerTx, onDelete: (String) -> Unit) {
+    var asking by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { asking = true }) { Text(stringResource(R.string.ledger_delete)) }
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text(stringResource(R.string.ledger_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.ledger_delete_confirm_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    asking = false
+                    onDelete(tx.pageId)
+                }) { Text(stringResource(R.string.ledger_delete_confirm)) }
+            },
+            dismissButton = { TextButton(onClick = { asking = false }) { Text(stringResource(R.string.ledger_cancel)) } },
+        )
     }
 }
 
@@ -321,7 +343,7 @@ private fun Matched(rows: List<LedgerTx>, actions: LedgerActions) {
         rows.forEach { tx ->
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { TxLine(tx) }
-                TextButton(onClick = { actions.onDelete(tx.pageId) }) { Text(stringResource(R.string.ledger_delete)) }
+                DeleteButton(tx, actions.onDelete)
             }
         }
     }
