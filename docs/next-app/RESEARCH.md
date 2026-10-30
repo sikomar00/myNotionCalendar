@@ -205,6 +205,8 @@ interface PropertyHandler<V : PropValue> {
 
 ## 6. 현재 앱에서 가져올 것과 이번에 배운 함정
 
+현재 앱의 상태(2026-10-30, `ccr-6810527c-es92oi` 브랜치 확인): Phase 6~8이 구현돼 있다. DB 버전 11, 모듈 `:feature:habit·ledger·dday`와 `:core:weather`, 위젯 8종 안팎(월간·달력+일정·아젠다·습관·통합 탭·가계부·디데이 3종). 아래 함정 중 위젯 종류 찾기는 이미 `widget/.../WidgetKinds.kt`(`AppWidgetManager`로 위젯 종류를 찾아 다시 그림), 위젯 수신자 모음은 `WidgetReceivers.kt`, 갱신 목록은 `AllWidgets.kt`에 반영돼 있다. **복사할 때는 이 반영본을 가져오고, 낡은 PRD 초기 문장이 아니라 코드를 기준으로 삼는다.** 습관·가계부의 도메인 로직(주 목표, 예산, 중복 정리)은 이 새 앱의 "위젯 동작·계산 속성"으로 일반화할 수 있는지 먼저 검토할 대상이다(PROMPTS §D-4).
+
 가져올 자산(경로는 `myNotionCalendar` 기준)
 - 노션 클라이언트·재시도·속도 제한: `core/notion/.../NotionClient.kt`, `RetryAndRateLimit` 테스트
 - 날짜 처리: `mapping/DateCodec.kt`(날짜만/시간 포함, Asia/Seoul)
@@ -212,7 +214,7 @@ interface PropertyHandler<V : PropValue> {
 - 동기화 구조·스케줄러·진단: `NotionSyncEngine.kt`, `SyncWorker.kt`, `feature/diagnostics`
 - 복구: `RecoveringOpenHelperFactory.kt`, 마이그레이션 테스트 패턴
 - 보안: SecretStore(Tink), 백업 규칙
-- 위젯: 갱신 디바운스 `GlanceWidgetRefresher.kt`, 설정 저장소 `WidgetConfigRepository.kt`, 월 그리드·달력+일정·아젠다, `Glance` 단위 테스트 패턴
+- 위젯: 갱신 디바운스 `GlanceWidgetRefresher.kt`, 종류 레지스트리 `WidgetKinds.kt`, 설정 저장소 `WidgetConfigRepository.kt`, 월 그리드·달력+일정·아젠다, 통합 탭(`TabbedWidget.kt`), `Glance` 단위 테스트 패턴(`*WidgetTest.kt`)
 - 디자인: `core/designsystem`, `DESIGN.md`
 - 개발 규율: StrictMode 설정(`oemFrames`), Sentry, Baseline Profile·JankStats, 빌드 컨벤션(`build-logic`)
 
