@@ -38,7 +38,7 @@ data class AppSettings(
     val hiddenSourceIds: Set<String> = emptySet(),
     /** MV-09 앱에서만 숨길 색 기준 값("dsId/optionId"). */
     val hiddenOptionKeys: Set<String> = emptySet(),
-    /** S25-10 Material You(배경화면 색) 사용. 기본 켬. */
+    /** S25-10 Material You(배경화면 색) 사용. 기본 끔. */
     val dynamicColor: Boolean = false,
     /** EX-02 공휴일 표시(폰의 공휴일 캘린더, READ_CALENDAR). 권한을 받으면 켠다. */
     val showHolidays: Boolean = false,
