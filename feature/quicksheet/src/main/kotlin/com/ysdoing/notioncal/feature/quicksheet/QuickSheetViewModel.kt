@@ -42,14 +42,18 @@ data class NewEvent(
     val endDate: LocalDate? = null,
 )
 
-/** 날짜 + 선택적 시간을 저장용 값으로 바꾼다. 시간은 Asia/Seoul 기준(NS-07). */
+/**
+ * 날짜 + 선택적 시간을 저장용 값으로 바꾼다. 시간은 Asia/Seoul 기준(NS-07).
+ * 시간 일정이 다른 날에 끝나면 끝나는 날을 endDate로 둬, 동기화 결과(DateCodec.displayDates)와 같은 모양이 되게 한다.
+ */
 fun dateValueOf(date: LocalDate, time: TimeRange?, endDate: LocalDate? = null): DateValue {
     val lastDay = endDate?.takeIf { it.isAfter(date) }
     if (time == null) return DateValue.allDay(date, lastDay)
     val start = date.atTime(time.start).atZone(APP_ZONE).toInstant()
     var end = (lastDay ?: date).atTime(time.end).atZone(APP_ZONE).toInstant()
     if (!end.isAfter(start)) end = start.plusSeconds(3600)
-    return DateValue(date.toString(), startTime = start.toEpochMilli(), endTime = end.toEpochMilli())
+    val endDay = end.atZone(APP_ZONE).toLocalDate().takeIf { it.isAfter(date) }
+    return DateValue(date.toString(), endDay?.toString(), start.toEpochMilli(), end.toEpochMilli())
 }
 
 /**
