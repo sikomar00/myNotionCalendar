@@ -15,6 +15,7 @@
 - StrictMode 확인(PF-03): `adb logcat -d -s NotionCalStrictMode:W` 결과가 0줄이어야 한다. One UI 내부 위반(Typeface.setFlipFonts, IdsController, InputRune, 권한 창 등 startActivity 때 시스템 서버 ASKS)은 D 레벨 'OEM 위반 무시'로만 남는다. 새 OEM 예외는 근거 스택을 확인한 뒤에만 `StrictModeSetup.oemFrames`에 추가한다.
 
 # 모듈 규칙 (PRD §7)
+- v2 목표 모듈 구조는 docs/PRD-v2.md §7.1이다(정렬 전 초안). 이름을 바꾸기 전까지, 그리고 v2를 현행 코드에 맞춰 정렬하기 전까지는 아래 현행 규칙이 우선한다(`:widget`의 `:core:notion`·`:core:sync` 의존 금지는 v2에서도 유지).
 - `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`, `:core:designsystem`
 - `:core:sync` → `:core:notion`, `:core:data`, `:core:weather`
 - `:core:weather` → 의존 없음(OkHttp·kotlinx.serialization만). 날씨 제공처(Open-Meteo 기본 모델)를 가둔다. `:core:sync`의 WeatherWorker만 부른다. 화면·위젯은 `:core:data`의 `WeatherRepository`(Room)만 읽는다.

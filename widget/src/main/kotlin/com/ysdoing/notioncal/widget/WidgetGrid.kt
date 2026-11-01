@@ -91,7 +91,7 @@ internal fun WeekRow(
                 }
             }
         }
-        // 칸 어디를 눌러도 그 날짜로 앱을 연다. 퀵 시트(WI-01)는 Phase 3에서 이 자리를 쓴다.
+        // 칸 어디를 눌러도 그 날짜의 퀵 시트(WI-01)를 연다.
         Row(modifier = GlanceModifier.fillMaxSize()) {
             repeat(7) { col ->
                 val date = weekStart.plusDays(col.toLong())

@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
         if (firstLaunch) lifecycleScope.launch { safeMode = health.onLaunchStarted() } else safeMode = false
         setContent {
             val failure by health.failure.collectAsStateWithLifecycle()
-            // 설정을 읽기 전에는 기본값(Material You 켬)으로 그린다.
+            // 설정을 읽기 전에는 기본값(Material You 끔)으로 그린다.
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 val safe = safeMode

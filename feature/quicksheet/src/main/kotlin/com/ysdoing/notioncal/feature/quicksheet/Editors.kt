@@ -58,6 +58,7 @@ import androidx.core.net.toUri
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.quickinput.QuickInputParser
 import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EditableEvent
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.PropValue
@@ -271,6 +272,15 @@ private fun timeText(event: CalendarEvent): String {
 }
 
 /**
+ * WI-05: 편집한 시작일·시간을 저장용 값으로 바꾼다. 기간 일정은 종일이든 시간 일정이든 날 수를 유지한다
+ * (예: 22:00~다음 날 02:00 일정을 옮겨도 다음 날 02:00에 끝난다).
+ */
+internal fun editedDateValue(event: CalendarEvent, date: LocalDate, time: TimeRange?): DateValue {
+    val span = event.endDate?.let { ChronoUnit.DAYS.between(event.startDate, it) } ?: 0
+    return dateValueOf(date, time, date.plusDays(span))
+}
+
+/**
  * WI-05 편집 폼: 제목·날짜·시간·완료·색 기준 select, 설정에서 고른 추가 속성(EX-07), 노션에서 열기, 삭제(휴지통).
  * 바뀐 필드만 저장한다.
  */
@@ -364,11 +374,7 @@ fun EventEditorForm(
                 onSave(
                     EventChange(
                         title = title.trim().takeIf { it != event.title && it.isNotBlank() },
-                        date = if (dateChanged) dateValueOf(date, time).let { v ->
-                            // 기간 일정은 길이를 유지한다.
-                            val span = event.endDate?.let { ChronoUnit.DAYS.between(event.startDate, it) } ?: 0
-                            if (time == null && span > 0) v.copy(endDate = date.plusDays(span).toString()) else v
-                        } else null,
+                        date = if (dateChanged) editedDateValue(event, date, time) else null,
                         done = done.takeIf { it != event.done },
                         select = SelectValue(optionId).takeIf { optionId != item.colorOptionId },
                         props = propEdits.filter { (id, value) -> value != (item.extraValues[id] ?: PropValue()) }.takeIf { it.isNotEmpty() },
