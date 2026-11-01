@@ -3,12 +3,13 @@ package com.ysdoing.notioncal.core.data
 import java.security.MessageDigest
 
 /**
- * SEC-02: 밖으로 나가는 글(로그 내보내기, 크래시 리포트)에서 토큰과 일정 제목을 지운다.
+ * SEC-02: 밖으로 나가는 글(로그 내보내기, 크래시 리포트)에서 토큰과 일정 제목을 지운다. 가계부 금액도 가린다(LD-06).
  * 토큰 형식은 노션 통합 토큰(`ntn_`, 옛 `secret_`)과 Authorization 헤더 값이다.
  */
 object Redactor {
     const val TOKEN_MASK = "<토큰>"
     const val TEXT_MASK = "<내용>"
+    const val AMOUNT_MASK = "<금액>"
 
     private val tokenPatterns = listOf(
         Regex("""\b(?:ntn|secret)_[A-Za-z0-9]{8,}"""),
@@ -17,6 +18,9 @@ object Redactor {
 
     /** 따옴표 안 문자열. 직렬화 오류 메시지는 노션 응답 JSON(일정 제목 포함)을 그대로 담는다. */
     private val quoted = Regex(""""(?:[^"\\]|\\.)*"""")
+
+    /** LD-06 금액 표기: 천 단위 쉼표 숫자, '원'·'만'이 붙은 숫자. 파일:줄 번호 같은 맨 숫자는 건드리지 않는다. */
+    private val amounts = Regex("""[-+]?\d{1,3}(?:,\d{3})+(?:원)?|[-+]?\d+(?:\.\d+)?(?:원|만)""")
 
     /** kotlinx.serialization 오류의 "JSON input: …" 꼬리. */
     private val jsonInput = Regex("""(?s)JSON input:.*""")
@@ -31,7 +35,8 @@ object Redactor {
     fun scrubReport(text: String): String {
         val noTokens = scrubTokens(text)
         val noJson = jsonInput.replace(noTokens, "JSON input: $TEXT_MASK")
-        return quoted.replace(noJson, "\"$TEXT_MASK\"")
+        val noAmounts = amounts.replace(noJson, AMOUNT_MASK)
+        return quoted.replace(noAmounts, "\"$TEXT_MASK\"")
     }
 
     /** 제목을 알고 있을 때(내보내기). 같은 제목은 같은 표지로 바뀌어 항목끼리 구분은 된다. */

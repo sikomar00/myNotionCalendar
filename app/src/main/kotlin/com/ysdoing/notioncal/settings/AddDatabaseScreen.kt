@@ -2,7 +2,7 @@ package com.ysdoing.notioncal.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -45,7 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -53,9 +56,19 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.sync.CompanionInspection
+import com.ysdoing.notioncal.core.sync.CompanionResult
+import com.ysdoing.notioncal.core.sync.DatabaseInspection
+import com.ysdoing.notioncal.core.sync.LedgerProblem
+import com.ysdoing.notioncal.core.sync.LedgerSuggester
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
+import com.ysdoing.notioncal.core.sync.MappingChoice
 import com.ysdoing.notioncal.core.sync.PropertyOption
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddDatabaseRoute(
     onDone: () -> Unit,
@@ -117,51 +130,254 @@ fun AddDatabaseRoute(
             }
             val choice = ui.choice
             if (choice == null) {
-                Text(stringResource(R.string.add_db_no_date), color = MaterialTheme.colorScheme.error)
+                // HB-01: 🌱 습관(날짜 없음, relation 있음) 링크를 넣었으면 ✅ 습관 기록 링크를 넣으라고 안내한다.
+                val message = if (inspection.looksLikeHabitDatabase) R.string.add_db_habit_link_hint else R.string.add_db_no_date
+                Text(stringResource(message), color = MaterialTheme.colorScheme.error)
                 return@Column
+            }
+            // HB-01·LD-01: 📅 Calendar에도 relation이 있으므로 '습관 기록'·'가계부' 종류는 사용자가 고른다.
+            val kinds = buildList {
+                add(AddKind.CALENDAR to R.string.add_db_kind_calendar)
+                if (inspection.logSuggestion != null) add(AddKind.HABIT_LOG to R.string.add_db_kind_habit_log)
+                if (inspection.ledgerSuggestion != null) add(AddKind.LEDGER to R.string.add_db_kind_ledger)
+            }
+            // LD-01: 금액처럼 보이는 속성이 number가 아니면 가계부로 등록할 수 없는 이유를 보인다.
+            inspection.ledgerProblem?.let { problem ->
+                val reason = when (problem) {
+                    LedgerProblem.AMOUNT_NOT_NUMBER -> R.string.add_db_ledger_amount_not_number
+                    LedgerProblem.NO_TYPE_SELECT -> R.string.add_db_ledger_no_type
+                    LedgerProblem.NO_DATE -> R.string.add_db_no_date
+                }
+                Text(stringResource(reason), color = MaterialTheme.colorScheme.error)
+            }
+            if (kinds.size > 1) {
+                Text(stringResource(R.string.add_db_kind), style = MaterialTheme.typography.titleSmall)
+                SingleChoiceSegmentedButtonRow {
+                    kinds.forEachIndexed { index, (kind, label) ->
+                        SegmentedButton(
+                            selected = ui.kind == kind,
+                            onClick = { viewModel.setKind(kind) },
+                            shape = SegmentedButtonDefaults.itemShape(index, kinds.size),
+                            icon = {},
+                        ) { Text(stringResource(label), maxLines = 1) }
+                    }
+                }
+                if (ui.kind == AddKind.HABIT_LOG) {
+                    Text(
+                        stringResource(R.string.add_db_kind_habit_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Text(
                 stringResource(R.string.add_db_preset_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val c = inspection.candidates
-            PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, choice.titlePropId, allowNone = false) { id ->
-                id?.let { viewModel.updateChoice { ch -> ch.copy(titlePropId = it) } }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, choice.datePropId, allowNone = false) { id ->
-                id?.let { viewModel.updateChoice { ch -> ch.copy(datePropId = it) } }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_done_prop), c.done, choice.donePropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(donePropId = id) }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_color_prop), c.colors, choice.colorPropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(colorPropId = id) }
-            }
-            PropertyDropdown(stringResource(R.string.add_db_sort_prop), c.sorts, choice.sortPropId, allowNone = true) { id ->
-                viewModel.updateChoice { it.copy(sortPropId = id) }
+            when (ui.kind) {
+                AddKind.HABIT_LOG -> HabitFields(ui, inspection, viewModel)
+                AddKind.LEDGER -> LedgerFields(ui, inspection, viewModel)
+                AddKind.CALENDAR -> CalendarFields(inspection, choice, viewModel)
             }
 
             Text(stringResource(R.string.add_db_color), style = MaterialTheme.typography.titleSmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                NotionColors.palette.forEach { (name, hex) ->
-                    val selected = ui.colorHex == hex
-                    Box(
-                        Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(NotionColors.argb(hex)))
-                            .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier)
-                            .semantics {
-                                contentDescription = name
-                                this.selected = selected
-                            }
-                            .clickable { viewModel.setColor(hex) },
-                    )
-                }
+            ColorChoices(ui.colorHex, viewModel::setColor)
+            Button(onClick = viewModel::register, enabled = ui.canRegister, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(
+                        when (ui.kind) {
+                            AddKind.HABIT_LOG -> R.string.add_db_register_habit
+                            AddKind.LEDGER -> R.string.add_db_register_ledger
+                            AddKind.CALENDAR -> R.string.add_db_register
+                        },
+                    ),
+                )
             }
-            Button(onClick = viewModel::register, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.add_db_register))
+        }
+    }
+}
+
+@Composable
+private fun CalendarFields(inspection: DatabaseInspection, choice: MappingChoice, viewModel: AddDatabaseViewModel) {
+    val c = inspection.candidates
+    PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, choice.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateChoice { ch -> ch.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, choice.datePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateChoice { ch -> ch.copy(datePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_done_prop), c.done, choice.donePropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(donePropId = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_color_prop), c.colors, choice.colorPropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(colorPropId = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_sort_prop), c.sorts, choice.sortPropId, allowNone = true) { id ->
+        viewModel.updateChoice { it.copy(sortPropId = id) }
+    }
+}
+
+/** HB-01: ✅ 습관 기록(제목·날짜·습관 연결)과 연결이 가리키는 🌱 습관(이름·이모지·주 목표·진행 중·시작일·순서)의 매핑. */
+@Composable
+private fun HabitFields(ui: AddDatabaseUi, inspection: DatabaseInspection, viewModel: AddDatabaseViewModel) {
+    val log = ui.logChoice ?: return
+    val c = inspection.candidates
+    PropertyDropdown(stringResource(R.string.add_db_title_prop), c.titles, log.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, log.datePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(datePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_link_prop), c.relations, log.linkPropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLogChoice { l -> l.copy(linkPropId = it) } }
+    }
+    val habit = ui.habit
+    if (habit.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    when {
+        habit.noRelation -> Text(stringResource(R.string.add_db_habit_no_relation), color = MaterialTheme.colorScheme.error)
+        habit.error == NotionError.NotShared -> Text(stringResource(R.string.add_db_habit_not_shared), color = MaterialTheme.colorScheme.error)
+        habit.error != null -> Text(habit.error.text(), color = MaterialTheme.colorScheme.error)
+    }
+    val target = habit.inspection ?: return
+    Text(stringResource(R.string.add_db_habit_section, target.target.name), style = MaterialTheme.typography.titleMedium)
+    val choice = habit.choice
+    if (choice == null) {
+        Text(stringResource(R.string.add_db_habit_no_title), color = MaterialTheme.colorScheme.error)
+        return
+    }
+    val h = target.candidates
+    PropertyDropdown(stringResource(R.string.add_db_habit_name), h.titles, choice.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateHabitChoice { ch -> ch.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_emoji), h.texts, choice.emoji, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(emoji = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_target), h.numbers, choice.weeklyTarget, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(weeklyTarget = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_active), h.checkboxes, choice.active, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(active = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_start), h.dates, choice.startDate, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(startDate = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_habit_order), h.numbers, choice.sortOrder, allowNone = true) { id ->
+        viewModel.updateHabitChoice { it.copy(sortOrder = id) }
+    }
+}
+
+/** LD-01: 거래내역 속성 매핑 + 함께 등록할 예산·카테고리 마스터(자동으로 못 찾으면 링크) + 예산 그룹·부호. */
+@Composable
+private fun LedgerFields(ui: AddDatabaseUi, inspection: DatabaseInspection, viewModel: AddDatabaseViewModel) {
+    val choice = ui.ledgerChoice ?: return
+    val c = LedgerSuggester.candidates(inspection.schema)
+    PropertyDropdown(stringResource(R.string.add_db_ledger_title), c.titles, choice.titlePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLedgerChoice { ch -> ch.copy(titlePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_date_prop), c.dates, choice.datePropId, allowNone = false) { id ->
+        id?.let { viewModel.updateLedgerChoice { ch -> ch.copy(datePropId = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_amount), c.numbers, choice.amount, allowNone = false) { id ->
+        id?.let { viewModel.updateLedgerChoice { ch -> ch.copy(amount = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_flow), c.selects, choice.flow, allowNone = false) { id ->
+        id?.let { viewModel.updateLedgerChoice { ch -> ch.copy(flow = it) } }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_category), c.selects, choice.category, allowNone = true) { id ->
+        viewModel.updateLedgerChoice { it.copy(category = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_time), c.texts, choice.time, allowNone = true) { id ->
+        viewModel.updateLedgerChoice { it.copy(time = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_payment), c.selects, choice.payment, allowNone = true) { id ->
+        viewModel.updateLedgerChoice { it.copy(payment = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_planned), c.checkboxes, choice.planned, allowNone = true) { id ->
+        viewModel.updateLedgerChoice { it.copy(planned = id) }
+    }
+    PropertyDropdown(stringResource(R.string.add_db_ledger_manual), c.checkboxes, choice.manual, allowNone = true) { id ->
+        viewModel.updateLedgerChoice { it.copy(manual = id) }
+    }
+
+    val part = ui.ledger
+    Text(stringResource(R.string.add_db_ledger_companions), style = MaterialTheme.typography.titleMedium)
+    if (part.searching) LinearProgressIndicator(Modifier.fillMaxWidth())
+    if (part.searched || !part.searching) {
+        CompanionRow(stringResource(R.string.add_db_ledger_budget), part.budget, part.budgetError, part.searched) { link -> viewModel.inspectCompanion(link, budget = true) }
+        CompanionRow(stringResource(R.string.add_db_ledger_category_db), part.category, part.categoryError, part.searched) { link ->
+            viewModel.inspectCompanion(link, budget = false)
+        }
+    }
+    part.budget?.groupOptions?.takeIf { it.isNotEmpty() }?.let { groups ->
+        PropertyDropdown(
+            stringResource(R.string.add_db_ledger_budget_group),
+            groups.map { PropertyOption(it, it, "select") },
+            part.budgetGroup,
+            allowNone = false,
+        ) { it?.let(viewModel::setBudgetGroup) }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.add_db_ledger_spend_negative))
+            Text(
+                stringResource(R.string.add_db_ledger_spend_negative_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = part.spendNegative, onCheckedChange = viewModel::setSpendNegative)
+    }
+}
+
+/** 예산·카테고리 마스터 한 줄: 찾았으면 이름, 못 찾았으면 링크 칸 + 조회. */
+@Composable
+private fun CompanionRow(label: String, found: CompanionInspection?, error: CompanionResult?, searched: Boolean, onInspect: (String) -> Unit) {
+    if (found != null) {
+        Text(stringResource(R.string.add_db_ledger_found, label, found.target.name), style = MaterialTheme.typography.bodyMedium)
+        return
+    }
+    if (!searched) return
+    var link by rememberSaveable(label) { mutableStateOf("") }
+    OutlinedTextField(
+        value = link,
+        onValueChange = { link = it },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(R.string.add_db_ledger_link, label)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
+    )
+    OutlinedButton(onClick = { onInspect(link) }, enabled = link.isNotBlank()) { Text(stringResource(R.string.add_db_inspect)) }
+    when (error) {
+        CompanionResult.InvalidLink -> Text(stringResource(R.string.error_invalid_link), color = MaterialTheme.colorScheme.error)
+        CompanionResult.Unusable -> Text(stringResource(R.string.add_db_ledger_unusable, label), color = MaterialTheme.colorScheme.error)
+        is CompanionResult.Failed -> Text(error.error.text(), color = MaterialTheme.colorScheme.error)
+        else -> Unit
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        NotionColors.palette.forEach { (name, hex) ->
+            val selected = colorHex == hex
+            // 눈에 보이는 원은 36dp, 누르는 영역은 48dp.
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .selectable(selected = selected, role = Role.RadioButton) { onSelect(hex) }
+                    .semantics { contentDescription = name },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(NotionColors.argb(hex)))
+                        .then(if (selected) Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape) else Modifier),
+                )
             }
         }
     }

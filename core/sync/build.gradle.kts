@@ -11,6 +11,8 @@ android {
 dependencies {
     api(project(":core:data"))
     api(project(":core:notion"))
+    // WX-01 WeatherWorker만 날씨 제공처를 부른다.
+    implementation(project(":core:weather"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     api(libs.work.runtime.ktx)

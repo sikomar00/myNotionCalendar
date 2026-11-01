@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DD-03 디데이 1×1: 숫자를 크게, 아래 제목 한 줄. 넓히면 2×1 모양(날짜까지)으로 바뀐다.
+  updatePeriodMillis=0: 데이터 변경·자정 알람(WG-03)이 갱신을 요청한다.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.ysdoing.notioncal.widget.WidgetConfigActivity"
+    android:description="@string/dday_small_widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:previewLayout="@layout/widget_preview_dday"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

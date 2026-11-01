@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="habit_title">습관</string>
+    <string name="habit_settings">설정</string>
+    <string name="habit_today">오늘</string>
+    <string name="habit_today_count">오늘 %1$d/%2$d</string>
+    <string name="habit_empty_title">등록한 습관이 없습니다</string>
+    <string name="habit_empty_body">노션의 ✅ 습관 기록 DB 링크를 설정 → DB 추가에 넣고 종류를 습관 기록으로 고르면 🌱 습관과 함께 등록됩니다.</string>
+    <string name="habit_open_settings">설정 열기</string>
+    <string name="habit_month_count">이번 달 %1$d일</string>
+    <string name="habit_week_count">이번 주 %1$d/%2$d</string>
+    <string name="habit_day">%1$s, %2$d월 %3$d일 %4$s</string>
+    <string name="habit_month_grass">%1$d월 기록: %2$d일 함</string>
+    <string name="habit_before_start">시작 전</string>
+    <string name="habit_blocked">기록 DB의 \'습관\' 연결 속성을 찾지 못해 체크하지 않았습니다. 설정에서 다시 연결하세요.</string>
+</resources>

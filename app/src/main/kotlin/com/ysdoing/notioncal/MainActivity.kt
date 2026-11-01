@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.SettingsRepository
@@ -44,18 +45,31 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var reminderScheduler: ReminderScheduler
 
+    @Inject
+    lateinit var weatherScheduler: com.ysdoing.notioncal.core.sync.WeatherScheduler
+
     /** null: 실행 표지를 확인하는 중(수 ms), true: 안전 모드로 시작(PF-10), false: 정상 시작. */
     private var safeMode by mutableStateOf<Boolean?>(null)
 
     /** 위젯 날짜 탭으로 받은 날짜(AppIntents.EXTRA_DATE). 화면이 처리하면 비운다. */
     private var openDate by mutableStateOf<LocalDate?>(null)
 
+    /** 습관·가계부 위젯에서 열었으면 그 탭(AppIntents.EXTRA_TAB). */
+    private var openTab by mutableStateOf<HomeTab?>(null)
+
+    /** EX-12 `notioncal://dday`(디데이 목록 위젯 '+' 포함): 설정의 디데이 화면을 연다. */
+    private var openDday by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // targetSdk 37은 엣지 투 엣지가 기본이므로 인셋은 Scaffold로 처리한다(S25-08).
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val firstLaunch = savedInstanceState == null
-        if (firstLaunch) openDate = dateFrom(intent)
+        if (firstLaunch) {
+            openDate = dateFrom(intent)
+            openTab = tabFrom(intent)
+            applyLink(intent)
+        }
         // PF-10: 실행 표지는 IO에서 확인한다. 프로세스 복원(회전·활동 유지 안 함)은 새 실행으로 세지 않는다.
         if (firstLaunch) lifecycleScope.launch { safeMode = health.onLaunchStarted() } else safeMode = false
         setContent {
@@ -70,6 +84,10 @@ class MainActivity : ComponentActivity() {
                         onOpenDateHandled = { openDate = null },
                         safeMode = safe,
                         failure = failure,
+                        openTab = openTab,
+                        onOpenTabHandled = { openTab = null },
+                        openDday = openDday,
+                        onOpenDdayHandled = { openDday = false },
                     )
                 }
             }
@@ -82,6 +100,7 @@ class MainActivity : ComponentActivity() {
                     syncRequester.request(SyncTrigger.APP_OPEN)
                     // EX-02: 공휴일은 하루 한 번 폰의 공휴일 캘린더에서 다시 읽는다.
                     holidayScheduler.requestIfStale()
+                    weatherScheduler.requestIfStale() // WX-01 앱을 열 때 3시간이 지났으면
                 }
             }
         }
@@ -100,6 +119,27 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         dateFrom(intent)?.let { openDate = it }
+        tabFrom(intent)?.let { openTab = it }
+        applyLink(intent)
+    }
+
+    /** EX-12: VIEW 링크만 처리한다. 화면 열기만 하고 쓰기는 하지 않는다. */
+    private fun applyLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        when (val link = DeepLinks.parse(intent.dataString)) {
+            DeepLink.Today -> openDate = LocalDate.now(APP_ZONE)
+            DeepLink.Habit -> openTab = HomeTab.HABIT
+            DeepLink.Ledger -> openTab = HomeTab.LEDGER
+            is DeepLink.Date -> openDate = link.date
+            DeepLink.Dday -> openDday = true
+            null -> Unit
+        }
+    }
+
+    private fun tabFrom(intent: Intent?): HomeTab? = when (intent?.getStringExtra(AppIntents.EXTRA_TAB)) {
+        AppIntents.TAB_HABIT -> HomeTab.HABIT
+        AppIntents.TAB_LEDGER -> HomeTab.LEDGER
+        else -> null
     }
 
     private fun dateFrom(intent: Intent?): LocalDate? =

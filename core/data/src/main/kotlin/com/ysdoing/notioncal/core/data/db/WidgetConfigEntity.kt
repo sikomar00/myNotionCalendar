@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -28,6 +29,14 @@ data class WidgetConfigEntity(
     val hideDone: Boolean = false,
     /** CAL-03(P1)용 자리. */
     val showPhoneCal: Boolean = false,
+    /** WG-11 통합 위젯에서 고른 탭("CALENDAR"·"HABIT", v9). 다른 위젯은 쓰지 않는다. */
+    @ColumnInfo(defaultValue = "CALENDAR") val selectedTab: String = "CALENDAR",
+    /** LD-06 가계부 금액 숨김(●●●, v10). */
+    @ColumnInfo(defaultValue = "0") val hideAmounts: Boolean = false,
+    /** DD-03·04 디데이 위젯이 보여 줄 고정 일정(v11). */
+    val ddayPageId: String? = null,
+    /** WX-04 머리에 오늘 날씨(v11). */
+    @ColumnInfo(defaultValue = "0") val showWeather: Boolean = false,
 )
 
 @Dao

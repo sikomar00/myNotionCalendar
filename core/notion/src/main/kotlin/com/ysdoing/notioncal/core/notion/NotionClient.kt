@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.notion.dto.ParentDto
 import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
 import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
+import com.ysdoing.notioncal.core.notion.dto.ViewDto
 import dagger.Lazy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -50,7 +51,7 @@ interface NotionWriter {
 class NotionClient @Inject constructor(
     private val apiLazy: Lazy<NotionApi>,
     private val json: Json,
-) : NotionReader, NotionWriter {
+) : NotionReader, NotionWriter, ViewReader {
     constructor(api: NotionApi, json: Json) : this(Lazy { api }, json)
 
     private val api: NotionApi get() = apiLazy.get()
@@ -59,7 +60,26 @@ class NotionClient @Inject constructor(
 
     suspend fun database(databaseId: String): DatabaseDto = call { api.database(databaseId) }
 
+    /** LD-01: 페이지의 자식 DB(ID, 제목). 다음 쪽까지 끝까지 받는다. */
+    suspend fun childDatabases(pageId: String): List<Pair<String, String>> {
+        val found = mutableListOf<Pair<String, String>>()
+        var cursor: String? = null
+        do {
+            val page = call { api.blockChildren(pageId, cursor) }
+            page.results.forEach { block -> block.childDatabase?.let { found += block.id to it.title } }
+            cursor = if (page.hasMore) page.nextCursor else null
+        } while (cursor != null)
+        return found
+    }
+
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
+
+    override suspend fun viewIds(dataSourceId: String): List<String> = call { api.views(dataSourceId) }.results.map { it.id }
+
+    override suspend fun view(viewId: String): ViewDto = call { api.view(viewId) }
+
+    override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int): List<PageDto> =
+        call { api.query(dataSourceId, QueryRequestDto(filter = viewFilter(view), sorts = view.sorts, pageSize = limit)) }.results
 
     override suspend fun pageOrNull(pageId: String): PageDto? = try {
         call { api.page(pageId) }

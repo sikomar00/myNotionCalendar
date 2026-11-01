@@ -16,7 +16,8 @@ data class DataSourceEntity(
     /** "#RRGGBB". 일정에 색 기준 값이 없을 때 쓰는 DB 색. */
     val colorHex: String,
     val titlePropId: String,
-    val datePropId: String,
+    /** 날짜 속성 ID. 날짜 없는 DB(🌱 습관, HB-01)는 null이다(v9). */
+    val datePropId: String?,
     val donePropId: String?,
     /** "CHECKBOX" 또는 "STATUS". 완료 속성을 안 쓰면 null. */
     val doneType: String?,
@@ -47,12 +48,32 @@ data class DataSourceEntity(
     val emphasisPropId: String? = null,
     /** EX-11 강조할 옵션 ID 목록(JSON 배열, v8). 예: 우선순위 '1st'. */
     val emphasisOptionIds: String? = null,
+    /**
+     * DB 종류(v9, PRD §10의 role). [com.ysdoing.notioncal.core.data.SourceKind] 이름: CALENDAR(일정), HABIT(🌱 습관),
+     * HABIT_LOG(✅ 습관 기록). 달력·검색·일정 위젯은 CALENDAR만 읽는다. 모르는 값은 건너뛴다.
+     */
+    @ColumnInfo(defaultValue = "CALENDAR") val kind: String = "CALENDAR",
+    /** HABIT_LOG: 습관을 가리키는 relation 속성 ID(v9). */
+    val linkPropId: String? = null,
+    /** HABIT_LOG: 짝인 🌱 습관 data source ID(v9). 켜기·끄기·삭제를 함께 한다. */
+    val linkDataSourceId: String? = null,
+    /** HABIT: 이모지·주 목표·진행 중·시작일·순서 속성 ID(JSON [com.ysdoing.notioncal.core.data.HabitPropIds], v9). */
+    val habitPropIds: String? = null,
+    /**
+     * LEDGER·BUDGET·CATEGORY 속성 ID(JSON, v10). 거래내역은 [com.ysdoing.notioncal.core.data.LedgerPropIds],
+     * 예산은 [com.ysdoing.notioncal.core.data.BudgetPropIds], 카테고리 마스터는 [com.ysdoing.notioncal.core.data.CategoryPropIds].
+     */
+    val rolePropIds: String? = null,
+    /** LEDGER: 지출이 음수인 양식(뱅크샐러드 원본, LD-02 설정값, v10). */
+    @ColumnInfo(defaultValue = "1") val spendNegative: Boolean = true,
+    /** LEDGER: 예산과 비교할 그룹(LD-01·05, v10). '전체'면 지출 전부. */
+    @ColumnInfo(defaultValue = "전체") val budgetGroup: String = "전체",
 )
 
 /** 노션 페이지 1개 = 1행(PRD §10). 날짜만 있는 일정은 시간 컬럼이 null이다(NS-07). */
 @Entity(
     tableName = "events",
-    indices = [Index("startDate"), Index("dataSourceId", "startDate")],
+    indices = [Index("startDate"), Index("dataSourceId", "startDate"), Index("linkPageId", "startDate")],
 )
 data class EventEntity(
     @PrimaryKey val pageId: String,
@@ -80,6 +101,24 @@ data class EventEntity(
     val extraValues: String? = null,
     /** 제목에 노션 언급(@)이 있다(v7). 앱에서 제목을 바꾸면 언급이 글자로 바뀌므로 편집 화면이 경고한다. */
     @ColumnInfo(defaultValue = "0") val titleHasMention: Boolean = false,
+    /** ✅ 습관 기록 행이 가리키는 🌱 습관 page ID(relation, v9). 일정 행은 null. */
+    val linkPageId: String? = null,
+    /** 노션 created_time(epoch ms, v10). LD-08 중복 중 먼저 만든 행을 고를 때 쓴다. 앱이 만든 임시 행은 만든 시각. */
+    @ColumnInfo(defaultValue = "0") val createdTime: Long = 0,
+    /** LD-02 거래 금액(원, 노션 부호 그대로, v10). 거래 행이 아니면 null. */
+    val amount: Long? = null,
+    /** 거래 타입(OUT·IN·TRANSFER, [com.ysdoing.notioncal.core.data.ledger.Flow] 이름, v10). */
+    val flow: String? = null,
+    /** 대분류(select 이름, v10). */
+    val category: String? = null,
+    /** 시간(HH:MM, v10). */
+    val txTime: String? = null,
+    /** 결제수단(select 이름, v10). LD-08 중복 키에 들어간다. */
+    val payment: String? = null,
+    /** LD-09 예정(v10). */
+    @ColumnInfo(defaultValue = "0") val planned: Boolean = false,
+    /** LD-10 앱입력(v10). */
+    @ColumnInfo(defaultValue = "0") val manual: Boolean = false,
 )
 
 /** 화면용 조회 결과: 일정 + 소속 DB 색. */
@@ -92,6 +131,9 @@ data class EventRow(
     val emphasisPropId: String? = null,
     val emphasisOptionIds: String? = null,
 )
+
+/** 습관 기록 한 건의 (습관 page ID, 날짜). */
+data class HabitLogRow(val habitId: String, val date: LocalDate)
 
 /** 동기화 기록(진단 화면·§3 지표). 오류 문구에 토큰·일정 제목을 넣지 않는다(SEC-02). */
 @Entity(tableName = "sync_log", indices = [Index("at")])
@@ -117,3 +159,21 @@ data class HolidayEntity(
     val source: String,
 )
 
+
+/**
+ * 🌱 습관 1개 = 1행(HB-01, v9). 노션에서 날짜 없이 전체 조회해 DB별로 통째로 바꾸는 캐시다(DB 복구 때 남기지 않는다).
+ * 값이 비면 기본값: 주 목표 7, 진행 중 true, 시작일 없음, 순서 없음(이름순).
+ */
+@Entity(tableName = "habits", indices = [Index("dataSourceId")])
+data class HabitEntity(
+    @PrimaryKey val pageId: String,
+    val dataSourceId: String,
+    val name: String,
+    val emoji: String?,
+    /** 1~7. */
+    val weeklyTarget: Int,
+    val active: Boolean,
+    val startDate: LocalDate?,
+    val sortOrder: Double?,
+    val url: String = "",
+)

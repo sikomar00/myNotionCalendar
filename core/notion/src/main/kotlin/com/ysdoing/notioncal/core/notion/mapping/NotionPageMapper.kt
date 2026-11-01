@@ -23,6 +23,10 @@ data class PropertyMapping(
     val doneType: DoneType?,
     val colorPropId: String?,
     val sortPropId: String?,
+    /** HB-02 ✅ 습관 기록의 '습관' relation. 일정 DB는 null. */
+    val linkPropId: String? = null,
+    /** LD-01 가계부(거래내역) 속성. 일정 DB는 null. */
+    val ledger: LedgerMapping? = null,
 )
 
 /** 노션 페이지 1개를 앱 일정으로 옮긴 값. */
@@ -47,6 +51,12 @@ data class RemoteEvent(
     val extraValues: Map<String, PropertyValue> = emptyMap(),
     /** 제목에 언급(@페이지·@사람·@날짜)이 들어 있다. 앱에서 제목을 바꾸면 언급이 글자로 바뀐다. */
     val titleHasMention: Boolean = false,
+    /** HB-02 relation의 첫 page ID(✅ 습관 기록 → 🌱 습관). 연결 속성을 매핑하지 않았거나 비면 null. */
+    val linkPageId: String? = null,
+    /** 노션 created_time. LD-08 중복 중 먼저 만든 행을 고를 때 쓴다. */
+    val createdTime: Instant? = null,
+    /** LD-02 거래 값. 가계부 매핑이 없으면 null. */
+    val ledger: RemoteLedger? = null,
 )
 
 /** 페이지 해석 결과. 날짜가 없으면 [event]가 null이고 캘린더에서 빠진다. */
@@ -92,6 +102,7 @@ class NotionPageMapper(
         val color = colorValue?.str("color")
         val sortKey = prop(mapping.sortPropId)?.obj("select")?.str("id")?.let { sortOrder[it] }
         val extraValues = props.mapNotNull { p -> extraValue(p)?.let { value -> p.str("id")?.let { it to value } } }.toMap()
+        val linkPageId = (prop(mapping.linkPropId)?.get("relation") as? JsonArray)?.firstNotNullOfOrNull { (it as? JsonObject)?.str("id") }
 
         return MappedPage(
             page.id,
@@ -111,6 +122,9 @@ class NotionPageMapper(
                 url = page.url,
                 lastEditedTime = Instant.parse(page.lastEditedTime),
                 extraValues = extraValues,
+                linkPageId = linkPageId,
+                createdTime = page.createdTime?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                ledger = mapping.ledger?.let { PageProps(page).ledger(it) },
             ),
         )
     }

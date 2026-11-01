@@ -1,12 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SEC-03: 토큰 저장 파일은 백업·기기 이전에서 제외한다. Tink 키셋도 제외한다(다른 기기의 Keystore로는 풀 수 없음). -->
+<!--
+  SEC-03: 토큰 저장 파일은 백업·기기 이전에서 제외한다. Tink 키셋도 제외한다(다른 기기의 Keystore로는 풀 수 없음).
+  SEC-05: Room 캐시(notioncal.db와 WAL·저널 파일)도 제외한다. 노션에서 다시 받으면 되고, 토큰이 없으면 쓸 수도 없다.
+-->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="datastore/secrets.preferences_pb" />
         <exclude domain="sharedpref" path="notioncal_keyset_prefs.xml" />
+        <exclude domain="database" path="notioncal.db" />
+        <exclude domain="database" path="notioncal.db-wal" />
+        <exclude domain="database" path="notioncal.db-shm" />
+        <exclude domain="database" path="notioncal.db-journal" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="datastore/secrets.preferences_pb" />
         <exclude domain="sharedpref" path="notioncal_keyset_prefs.xml" />
+        <exclude domain="database" path="notioncal.db" />
+        <exclude domain="database" path="notioncal.db-wal" />
+        <exclude domain="database" path="notioncal.db-shm" />
+        <exclude domain="database" path="notioncal.db-journal" />
     </device-transfer>
 </data-extraction-rules>

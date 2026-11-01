@@ -1,0 +1,65 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "habit-meditate",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:00:00.000Z",
+      "in_trash": false,
+      "url": "https://www.notion.so/habit-meditate",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "명상" }] },
+        "이모지": { "id": "eMoJ", "type": "rich_text", "rich_text": [{ "type": "text", "plain_text": "🧘" }] },
+        "주 목표": { "id": "gOaL", "type": "number", "number": 3 },
+        "진행 중": { "id": "aCtV", "type": "checkbox", "checkbox": true },
+        "시작일": { "id": "sTrT", "type": "date", "date": { "start": "2026-10-19", "end": null, "time_zone": null } },
+        "순서": { "id": "oRdR", "type": "number", "number": 2 },
+        "기록": { "id": "gIrO", "type": "relation", "relation": [{ "id": "log-page-1" }], "has_more": false }
+      }
+    },
+    {
+      "object": "page",
+      "id": "habit-blank",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:00:00.000Z",
+      "in_trash": false,
+      "url": "https://www.notion.so/habit-blank",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "빈 습관" }] },
+        "이모지": { "id": "eMoJ", "type": "rich_text", "rich_text": [] },
+        "주 목표": { "id": "gOaL", "type": "number", "number": null },
+        "진행 중": { "id": "aCtV", "type": "checkbox", "checkbox": false },
+        "시작일": { "id": "sTrT", "type": "date", "date": null },
+        "순서": { "id": "oRdR", "type": "number", "number": null },
+        "기록": { "id": "gIrO", "type": "relation", "relation": [], "has_more": false }
+      }
+    },
+    {
+      "object": "page",
+      "id": "habit-odd",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:00:00.000Z",
+      "in_trash": false,
+      "url": "https://www.notion.so/habit-odd",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "주 목표 이상" }] },
+        "주 목표": { "id": "gOaL", "type": "number", "number": 4.6 },
+        "시작일": { "id": "sTrT", "type": "date", "date": { "start": "2026-10-19T07:00:00.000+09:00", "end": null, "time_zone": null } }
+      }
+    },
+    {
+      "object": "page",
+      "id": "habit-trashed",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:00:00.000Z",
+      "in_trash": true,
+      "url": "https://www.notion.so/habit-trashed",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "지운 습관" }] }
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}

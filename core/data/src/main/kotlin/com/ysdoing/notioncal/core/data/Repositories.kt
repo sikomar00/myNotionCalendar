@@ -134,11 +134,27 @@ class DataSourceRepository @Inject constructor(
     private val eventDao: EventDao,
     private val widgetRefresher: WidgetRefresher,
 ) {
+    /** 설정 화면: 모든 종류. */
     fun observeAll(): Flow<List<DataSourceEntity>> = dataSourceDao.observeAll()
 
+    /** 달력 필터·퀵 추가 DB 칩·기본 DB·위젯 설정 DB 목록: 일정 DB만. */
+    fun observeCalendarSources(): Flow<List<DataSourceEntity>> = dataSourceDao.observeByKind(SourceKind.CALENDAR.name)
+
+    /** HB-01: 습관 기록과 🌱 습관은 한 쌍이라 함께 켜고 끈다. */
     suspend fun setEnabled(id: String, enabled: Boolean) {
-        dataSourceDao.setEnabled(id, enabled)
+        db.withTransaction { pairOf(id).forEach { dataSourceDao.setEnabled(it, enabled) } }
         widgetRefresher.requestUpdate()
+    }
+
+    /** [id]와 짝(✅ 습관 기록 ↔ 🌱 습관, 거래내역 ↔ 예산·카테고리 마스터)의 ID. 일정 DB면 자기 자신만. */
+    private suspend fun pairOf(id: String): List<String> {
+        val source = dataSourceDao.get(id) ?: return listOf(id)
+        return when (source.sourceKind) {
+            SourceKind.HABIT_LOG -> listOfNotNull(id, source.linkDataSourceId)
+            SourceKind.HABIT, SourceKind.LEDGER -> listOf(id) + dataSourceDao.linkedTo(id).map { it.dataSourceId }
+            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.let { pairOf(it) } ?: listOf(id)
+            else -> listOf(id)
+        }
     }
 
     /** NS-09 배너 '확인': 이 DB의 스키마 알림을 확인 처리한다. */
@@ -164,11 +180,16 @@ class DataSourceRepository @Inject constructor(
         dataSourceDao.setExtraPropIds(id, encodeIdList(propIds))
     }
 
-    /** 등록을 지우면 그 DB의 로컬 일정도 지운다. 노션 원본은 건드리지 않는다. */
+    /** 등록을 지우면 그 DB의 로컬 일정(습관 기록·습관 캐시 포함)도 지운다. 습관 짝은 함께 지운다. 노션 원본은 건드리지 않는다. */
     suspend fun delete(id: String) {
         db.withTransaction {
-            eventDao.deleteForSource(id)
-            dataSourceDao.deleteRow(id)
+            pairOf(id).forEach { target ->
+                eventDao.deleteForSource(target)
+                db.habitDao().deleteForSource(target)
+                db.ledgerDao().deleteBudgets(target)
+                db.ledgerDao().deleteCategoryGroups(target)
+                dataSourceDao.deleteRow(target)
+            }
         }
         widgetRefresher.requestUpdate()
     }

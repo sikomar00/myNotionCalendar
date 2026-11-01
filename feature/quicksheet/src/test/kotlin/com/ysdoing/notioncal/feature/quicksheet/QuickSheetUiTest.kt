@@ -3,6 +3,9 @@ package com.ysdoing.notioncal.feature.quicksheet
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -116,6 +119,18 @@ class QuickSheetUiTest {
         compose.onNodeWithText("완료").performClick()
         compose.onNodeWithText("저장").performClick()
         assertEquals(EventChange(done = true), saved)
+    }
+
+    /** DD-01: 편집 시트에서 바로 디데이로 고정·해제(저장 버튼과 따로). */
+    @Test
+    fun editorPinsDday() {
+        val item = EditableEvent(event("p1", "영어 스터디"), null, emptyList(), "Calendar")
+        val changes = mutableListOf<Boolean>()
+        var pinned by mutableStateOf(false)
+        compose.setContent { MaterialTheme { EventEditorForm(item, onSave = {}, onDelete = {}, pinned = pinned, onPinChange = { changes += it; pinned = it }) } }
+        compose.onNodeWithText("디데이로 고정").performClick()
+        compose.onNodeWithText("디데이 고정됨").performClick()
+        assertEquals(listOf(true, false), changes)
     }
 
     @Test

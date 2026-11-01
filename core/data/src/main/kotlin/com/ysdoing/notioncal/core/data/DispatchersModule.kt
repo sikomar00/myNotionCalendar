@@ -8,6 +8,8 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.ysdoing.notioncal.core.data.db.DataSourceDao
 import com.ysdoing.notioncal.core.data.db.EventDao
+import com.ysdoing.notioncal.core.data.db.HabitDao
+import com.ysdoing.notioncal.core.data.db.LedgerDao
 import com.ysdoing.notioncal.core.data.db.HolidayDao
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.RecoveringOpenHelperFactory
@@ -81,6 +83,24 @@ object DataModule {
 
     @Provides
     fun provideHolidayDao(db: NotionCalDatabase): HolidayDao = db.holidayDao()
+
+    @Provides
+    fun provideHabitDao(db: NotionCalDatabase): HabitDao = db.habitDao()
+
+    @Provides
+    fun provideLedgerDao(db: NotionCalDatabase): LedgerDao = db.ledgerDao()
+
+    @Provides
+    fun provideDdayRemovedNotice(settings: SettingsRepository): DdayRemovedNotice = DdayRemovedNotice { settings.addDdayRemovedNotice(it) }
+
+    @Provides
+    fun provideDdayDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.DdayDao = db.ddayDao()
+
+    @Provides
+    fun provideWeatherDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.WeatherDao = db.weatherDao()
+
+    @Provides
+    fun provideViewDao(db: NotionCalDatabase): com.ysdoing.notioncal.core.data.db.ViewDao = db.viewDao()
 
     @Provides
     @Singleton

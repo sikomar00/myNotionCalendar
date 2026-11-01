@@ -19,7 +19,8 @@ class MonthNavAction : ActionCallback {
             0 -> configs.resetMonth(appWidgetId)
             else -> configs.shiftMonth(appWidgetId, delta)
         }
-        NotionCalWidget().update(context, glanceId)
+        // 검증 메모 5: 누른 위젯의 종류로 다시 그린다(통합 위젯의 📅 탭에서 눌러도 탭이 사라지지 않게).
+        WidgetKinds.update(context, glanceId)
         Log.d(GlanceWidgetRefresher.TAG, "월 이동 반영: ${SystemClock.elapsedRealtime() - started}ms")
     }
 

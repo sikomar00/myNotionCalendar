@@ -36,6 +36,8 @@ class SyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val engine: NotionSyncEngine,
     private val outbox: OutboxProcessor,
+    private val mirror: PhoneCalendarMirror,
+    private val views: ViewSync,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -44,6 +46,10 @@ class SyncWorker @AssistedInject constructor(
         // 보내지 않은 쓰기를 먼저 보낸 뒤 읽는다. 실패해도 읽기는 진행한다(작업은 남아 다음에 다시 보낸다).
         outbox.process()
         val outcome = engine.sync(trigger, inputData.getString(KEY_DATA_SOURCE))
+        // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
+        mirror.refreshIfEnabled()
+        // VW-01: 등록한 노션 보기 스냅샷도 같은 주기에 맞춘다(실패해도 위 결과에 영향 없음).
+        views.syncAll()
         // 연결·서버 문제는 WorkManager 백오프로 다시 시도한다. 토큰·공유 문제는 사용자가 고쳐야 하므로 끝낸다.
         return when (outcome.error) {
             NotionError.Network, NotionError.RateLimited, is NotionError.Server -> Result.retry()

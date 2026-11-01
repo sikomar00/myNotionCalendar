@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -15,6 +16,8 @@ import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
+import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
+import com.ysdoing.notioncal.core.data.weather.WeatherPlace
 import java.time.DayOfWeek
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,6 +57,16 @@ data class AppSettings(
     val widgetPreviewsVersion: Int = 0,
     /** 마지막으로 본 앱 설치·업데이트 시각(PackageInfo.lastUpdateTime). 바뀌면 다음 동기화가 전체 범위를 다시 받는다. */
     val seenAppUpdateAt: Long = 0,
+    /** DD-01 노션에서 휴지통으로 가 고정을 푼 디데이 제목들(디데이 화면 안내, 닫으면 비움). */
+    val ddayRemovedNotice: Set<String> = emptySet(),
+    /** WX-01 날씨 켬. 켜면 예보를 받아 날짜 옆에 붙인다. */
+    val weatherEnabled: Boolean = false,
+    /** WX-02 위치 방식. 기본은 지역 직접 선택(권한 없음). */
+    val weatherLocationMode: WeatherLocationMode = WeatherLocationMode.REGION,
+    /** WX-02 예보 위치(소수 둘째 자리). 고르기 전에는 null. */
+    val weatherPlace: WeatherPlace? = null,
+    /** WX-03 월 보기에서 예보가 있는 모든 칸에 아이콘(기본은 오늘 칸만). */
+    val weatherMonthCellIcons: Boolean = false,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -93,6 +106,16 @@ class SettingsRepository @Inject constructor(
                 seenAppUpdateAt = prefs[SEEN_APP_UPDATE_AT] ?: 0,
                 hiddenOptionKeys = prefs[HIDDEN_OPTIONS].orEmpty(),
                 calendarView = prefs[CALENDAR_VIEW]?.let { runCatching { CalendarView.valueOf(it) }.getOrNull() } ?: CalendarView.MONTH,
+                ddayRemovedNotice = prefs[DDAY_REMOVED_NOTICE].orEmpty(),
+                weatherEnabled = prefs[WEATHER_ENABLED] ?: false,
+                weatherLocationMode = prefs[WEATHER_LOCATION_MODE]?.let { runCatching { WeatherLocationMode.valueOf(it) }.getOrNull() }
+                    ?: WeatherLocationMode.REGION,
+                weatherPlace = run {
+                    val lat = prefs[WEATHER_LAT]
+                    val lon = prefs[WEATHER_LON]
+                    if (lat == null || lon == null) null else WeatherPlace(prefs[WEATHER_PLACE_NAME].orEmpty(), lat, lon)
+                },
+                weatherMonthCellIcons = prefs[WEATHER_MONTH_CELL_ICONS] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -177,6 +200,39 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[SEEN_APP_UPDATE_AT] = at }
     }
 
+    /** DD-01 노션에서 지워져 고정을 푼 디데이를 안내에 더한다. */
+    suspend fun addDdayRemovedNotice(titles: Collection<String>) {
+        if (titles.isEmpty()) return
+        dataStore.edit { it[DDAY_REMOVED_NOTICE] = it[DDAY_REMOVED_NOTICE].orEmpty() + titles }
+    }
+
+    suspend fun clearDdayRemovedNotice() {
+        dataStore.edit { it.remove(DDAY_REMOVED_NOTICE) }
+    }
+
+    suspend fun setWeatherEnabled(enabled: Boolean) {
+        dataStore.edit { it[WEATHER_ENABLED] = enabled }
+        widgetRefresher.requestUpdate()
+    }
+
+    suspend fun setWeatherLocationMode(mode: WeatherLocationMode) {
+        dataStore.edit { it[WEATHER_LOCATION_MODE] = mode.name }
+    }
+
+    /** WX-02: 좌표는 소수 둘째 자리(약 1km)로 줄여 저장한다. */
+    suspend fun setWeatherPlace(place: WeatherPlace) {
+        val rounded = place.rounded()
+        dataStore.edit {
+            it[WEATHER_PLACE_NAME] = rounded.name
+            it[WEATHER_LAT] = rounded.lat
+            it[WEATHER_LON] = rounded.lon
+        }
+    }
+
+    suspend fun setWeatherMonthCellIcons(show: Boolean) {
+        dataStore.edit { it[WEATHER_MONTH_CELL_ICONS] = show }
+    }
+
     private companion object {
         val WEEK_START = stringPreferencesKey("week_start")
         val HIDE_DONE = booleanPreferencesKey("hide_done")
@@ -198,5 +254,12 @@ class SettingsRepository @Inject constructor(
         val REMINDERS_HANDLED_UNTIL = longPreferencesKey("reminders_handled_until")
         val WIDGET_PREVIEWS_VERSION = intPreferencesKey("widget_previews_version")
         val SEEN_APP_UPDATE_AT = longPreferencesKey("seen_app_update_at")
+        val DDAY_REMOVED_NOTICE = stringSetPreferencesKey("dday_removed_notice")
+        val WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
+        val WEATHER_LOCATION_MODE = stringPreferencesKey("weather_location_mode")
+        val WEATHER_PLACE_NAME = stringPreferencesKey("weather_place_name")
+        val WEATHER_LAT = doublePreferencesKey("weather_lat")
+        val WEATHER_LON = doublePreferencesKey("weather_lon")
+        val WEATHER_MONTH_CELL_ICONS = booleanPreferencesKey("weather_month_cell_icons")
     }
 }

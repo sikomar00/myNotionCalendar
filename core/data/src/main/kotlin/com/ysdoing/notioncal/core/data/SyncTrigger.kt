@@ -51,6 +51,11 @@ object AppIntents {
     /** yyyy-MM-dd */
     const val EXTRA_DATE = "com.ysdoing.notioncal.extra.DATE"
 
+    /** 첫 화면에서 열 하단 탭. [TAB_HABIT]이면 습관 탭(습관 위젯 머리줄). */
+    const val EXTRA_TAB = "com.ysdoing.notioncal.extra.TAB"
+    const val TAB_HABIT = "habit"
+    const val TAB_LEDGER = "ledger"
+
     /** 퀵 시트(WI-01·02·05). EXTRA_MODE = day|add|edit */
     const val ACTION_QUICK_SHEET = "com.ysdoing.notioncal.action.QUICK_SHEET"
     const val EXTRA_MODE = "com.ysdoing.notioncal.extra.MODE"
@@ -58,4 +63,7 @@ object AppIntents {
     const val MODE_DAY = "day"
     const val MODE_ADD = "add"
     const val MODE_EDIT = "edit"
+
+    /** LD-07 가계부 빠른 입력(위젯 '+'·날짜 탭, 💰 탭). EXTRA_DATE로 날짜를 넘긴다. */
+    const val ACTION_LEDGER_INPUT = "com.ysdoing.notioncal.action.LEDGER_INPUT"
 }

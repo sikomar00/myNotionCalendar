@@ -215,4 +215,40 @@ class NotionClientTest {
         server.enqueue(error(404, "object_not_found"))
         assertNull(client.trashPage("gone"))
     }
+
+    /** LD-01: 거래내역 DB의 부모 페이지와 그 페이지의 자식 DB(예산·카테고리 마스터)를 찾는다. 자식 목록은 끝까지 넘긴다. */
+    @Test
+    fun parentPageAndChildDatabases() = runTest {
+        server.enqueue(
+            ok(
+                """{"object":"database","id":"db-ledger","title":[{"plain_text":"거래내역"}],
+                   "parent":{"type":"page_id","page_id":"page-money"},"data_sources":[{"id":"ds-ledger","name":"거래내역"}]}""",
+            ),
+        )
+        assertEquals("page-money", client.database("db-ledger").parent?.pageId)
+        server.takeRequest()
+
+        server.enqueue(
+            ok(
+                """{"object":"list","results":[
+                   {"object":"block","id":"db-ledger","type":"child_database","child_database":{"title":"거래내역"}},
+                   {"object":"block","id":"blk-1","type":"paragraph","paragraph":{}}],
+                   "next_cursor":"c2","has_more":true}""",
+            ),
+        )
+        server.enqueue(
+            ok(
+                """{"object":"list","results":[
+                   {"object":"block","id":"db-budget","type":"child_database","child_database":{"title":"예산"}},
+                   {"object":"block","id":"db-cat","type":"child_database","child_database":{"title":"카테고리 마스터"}}],
+                   "next_cursor":null,"has_more":false}""",
+            ),
+        )
+        assertEquals(
+            listOf("db-ledger" to "거래내역", "db-budget" to "예산", "db-cat" to "카테고리 마스터"),
+            client.childDatabases("page-money"),
+        )
+        assertEquals("/v1/blocks/page-money/children?page_size=100", server.takeRequest().target)
+        assertEquals("/v1/blocks/page-money/children?start_cursor=c2&page_size=100", server.takeRequest().target)
+    }
 }

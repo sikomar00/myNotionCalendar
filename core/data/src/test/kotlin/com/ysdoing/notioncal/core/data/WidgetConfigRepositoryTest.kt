@@ -57,6 +57,20 @@ class WidgetConfigRepositoryTest {
         assertEquals(0, saved.opacity)
     }
 
+    /** WG-11: 고른 탭은 위젯마다 따로이고, 달 이동·설정 저장(행 전체 upsert) 뒤에도 남는다. */
+    @Test
+    fun selectedTabIsPerWidgetAndSurvivesOtherSaves() = runTest {
+        repo.selectTab(1, WidgetTab.HABIT)
+        repo.selectTab(2, WidgetTab.CALENDAR)
+        repo.shiftMonth(1, +1)
+        repo.resetMonth(1)
+        repo.save(repo.get(1).copy(theme = WidgetTheme.DARK))
+
+        assertEquals(WidgetTab.HABIT, repo.get(1).selectedTab)
+        assertEquals(WidgetTab.CALENDAR, repo.get(2).selectedTab)
+        assertEquals(WidgetTab.CALENDAR, repo.get(3).selectedTab) // 저장 전 기본값
+    }
+
     @Test
     fun deleteRemovesOnlyGivenWidgets() = runTest {
         repo.save(WidgetConfig(1, hideDone = true))

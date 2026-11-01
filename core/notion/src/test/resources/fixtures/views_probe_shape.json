@@ -1,0 +1,2409 @@
+{
+ "probes": [
+  {
+   "sourceKind": "CALENDAR",
+   "views": [
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "calendar",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": [
+       {
+        "property": "S",
+        "direction": "ascending"
+       }
+      ],
+      "quick_filters": null,
+      "configuration": {
+       "type": "calendar",
+       "date_property_id": "S",
+       "date_property_name": "S",
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        }
+       ]
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 100,
+     "viewQueryError": null,
+     "dataSourceRows": 100,
+     "dataSourceError": null,
+     "sameFirstRows": 100,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "Dday": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "string",
+         "string": "S"
+        }
+       },
+       "ParentItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Ctgr": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "FollowUpTasks": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "Pri.": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "toTMR": {
+        "id": "S",
+        "type": "button",
+        "button": {}
+       },
+       "완료": {
+        "id": "S",
+        "type": "checkbox",
+        "checkbox": false
+       },
+       "CreationDate": {
+        "id": "S",
+        "type": "created_time",
+        "created_time": "S"
+       },
+       "Time": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "Date": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "SubItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "BridgeDB": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "PreTask": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Name": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "table",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": [
+       {
+        "property": "S",
+        "direction": "ascending"
+       }
+      ],
+      "quick_filters": {
+       "XNuP": {
+        "checkbox": {
+         "equals": false
+        }
+       }
+      },
+      "configuration": {
+       "type": "table",
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 222,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 32,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 138
+        }
+       ],
+       "group_by": {
+        "type": "select",
+        "property_id": "S",
+        "sort": {
+         "type": "manual"
+        },
+        "property_name": "S",
+        "hide_empty_groups": true
+       },
+       "subtasks": {
+        "filter_scope": "S",
+        "toggle_column_id": "S"
+       },
+       "wrap_cells": false,
+       "frozen_column_index": -1
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 13,
+     "viewQueryError": null,
+     "dataSourceRows": 13,
+     "dataSourceError": null,
+     "sameFirstRows": 13,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "Dday": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "string",
+         "string": "S"
+        }
+       },
+       "ParentItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Ctgr": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "FollowUpTasks": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": "S"
+       },
+       "Pri.": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "toTMR": {
+        "id": "S",
+        "type": "button",
+        "button": {}
+       },
+       "완료": {
+        "id": "S",
+        "type": "checkbox",
+        "checkbox": false
+       },
+       "CreationDate": {
+        "id": "S",
+        "type": "created_time",
+        "created_time": "S"
+       },
+       "Time": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "Date": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "SubItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "BridgeDB": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "PreTask": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Name": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "list",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": null,
+      "quick_filters": {
+       "XNuP": {
+        "checkbox": {
+         "equals": false
+        }
+       },
+       "e=~@": {
+        "date": {
+         "is_empty": true
+        }
+       }
+      },
+      "configuration": {
+       "type": "list",
+       "properties": [
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        }
+       ]
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 2,
+     "viewQueryError": null,
+     "dataSourceRows": 2,
+     "dataSourceError": null,
+     "sameFirstRows": 2,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "Dday": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "string",
+         "string": null
+        }
+       },
+       "ParentItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Ctgr": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "FollowUpTasks": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "Pri.": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "toTMR": {
+        "id": "S",
+        "type": "button",
+        "button": {}
+       },
+       "완료": {
+        "id": "S",
+        "type": "checkbox",
+        "checkbox": false
+       },
+       "CreationDate": {
+        "id": "S",
+        "type": "created_time",
+        "created_time": "S"
+       },
+       "Time": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "Date": {
+        "id": "S",
+        "type": "date",
+        "date": null
+       },
+       "SubItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "BridgeDB": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "PreTask": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Name": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "calendar",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": null,
+      "quick_filters": {
+       "@qUv": {
+        "relation": {
+         "is_empty": true
+        }
+       }
+      },
+      "configuration": {
+       "type": "calendar",
+       "date_property_id": "S",
+       "date_property_name": "S",
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        }
+       ],
+       "view_range": "S"
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 100,
+     "viewQueryError": null,
+     "dataSourceRows": 100,
+     "dataSourceError": null,
+     "sameFirstRows": 100,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "Dday": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "string",
+         "string": "S"
+        }
+       },
+       "ParentItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Ctgr": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "FollowUpTasks": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "Pri.": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "toTMR": {
+        "id": "S",
+        "type": "button",
+        "button": {}
+       },
+       "완료": {
+        "id": "S",
+        "type": "checkbox",
+        "checkbox": true
+       },
+       "CreationDate": {
+        "id": "S",
+        "type": "created_time",
+        "created_time": "S"
+       },
+       "Time": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "Date": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "SubItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "BridgeDB": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "PreTask": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Name": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "board",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": [
+       {
+        "property": "S",
+        "direction": "ascending"
+       }
+      ],
+      "quick_filters": {
+       "@qUv": {
+        "relation": {
+         "is_empty": true
+        }
+       }
+      },
+      "configuration": {
+       "type": "board",
+       "group_by": {
+        "type": "select",
+        "property_id": "S",
+        "sort": {
+         "type": "manual"
+        },
+        "property_name": "S",
+        "hide_empty_groups": false
+       },
+       "sub_group_by": {
+        "type": "select",
+        "property_id": "S",
+        "sort": {
+         "type": "manual"
+        },
+        "property_name": "S",
+        "hide_empty_groups": false
+       },
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        }
+       ],
+       "cover_size": "S",
+       "card_layout": "S"
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 0,
+     "viewQueryError": null,
+     "dataSourceRows": 100,
+     "dataSourceError": null,
+     "sameFirstRows": 0,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "Dday": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "string",
+         "string": "S"
+        }
+       },
+       "ParentItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Ctgr": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "FollowUpTasks": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "Pri.": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "toTMR": {
+        "id": "S",
+        "type": "button",
+        "button": {}
+       },
+       "완료": {
+        "id": "S",
+        "type": "checkbox",
+        "checkbox": false
+       },
+       "CreationDate": {
+        "id": "S",
+        "type": "created_time",
+        "created_time": "S"
+       },
+       "Time": {
+        "id": "S",
+        "type": "select",
+        "select": null
+       },
+       "Date": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "SubItem": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "BridgeDB": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "PreTask": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Name": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    }
+   ]
+  },
+  {
+   "sourceKind": "CALENDAR",
+   "views": [
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "table",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": [
+       {
+        "property": "S",
+        "direction": "descending"
+       },
+       {
+        "property": "S",
+        "direction": "ascending"
+       }
+      ],
+      "quick_filters": null,
+      "configuration": {
+       "type": "table",
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 109,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 276,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 131,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 138,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 100,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 111
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 111
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 107
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true,
+         "width": 149
+        }
+       ],
+       "subtasks": {
+        "filter_scope": "S"
+       },
+       "wrap_cells": false,
+       "frozen_column_index": -1
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 32,
+     "viewQueryError": null,
+     "dataSourceRows": 32,
+     "dataSourceError": null,
+     "sameFirstRows": 32,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": {
+       "type": "emoji",
+       "emoji": "S"
+      },
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "최종 편집 일시": {
+        "id": "S",
+        "type": "last_edited_time",
+        "last_edited_time": "S"
+       },
+       "Cover": {
+        "id": "S",
+        "type": "files",
+        "files": [
+         {
+          "name": "S",
+          "type": "external",
+          "external": {
+           "url": "S"
+          }
+         }
+        ]
+       },
+       "Goal": {
+        "id": "S",
+        "type": "number",
+        "number": 5
+       },
+       "Instructor": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": [
+         {
+          "id": "S",
+          "name": "S",
+          "color": "S"
+         }
+        ]
+       },
+       "Hours": {
+        "id": "S",
+        "type": "number",
+        "number": 7
+       },
+       "LearningCal": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "EndDate": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "Status": {
+        "id": "S",
+        "type": "status",
+        "status": {
+         "id": "S",
+         "name": "S",
+         "color": "S"
+        }
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": "S"
+       },
+       "ing": {
+        "id": "S",
+        "type": "number",
+        "number": 5
+       },
+       "%": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "number",
+         "number": 1
+        }
+       },
+       "StartDate": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "LookUp_Bridge": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Tools": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": [
+         {
+          "id": "S",
+          "name": "S",
+          "color": "S"
+         }
+        ]
+       },
+       "이름": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": true,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "viewError": "Validation"
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "gallery",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": [
+       {
+        "property": "S",
+        "direction": "descending"
+       }
+      ],
+      "quick_filters": {
+       "jSO@": {
+        "status": {
+         "equals": "S"
+        }
+       }
+      },
+      "configuration": {
+       "type": "gallery",
+       "properties": [
+        {
+         "property_id": "S",
+         "visible": true,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": true,
+         "wrap": false,
+         "card_property_width_mode": "S"
+        },
+        {
+         "property_id": "S",
+         "visible": true,
+         "wrap": false,
+         "card_property_width_mode": "S"
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false,
+         "card_property_width_mode": "S"
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        },
+        {
+         "property_id": "S",
+         "visible": false,
+         "wrap": false
+        }
+       ],
+       "cover": {
+        "type": "property",
+        "property_id": "S"
+       },
+       "cover_size": "S",
+       "cover_aspect": "S",
+       "card_layout": "S"
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 7,
+     "viewQueryError": null,
+     "dataSourceRows": 7,
+     "dataSourceError": null,
+     "sameFirstRows": 7,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": {
+       "type": "emoji",
+       "emoji": "S"
+      },
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "최종 편집 일시": {
+        "id": "S",
+        "type": "last_edited_time",
+        "last_edited_time": "S"
+       },
+       "Cover": {
+        "id": "S",
+        "type": "files",
+        "files": [
+         {
+          "name": "S",
+          "type": "external",
+          "external": {
+           "url": "S"
+          }
+         }
+        ]
+       },
+       "Goal": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "Instructor": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": []
+       },
+       "Hours": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "LearningCal": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "EndDate": {
+        "id": "S",
+        "type": "date",
+        "date": null
+       },
+       "Status": {
+        "id": "S",
+        "type": "status",
+        "status": {
+         "id": "S",
+         "name": "S",
+         "color": "S"
+        }
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "ing": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "%": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "number",
+         "number": 0
+        }
+       },
+       "StartDate": {
+        "id": "S",
+        "type": "date",
+        "date": null
+       },
+       "LookUp_Bridge": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Tools": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": []
+       },
+       "이름": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": true,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "timeline",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": null,
+      "quick_filters": null,
+      "configuration": {
+       "type": "timeline",
+       "date_property_id": "S",
+       "date_property_name": "S",
+       "preference": {
+        "zoom_level": "S",
+        "center_timestamp": 1757267528572
+       },
+       "arrows_by": {
+        "property_id": "S"
+       }
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 32,
+     "viewQueryError": null,
+     "dataSourceRows": 32,
+     "dataSourceError": null,
+     "sameFirstRows": 32,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "최종 편집 일시": {
+        "id": "S",
+        "type": "last_edited_time",
+        "last_edited_time": "S"
+       },
+       "Cover": {
+        "id": "S",
+        "type": "files",
+        "files": []
+       },
+       "Goal": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "Instructor": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": []
+       },
+       "Hours": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "LearningCal": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "EndDate": {
+        "id": "S",
+        "type": "date",
+        "date": null
+       },
+       "Status": {
+        "id": "S",
+        "type": "status",
+        "status": {
+         "id": "S",
+         "name": "S",
+         "color": "S"
+        }
+       },
+       "URL": {
+        "id": "S",
+        "type": "url",
+        "url": null
+       },
+       "ing": {
+        "id": "S",
+        "type": "number",
+        "number": null
+       },
+       "%": {
+        "id": "S",
+        "type": "formula",
+        "formula": {
+         "type": "number",
+         "number": 0
+        }
+       },
+       "StartDate": {
+        "id": "S",
+        "type": "date",
+        "date": null
+       },
+       "LookUp_Bridge": {
+        "id": "S",
+        "type": "relation",
+        "relation": [],
+        "has_more": false
+       },
+       "Tools": {
+        "id": "S",
+        "type": "multi_select",
+        "multi_select": []
+       },
+       "이름": {
+        "id": "S",
+        "type": "title",
+        "title": []
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "viewError": "Validation"
+    }
+   ]
+  },
+  {
+   "sourceKind": "HABIT_LOG",
+   "views": [
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "calendar",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": null,
+      "quick_filters": null,
+      "configuration": {
+       "type": "calendar",
+       "date_property_id": "S",
+       "date_property_name": "S",
+       "properties": [
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": true
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        },
+        {
+         "property_id": "S",
+         "property_name": "S",
+         "visible": false
+        }
+       ]
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 6,
+     "viewQueryError": null,
+     "dataSourceRows": 6,
+     "dataSourceError": null,
+     "sameFirstRows": 6,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "습관": {
+        "id": "S",
+        "type": "relation",
+        "relation": [
+         {
+          "id": "S"
+         }
+        ],
+        "has_more": false
+       },
+       "날짜": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "이름": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    },
+    {
+     "view": {
+      "object": "view",
+      "id": "S",
+      "parent": {
+       "type": "database_id",
+       "database_id": "S"
+      },
+      "data_source_id": "S",
+      "name": "S",
+      "type": "table",
+      "created_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_time": "S",
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "url": "S",
+      "filter": null,
+      "sorts": null,
+      "quick_filters": null,
+      "configuration": {
+       "type": "table"
+      },
+      "request_id": "S"
+     },
+     "viewQueryRows": 6,
+     "viewQueryError": null,
+     "dataSourceRows": 6,
+     "dataSourceError": null,
+     "sameFirstRows": 6,
+     "sameSet": true,
+     "firstRowShape": {
+      "object": "page",
+      "id": "S",
+      "created_time": "S",
+      "last_edited_time": "S",
+      "created_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "last_edited_by": {
+       "object": "user",
+       "id": "S"
+      },
+      "cover": null,
+      "icon": null,
+      "parent": {
+       "type": "data_source_id",
+       "data_source_id": "S",
+       "database_id": "S"
+      },
+      "in_trash": false,
+      "is_archived": false,
+      "is_locked": false,
+      "properties": {
+       "습관": {
+        "id": "S",
+        "type": "relation",
+        "relation": [
+         {
+          "id": "S"
+         }
+        ],
+        "has_more": false
+       },
+       "날짜": {
+        "id": "S",
+        "type": "date",
+        "date": {
+         "start": "S",
+         "end": null,
+         "time_zone": null
+        }
+       },
+       "이름": {
+        "id": "S",
+        "type": "title",
+        "title": [
+         {
+          "type": "text",
+          "text": {
+           "content": "S",
+           "link": null
+          },
+          "annotations": {
+           "bold": false,
+           "italic": false,
+           "strikethrough": false,
+           "underline": false,
+           "code": false,
+           "color": "S"
+          },
+          "plain_text": "S",
+          "href": null
+         }
+        ]
+       }
+      },
+      "url": "S",
+      "public_url": null
+     }
+    }
+   ]
+  }
+ ]
+}

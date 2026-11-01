@@ -46,6 +46,7 @@ import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.calendar.Agenda
 import com.ysdoing.notioncal.core.data.calendar.AgendaDay
 import kotlinx.coroutines.flow.StateFlow
+import com.ysdoing.notioncal.core.designsystem.WeatherBadge
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -80,6 +81,8 @@ fun AgendaView(
     textScale: Float = 1f,
     /** EX-02 공휴일(날짜 → 이름). */
     holidays: (from: LocalDate, to: LocalDate) -> StateFlow<Map<LocalDate, String>> = { _, _ -> MutableStateFlow(emptyMap()) },
+    /** WX-03 날짜 머리의 아이콘 + 최고·최저. */
+    weather: MonthWeather = MonthWeather(),
 ) {
     var anchor by remember { mutableStateOf(initialFocus) }
     LaunchedEffect(jump) { jump?.let { anchor = it.date } }
@@ -124,7 +127,7 @@ fun AgendaView(
     }
     LazyColumn(modifier.fillMaxSize(), state = listState) {
         items(days.orEmpty(), key = { it.date.toEpochDay() }) { day ->
-            AgendaDayRow(day, today, holidayNames[day.date], onDayClick, onEventClick, textScale)
+            AgendaDayRow(day, today, holidayNames[day.date], onDayClick, onEventClick, textScale, weather)
         }
     }
 }
@@ -137,6 +140,7 @@ private fun AgendaDayRow(
     onDayClick: (LocalDate) -> Unit,
     onEventClick: (CalendarEvent) -> Unit,
     textScale: Float,
+    weather: MonthWeather,
 ) {
     val isToday = day.date == today
     val accent = when {
@@ -161,6 +165,7 @@ private fun AgendaDayRow(
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                 color = accent,
             )
+            weather.days[day.date]?.let { WeatherBadge(it, weather.stale, vertical = true, iconSize = 14.dp, fontSize = 10.sp) }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (holiday != null) {

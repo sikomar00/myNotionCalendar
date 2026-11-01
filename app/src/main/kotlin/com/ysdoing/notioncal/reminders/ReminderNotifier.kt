@@ -81,7 +81,7 @@ class ReminderNotifier @Inject constructor(
 
     fun cancel(id: Int) = NotificationManagerCompat.from(context).cancel(id)
 
-    /** "오늘 10:30 · 10분 후" / "종일 · 내일" */
+    /** "오늘 10:30, 10분 후" / "내일 종일" */
     internal fun describe(reminder: Reminder): String {
         val today = clock.instant().atZone(APP_ZONE).toLocalDate()
         val start = reminder.startTime

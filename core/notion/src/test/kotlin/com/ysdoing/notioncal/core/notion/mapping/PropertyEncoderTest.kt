@@ -99,4 +99,14 @@ class PropertyEncoderTest {
         val json = PropertyEncoder(calendar.copy(donePropId = null, doneType = null), null, null).encode(PageWrite(done = true, title = "x"))
         assertTrue(json.keys == setOf("title"))
     }
+
+    /** HB-02: 기록을 만들 때 '습관' relation에 습관 page 하나를 건다. 연결 속성이 없는 매핑은 relation을 보내지 않는다. */
+    @Test
+    fun relationLinksOnePage() {
+        val log = PropertyMapping("title", "nAlJ", null, null, null, null, linkPropId = "sB%3Fg")
+        val json = PropertyEncoder(log, null, null).encode(PageWrite(title = "명상 2026-10-19", link = "habit-meditate"))
+        val relation = json["sB%3Fg"]!!.jsonObject["relation"]!!.jsonArray
+        assertEquals("habit-meditate", relation.single().jsonObject["id"]!!.jsonPrimitive.content)
+        assertEquals(setOf("title"), PropertyEncoder(calendar, null, null).encode(PageWrite(title = "x", link = "habit-meditate")).keys)
+    }
 }

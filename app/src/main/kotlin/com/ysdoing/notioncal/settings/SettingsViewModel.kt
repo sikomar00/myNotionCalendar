@@ -16,6 +16,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
+import com.ysdoing.notioncal.core.data.weather.Region
+import com.ysdoing.notioncal.core.data.weather.RegionCatalog
+import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
+import com.ysdoing.notioncal.core.data.weather.WeatherPlace
+import com.ysdoing.notioncal.core.data.weather.WeatherRepository
+import com.ysdoing.notioncal.core.data.weather.WeatherStatus
+import com.ysdoing.notioncal.core.sync.WeatherScheduler
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import com.ysdoing.notioncal.core.sync.HolidayScheduler
 import java.time.Clock
@@ -36,6 +44,9 @@ class SettingsViewModel @Inject constructor(
     private val holidayScheduler: HolidayScheduler,
     private val reminderScheduler: ReminderScheduler,
     private val clock: Clock,
+    private val weather: WeatherRepository,
+    private val regions: RegionCatalog,
+    private val weatherScheduler: WeatherScheduler,
 ) : ViewModel() {
     /** S25-11 정확한 알람을 쓸 수 있는지. 설정 화면이 다시 보일 때 [refreshExactAlarm]로 갱신한다. */
     private val _exactAlarm = MutableStateFlow(reminderScheduler.exactAllowed())
@@ -69,6 +80,49 @@ class SettingsViewModel @Inject constructor(
 
     val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** WX-01 받아온 시각(설정 화면 표시). */
+    val weatherStatus: StateFlow<WeatherStatus> = weather.observeStatus()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WeatherStatus(null, false, null))
+
+    fun setWeatherEnabled(on: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setWeatherEnabled(on)
+            if (on) weatherScheduler.requestNow()
+        }
+    }
+
+    fun setWeatherMode(mode: WeatherLocationMode) {
+        viewModelScope.launch { settingsRepository.setWeatherLocationMode(mode) }
+    }
+
+    suspend fun searchRegions(query: String): List<Region> = regions.search(query)
+
+    /** WX-02 지역을 바꾸면 이전 지역 예보를 지우고 바로 받는다. */
+    fun pickRegion(region: Region) {
+        viewModelScope.launch {
+            settingsRepository.setWeatherLocationMode(WeatherLocationMode.REGION)
+            changePlace(WeatherPlace(region.name, region.lat, region.lon))
+        }
+    }
+
+    /** WX-02 대략 위치: 가장 가까운 시·군·구 이름을 붙여 소수 둘째 자리로 저장한다. */
+    fun useLocation(lat: Double, lon: Double) {
+        viewModelScope.launch {
+            val near = regions.all().minByOrNull { (it.lat - lat) * (it.lat - lat) + (it.lon - lon) * (it.lon - lon) }
+            changePlace(WeatherPlace(near?.name?.let { "$it 근처" } ?: "현재 위치", lat, lon))
+        }
+    }
+
+    private suspend fun changePlace(place: WeatherPlace) {
+        if (settingsRepository.settings.first().weatherPlace?.rounded() != place.rounded()) weather.clear()
+        settingsRepository.setWeatherPlace(place)
+        weatherScheduler.requestNow()
+    }
+
+    fun setWeatherMonthCells(show: Boolean) {
+        viewModelScope.launch { settingsRepository.setWeatherMonthCellIcons(show) }
+    }
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())

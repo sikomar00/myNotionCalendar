@@ -94,7 +94,9 @@ class DiagnosticsRepositoryTest {
     @Test
     fun clearCacheKeepsPendingWritesAndRegistrations() = runTest {
         seed()
+        db.habitDao().insert(listOf(com.ysdoing.notioncal.core.data.db.HabitEntity("h1", "habits", "명상", null, 7, true, null, null)))
         repo.clearCache()
+        assertEquals(emptyList<Any>(), db.habitDao().forSource("habits")) // 🌱 습관도 캐시라 비운다
 
         assertNull(db.eventDao().get("p1"))
         assertEquals("치과 검진", db.eventDao().get("local-1")!!.title) // 아직 보내지 않은 일정은 남는다

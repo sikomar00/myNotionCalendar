@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.notion.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
 // Notion-Version 2026-03-11 응답 중 앱이 쓰는 필드만 정의한다. 나머지는 ignoreUnknownKeys로 무시한다.
@@ -24,11 +25,37 @@ data class DataSourceRefDto(
     val name: String = "",
 )
 
+/** DB의 부모(LD-01: 거래내역과 같은 페이지의 예산·카테고리 마스터를 찾는다). */
+@Serializable
+data class ParentRefDto(
+    val type: String = "",
+    @SerialName("page_id") val pageId: String? = null,
+)
+
 @Serializable
 data class DatabaseDto(
     val id: String,
     val title: List<RichTextDto> = emptyList(),
     @SerialName("data_sources") val dataSources: List<DataSourceRefDto> = emptyList(),
+    val parent: ParentRefDto? = null,
+)
+
+@Serializable
+data class ChildDatabaseDto(val title: String = "")
+
+/** 블록 하나. 앱은 자식 DB(child_database)만 쓴다. */
+@Serializable
+data class BlockDto(
+    val id: String,
+    val type: String = "",
+    @SerialName("child_database") val childDatabase: ChildDatabaseDto? = null,
+)
+
+@Serializable
+data class BlockListDto(
+    val results: List<BlockDto> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
 )
 
 @Serializable
@@ -57,6 +84,13 @@ data class StatusSchemaDto(
     val groups: List<StatusGroupDto> = emptyList(),
 )
 
+/** relation 속성의 대상 DB(HB-01: ✅ 습관 기록의 '습관' → 🌱 습관). */
+@Serializable
+data class RelationSchemaDto(
+    @SerialName("data_source_id") val dataSourceId: String? = null,
+    @SerialName("database_id") val databaseId: String? = null,
+)
+
 @Serializable
 data class PropertySchemaDto(
     val id: String,
@@ -65,6 +99,7 @@ data class PropertySchemaDto(
     val select: SelectSchemaDto? = null,
     val status: StatusSchemaDto? = null,
     @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
+    val relation: RelationSchemaDto? = null,
 )
 
 @Serializable
@@ -82,6 +117,14 @@ data class PageDto(
     @SerialName("last_edited_time") val lastEditedTime: String,
     @SerialName("in_trash") val inTrash: Boolean = false,
     val properties: JsonObject = JsonObject(emptyMap()),
+    /** 소속 data source(DD-01: 캐시에 없는 고정 일정을 받을 때 어느 DB 매핑을 쓸지). */
+    val parent: PageParentDto? = null,
+)
+
+@Serializable
+data class PageParentDto(
+    val type: String = "",
+    @SerialName("data_source_id") val dataSourceId: String? = null,
 )
 
 @Serializable
@@ -100,6 +143,7 @@ data class QueryResponseDto(
 @Serializable
 data class QueryRequestDto(
     val filter: JsonObject? = null,
+    val sorts: JsonArray? = null,
     @SerialName("start_cursor") val startCursor: String? = null,
     @SerialName("page_size") val pageSize: Int = 100,
 )

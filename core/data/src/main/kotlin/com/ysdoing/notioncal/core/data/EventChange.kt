@@ -71,7 +71,33 @@ data class ExtraProp(
     val options: List<ColorOption> = emptyList(),
 )
 
-/** 쓰기 1건에서 바뀐 필드만 담는다(PRD §8.5-6: 바뀐 속성만 전송). [props]는 EX-07 추가 속성(키는 속성 ID). */
+/**
+ * LD-07·09 거래 값(바뀐 것만). [flow]는 [com.ysdoing.notioncal.core.data.ledger.Flow] 이름(OUT·IN·TRANSFER).
+ * [category]가 빈 문자열이면 대분류를 비운다.
+ */
+@Serializable
+data class LedgerValue(
+    val amount: Long? = null,
+    val flow: String? = null,
+    val category: String? = null,
+    val time: String? = null,
+    val planned: Boolean? = null,
+    val manual: Boolean? = null,
+) {
+    fun mergedWith(later: LedgerValue) = LedgerValue(
+        amount = later.amount ?: amount,
+        flow = later.flow ?: flow,
+        category = later.category ?: category,
+        time = later.time ?: time,
+        planned = later.planned ?: planned,
+        manual = later.manual ?: manual,
+    )
+}
+
+/**
+ * 쓰기 1건에서 바뀐 필드만 담는다(PRD §8.5-6: 바뀐 속성만 전송). [props]는 EX-07 추가 속성(키는 속성 ID).
+ * [link]는 HB-02 ✅ 습관 기록을 만들 때 거는 🌱 습관 page ID다. 기록은 고치지 않으므로 충돌 판정(ChangeField)에는 넣지 않는다.
+ */
 @Serializable
 data class EventChange(
     val title: String? = null,
@@ -79,6 +105,9 @@ data class EventChange(
     val done: Boolean? = null,
     val select: SelectValue? = null,
     val props: Map<String, PropValue>? = null,
+    val link: String? = null,
+    /** LD-07·09 거래 값. 기록은 거래 쓰기만 하므로 충돌 판정(ChangeField)에는 넣지 않는다. */
+    val ledger: LedgerValue? = null,
 ) {
     fun mergedWith(later: EventChange) = EventChange(
         title = later.title ?: title,
@@ -86,9 +115,16 @@ data class EventChange(
         done = later.done ?: done,
         select = later.select ?: select,
         props = if (props == null && later.props == null) null else props.orEmpty() + later.props.orEmpty(),
+        link = later.link ?: link,
+        ledger = when {
+            ledger == null -> later.ledger
+            later.ledger == null -> ledger
+            else -> ledger.mergedWith(later.ledger)
+        },
     )
 
-    val isEmpty: Boolean get() = title == null && date == null && done == null && select == null && props.isNullOrEmpty()
+    val isEmpty: Boolean
+        get() = title == null && date == null && done == null && select == null && props.isNullOrEmpty() && link == null && ledger == null
 }
 
 /** 색 기준 select 옵션(data_sources.colorOptions JSON). */
@@ -113,6 +149,15 @@ data class EventSnapshot(
     val url: String,
     val lastEditedTime: Long,
     val extraValues: String? = null,
+    val linkPageId: String? = null,
+    val createdTime: Long = 0,
+    val amount: Long? = null,
+    val flow: String? = null,
+    val category: String? = null,
+    val txTime: String? = null,
+    val payment: String? = null,
+    val planned: Boolean = false,
+    val manual: Boolean = false,
 )
 
 /** outbox JSON 직렬화. 모르는 키는 무시해 이후 필드 추가에도 이전 행을 읽을 수 있게 한다. */
@@ -123,7 +168,8 @@ val OutboxJson: Json = Json {
 
 fun EventEntity.snapshot() = EventSnapshot(
     pageId, dataSourceId, title, startDate.toString(), endDate?.toString(), startTime, endTime, isAllDay, done,
-    colorKey, colorOptionId, sortKey, url, lastEditedTime, extraValues,
+    colorKey, colorOptionId, sortKey, url, lastEditedTime, extraValues, linkPageId,
+    createdTime, amount, flow, category, txTime, payment, planned, manual,
 )
 
 fun EventSnapshot.toEntity() = EventEntity(
@@ -142,6 +188,15 @@ fun EventSnapshot.toEntity() = EventEntity(
     lastEditedTime = lastEditedTime,
     colorOptionId = colorOptionId,
     extraValues = extraValues,
+    linkPageId = linkPageId,
+    createdTime = createdTime,
+    amount = amount,
+    flow = flow,
+    category = category,
+    txTime = txTime,
+    payment = payment,
+    planned = planned,
+    manual = manual,
 )
 
 fun EventEntity.dateValue() = DateValue(startDate.toString(), endDate?.toString(), startTime, endTime)
@@ -177,6 +232,17 @@ fun EventEntity.applying(change: EventChange, colorOptions: List<ColorOption>): 
         next = next.copy(colorOptionId = s.optionId, colorKey = option?.color?.takeIf { it != "default" })
     }
     change.props?.let { props -> next = next.copy(extraValues = encodeExtraValues(parseExtraValues(next.extraValues) + props)) }
+    change.link?.let { next = next.copy(linkPageId = it) }
+    change.ledger?.let { tx ->
+        next = next.copy(
+            amount = tx.amount ?: next.amount,
+            flow = tx.flow ?: next.flow,
+            category = tx.category?.let { c -> c.ifBlank { null } } ?: next.category.takeIf { tx.category == null },
+            txTime = tx.time?.ifBlank { null } ?: next.txTime.takeIf { tx.time == null },
+            planned = tx.planned ?: next.planned,
+            manual = tx.manual ?: next.manual,
+        )
+    }
     return next
 }
 

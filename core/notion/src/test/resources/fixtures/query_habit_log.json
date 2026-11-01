@@ -1,0 +1,33 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "log-page-1",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:10:00.000Z",
+      "in_trash": false,
+      "url": "https://www.notion.so/log-page-1",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "명상 2026-10-19" }] },
+        "날짜": { "id": "nAlJ", "type": "date", "date": { "start": "2026-10-19", "end": null, "time_zone": null } },
+        "습관": { "id": "sB%3Fg", "type": "relation", "relation": [{ "id": "habit-meditate" }], "has_more": false }
+      }
+    },
+    {
+      "object": "page",
+      "id": "log-page-2",
+      "created_time": "2026-10-19T00:00:00.000Z",
+      "last_edited_time": "2026-10-19T00:10:00.000Z",
+      "in_trash": false,
+      "url": "https://www.notion.so/log-page-2",
+      "properties": {
+        "이름": { "id": "title", "type": "title", "title": [{ "type": "text", "plain_text": "연결 없는 기록" }] },
+        "날짜": { "id": "nAlJ", "type": "date", "date": { "start": "2026-10-18", "end": null, "time_zone": null } },
+        "습관": { "id": "sB%3Fg", "type": "relation", "relation": [], "has_more": false }
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}

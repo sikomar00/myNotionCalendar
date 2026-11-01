@@ -21,7 +21,7 @@
     <string name="month_onboarding_title">노션 DB를 연결하세요</string>
     <string name="month_onboarding_body">설정에서 내부 연결 토큰을 입력하고 일정 DB 링크를 등록하면 이 달력에 표시됩니다.</string>
     <string name="month_pending_writes">전송 대기 %1$d건</string>
-    <string name="month_write_issues">노션 반영 실패 %1$d건 · 충돌 %2$d건</string>
+    <string name="month_write_issues">노션 반영 실패 %1$d건, 충돌 %2$d건</string>
     <string name="month_write_issues_show">내용 보기</string>
     <string name="month_write_issues_title">노션 반영 결과</string>
     <string name="month_write_issues_ack">모두 확인</string>
@@ -69,4 +69,6 @@
     <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었어요. 동기화는 그대로 됩니다.</string>
     <string name="a11y_done">완료됨</string>
     <string name="month_day_holiday_a11y">%1$d월 %2$d일, %3$s, 일정 %4$d개</string>
+    <string name="month_issue_untitled">(제목 없음)</string>
+    <string name="month_weather_credit">날씨: Open-Meteo</string>
 </resources>

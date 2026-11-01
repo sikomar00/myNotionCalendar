@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LD-03 가계부 달력 위젯: 기본 4×4(6주 그리드), 최소 4×2(이번 주 한 줄). 설정은 월 위젯과 같은 화면(테마·글자·금액 숨김 LD-06).
+  updatePeriodMillis=0: 데이터 변경·자정 알람이 갱신을 요청한다.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.ysdoing.notioncal.widget.WidgetConfigActivity"
+    android:description="@string/ledger_widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
+    android:previewLayout="@layout/widget_preview_ledger"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="4"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable|configuration_optional" />

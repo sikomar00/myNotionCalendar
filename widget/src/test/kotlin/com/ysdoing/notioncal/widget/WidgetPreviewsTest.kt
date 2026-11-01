@@ -52,4 +52,14 @@ class WidgetPreviewsTest {
         onNode(hasTextEqualTo("팀 회의")).assertExists()
         assertTrue(WidgetPreviews.splitState(today).agenda.days.flatMap { it.items }.all { it.first.pageId.startsWith("preview-") })
     }
+
+    @Test
+    fun habitPreviewUsesSampleHabits() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        val state = WidgetPreviews.habitState(today)
+        assertTrue(state.board.habits.all { it.habit.pageId.startsWith("preview-") })
+        setContext(context)
+        setAppWidgetSize(WidgetPreviews.HABIT_SIZE)
+        provideComposable { HabitWidgetContent(state, systemFontScale = 1f) }
+        onAllNodes(hasTestTag("habitRow")).assertCountEquals(3)
+    }
 }

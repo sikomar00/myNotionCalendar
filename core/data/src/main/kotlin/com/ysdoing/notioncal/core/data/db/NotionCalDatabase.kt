@@ -20,6 +20,15 @@ import java.time.LocalDate
  * - 6: holidays 추가 (EX-02, 테이블 추가만이라 AutoMigration)
  * - 7: events.titleHasMention (제목 언급 편집 경고, AutoMigration)
  * - 8: data_sources.emphasisPropId·emphasisOptionIds (EX-11 우선순위 강조, AutoMigration)
+ * - 9: 해빗 트래커(HB-01·02, WG-11). data_sources.kind(기본 CALENDAR)·linkPropId·linkDataSourceId·habitPropIds,
+ *      datePropId nullable(🌱 습관은 날짜 없음, AutoMigration이 표를 다시 만든다), events.linkPageId + 인덱스,
+ *      habits 추가, widget_configs.selectedTab(기본 CALENDAR)
+ * - 10: 가계부(LD-01~10, WG-11 💰). data_sources.rolePropIds·spendNegative(기본 1)·budgetGroup(기본 전체),
+ *      events.createdTime·amount·flow·category·txTime·payment·planned·manual, widget_configs.hideAmounts,
+ *      budgets·category_groups(캐시)·ledger_dup_keeps(앱 상태) 추가
+ * - 11: 디데이·날씨(DD-01~05, WX-01~05). dday_pins(앱 상태)·weather_days·weather_hours(캐시) 추가,
+ *      widget_configs.ddayPageId·showWeather(기본 0)
+ * - 12: 노션 보기 위젯(VW-01). view_snapshots(등록한 보기+설정)·view_rows(행 스냅샷, 캐시) 추가, AutoMigration
  */
 @Database(
     entities = [
@@ -30,10 +39,19 @@ import java.time.LocalDate
         OutboxEntity::class,
         ConflictEntity::class,
         HolidayEntity::class,
+        HabitEntity::class,
+        BudgetEntity::class,
+        CategoryGroupEntity::class,
+        LedgerDupKeepEntity::class,
+        DdayPinEntity::class,
+        WeatherDayEntity::class,
+        WeatherHourEntity::class,
+        ViewSnapshotEntity::class,
+        ViewRowEntity::class,
     ],
-    version = 8,
+    version = 12,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {
@@ -44,6 +62,11 @@ abstract class NotionCalDatabase : RoomDatabase() {
     abstract fun outboxDao(): OutboxDao
     abstract fun conflictDao(): ConflictDao
     abstract fun holidayDao(): HolidayDao
+    abstract fun habitDao(): HabitDao
+    abstract fun ledgerDao(): LedgerDao
+    abstract fun ddayDao(): DdayDao
+    abstract fun weatherDao(): WeatherDao
+    abstract fun viewDao(): ViewDao
 
     companion object {
         const val NAME = "notioncal.db"
