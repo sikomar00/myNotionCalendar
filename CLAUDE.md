@@ -8,13 +8,14 @@
 - Phase 종료 시 ./gradlew test lint 통과, 실기기 설치, adb 스크린샷으로 화면 확인. 확인 못 한 항목은 '미검증'으로 보고한다.
 
 # 개발 환경 (Windows 11)
-- PRD §4는 맥북 기준이지만 실제 개발은 Windows PC에서 한다. 셸은 PowerShell, Bash(Git Bash) 둘 다 있다.
+- 실제 개발은 Windows PC에서 한다(PRD §3 대상 환경. v1 PRD §4의 맥북 기준은 `docs/archive/`에 보관). 셸은 PowerShell, Bash(Git Bash) 둘 다 있다.
 - JDK: Android Studio 내장 JBR (`C:\Program Files\Android\Android Studio\jbr`). PATH에 없으므로 빌드 전 `JAVA_HOME`을 이 경로로 지정한다.
 - SDK: `%LOCALAPPDATA%\Android\Sdk` (local.properties의 sdk.dir). adb: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
 - 빌드: `gradlew.bat test lint assembleDebug`. 스크린샷: `adb exec-out screencap -p > docs/shots/<이름>.png`.
 - StrictMode 확인(PF-03): `adb logcat -d -s NotionCalStrictMode:W` 결과가 0줄이어야 한다. One UI 내부 위반(Typeface.setFlipFonts, IdsController, InputRune, 권한 창 등 startActivity 때 시스템 서버 ASKS)은 D 레벨 'OEM 위반 무시'로만 남는다. 새 OEM 예외는 근거 스택을 확인한 뒤에만 `StrictModeSetup.oemFrames`에 추가한다.
 
 # 모듈 규칙 (PRD §7)
+- v2 목표 모듈 구조는 docs/PRD.md §7.1이다. Phase 6에서 이름을 바꾸기 전까지는 아래 현행 규칙을 따른다(`:widget`의 `:core:notion`·`:core:sync` 의존 금지는 v2에서도 유지).
 - `:app` → `:feature:*`, `:widget`, `:core:sync`, `:core:data`, `:core:designsystem`
 - `:core:sync` → `:core:notion`, `:core:data`
 - `:widget` → `:core:data`, `:core:designsystem`만. `:core:notion` 의존 금지(위젯 네트워크 호출을 빌드 단계에서 차단).
