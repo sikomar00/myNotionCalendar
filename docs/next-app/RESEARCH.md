@@ -205,7 +205,7 @@ interface PropertyHandler<V : PropValue> {
 
 ## 6. 현재 앱에서 가져올 것과 이번에 배운 함정
 
-현재 앱의 상태(2026-10-30, `ccr-6810527c-es92oi` 브랜치 확인): Phase 6~8이 구현돼 있다. DB 버전 11, 모듈 `:feature:habit·ledger·dday`와 `:core:weather`, 위젯 8종 안팎(월간·달력+일정·아젠다·습관·통합 탭·가계부·디데이 3종). 아래 함정 중 위젯 종류 찾기는 이미 `widget/.../WidgetKinds.kt`(`AppWidgetManager`로 위젯 종류를 찾아 다시 그림), 위젯 수신자 모음은 `WidgetReceivers.kt`, 갱신 목록은 `AllWidgets.kt`에 반영돼 있다. **복사할 때는 이 반영본을 가져오고, 낡은 PRD 초기 문장이 아니라 코드를 기준으로 삼는다.** 습관·가계부의 도메인 로직(주 목표, 예산, 중복 정리)은 이 새 앱의 "위젯 동작·계산 속성"으로 일반화할 수 있는지 먼저 검토할 대상이다(PROMPTS §D-4).
+현재 앱의 상태(2026-10-30, GitHub에 올라 있던 `ccr-6810527c-es92oi` 브랜치 확인. **2026-11-02 정정:** 이는 Phase 8 시점이다. 로컬에는 Phase 9-A·9-B(노션 보기 읽기 층, DB v12)와 9-C 진행분(DB v13, 미커밋)이 더 있다. 9-A 실측은 `docs/PRD-v2.md` §8.5): Phase 6~8이 구현돼 있다. DB 버전 11, 모듈 `:feature:habit·ledger·dday`와 `:core:weather`, 위젯 8종 안팎(월간·달력+일정·아젠다·습관·통합 탭·가계부·디데이 3종). 아래 함정 중 위젯 종류 찾기는 이미 `widget/.../WidgetKinds.kt`(`AppWidgetManager`로 위젯 종류를 찾아 다시 그림), 위젯 수신자 모음은 `WidgetReceivers.kt`, 갱신 목록은 `AllWidgets.kt`에 반영돼 있다. **복사할 때는 이 반영본을 가져오고, 낡은 PRD 초기 문장이 아니라 코드를 기준으로 삼는다.** 습관·가계부의 도메인 로직(주 목표, 예산, 중복 정리)은 이 새 앱의 "위젯 동작·계산 속성"으로 일반화할 수 있는지 먼저 검토할 대상이다(PROMPTS §D-4).
 
 가져올 자산(경로는 `myNotionCalendar` 기준)
 - 노션 클라이언트·재시도·속도 제한: `core/notion/.../NotionClient.kt`, `RetryAndRateLimit` 테스트
@@ -234,9 +234,9 @@ interface PropertyHandler<V : PropValue> {
 
 | # | 확인할 것 | 방법 |
 | --- | --- | --- |
-| 1 | 보기 유형별 `configuration` JSON의 실제 키(table·board·calendar·timeline·list·gallery·chart) | 사용자의 실제 DB에서 `GET /v1/views`로 받아 **개인정보를 지운 합성 픽스처**로 저장 |
+| 1 | 보기 유형별 `configuration` JSON의 실제 키(table·board·calendar·timeline·list·gallery·chart) — **9-A 부분 해소(2026-10-21)**: `configuration.properties[]`(`property_id`·`property_name`·`visible`·`width`)만 실측했고 유형별 나머지 키는 미확인(`docs/PRD-v2.md` §8.5) | 사용자의 실제 DB에서 `GET /v1/views`로 받아 **개인정보를 지운 합성 픽스처**로 저장 |
 | 2 | 장소(place) 속성의 읽기·쓰기 JSON | 실제 값이 있는 DB에서 받아 확인, 없으면 읽기 전용 |
-| 3 | 보기 질의의 이어받기·필터 적용·정렬 보장 여부, 빠른 필터 반영 여부 | 실제 호출 + MockWebServer 픽스처 |
+| 3 | 보기 질의의 이어받기·필터 적용·정렬 보장 여부, 빠른 필터 반영 여부 — **9-A 부분 해소(2026-10-21)**: 보기 쿼리는 id만 주고, `quick_filters`는 `filter`에 들어 있지 않아 합쳐야 한다. 데이터 소스 쿼리(`filter`+`quick_filters`+`sorts`)가 보기 쿼리와 10개 중 9개 일치했고 board 1건은 불일치. 이어받기는 미확인(§8.5) | 실제 호출 + MockWebServer 픽스처 |
 | 4 | 속성 항목 응답의 다음 커서 필드 이름 | 실제 응답 |
 | 5 | 선택 쓰기에서 없는 이름이 새 옵션을 만드는지 | 테스트 DB에서 확인 |
 | 6 | 사용자 정보 읽기 권한이 없을 때 사람 속성 응답 | 권한 끈 연결로 비교 |
