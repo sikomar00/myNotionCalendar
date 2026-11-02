@@ -1,5 +1,7 @@
 package com.ysdoing.notioncal.widget
 
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewChoice
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -28,6 +30,7 @@ import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -242,5 +245,122 @@ class ViewWidgetTest {
         assertEquals(4, tableColumnCount(320.dp, 5)) // (320-20)/72 = 4
         assertEquals(2, tableColumnCount(320.dp, 2)) // 열이 적으면 열 수까지만
         assertEquals(1, tableColumnCount(320.dp, 0)) // 보이는 열이 없어도 깨지지 않는다
+    }
+
+    // --- VW-08 체크·상태 칸은 눌러서 바꾼다(탭은 보기 전용 쓰기 큐에만 쌓고 노션은 부르지 않는다).
+
+    private val doneColumn = ViewColumn("dn", "완료", "checkbox")
+    private val statusColumn = ViewColumn("st", "상태", "status", listOf(ViewChoice("o1", "할 일"), ViewChoice("o2", "진행 중")))
+
+    private fun todoBoard() = ViewBoard(
+        "v1", "투두", "table", listOf("이름", "완료", "상태"),
+        listOf(ViewRow("p1", "https://notion.so/p1", listOf("장보기", "", "할 일")), ViewRow("p2", "https://notion.so/p2", listOf("보고서", "✓", "진행 중"))),
+        now, null, listOf(ViewColumn("t", "이름", "title"), doneColumn, statusColumn),
+    )
+
+    private fun tap(propId: String, type: String, pageId: String) = actionParametersOf(
+        ViewCellAction.ViewKey to "v1", ViewCellAction.PageKey to pageId, ViewCellAction.PropKey to propId, ViewCellAction.TypeKey to type,
+    )
+
+    @Test
+    fun checkAndStatusCellsAreTapTargetsInTheTable() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(4) // 두 행 x (체크 + 상태)
+        listOf("☐", "☑", "할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasContentDescriptionEqualTo("장보기, 완료 체크 안 됨, 눌러서 체크"))
+            .assert(hasRunCallbackClickAction<ViewCellAction>(tap("dn", "checkbox", "p1")))
+        onNode(hasContentDescriptionEqualTo("보고서, 완료 체크됨, 눌러서 해제"))
+            .assert(hasRunCallbackClickAction<ViewCellAction>(tap("dn", "checkbox", "p2")))
+        onNode(hasContentDescriptionEqualTo("보고서, 상태 진행 중, 눌러서 다음 값으로"))
+            .assert(hasRunCallbackClickAction<ViewCellAction>(tap("st", "status", "p2")))
+        // 행을 누르면 노션 페이지를 여는 것은 그대로다.
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(2)
+        onAllNodes(hasTestTag("viewRow")).assertAll(hasClickAction())
+    }
+
+    @Test
+    fun narrowListPutsTheCheckboxFirstAndTheStatusOnTheSecondLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(4) // 체크박스 + 둘째 줄(상태)
+        listOf("장보기", "보고서", "☐", "☑", "할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTextEqualTo("완료")).assertDoesNotExist() // 열 이름은 표에서만
+    }
+
+    @Test
+    fun aBoardWithoutWriteInfoHasNoTapTargets() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(0)
+    }
+
+    @Test
+    fun numbersAndTitlesAreNotTapTargets() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val withNumber = ViewBoard(
+            "v1", "책", "table", listOf("이름", "쪽수"), listOf(ViewRow("p1", "u", listOf("데미안", "12"))), now, null,
+            listOf(ViewColumn("t", "이름", "title"), ViewColumn("pg", "쪽수", "number")),
+        )
+        provideComposable { ViewWidgetContent(state(withNumber), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(0) // 숫자는 M5, 제목은 눌러서 바꾸지 않는다
+    }
+
+    @Test
+    fun headerHasAnAddButtonOnlyWhenTheViewCanCreate() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
+        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1")))
+        onNode(hasContentDescriptionEqualTo("투두, 새 항목 추가")).assertExists()
+        onNode(hasTestTag("viewHeader")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf())) // 이름을 누르면 새로고침은 그대로
+    }
+
+    @Test
+    fun noAddButtonWithoutWriteInfo() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        onNode(hasTestTag("viewAdd")).assertDoesNotExist()
+    }
+
+    @Test
+    fun addIntentOpensTheSheetForThatViewOnly() {
+        val intent = viewAddIntent(context, "v1")
+        assertEquals(com.ysdoing.notioncal.core.data.AppIntents.ACTION_VIEW_ADD, intent.action)
+        assertEquals("v1", intent.getStringExtra(com.ysdoing.notioncal.core.data.AppIntents.EXTRA_VIEW_ID))
+        assertEquals(context.packageName, intent.`package`) // 같은 앱의 시트만 연다
+        assertNotEquals(viewAddIntent(context, "v2").data, intent.data) // 보기마다 PendingIntent가 따로다
+    }
+
+    @Test
+    fun listWithOnlyTitleAndCheckboxDrawsTheCheckboxOnce() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        val titleAndCheck = ViewBoard(
+            "v1", "투두", "list", listOf("이름", "완료"),
+            listOf(ViewRow("p1", "u1", listOf("장보기", "")), ViewRow("p2", "u2", listOf("보고서", "✓"))), now, null,
+            listOf(ViewColumn("t", "이름", "title"), doneColumn),
+        )
+        provideComposable { ViewWidgetContent(state(titleAndCheck), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(2) // 행마다 하나(둘째 줄에 같은 칸이 또 나오지 않는다)
+        onAllNodes(hasTextEqualTo("☐")).assertCountEquals(1)
+        onAllNodes(hasTextEqualTo("☑")).assertCountEquals(1)
+    }
+
+    @Test
+    fun singleOptionStatusIsNotATapTarget() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val one = ViewBoard(
+            "v1", "투두", "table", listOf("이름", "상태"), listOf(ViewRow("p1", "u1", listOf("장보기", "할 일"))), now, null,
+            listOf(ViewColumn("t", "이름", "title"), ViewColumn("st", "상태", "status", listOf(ViewChoice("o1", "할 일")))),
+        )
+        provideComposable { ViewWidgetContent(state(one), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(0)
     }
 }

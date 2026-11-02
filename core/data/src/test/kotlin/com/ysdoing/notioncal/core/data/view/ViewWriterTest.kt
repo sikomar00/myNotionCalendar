@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 
 /** M3 보기 행 쓰기: 위젯에 바로 반영하고(낙관), 보내지 않은 바꿈 큐에 같은 속성은 마지막 값 하나만 남긴다. */
@@ -34,6 +35,8 @@ class ViewWriterTest {
     private val sep = VIEW_CELL_SEPARATOR
 
     private val columns = listOf(
+        ViewColumn("t", "Name", "title"),
+        ViewColumn("wh", "When", "date"),
         ViewColumn("dn", "Done", "checkbox"),
         ViewColumn(
             "st", "Status", "status",
@@ -167,5 +170,50 @@ class ViewWriterTest {
         db.viewDao().replace(snapshot.copy(name = "바뀜"), listOf(row), fetchedAt = clock.millis() + 1)
         assertEquals("바뀜", db.viewDao().snapshot("v1")!!.name)
         assertEquals(clock.millis(), db.viewDao().snapshot("v1")!!.lastWriteAt) // 읽기가 바꾼 시각을 지우지 않는다
+    }
+
+    // --- 새 항목 만들기
+
+    @Test
+    fun createQueuesANewItemWithTheTitleAndTheDateColumn() = runTest {
+        assertTrue(writer().create("v1", "  장보기  ", LocalDate.of(2026, 11, 4)))
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("create", "t", "ds"), listOf(write.propType, write.propId, write.dataSourceId))
+        assertTrue(write.pageId.startsWith("new-"))
+        assertEquals(ViewCreate("장보기", "2026-11-04", "wh"), ViewJson.parseCreate(write.value)) // 제목은 앞뒤 공백을 뺀다
+        assertEquals(1, requests)
+        assertEquals(row, db.viewDao().row("v1", "p1")) // 로컬 행은 건드리지 않는다(노션이 만든 뒤 보기를 다시 받아 채운다)
+    }
+
+    @Test
+    fun createWithoutADateLeavesTheDateOut() = runTest {
+        writer().create("v1", "메모", null)
+        assertEquals(ViewCreate("메모", null, null), ViewJson.parseCreate(db.viewDao().firstWrite()!!.value))
+    }
+
+    @Test
+    fun createRefusesABlankTitleOrAViewWithoutTitleInfo() = runTest {
+        assertFalse(writer().create("v1", "   ", null))
+        db.viewDao().upsert(ViewSnapshotEntity("v2", "ds", "정보 없음", "table"))
+        assertFalse(writer().create("v2", "제목", null)) // 아직 쓰기 정보를 받지 못한 보기
+        assertFalse(writer().create("none", "제목", null))
+        assertNull(db.viewDao().firstWrite())
+        assertEquals(0, requests)
+    }
+
+    @Test
+    fun twoCreatesAreBothKept() = runTest {
+        writer().create("v1", "하나", null)
+        writer().create("v1", "둘", null)
+        assertEquals(2, db.viewDao().pendingWriteCount()) // 같은 속성 바꿈과 달리 합치지 않는다
+        assertEquals(clock.millis(), db.viewDao().snapshot("v1")!!.lastWriteAt)
+    }
+
+    @Test
+    fun createDoesNotQueueForAViewThatWasJustRemoved() = runTest {
+        db.viewDao().remove("v1")
+        assertFalse(writer().create("v1", "장보기", null))
+        assertEquals(0, db.viewDao().pendingWriteCount()) // 등록을 지운 보기의 바꿈은 노션에 가지 않는다
+        assertEquals(0, requests)
     }
 }

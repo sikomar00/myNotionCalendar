@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewWriter
+import java.time.LocalDate
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionJson
@@ -41,6 +42,7 @@ class ViewWriteProcessorTest {
     private lateinit var db: NotionCalDatabase
     private val clock = Clock.fixed(Instant.parse("2026-11-03T00:00:00Z"), ZoneOffset.UTC)
     private val sent = mutableListOf<Pair<String, JsonObject>>()
+    private val created = mutableListOf<Pair<String, JsonObject>>()
     private val failures = ArrayDeque<NotionError?>()
     private val viewRequests = mutableListOf<String>()
     private var widgetUpdates = 0
@@ -50,6 +52,7 @@ class ViewWriteProcessorTest {
         """{"id":"ds","properties":{
             "Name":{"id":"title","name":"Name","type":"title"},
             "Done":{"id":"dn","name":"Done","type":"checkbox"},
+            "When":{"id":"wh","name":"When","type":"date"},
             "Status":{"id":"st","name":"Status","type":"status"}}}""",
     )
 
@@ -60,7 +63,11 @@ class ViewWriteProcessorTest {
     }
 
     private val notionWriter = object : NotionWriter {
-        override suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto = error("보기 쓰기는 만들지 않는다")
+        override suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto {
+            failures.removeFirstOrNull()?.let { throw NotionException(it) }
+            created += dataSourceId to properties
+            return PageDto(id = "new-page", lastEditedTime = "2026-11-03T00:00:00.000Z")
+        }
         override suspend fun updatePage(pageId: String, properties: JsonObject): PageDto {
             failures.removeFirstOrNull()?.let { throw NotionException(it) }
             sent += pageId to properties
@@ -83,6 +90,8 @@ class ViewWriteProcessorTest {
         db = Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext<Context>(), NotionCalDatabase::class.java)
             .allowMainThreadQueries().build()
         val columns = listOf(
+            ViewColumn("title", "Name", "title"),
+            ViewColumn("wh", "When", "date"),
             ViewColumn("dn", "Done", "checkbox"),
             ViewColumn("st", "Status", "status", listOf(ViewChoice("o1", "할 일"), ViewChoice("o2", "진행 중"))),
         )
@@ -101,7 +110,7 @@ class ViewWriteProcessorTest {
 
     private fun processor(): ViewWriteProcessor {
         val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock)
-        return ViewWriteProcessor(notionReader, notionWriter, db.viewDao(), views, { widgetUpdates++ }, Dispatchers.Unconfined)
+        return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
     }
 
     private fun writer() = ViewWriter(db.viewDao(), { }, { }, clock)
@@ -210,5 +219,78 @@ class ViewWriteProcessorTest {
         assertEquals(NotionError.Network, outcome.retryError)
         assertEquals(1, outcome.remaining)
         assertEquals(0, viewRequests.size) // 연결이 안 되는 지금 보기를 다시 받지 않는다(다음 동기화가 한다)
+    }
+
+    // --- 새 항목 만들기
+
+    @Test
+    fun createsTheItemUsingCurrentNamesAndThenReadsTheViewToShowIt() = runTest {
+        writer().create("v1", "장보기", LocalDate.of(2026, 11, 4))
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0, 0), listOf(outcome.sent, outcome.dropped, outcome.remaining))
+        assertEquals(
+            listOf("ds" to """{"Name":{"title":[{"text":{"content":"장보기"}}]},"When":{"date":{"start":"2026-11-04"}}}"""),
+            created.map { it.first to it.second.toString() },
+        )
+        assertEquals(listOf("v1"), viewRequests) // 새 행이 위젯에 나타나게 보기를 바로 다시 받는다
+        assertEquals(0, sent.size) // 속성 바꿈(PATCH)이 아니다
+    }
+
+    @Test
+    fun theItemIsStillCreatedWhenTheDatePropertyWasDeleted() = runTest {
+        writer().create("v1", "장보기", LocalDate.of(2026, 11, 4))
+        schema = NotionJson.decodeFromString(DataSourceDto.serializer(), """{"id":"ds","properties":{"Name":{"id":"title","name":"Name","type":"title"}}}""")
+        processor().process()
+        assertEquals("""{"Name":{"title":[{"text":{"content":"장보기"}}]}}""", created.single().second.toString()) // 제목이 더 중요하다
+    }
+
+    @Test
+    fun aDeletedTitlePropertyDropsTheCreateInsteadOfSendingAnIdKey() = runTest {
+        writer().create("v1", "장보기", null)
+        schema = NotionJson.decodeFromString(DataSourceDto.serializer(), """{"id":"ds","properties":{}}""")
+        val outcome = processor().process()
+        assertEquals(1, outcome.dropped)
+        assertEquals(0, created.size)
+    }
+
+    @Test
+    fun aFailedCreateIsRetriedAndKeptInOrder() = runTest {
+        writer().create("v1", "하나", null)
+        failures += NotionError.Server(503)
+        val outcome = processor().process()
+        assertEquals(NotionError.Server(503), outcome.retryError)
+        assertEquals(1, outcome.remaining)
+        assertEquals(0, created.size)
+        assertEquals(1, processor().process().sent) // 다음 실행에서 만든다
+        assertEquals(1, created.size)
+    }
+
+    @Test
+    fun aDroppedCreateIsLeftAsAWriteFailureNotLostSilently() = runTest {
+        writer().create("v1", "장보기", null)
+        failures += NotionError.Validation("validation_error")
+        processor().process()
+        val issue = db.conflictDao().all().single()
+        assertEquals(listOf("장보기", "PAGE", "CREATE", OutboxProcessor.KIND_REJECTED), listOf(issue.title, issue.field, issue.localValue, issue.kind))
+    }
+
+    @Test
+    fun aDroppedChangeIsRecordedWithTheRowTitle() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        failures += NotionError.Validation("validation_error")
+        processor().process()
+        val issue = db.conflictDao().all().single()
+        assertEquals(listOf("첫째", "UPDATE", OutboxProcessor.KIND_REJECTED), listOf(issue.title, issue.localValue, issue.kind))
+    }
+
+    @Test
+    fun aCreateIsNeverDroppedForTooManyRetries() = runTest {
+        writer().create("v1", "장보기", null)
+        val id = db.viewDao().firstWrite()!!.id
+        repeat(20) { db.viewDao().markWriteFailed(id, "Network") }
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0), listOf(outcome.sent, outcome.dropped)) // 사용자가 쓴 글이라 보낼 때까지 다시 시도한다
+        assertEquals(1, created.size)
+        assertEquals(0, db.conflictDao().all().size)
     }
 }

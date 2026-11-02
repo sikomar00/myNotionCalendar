@@ -21,7 +21,19 @@ data class ViewBoard(
     val rows: List<ViewRow>,
     val syncedAt: Long,
     val lastError: String?,
+    /** 보이는 속성의 정보(종류·선택지, 제목·날짜 열 포함). 비어 있으면 아직 받지 못해 바꾸거나 만들 수 없다. */
+    val columnInfo: List<ViewColumn> = emptyList(),
 ) {
+    /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
+    val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
+
+    /** 새 항목에 날짜를 넣을 열이 있다. */
+    val hasDateColumn: Boolean get() = columnInfo.any { it.type == "date" }
+
+    /** [index]번째 열이 위젯에서 눌러 바꿀 수 있는 속성이면 그 정보, 아니면 null. */
+    fun tappableAt(index: Int): ViewColumn? =
+        columns.getOrNull(index)?.let { name -> columnInfo.firstOrNull { it.name == name && it.tappable } }
+
     /** 노션에서 보기를 찾을 수 없다(지워졌거나 권한이 없음). 네트워크 실패 같은 일시 오류는 아니다. */
     val notFound: Boolean get() = lastError == VIEW_ERROR_NOT_FOUND
 }
@@ -46,6 +58,7 @@ class ViewRepository @Inject constructor(
                     rows = rows.map { r -> ViewRow(r.pageId, r.url, r.cells.split(VIEW_CELL_SEPARATOR)) },
                     syncedAt = it.syncedAt,
                     lastError = it.lastError,
+                    columnInfo = ViewJson.columns(it.columnInfo),
                 )
             }
         }

@@ -2,6 +2,14 @@
 <resources>
     <string name="qs_day_title">%1$d월 %2$d일 (%3$s)</string>
     <string name="qs_add_title">일정 추가</string>
+    <string name="view_add_title">새 항목</string>
+    <string name="view_add_no_date">날짜 없음</string>
+    <string name="view_add_today">오늘</string>
+    <string name="view_add_tomorrow">내일</string>
+    <string name="view_add_pick">날짜 선택</string>
+    <string name="view_add_ok">확인</string>
+    <string name="view_add_unavailable">이 보기에서는 새 항목을 만들 수 없습니다. 위젯을 새로고침한 뒤 다시 시도하세요</string>
+    <string name="view_add_failed">추가하지 못했습니다. 보기가 지워졌거나 아직 받지 못했습니다</string>
     <string name="qs_edit_title">일정 편집</string>
     <string name="qs_title_hint">제목</string>
     <string name="qs_add">추가</string>

@@ -18,7 +18,7 @@
     <string name="settings_add_database">DB 추가</string>
     <string name="settings_add_view">노션 보기 추가</string>
     <string name="add_view_title">노션 보기 추가</string>
-    <string name="add_view_limits">읽기 전용입니다. 위젯에서 노션으로 쓰지 않습니다. 행은 보기마다 50개까지 보여 주고, 갤러리 커버 이미지와 보드 열 배치는 지원하지 않습니다.</string>
+    <string name="add_view_limits">위젯에서 체크박스와 상태·선택 값은 눌러서 바꾸고, 머리의 + 로 새 항목을 만들 수 있습니다. 그 밖의 속성과 본문은 노션에서 고칩니다. 행은 보기마다 50개까지 보여 주고, 갤러리 커버 이미지와 보드 열 배치는 지원하지 않습니다.</string>
     <string name="add_view_link">DB 링크</string>
     <string name="add_view_load">보기 불러오기</string>
     <string name="add_view_loading">불러오는 중…</string>

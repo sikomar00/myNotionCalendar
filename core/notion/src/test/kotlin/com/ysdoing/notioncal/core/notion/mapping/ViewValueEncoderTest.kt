@@ -40,4 +40,20 @@ class ViewValueEncoderTest {
         assertNull(encodeViewValue("Note", "rich_text", JsonPrimitive("x")))
         assertNull(encodeViewValue("When", "date", JsonPrimitive("2026-11-03")))
     }
+
+    @Test
+    fun newItemHasATitleAndAnOptionalDate() {
+        assertEquals(
+            json("""{"Name":{"title":[{"text":{"content":"장보기"}}]},"When":{"date":{"start":"2026-11-04"}}}"""),
+            encodeViewCreate("Name", "장보기", "When", "2026-11-04"),
+        )
+        assertEquals(json("""{"Name":{"title":[{"text":{"content":"메모"}}]}}"""), encodeViewCreate("Name", "메모", null, null))
+        assertEquals(json("""{"Name":{"title":[{"text":{"content":"메모"}}]}}"""), encodeViewCreate("Name", "메모", "When", null)) // 날짜 값이 없으면 넣지 않는다
+    }
+
+    @Test
+    fun newItemTitleIsCappedAtNotionsLimit() {
+        val content = encodeViewCreate("Name", "가".repeat(5000), null, null).toString()
+        assertEquals(2000, content.count { it == '가' })
+    }
 }

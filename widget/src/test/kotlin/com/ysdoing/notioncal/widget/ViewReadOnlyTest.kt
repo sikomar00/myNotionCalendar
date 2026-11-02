@@ -5,14 +5,16 @@ import org.junit.Test
 import java.io.File
 
 /**
- * VW-07 노션 보기 기능은 읽기 전용이다. 보기 위젯·저장소·동기화·등록·API 읽기 코드가 노션에 쓰는 길(아웃박스·쓰기 API)을
- * 건드리지 않는지 소스에서 찾고, 한계 안내 문구가 설정 화면 문자열에 있는지 확인한다(VW-08 쓰기를 넣을 때 이 시험을 고친다).
+ * VW-07·08 보기 위젯은 노션 API를 직접 부르지 않는다. 쓰기는 ViewWriter가 보기 전용 큐(view_writes)에 쌓을 뿐이고 보내기는
+ * 동기화 쪽 처리기가 한다. 보기 위젯·저장소·동기화·등록·API 읽기 코드가 일정 아웃박스와 쓰기 API를 건드리지 않는지 소스에서 찾고,
+ * 한계 안내 문구가 설정 화면 문자열에 있는지 확인한다.
  */
 class ViewReadOnlyTest {
     private val forbidden = listOf("Outbox", "EventWriter", "createPage", "updatePage", "trashPage")
 
     private val viewSources = listOf(
         "src/main/kotlin/com/ysdoing/notioncal/widget/ViewWidget.kt",
+        "src/main/kotlin/com/ysdoing/notioncal/widget/ViewCellAction.kt",
         "../core/data/src/main/kotlin/com/ysdoing/notioncal/core/data/view/ViewRepository.kt",
         "../core/sync/src/main/kotlin/com/ysdoing/notioncal/core/sync/ViewSync.kt",
         "../core/sync/src/main/kotlin/com/ysdoing/notioncal/core/sync/ViewRegistration.kt",
@@ -36,7 +38,7 @@ class ViewReadOnlyTest {
         val strings = File("../app/src/main/res/values/strings.xml")
         assertTrue("앱 문자열을 찾지 못했습니다: $strings", strings.isFile)
         val limits = Regex("""<string name="add_view_limits">([^<]*)</string>""").find(strings.readText())?.groupValues?.get(1).orEmpty()
-        listOf("읽기 전용", "50개", "갤러리 커버", "보드 열 배치").forEach {
+        listOf("체크박스", "상태", "새 항목", "50개", "갤러리 커버", "보드 열 배치").forEach {
             assertTrue("한계 안내에 '$it'이(가) 없습니다: $limits", it in limits)
         }
     }

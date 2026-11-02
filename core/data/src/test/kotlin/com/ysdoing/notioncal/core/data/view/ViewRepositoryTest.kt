@@ -80,4 +80,29 @@ class ViewRepositoryTest {
         assertEquals(0, db.viewDao().rows("v1").size)
         assertEquals(1, widgetUpdates)
     }
+
+    @Test
+    fun boardKnowsWhichColumnsCanBeTapped() = runTest {
+        val sep = VIEW_CELL_SEPARATOR
+        val info = ViewJson.encodeColumns(
+            listOf(ViewColumn("t", "이름", "title"), ViewColumn("dn", "완료", "checkbox"), ViewColumn("pg", "쪽수", "number"), ViewColumn("st", "상태", "status", listOf(ViewChoice("a", "하나"), ViewChoice("b", "둘")))),
+        )
+        seed(
+            ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = listOf("이름", "완료", "쪽수", "상태", "메모").joinToString(sep), columnInfo = info),
+            listOf(ViewRowEntity("v1", 0, "p1", "u", "a${sep}${sep}1${sep}x${sep}m")),
+        )
+        val board = repo().observe("v1").first()!!
+        assertEquals(listOf(null, "checkbox", null, "status", null), (0..4).map { board.tappableAt(it)?.type }) // 제목·숫자·메모는 눌러 바꾸지 않는다
+        assertEquals("dn", board.tappableAt(1)!!.id)
+    }
+
+    @Test
+    fun boardKnowsWhetherItCanCreateAndHasADateColumn() = runTest {
+        val withTitle = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title"), ViewColumn("d", "날짜", "date")))
+        seed(ViewSnapshotEntity("v1", "ds", "a", "table", columns = "이름", columnInfo = withTitle), emptyList())
+        seed(ViewSnapshotEntity("v2", "ds", "b", "table", columns = "이름"), emptyList()) // 아직 쓰기 정보를 받지 못함
+        seed(ViewSnapshotEntity("v3", "ds", "c", "board", columns = "이름", columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title")))), emptyList())
+        assertEquals(listOf(true, false, true), listOf("v1", "v2", "v3").map { repo().observe(it).first()!!.canCreate })
+        assertEquals(listOf(true, false, false), listOf("v1", "v2", "v3").map { repo().observe(it).first()!!.hasDateColumn })
+    }
 }

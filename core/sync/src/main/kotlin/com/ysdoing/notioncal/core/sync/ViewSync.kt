@@ -98,7 +98,9 @@ class ViewSync @Inject constructor(
         val pages = reader.rows(registered.dataSourceId, view)
         val schema = schemaOrNull(registered.dataSourceId, schemas)
         val configured = view.configuration?.properties.orEmpty()
-        val columns = visibleColumns(configured.map { it.propertyName to it.visible }, pages.firstOrNull()?.titlePropertyName())
+        // 제목은 행이 없어도 알 수 있게 스키마에서 찾는다(빈 보기나 카드 제목을 열 목록에 넣지 않는 보드·갤러리도 새 항목을 만들 수 있다).
+        val titleName = pages.firstOrNull()?.titlePropertyName() ?: schema?.properties?.values?.firstOrNull { it.type == "title" }?.name
+        val columns = visibleColumns(configured.map { it.propertyName to it.visible }, titleName)
         val writable = schema?.let { writableColumns(columns, it) } ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns }
         val meta = registered.copy(
             name = view.name,
@@ -110,7 +112,7 @@ class ViewSync @Inject constructor(
         )
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { displayValue(page.properties[it] as? JsonObject ?: JsonObject(emptyMap())) }
-            val typed = writable.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
+            val typed = writable.filter { it.writable }.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
             ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed))
         }
         return meta to rows
@@ -121,14 +123,14 @@ class ViewSync @Inject constructor(
 }
 
 /**
- * 보이는 열 중 위젯에서 바로 바꿀 수 있는 속성(체크·선택·상태·숫자)의 쓰기 정보. 스키마에 없는 열(수식·롤업 등)은 빠진다.
- * 상태 선택지에는 그룹 이름(할 일·진행 중·완료)을 붙인다.
+ * 보이는 열 중 위젯에서 바꾸거나 새 항목을 만들 때 쓰는 속성(체크·선택·상태·숫자, 그리고 제목·날짜)의 정보.
+ * 스키마에 없는 열(수식·롤업 등)은 빠진다. 상태 선택지에는 그룹 이름(할 일·진행 중·완료)을 붙인다.
  */
 internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): List<ViewColumn> {
     val byName = schema.properties.values.associateBy { it.name }
     return columnNames.mapNotNull { name ->
         val property = byName[name] ?: return@mapNotNull null
-        if (property.type !in ViewColumn.WRITABLE_TYPES) return@mapNotNull null
+        if (property.type !in ViewColumn.INFO_TYPES) return@mapNotNull null
         val options = when (property.type) {
             "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
             "status" -> {

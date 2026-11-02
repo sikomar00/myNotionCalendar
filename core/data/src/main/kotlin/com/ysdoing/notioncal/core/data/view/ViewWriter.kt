@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data.view
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
+import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import kotlinx.serialization.json.JsonElement
@@ -12,6 +13,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import java.math.BigDecimal
 import java.time.Clock
+import java.time.LocalDate
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,6 +46,30 @@ class ViewWriter @Inject constructor(
     suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current ->
         val base = (current as? JsonPrimitive)?.doubleOrNull ?: 0.0
         JsonPrimitive(BigDecimal.valueOf(base).add(BigDecimal.valueOf(delta)).toDouble())
+    }
+
+    /**
+     * 새 항목(제목 + 선택 날짜)을 만든다. 로컬 행은 만들지 않고 큐에만 쌓는다. 노션이 만든 뒤 처리기가 이 보기를 바로 다시 받아 행이 나타난다.
+     * 제목이 비었거나 보기에 제목 열 정보가 없으면 false. 보기에 날짜 열이 없으면 날짜는 넣지 않는다(첫 날짜 열에 넣는다).
+     * shortcut: 노션이 만들었는데 응답이 끊기면(시간 초과·연결 끊김·5xx) 처리기가 다시 보내 같은 항목이 둘 생길 수 있다(일정 아웃박스의
+     * '이미 만들었나' 확인이 없다), 문제가 되면 만든 시각과 제목으로 찾아본다.
+     */
+    suspend fun create(viewId: String, title: String, date: LocalDate?): Boolean {
+        val name = title.trim()
+        if (name.isEmpty()) return false
+        val snapshot = dao.snapshot(viewId) ?: return false
+        val columns = ViewJson.columns(snapshot.columnInfo)
+        val titleColumn = columns.firstOrNull { it.type == "title" } ?: return false
+        val dateColumn = columns.firstOrNull { it.type == "date" }?.takeIf { date != null }
+        val spec = ViewCreate(name, date?.takeIf { dateColumn != null }?.toString(), dateColumn?.id)
+        val queued = dao.enqueueCreate(
+            ViewWriteEntity(
+                viewId = viewId, pageId = "new-${UUID.randomUUID()}", dataSourceId = snapshot.dataSourceId, propId = titleColumn.id,
+                propType = VIEW_WRITE_CREATE, value = ViewJson.encodeCreate(spec), createdAt = clock.millis(),
+            ),
+        )
+        if (queued) requester.request()
+        return queued
     }
 
     private suspend fun change(

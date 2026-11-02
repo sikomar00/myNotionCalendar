@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.core.notion.mapping
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,5 +34,18 @@ fun encodeViewValue(key: String, type: String, value: JsonElement?): JsonObject?
             }
         }
         else -> null
+    }
+}
+
+/**
+ * 새 항목(`POST /pages`)의 properties. [titleKey]·[dateKey]는 보내는 순간 스키마의 속성 이름이다. [date]는 yyyy-MM-dd이고
+ * [dateKey]가 없으면 넣지 않는다.
+ */
+fun encodeViewCreate(titleKey: String, title: String, dateKey: String?, date: String?): JsonObject = buildJsonObject {
+    putJsonObject(titleKey) {
+        put("title", buildJsonArray { add(buildJsonObject { putJsonObject("text") { put("content", title.take(PropertyEncoder.MAX_TITLE)) } }) })
+    }
+    if (dateKey != null && date != null) {
+        putJsonObject(dateKey) { putJsonObject("date") { put("start", date) } }
     }
 }

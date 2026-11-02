@@ -19,6 +19,23 @@
                 <data android:scheme="notioncal" />
             </intent-filter>
         </activity>
+
+        <!--
+          VW-08 노션 보기 위젯의 새 항목 입력 시트(위젯 머리 '+'). 퀵 시트와 같은 반투명 모양이고 같은 앱의 PendingIntent로만 연다.
+        -->
+        <activity
+            android:name=".ViewAddActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotionCal.QuickSheet"
+            android:windowSoftInputMode="stateVisible|adjustResize">
+            <intent-filter>
+                <action android:name="com.ysdoing.notioncal.action.VIEW_ADD" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

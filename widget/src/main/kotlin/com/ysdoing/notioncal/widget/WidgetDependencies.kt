@@ -43,6 +43,9 @@ interface WidgetDependencies {
     /** VW-03 노션 보기 스냅샷(Room만 읽는다). */
     fun views(): com.ysdoing.notioncal.core.data.view.ViewRepository
 
+    /** VW-08 보기 행의 체크·상태 탭(로컬 행을 고치고 쓰기 큐에 쌓는다. 노션은 부르지 않는다). */
+    fun viewWriter(): com.ysdoing.notioncal.core.data.view.ViewWriter
+
     /** WX-04 날씨 캐시(Room만 읽는다). */
     fun weather(): com.ysdoing.notioncal.core.data.weather.WeatherRepository
 

@@ -23,6 +23,12 @@ data class ViewColumn(val id: String, val name: String, val type: String, val op
     /** 위젯에서 바로 바꿀 수 있는 종류(체크·상태·선택·숫자). 나머지는 읽기만 한다. */
     val writable: Boolean get() = type in WRITABLE_TYPES
 
+    /**
+     * 위젯 칸을 한 번 눌러 바로 바꿀 수 있는가. 체크박스, 그리고 선택지가 둘 이상인 상태·선택이다(하나뿐이면 눌러도 같은 값이다).
+     * 숫자는 눌러서 바꾸는 방식이 달라 따로 다룬다.
+     */
+    val tappable: Boolean get() = type == "checkbox" || (type in OPTION_TYPES && options.size >= 2)
+
     /** 표시용 글자. [value]는 [ViewJson.typed]의 값(체크 bool, 선택지 ID, 숫자)이다. 노션 읽기 표기(displayValue)와 같다. */
     fun display(value: JsonElement?): String = when (type) {
         "checkbox" -> if ((value as? JsonPrimitive)?.booleanOrNull == true) "✓" else ""
@@ -40,11 +46,19 @@ data class ViewColumn(val id: String, val name: String, val type: String, val op
 
     companion object {
         val WRITABLE_TYPES = setOf("checkbox", "select", "status", "number")
+        private val OPTION_TYPES = setOf("select", "status")
+
+        /** columnInfo에 담는 종류: 바꿀 수 있는 것에 더해, 새 항목을 만들 때 쓸 제목·날짜 열. */
+        val INFO_TYPES = WRITABLE_TYPES + setOf("title", "date")
 
         /** 이보다 큰 정수는 Long으로 바꾸면 값이 틀어지므로 그대로 글자로 쓴다. */
         private const val MAX_PLAIN = 1e15
     }
 }
+
+/** 새 항목 만들기 값(제목, 선택 날짜 yyyy-MM-dd와 그 날짜를 넣을 속성 ID). view_writes.value에 JSON으로 담는다. */
+@Serializable
+data class ViewCreate(val title: String, val date: String? = null, val dateProp: String? = null)
 
 /** view_snapshots.columnInfo·view_rows.typed의 JSON 읽기·쓰기. 깨진 글자는 빈 값으로 읽는다(캐시라 다시 받으면 된다). */
 object ViewJson {
@@ -64,6 +78,12 @@ object ViewJson {
 
     /** JSON 원시값 한 개의 글자(쓰기 큐 value 열). 비어 있으면 null. */
     fun valueText(value: JsonElement?): String? = value?.takeIf { it !is JsonNull }?.toString()
+
+    fun encodeCreate(create: ViewCreate): String = json.encodeToString(ViewCreate.serializer(), create)
+
+    /** 깨졌으면 null(보내지 않고 버린다). */
+    fun parseCreate(text: String?): ViewCreate? =
+        text?.let { runCatching { json.decodeFromString(ViewCreate.serializer(), it) }.getOrNull() }
 
     /** 쓰기 큐 value 열을 값으로 읽는다. 비어 있으면(null) 비우는 값 JsonNull, 깨진 글자면 null(노션에 지우는 쓰기를 보내지 않게 구분한다). */
     fun parseValue(text: String?): JsonElement? =

@@ -20,6 +20,9 @@ const val VIEW_CELL_SEPARATOR = "\u001F"
  */
 const val VIEW_ERROR_NOT_FOUND = "NotShared"
 
+/** [ViewWriteEntity.propType]이 이 값이면 속성 바꿈이 아니라 새 항목 만들기다([ViewWriteEntity.value]는 ViewCreate JSON, pageId는 임시 값). */
+const val VIEW_WRITE_CREATE = "create"
+
 /**
  * VW-01 등록한 노션 보기와 마지막으로 받은 설정(v12). 행이 있으면 등록된 보기다.
  * [columns]는 보이는 속성 이름을 [VIEW_CELL_SEPARATOR]로 이은 것. [syncedAt]이 0이면 아직 못 받았다.
@@ -135,6 +138,18 @@ abstract class ViewDao {
 
     @Query("UPDATE view_snapshots SET lastWriteAt = :at WHERE viewId = :viewId")
     protected abstract suspend fun markWritten(viewId: String, at: Long)
+
+    /**
+     * 새 항목 만들기를 큐에 쌓는다(고칠 로컬 행이 없다). 보기는 노션이 만든 뒤 처리기가 다시 받아 채운다.
+     * 그 사이 등록이 지워졌으면(등록을 지우면 그 보기의 바꿈은 노션에 가지 않는다) 쌓지 않고 false.
+     */
+    @Transaction
+    open suspend fun enqueueCreate(write: ViewWriteEntity): Boolean {
+        if (snapshot(write.viewId) == null) return false
+        insertWrite(write)
+        markWritten(write.viewId, write.createdAt)
+        return true
+    }
 
     /**
      * 로컬 행을 먼저 고치고(낙관적) 같은 속성의 이전 대기분을 지운 뒤 쓰기 큐에 쌓는다. 한 트랜잭션이다.

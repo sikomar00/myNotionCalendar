@@ -265,6 +265,7 @@ class ViewSyncTest {
                 "options":[{"id":"o1","name":"할 일"},{"id":"o2","name":"진행 중"},{"id":"o3","name":"완료"}],
                 "groups":[{"id":"g1","name":"To-do","option_ids":["o1"]},{"id":"g3","name":"Complete","option_ids":["o3"]}]}},
             "Pages":{"id":"pg","name":"Pages","type":"number"},
+            "When":{"id":"wh","name":"When","type":"date"},
             "Note":{"id":"nt","name":"Note","type":"rich_text"}}}""",
     )
 
@@ -283,23 +284,27 @@ class ViewSyncTest {
 
     @Test
     fun savesWriteInfoAndTypedValuesForWritableColumnsOnly() = runTest {
-        viewProperties = listOf("Name", "Done", "Status", "Pages", "Note").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        viewProperties = listOf("Name", "Done", "Status", "Pages", "When", "Note").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
         schema = writableSchema
         rowPages = listOf(richPage("a", true, "o2", "12"), richPage("b", false, "o3", "null"))
         register("v1")
         sync().syncAll()
         val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
-        // 쓸 수 있는 종류(체크·상태·선택·숫자)만. 제목·메모(rich_text)는 읽기만 하므로 빠진다.
-        assertEquals(listOf("Done" to "checkbox", "Status" to "status", "Pages" to "number"), columns.map { it.name to it.type })
+        // 바꿀 수 있는 종류(체크·상태·선택·숫자)와 새 항목을 만들 때 쓰는 제목·날짜만. 메모(rich_text)는 읽기만 하므로 빠진다.
+        assertEquals(
+            listOf("Name" to "title", "Done" to "checkbox", "Status" to "status", "Pages" to "number", "When" to "date"),
+            columns.map { it.name to it.type },
+        )
         val status = columns.single { it.id == "st" }
         assertEquals(listOf("o1" to "To-do", "o2" to null, "o3" to "Complete"), status.options.map { it.id to it.group })
         val rows = db.viewDao().rows("v1")
+        // 원래 값은 바꿀 수 있는 속성만 담는다(제목·날짜는 담지 않는다).
         assertEquals(mapOf("dn" to JsonPrimitive(true), "st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(12.0)), ViewJson.typed(rows[0].typed))
         assertEquals(JsonPrimitive(false), ViewJson.typed(rows[1].typed)["dn"])
         assertEquals("o3", (ViewJson.typed(rows[1].typed)["st"] as JsonPrimitive).content)
         assertEquals(kotlinx.serialization.json.JsonNull, ViewJson.typed(rows[1].typed)["pg"]) // 값이 비어 있다
-        // 표시용 글자는 그대로다.
-        assertEquals("a${VIEW_CELL_SEPARATOR}✓${VIEW_CELL_SEPARATOR}x${VIEW_CELL_SEPARATOR}12${VIEW_CELL_SEPARATOR}메모", rows[0].cells)
+        // 표시용 글자는 그대로다(날짜 열은 이 행에 값이 없어 빈 칸).
+        assertEquals("a${VIEW_CELL_SEPARATOR}✓${VIEW_CELL_SEPARATOR}x${VIEW_CELL_SEPARATOR}12${VIEW_CELL_SEPARATOR}${VIEW_CELL_SEPARATOR}메모", rows[0].cells)
     }
 
     @Test
@@ -356,5 +361,18 @@ class ViewSyncTest {
         val typed = ViewJson.typed(db.viewDao().rows("v1").single().typed)
         assertEquals(JsonPrimitive(false), typed["dn"]) // 새로 받은 값이 들어간다
         assertEquals("o3", (typed["st"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun anEmptyBoardViewStillKnowsItsTitleSoItCanCreateItems() = runTest {
+        // 보드·갤러리·목록 보기는 카드 제목을 열 목록에 넣지 않고, 행이 없으면 제목 이름을 행에서 알 수도 없다.
+        viewProperties = listOf(ViewPropertyDto("a", "Done"))
+        schema = writableSchema
+        rowPages = emptyList()
+        register("v1")
+        sync().syncAll()
+        val view = db.viewDao().all().single()
+        assertEquals(listOf("Name", "Done"), view.columns.split(VIEW_CELL_SEPARATOR)) // 제목이 첫 열
+        assertEquals("title", ViewJson.columns(view.columnInfo).first().type)
     }
 }

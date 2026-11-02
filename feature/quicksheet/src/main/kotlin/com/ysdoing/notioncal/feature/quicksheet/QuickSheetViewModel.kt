@@ -12,6 +12,7 @@ import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventRepository
 import com.ysdoing.notioncal.core.data.EventWriter
 import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -75,8 +76,14 @@ class QuickSheetViewModel @Inject constructor(
     private val holidays: HolidayRepository,
     private val ddays: DdayRepository,
     private val weather: WeatherRepository,
+    sync: SyncRequester,
 ) : ViewModel() {
     private val date = MutableStateFlow<LocalDate?>(null)
+
+    // 시트를 열 때도 노션과 맞춘다(2026-11-03 사용자 결정: 앱·시트를 열 때 + 위젯 새로고침). 이미 도는 중이면 새로 쌓지 않는다.
+    init {
+        SheetSyncThrottle.Shared.request(sync)
+    }
 
     fun showDay(day: LocalDate) {
         date.value = day
