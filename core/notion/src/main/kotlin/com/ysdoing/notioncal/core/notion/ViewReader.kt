@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.notion
 
+import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
 import com.ysdoing.notioncal.core.notion.dto.ViewDto
 import kotlinx.serialization.json.JsonArray
@@ -23,6 +24,12 @@ interface ViewReader {
      * 보기의 필터·빠른 필터·정렬을 데이터 소스 쿼리에 그대로 넣는다(9-A).
      */
     suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int = VIEW_ROW_LIMIT): List<PageDto>
+
+    /**
+     * 위젯에서 값을 되쓸 때 필요한 속성 스키마(종류·선택지). 기본 구현은 빈 스키마라, 이것을 구현하지 않은 읽기 전용 구현은
+     * 쓰기 정보 없이 행만 받는다.
+     */
+    suspend fun schema(dataSourceId: String): DataSourceDto = DataSourceDto(id = dataSourceId)
 }
 
 /** 보기 필터와 빠른 필터를 `and`로 묶는다. 둘 다 없으면 null. */

@@ -78,6 +78,8 @@ class NotionClient @Inject constructor(
 
     override suspend fun view(viewId: String): ViewDto = call { api.view(viewId) }
 
+    override suspend fun schema(dataSourceId: String): DataSourceDto = dataSource(dataSourceId)
+
     override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int): List<PageDto> =
         call { api.query(dataSourceId, QueryRequestDto(filter = viewFilter(view), sorts = view.sorts, pageSize = limit)) }.results
 

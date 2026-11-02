@@ -36,6 +36,7 @@ class SyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val engine: NotionSyncEngine,
     private val outbox: OutboxProcessor,
+    private val viewWrites: ViewWriteProcessor,
     private val mirror: PhoneCalendarMirror,
     private val views: ViewSync,
 ) : CoroutineWorker(context, params) {
@@ -45,16 +46,15 @@ class SyncWorker @AssistedInject constructor(
             ?: SyncTrigger.APP_OPEN
         // 보내지 않은 쓰기를 먼저 보낸 뒤 읽는다. 실패해도 읽기는 진행한다(작업은 남아 다음에 다시 보낸다).
         outbox.process()
+        // M3: 위젯에서 바꾼 보기 행도 읽기 전에 보낸다(읽기가 노션의 이전 값으로 덮지 않게).
+        val writeOutcome = viewWrites.process()
         val outcome = engine.sync(trigger, inputData.getString(KEY_DATA_SOURCE))
         // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
         mirror.refreshIfEnabled()
         // VW-01: 등록한 노션 보기 스냅샷도 같은 주기에 맞춘다(실패해도 위 결과에 영향 없음).
         views.syncAll()
         // 연결·서버 문제는 WorkManager 백오프로 다시 시도한다. 토큰·공유 문제는 사용자가 고쳐야 하므로 끝낸다.
-        return when (outcome.error) {
-            NotionError.Network, NotionError.RateLimited, is NotionError.Server -> Result.retry()
-            else -> Result.success()
-        }
+        return if (outcome.error.isRetryable() || writeOutcome.retryError.isRetryable()) Result.retry() else Result.success()
     }
 
     companion object {
@@ -63,21 +63,23 @@ class SyncWorker @AssistedInject constructor(
     }
 }
 
+private fun NotionError?.isRetryable() = this == NotionError.Network || this == NotionError.RateLimited || this is NotionError.Server
+
 /** NS-04: 아웃박스를 비운다. 네트워크가 없으면 CONNECTED 조건으로 기다렸다가 연결되면 실행된다(NS-06 네트워크 복구). */
 @HiltWorker
 class OutboxWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val processor: OutboxProcessor,
+    private val viewWrites: ViewWriteProcessor,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val outcome = processor.process()
-        return when (outcome.retryError) {
-            null -> Result.success()
-            // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
-            NotionError.Unauthorized, NotionError.NotShared -> Result.success()
-            else -> Result.retry()
-        }
+        val viewOutcome = viewWrites.process()
+        val errors = listOfNotNull(outcome.retryError, viewOutcome.retryError)
+        // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
+        // 둘 중 하나라도 일시 오류면 다시 시도한다(한쪽 오류가 다른 쪽 재시도를 가리지 않게).
+        return if (errors.all { it == NotionError.Unauthorized || it == NotionError.NotShared }) Result.success() else Result.retry()
     }
 }
 

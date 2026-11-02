@@ -6,14 +6,22 @@ import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewJson
+import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.ViewReader
+import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
 import com.ysdoing.notioncal.core.notion.mapping.displayValue
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,8 +43,9 @@ class ViewSync @Inject constructor(
 ) {
     suspend fun syncAll() {
         var changed = false
+        val schemas = HashMap<String, DataSourceDto?>() // 같은 DB의 보기가 여럿이어도 스키마는 한 번만 읽는다
         for (registered in dao.all()) {
-            val error = syncOne(registered)
+            val error = syncOne(registered, schemas)
             changed = true
             // 연결·토큰·속도 제한·서버 장애는 다른 보기도 똑같이 실패하므로 더 부르지 않는다.
             if (error != null && error.isSharedAcrossViews()) break
@@ -47,14 +56,17 @@ class ViewSync @Inject constructor(
     /** 방금 등록한 보기 하나만 받는다(등록 화면). 다른 보기를 기다리게 하지 않는다. */
     suspend fun sync(viewId: String) {
         val registered = dao.all().firstOrNull { it.viewId == viewId } ?: return
-        syncOne(registered)
+        syncOne(registered, HashMap())
         widgets.requestUpdate()
     }
 
     /** 보기 하나를 받아 스냅샷을 바꾼다. 실패하면 이전 스냅샷을 두고 오류만 남기며, 노션 오류는 돌려준다(성공이거나 예상 밖 예외면 null). */
-    private suspend fun syncOne(registered: ViewSnapshotEntity): NotionError? = try {
-        val (meta, rows) = snapshot(registered)
-        dao.replace(meta, rows)
+    private suspend fun syncOne(registered: ViewSnapshotEntity, schemas: MutableMap<String, DataSourceDto?>): NotionError? = try {
+        // 보내지 않은 바꿈이 남은 보기는 받지 않는다. 방금 한 체크를 노션의 이전 값으로 덮어 되돌리지 않게, 보낸 뒤에 받는다.
+        if (dao.pendingWrites(registered.viewId) > 0) return null
+        val fetchedAt = clock.millis() // 받는 도중에 위젯에서 바꾼 보기는 replace가 덮어쓰지 않는다
+        val (meta, rows) = snapshot(registered, schemas)
+        dao.replace(meta, rows, fetchedAt)
         null
     } catch (e: NotionException) {
         dao.markError(registered.viewId, e.error.storedName())
@@ -66,27 +78,78 @@ class ViewSync @Inject constructor(
         null
     }
 
-    private suspend fun snapshot(registered: ViewSnapshotEntity): Pair<ViewSnapshotEntity, List<ViewRowEntity>> {
+    /** 쓰기 정보용 스키마. 못 읽어도 행은 받을 수 있어 null로 두고, 그때는 지난번 쓰기 정보를 그대로 쓴다. */
+    private suspend fun schemaOrNull(dataSourceId: String, cache: MutableMap<String, DataSourceDto?>): DataSourceDto? =
+        if (dataSourceId in cache) {
+            cache[dataSourceId]
+        } else {
+            try {
+                reader.schema(dataSourceId)
+            } catch (e: NotionException) {
+                null
+            }.also { cache[dataSourceId] = it }
+        }
+
+    private suspend fun snapshot(
+        registered: ViewSnapshotEntity,
+        schemas: MutableMap<String, DataSourceDto?>,
+    ): Pair<ViewSnapshotEntity, List<ViewRowEntity>> {
         val view = reader.view(registered.viewId)
         val pages = reader.rows(registered.dataSourceId, view)
+        val schema = schemaOrNull(registered.dataSourceId, schemas)
         val configured = view.configuration?.properties.orEmpty()
         val columns = visibleColumns(configured.map { it.propertyName to it.visible }, pages.firstOrNull()?.titlePropertyName())
+        val writable = schema?.let { writableColumns(columns, it) } ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns }
         val meta = registered.copy(
             name = view.name,
             viewType = view.type,
             columns = columns.joinToString(VIEW_CELL_SEPARATOR),
             syncedAt = clock.millis(),
             lastError = null,
+            columnInfo = ViewJson.encodeColumns(writable),
         )
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { displayValue(page.properties[it] as? JsonObject ?: JsonObject(emptyMap())) }
-            ViewRowEntity(registered.viewId, i, page.id, page.url, cells)
+            val typed = writable.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
+            ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed))
         }
         return meta to rows
     }
 
     private fun PageDto.titlePropertyName(): String? =
         properties.entries.firstOrNull { ((it.value as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull == "title" }?.key
+}
+
+/**
+ * 보이는 열 중 위젯에서 바로 바꿀 수 있는 속성(체크·선택·상태·숫자)의 쓰기 정보. 스키마에 없는 열(수식·롤업 등)은 빠진다.
+ * 상태 선택지에는 그룹 이름(할 일·진행 중·완료)을 붙인다.
+ */
+internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): List<ViewColumn> {
+    val byName = schema.properties.values.associateBy { it.name }
+    return columnNames.mapNotNull { name ->
+        val property = byName[name] ?: return@mapNotNull null
+        if (property.type !in ViewColumn.WRITABLE_TYPES) return@mapNotNull null
+        val options = when (property.type) {
+            "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
+            "status" -> {
+                val groups = property.status?.groups.orEmpty()
+                property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name) }
+            }
+            else -> emptyList()
+        }
+        ViewColumn(property.id, property.name, property.type, options)
+    }
+}
+
+/** 행의 속성 JSON에서 [column]의 원래 값(체크 bool·선택지 ID·숫자)을 꺼낸다. 비어 있으면 JsonNull. */
+internal fun typedValue(column: ViewColumn, property: JsonObject?): JsonElement {
+    val value = property?.get(column.type) ?: return JsonNull
+    return when (column.type) {
+        "checkbox" -> (value as? JsonPrimitive)?.booleanOrNull?.let(::JsonPrimitive) ?: JsonPrimitive(false)
+        "select", "status" -> ((value as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull?.let(::JsonPrimitive) ?: JsonNull
+        "number" -> (value as? JsonPrimitive)?.doubleOrNull?.let(::JsonPrimitive) ?: JsonNull
+        else -> JsonNull
+    }
 }
 
 /**
@@ -112,7 +175,7 @@ private fun NotionError.isSharedAcrossViews(): Boolean =
  * `view_snapshots.lastError`에 남기는 값. 릴리스(R8)는 클래스 이름을 바꾸므로 `::class.simpleName`을 쓰지 않고 정한 문자열로 매핑한다.
  * `when`이 모든 경우를 다뤄야 해서 오류 종류가 늘면 여기서 컴파일이 막힌다.
  */
-private fun NotionError.storedName(): String = when (this) {
+internal fun NotionError.storedName(): String = when (this) {
     NotionError.NotShared -> VIEW_ERROR_NOT_FOUND
     NotionError.Unauthorized -> "Unauthorized"
     is NotionError.Validation -> "Validation"

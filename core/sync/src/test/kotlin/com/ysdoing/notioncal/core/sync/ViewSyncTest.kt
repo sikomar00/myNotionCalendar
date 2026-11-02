@@ -8,9 +8,13 @@ import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
+import com.ysdoing.notioncal.core.data.view.ViewJson
+import kotlinx.serialization.json.JsonPrimitive
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.ViewReader
+import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
 import com.ysdoing.notioncal.core.notion.dto.ViewConfigDto
 import com.ysdoing.notioncal.core.notion.dto.ViewDto
@@ -52,8 +56,20 @@ class ViewSyncTest {
         ).jsonObject,
     )
 
+    /** M3: 쓰기 정보(종류·선택지)를 읽을 스키마와, 행을 바꿔 끼울 수 있는 페이지 목록. */
+    private var schema = DataSourceDto(id = "ds")
+    private var schemaCalls = 0
+    private var schemaError: NotionError? = null
+    private var rowPages: List<PageDto>? = null
+
     private val reader = object : ViewReader {
         override suspend fun viewIds(dataSourceId: String) = emptyList<String>()
+
+        override suspend fun schema(dataSourceId: String): DataSourceDto {
+            schemaCalls++
+            schemaError?.let { throw NotionException(it) }
+            return schema
+        }
 
         override suspend fun view(viewId: String): ViewDto {
             requested += viewId
@@ -69,7 +85,7 @@ class ViewSyncTest {
         }
 
         override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int) =
-            listOf(page("p1", "첫째", "집"), page("p2", "둘째", "일"))
+            rowPages ?: listOf(page("p1", "첫째", "집"), page("p2", "둘째", "일"))
     }
 
     @Before
@@ -236,5 +252,109 @@ class ViewSyncTest {
         sync().syncAll()
         assertEquals(2, requested.size)
         assertEquals(2, db.viewDao().rows("v2").size)
+    }
+
+    // --- M3: 위젯에서 값을 되쓰기 위한 정보를 함께 저장한다.
+
+    private val writableSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"ds","properties":{
+            "Name":{"id":"title","name":"Name","type":"title"},
+            "Done":{"id":"dn","name":"Done","type":"checkbox"},
+            "Status":{"id":"st","name":"Status","type":"status","status":{
+                "options":[{"id":"o1","name":"할 일"},{"id":"o2","name":"진행 중"},{"id":"o3","name":"완료"}],
+                "groups":[{"id":"g1","name":"To-do","option_ids":["o1"]},{"id":"g3","name":"Complete","option_ids":["o3"]}]}},
+            "Pages":{"id":"pg","name":"Pages","type":"number"},
+            "Note":{"id":"nt","name":"Note","type":"rich_text"}}}""",
+    )
+
+    private fun richPage(id: String, done: Boolean, status: String, pages: String) = PageDto(
+        id = id,
+        url = "https://notion.so/$id",
+        lastEditedTime = "2026-10-22T00:00:00.000Z",
+        properties = Json.parseToJsonElement(
+            """{"Name":{"type":"title","title":[{"plain_text":"$id"}]},
+                "Done":{"type":"checkbox","checkbox":$done},
+                "Status":{"type":"status","status":{"id":"$status","name":"x"}},
+                "Pages":{"type":"number","number":$pages},
+                "Note":{"type":"rich_text","rich_text":[{"plain_text":"메모"}]}}""",
+        ).jsonObject,
+    )
+
+    @Test
+    fun savesWriteInfoAndTypedValuesForWritableColumnsOnly() = runTest {
+        viewProperties = listOf("Name", "Done", "Status", "Pages", "Note").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        schema = writableSchema
+        rowPages = listOf(richPage("a", true, "o2", "12"), richPage("b", false, "o3", "null"))
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        // 쓸 수 있는 종류(체크·상태·선택·숫자)만. 제목·메모(rich_text)는 읽기만 하므로 빠진다.
+        assertEquals(listOf("Done" to "checkbox", "Status" to "status", "Pages" to "number"), columns.map { it.name to it.type })
+        val status = columns.single { it.id == "st" }
+        assertEquals(listOf("o1" to "To-do", "o2" to null, "o3" to "Complete"), status.options.map { it.id to it.group })
+        val rows = db.viewDao().rows("v1")
+        assertEquals(mapOf("dn" to JsonPrimitive(true), "st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(12.0)), ViewJson.typed(rows[0].typed))
+        assertEquals(JsonPrimitive(false), ViewJson.typed(rows[1].typed)["dn"])
+        assertEquals("o3", (ViewJson.typed(rows[1].typed)["st"] as JsonPrimitive).content)
+        assertEquals(kotlinx.serialization.json.JsonNull, ViewJson.typed(rows[1].typed)["pg"]) // 값이 비어 있다
+        // 표시용 글자는 그대로다.
+        assertEquals("a${VIEW_CELL_SEPARATOR}✓${VIEW_CELL_SEPARATOR}x${VIEW_CELL_SEPARATOR}12${VIEW_CELL_SEPARATOR}메모", rows[0].cells)
+    }
+
+    @Test
+    fun aViewWithUnsentChangesIsNotReadUntilTheyAreSent() = runTest {
+        register("v1")
+        sync().syncAll()
+        val row = db.viewDao().rows("v1").first()
+        db.viewDao().enqueue(row, ViewWriteEntity(viewId = "v1", pageId = row.pageId, dataSourceId = "ds", propId = "dn", propType = "checkbox", value = "true", createdAt = 1))
+        requested.clear()
+        sync().syncAll()
+        assertEquals(emptyList<String>(), requested) // 노션에 묻지도 않는다(속도 제한도 아낀다)
+        assertEquals(row, db.viewDao().rows("v1").first())
+    }
+
+    @Test
+    fun aReadStartedBeforeAWidgetChangeDoesNotOverwriteIt() = runTest {
+        register("v1")
+        sync().syncAll()
+        val row = db.viewDao().rows("v1").first()
+        // 위젯에서 이 읽기가 시작된 뒤에 바꿨고(시각이 더 늦다) 이미 노션에 보냈다 → 읽은 이전 값으로 덮지 않는다.
+        val later = clock.millis() + 1_000
+        db.viewDao().enqueue(row.copy(cells = "위젯에서 바꿈"), ViewWriteEntity(viewId = "v1", pageId = row.pageId, dataSourceId = "ds", propId = "dn", propType = "checkbox", value = "true", createdAt = later))
+        db.viewDao().deleteWriteById(db.viewDao().firstWrite()!!.id)
+        requested.clear()
+        sync().syncAll()
+        assertEquals(listOf("v1"), requested) // 노션에서는 받았지만
+        assertEquals("위젯에서 바꿈", db.viewDao().rows("v1").first().cells) // 덮지 않았다
+    }
+
+    @Test
+    fun readsTheSchemaOncePerDataSourceNotOncePerView() = runTest {
+        viewProperties = listOf("Name", "Done").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        schema = writableSchema
+        rowPages = listOf(richPage("a", true, "o1", "1"))
+        register("v1", "v2")
+        sync().syncAll()
+        assertEquals(1, schemaCalls)
+    }
+
+    @Test
+    fun aSchemaFailureKeepsTheLastWriteInfoAndStillRefreshesRows() = runTest {
+        viewProperties = listOf("Name", "Done", "Status").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        schema = writableSchema
+        rowPages = listOf(richPage("a", true, "o2", "1"))
+        register("v1")
+        sync().syncAll()
+        val before = db.viewDao().all().single().columnInfo
+        schemaError = NotionError.Network
+        rowPages = listOf(richPage("a", false, "o3", "1"))
+        sync().syncAll()
+        val view = db.viewDao().all().single()
+        assertEquals(before, view.columnInfo) // 쓰기 정보는 지난번 것을 쓴다
+        assertNull(view.lastError) // 행은 받았으니 실패가 아니다
+        val typed = ViewJson.typed(db.viewDao().rows("v1").single().typed)
+        assertEquals(JsonPrimitive(false), typed["dn"]) // 새로 받은 값이 들어간다
+        assertEquals("o3", (typed["st"] as JsonPrimitive).content)
     }
 }

@@ -30,6 +30,7 @@ import java.time.LocalDate
  *      widget_configs.ddayPageId·showWeather(기본 0)
  * - 12: 노션 보기 위젯(VW-01). view_snapshots(등록한 보기+설정)·view_rows(행 스냅샷, 캐시) 추가, AutoMigration
  * - 13: widget_configs.viewId(VW-04, AutoMigration)
+ * - 14: 보기 행 쓰기(M3). view_snapshots.columnInfo·view_rows.typed 열과 view_writes(보내지 않은 바꿈 큐) 추가, AutoMigration
  */
 @Database(
     entities = [
@@ -49,10 +50,11 @@ import java.time.LocalDate
         WeatherHourEntity::class,
         ViewSnapshotEntity::class,
         ViewRowEntity::class,
+        ViewWriteEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {

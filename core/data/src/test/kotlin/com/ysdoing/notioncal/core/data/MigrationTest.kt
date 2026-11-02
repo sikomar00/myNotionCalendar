@@ -408,4 +408,30 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v13 → v14(보기 행 쓰기): 기존 보기·행은 그대로이고 새 열은 비어 있으며, 보내지 않은 바꿈 큐를 쓸 수 있다. */
+    @Test
+    fun v13ToV14AddsViewWriteInfoAndQueue() = runTest {
+        helper.createDatabase(13).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells) VALUES ('v1', 0, 'pg', 'https://n', '첫째')")
+        }
+        helper.runMigrationsAndValidate(14).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            assertEquals("", dao.snapshot("v1")!!.columnInfo)
+            val row = dao.row("v1", "pg")!!
+            assertEquals("첫째", row.cells)
+            assertEquals("", row.typed)
+            val write = com.ysdoing.notioncal.core.data.db.ViewWriteEntity(
+                viewId = "v1", pageId = "pg", dataSourceId = "ds1", propId = "dn", propType = "checkbox", value = "true", createdAt = 1,
+            )
+            dao.enqueue(row.copy(typed = "{}"), write)
+            assertEquals(1, dao.pendingWriteCount())
+            assertEquals("true", dao.firstWrite()!!.value)
+        } finally {
+            db.close()
+        }
+    }
 }
