@@ -146,6 +146,17 @@ fun SettingsRoute(
             HolidaySetting(settings.showHolidays, onChange = viewModel::setShowHolidays)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_week_numbers))
+                    Text(
+                        stringResource(R.string.settings_week_numbers_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = settings.showWeekNumbers, onCheckedChange = viewModel::setShowWeekNumbers)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_dynamic_color))
                     Text(
                         stringResource(R.string.settings_dynamic_color_note),

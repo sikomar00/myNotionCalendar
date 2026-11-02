@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +36,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,12 +62,11 @@ import com.ysdoing.notioncal.core.data.calendar.PlacedEvent
 import com.ysdoing.notioncal.core.data.calendar.WeekLayout
 import com.ysdoing.notioncal.core.data.calendar.chipLabel
 import com.ysdoing.notioncal.core.data.calendar.gridStart
+import com.ysdoing.notioncal.core.data.calendar.weekNumber
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import com.ysdoing.notioncal.core.designsystem.WeatherBadge
-import java.time.format.TextStyle
-import java.util.Locale
 
 @Immutable
 data class MonthGridState(
@@ -81,6 +78,8 @@ data class MonthGridState(
     val holidays: Map<LocalDate, String> = emptyMap(),
     /** WX-03 날씨: 오늘 칸(설정을 켜면 예보가 있는 모든 칸)에 아이콘. */
     val weather: MonthWeather = MonthWeather(),
+    /** 왼쪽 주차 열(설정의 '주 번호 표시'). */
+    val showWeekNumbers: Boolean = false,
 )
 
 /**
@@ -111,60 +110,52 @@ fun MonthGrid(
     val start = gridStart(state.month, state.weekStart)
     var drag by remember { mutableStateOf<GridDrag?>(null) }
     var headerHeight by remember { mutableIntStateOf(0) }
+    // 주차 열을 켜면 그리드 좌표(칸 계산·끌기)가 열 폭만큼 오른쪽으로 밀린다.
+    val gutter = if (state.showWeekNumbers) weekGutterWidth() else 0.dp
+    val gutterPx = with(LocalDensity.current) { gutter.toPx() }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val width = constraints.maxWidth.toFloat()
+        val width = constraints.maxWidth.toFloat() - gutterPx
         val weekHeight = (constraints.maxHeight - headerHeight) / 6f
         fun dateAt(position: Offset): LocalDate {
             val week = floor((position.y - headerHeight) / weekHeight).toInt().coerceIn(0, 5)
-            val col = floor(position.x / (width / 7)).toInt().coerceIn(0, 6)
+            val col = floor((position.x - gutterPx) / (width / 7)).toInt().coerceIn(0, 6)
             return start.plusDays(week * 7L + col)
         }
         Column(Modifier.fillMaxSize()) {
-            WeekdayHeader(state.weekStart, Modifier.onSizeChanged { headerHeight = it.height })
+            WeekdayHeader(state.weekStart, gutter, Modifier.onSizeChanged { headerHeight = it.height })
             repeat(6) { week ->
                 val weekStartDate = start.plusWeeks(week.toLong())
-                WeekRow(
-                    weekStart = weekStartDate,
-                    month = state.month,
-                    today = state.today,
-                    events = state.events,
-                    holidays = state.holidays,
-                    weather = state.weather,
-                    onDayClick = onDayClick,
-                    drag = drag,
-                    toGrid = { local -> Offset(local.x, headerHeight + week * weekHeight + local.y) },
-                    onDragStart = { event, origin, position -> drag = GridDrag(event, origin, position, dateAt(position)) },
-                    onDragMove = { position -> drag = drag?.copy(position = position, target = dateAt(position)) },
-                    onDragEnd = {
-                        drag?.let { d -> if (d.days != 0L) onMove(d.event, d.days) }
-                        drag = null
-                    },
-                    onDragCancel = { drag = null },
-                    // 끄는 칩이 아래 주 행에 가려지지 않게 잡은 주를 위에 그린다.
-                    modifier = Modifier.weight(1f).zIndex(if (drag?.event != null && drag?.origin?.let { it >= weekStartDate && it < weekStartDate.plusWeeks(1) } == true) 1f else 0f),
-                )
+                // 끄는 칩이 아래 주 행에 가려지지 않게 잡은 주를 위에 그린다.
+                val raised = drag?.origin?.let { it >= weekStartDate && it < weekStartDate.plusWeeks(1) } == true
+                Row(Modifier.fillMaxWidth().weight(1f).zIndex(if (raised) 1f else 0f)) {
+                    if (state.showWeekNumbers) {
+                        WeekNumberCell(weekNumber(weekStartDate, state.weekStart), Modifier.width(gutter).fillMaxHeight())
+                    }
+                    WeekRow(
+                        weekStart = weekStartDate,
+                        month = state.month,
+                        today = state.today,
+                        events = state.events,
+                        holidays = state.holidays,
+                        weather = state.weather,
+                        onDayClick = onDayClick,
+                        drag = drag,
+                        toGrid = { local -> Offset(gutterPx + local.x, headerHeight + week * weekHeight + local.y) },
+                        onDragStart = { event, origin, position -> drag = GridDrag(event, origin, position, dateAt(position)) },
+                        onDragMove = { position -> drag = drag?.copy(position = position, target = dateAt(position)) },
+                        onDragEnd = {
+                            drag?.let { d -> if (d.days != 0L) onMove(d.event, d.days) }
+                            drag = null
+                        },
+                        onDragCancel = { drag = null },
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
             }
         }
         drag?.let { d -> DraggedChip(d, cellWidth = width / 7) }
     }
 }
-
-@Composable
-private fun WeekdayHeader(weekStart: DayOfWeek, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        repeat(7) { i ->
-            val day = weekStart.plus(i.toLong())
-            Text(
-                text = day.getDisplayName(TextStyle.SHORT, Locale.KOREAN),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.labelMedium,
-                color = dayOfWeekColor(day) ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
 
 @Composable
 private fun WeekRow(
@@ -207,7 +198,7 @@ private fun WeekRow(
         val currentDayClick by rememberUpdatedState(onDayClick)
         val callbacks by rememberUpdatedState(DragCallbacks(onDragStart, onDragMove, onDragEnd, onDragCancel))
 
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        DayTiles(Modifier.fillMaxSize())
         // 놓을 칸 강조(MV-07)
         drag?.target?.let { target ->
             val col = ChronoUnit.DAYS.between(weekStart, target)
@@ -217,6 +208,8 @@ private fun WeekRow(
                         .offset(x = cellWidth * col.toInt())
                         .width(cellWidth)
                         .fillMaxHeight()
+                        .padding(1.dp)
+                        .clip(MaterialTheme.shapes.medium)
                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                 )
             }
@@ -392,34 +385,6 @@ private fun DraggedChip(drag: GridDrag, cellWidth: Float) {
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(drag.event.title, fontSize = 11.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, color = Color.White)
-    }
-}
-
-@Composable
-private fun DayLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHoliday: Boolean, modifier: Modifier = Modifier) {
-    // MV-01·EX-02: 공휴일은 일요일과 같은 빨강. 다른 달 날짜는 요일색 없이 흐린 기본색(3:1 이상).
-    val base = when {
-        !inMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = OUTSIDE_MONTH_ALPHA)
-        isHoliday -> sundayColor()
-        else -> dayOfWeekColor(date.dayOfWeek) ?: MaterialTheme.colorScheme.onSurface
-    }
-    // 글꼴 크기에 맞춰 커지도록 sp 기준 최소 크기를 쓴다(고정 dp면 글꼴 최대에서 숫자가 잘림).
-    val minSize = with(LocalDensity.current) { 18.sp.toDp() }
-    Box(modifier.padding(top = 2.dp), contentAlignment = Alignment.TopCenter) {
-        // 오늘은 칠한 네모(위젯·앱 아이콘의 오늘 칸과 같은 모양).
-        val circle = if (isToday) Modifier.clip(TodayShape).background(MaterialTheme.colorScheme.primary) else Modifier
-        Box(
-            Modifier.defaultMinSize(minWidth = minSize, minHeight = minSize).then(circle).padding(horizontal = 3.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = date.dayOfMonth.toString(),
-                fontSize = 12.sp,
-                lineHeight = 14.sp,
-                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimary else base,
-            )
-        }
     }
 }
 

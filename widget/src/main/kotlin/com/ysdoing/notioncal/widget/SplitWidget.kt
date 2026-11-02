@@ -56,12 +56,12 @@ import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 import com.ysdoing.notioncal.core.data.calendar.gridStart
+import com.ysdoing.notioncal.core.data.calendar.weekNumber
 import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.temporal.WeekFields
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
@@ -152,9 +152,6 @@ class SplitWidget : GlanceAppWidget() {
             holidays = holidays,
         )
 
-        /** 그 주 첫날 기준 주차. 주 시작 요일 설정을 따르고, 1월 1일이 든 주가 1주차다(2026년 10월 = 40~45주). */
-        fun weekNumber(weekFirstDay: LocalDate, weekStart: DayOfWeek): Int =
-            weekFirstDay.get(WeekFields.of(weekStart, 1).weekOfWeekBasedYear())
     }
 }
 
@@ -296,7 +293,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
             if (showWeek) {
                 val todayRow = state.today.minusDays(((state.today.dayOfWeek.value - state.weekStart.value + 7) % 7).toLong())
                 Text(
-                    text = context.getString(R.string.split_widget_week, SplitWidget.weekNumber(todayRow, state.weekStart)),
+                    text = context.getString(R.string.split_widget_week, weekNumber(todayRow, state.weekStart)),
                     modifier = GlanceModifier.padding(start = 6.dp).semantics { testTag = "splitWeek" },
                     style = TextStyle(color = palette.subtle, fontSize = (metrics.titleFontSp * 0.65f).sp),
                     maxLines = 1,
@@ -321,7 +318,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
             val first = start.plusWeeks(week.toLong())
             Row(GlanceModifier.fillMaxWidth().height(metrics.rowHeight), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = SplitWidget.weekNumber(first, state.weekStart).toString(),
+                    text = weekNumber(first, state.weekStart).toString(),
                     modifier = GlanceModifier.width(metrics.weekNumberWidth).semantics { testTag = "splitWeekNumber" },
                     style = TextStyle(color = palette.subtle, fontSize = metrics.weekNumberFontSp.sp, textAlign = TextAlign.Start),
                     maxLines = 1,

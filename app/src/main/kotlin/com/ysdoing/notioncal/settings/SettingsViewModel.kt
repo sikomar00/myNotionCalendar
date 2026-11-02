@@ -191,6 +191,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setDynamicColor(enabled) }
     }
 
+    /** 월 화면 주차 열 켜기·끄기. */
+    fun setShowWeekNumbers(show: Boolean) {
+        viewModelScope.launch { settingsRepository.setShowWeekNumbers(show) }
+    }
+
     /** NS-06 주기 동기화 간격. 바뀌면 PeriodicSync가 작업을 다시 예약한다. */
     fun setSyncInterval(minutes: Int) {
         viewModelScope.launch { settingsRepository.setSyncInterval(minutes) }

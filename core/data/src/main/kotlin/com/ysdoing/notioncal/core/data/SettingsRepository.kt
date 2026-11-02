@@ -43,6 +43,8 @@ data class AppSettings(
     val hiddenOptionKeys: Set<String> = emptySet(),
     /** S25-10 Material You(배경화면 색) 사용. 기본 끔. */
     val dynamicColor: Boolean = false,
+    /** 앱 월 화면 왼쪽 주차 열(주 시작 요일 설정을 따른 주 번호). 기본 끔. */
+    val showWeekNumbers: Boolean = false,
     /** EX-02 공휴일 표시(폰의 공휴일 캘린더, READ_CALENDAR). 권한을 받으면 켠다. */
     val showHolidays: Boolean = false,
     /** EX-02 공휴일을 마지막으로 읽어 온 시각(epoch ms). 앱 열기 때 하루 한 번 다시 읽는다. */
@@ -93,6 +95,7 @@ class SettingsRepository @Inject constructor(
                 dynamicColor = prefs[DYNAMIC_COLOR] ?: false,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
+                showWeekNumbers = prefs[SHOW_WEEK_NUMBERS] ?: false,
                 remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
                 reminderRules = ReminderRules(
                     timedMinutes = prefs[TIMED_REMINDERS]?.let { saved ->
@@ -165,6 +168,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setShowHolidays(show: Boolean) {
         dataStore.edit { it[SHOW_HOLIDAYS] = show }
+    suspend fun setShowWeekNumbers(show: Boolean) {
+        dataStore.edit { it[SHOW_WEEK_NUMBERS] = show }
+    }
+
         widgetRefresher.requestUpdate()
     }
 
@@ -247,6 +254,7 @@ class SettingsRepository @Inject constructor(
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_v2")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
+        val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
         val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")
