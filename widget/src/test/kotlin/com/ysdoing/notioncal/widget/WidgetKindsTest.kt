@@ -15,6 +15,7 @@ class WidgetKindsTest {
         assertTrue(WidgetKinds.forProvider(AgendaWidgetReceiver::class.java.name) is AgendaWidget)
         assertTrue(WidgetKinds.forProvider(SplitWidgetReceiver::class.java.name) is SplitWidget)
         assertTrue(WidgetKinds.forProvider(NotionCalWidgetReceiver::class.java.name) is NotionCalWidget)
+        assertTrue(WidgetKinds.forProvider(ViewWidgetReceiver::class.java.name) is ViewWidget)
         assertTrue(WidgetKinds.forProvider(null) is NotionCalWidget)
     }
 }

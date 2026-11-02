@@ -18,6 +18,7 @@ import com.ysdoing.notioncal.feature.ledger.LedgerRoute
 import com.ysdoing.notioncal.feature.month.MonthRoute
 import com.ysdoing.notioncal.feature.month.SearchRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
+import com.ysdoing.notioncal.settings.AddViewRoute
 import com.ysdoing.notioncal.settings.SettingsRoute
 import java.time.LocalDate
 
@@ -25,6 +26,7 @@ private object Routes {
     const val MONTH = "month"
     const val SETTINGS = "settings"
     const val ADD_DATABASE = "settings/add"
+    const val ADD_VIEW = "settings/add-view"
 
     /** NS-09 다시 연결: 그 DB의 링크(ID)와 data source를 미리 채운다. */
     const val RECONNECT = "settings/add/{db}/{ds}"
@@ -115,12 +117,16 @@ fun NotionCalNavHost(
             SettingsRoute(
                 onBack = { nav.popBackStack() },
                 onAddDatabase = { nav.navigate(Routes.ADD_DATABASE) },
+                onAddView = { nav.navigate(Routes.ADD_VIEW) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) { launchSingleTop = true } },
                 onOpenDday = { nav.navigate(Routes.DDAY) { launchSingleTop = true } },
             )
         }
         composable(Routes.DDAY) {
             DdayRoute(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.ADD_VIEW) {
+            AddViewRoute(onBack = { nav.popBackStack() })
         }
         composable(Routes.ADD_DATABASE) {
             AddDatabaseRoute(onDone = { nav.popBackStack() })
