@@ -91,6 +91,50 @@ class LedgerWidgetTest {
         onNode(hasTextEqualTo("-1.2만")).assertExists()
         onNode(hasTextEqualTo("-5만")).assertExists()
         onNode(hasTextEqualTo("+250만")).assertExists()
+        // 4×4(높이 380dp)는 칸에 남는 높이가 모자라 주 합계 줄을 쓰지 않는다(기존 배치를 줄이지 않는다).
+        onAllNodes(hasTestTag("ledgerWeekTotal")).assertCountEquals(0)
+    }
+
+    /** LD-15 뱅크샐러드식 주 합계 줄: 칸에 남는 높이가 있으면(높이 440dp) 주마다 한 줄을 그린다. 이 달 날짜분만 센다. */
+    @Test
+    fun tallShowsWeekTotals() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        val tall = DpSize(358.dp, 440.dp)
+        setContext(context)
+        setAppWidgetSize(tall)
+        assertTrue(LedgerMetrics.of(tall, WidgetConfig(1), 1f).weekTotalHeight > 0.dp)
+        provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("ledgerWeekTotal")).assertCountEquals(2) // 거래가 있는 두 주만(없는 주는 낭독하지 않는다)
+        onNode(hasContentDescriptionEqualTo("주 합계 지출 22,100원, 수입 0원")).assertExists() // 10/18~24
+        onNode(hasContentDescriptionEqualTo("주 합계 지출 0원, 수입 2,500,000원")).assertExists() // 10/11~17
+        onNode(hasTextEqualTo("-2.2만")).assertExists()
+        onAllNodes(hasTextEqualTo("+250만")).assertCountEquals(2) // 17일 칸과 그 주(11~17일) 합계 줄
+    }
+
+    /** 금액을 숨기면 주 합계도 ●●●이고 낭독에 금액이 없다(LD-06). */
+    @Test
+    fun hiddenAmountsHideWeekTotals() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        val tall = DpSize(358.dp, 440.dp)
+        setContext(context)
+        setAppWidgetSize(tall)
+        provideComposable { LedgerWidgetContent(state(WidgetConfig(1, hideAmounts = true)), systemFontScale = 1f) }
+        onAllNodes(hasContentDescriptionEqualTo("주 합계")).assertCountEquals(2)
+        onAllNodes(hasText("만")).assertCountEquals(0)
+    }
+
+    /** 칸에 남는 높이가 없으면 주 합계 줄·두 번째 금액 줄을 쓰지 않고, 쓰더라도 날짜 칸이 글자보다 낮아지지 않는다. */
+    @Test
+    fun extrasNeverShrinkTheDayCellBelowItsText() {
+        val sizes = listOf(LARGE, MEDIUM, DpSize(358.dp, 250.dp), DpSize(358.dp, 520.dp), DpSize(358.dp, 130.dp))
+        for (size in sizes) {
+            for ((config, system) in listOf(WidgetConfig(1) to 1f, WidgetConfig(1, fontScale = 150) to 2f)) {
+                val m = LedgerMetrics.of(size, config, system)
+                val amountLines = if (m.twoAmounts) 2 else 1
+                val needed = (m.dateFontSp + m.amountFontSp * amountLines) * system * WidgetMetrics.TEXT_BOX
+                assertTrue("$size $m", m.dayHeight.value >= needed - 0.5f)
+                // 주 합계는 6주 그리드에서만 쓴다(작은 위젯은 앞 주 거래를 읽어 오지 않는다).
+                assertTrue("$size $m", m.weekTotalHeight.value == 0f || m.rows == 6)
+            }
+        }
     }
 
     /** 6주가 안 들어가면 들어가는 만큼 주를 보이되 이번 주를 맨 아래에 둔다(최근 쓴 돈부터). */
@@ -157,7 +201,7 @@ class LedgerWidgetTest {
     fun metricsKeepTextInsideRowsAtMaxFont() {
         for (size in listOf(LARGE, MEDIUM)) {
             val m = LedgerMetrics.of(size, WidgetConfig(1, fontScale = 150), systemFontScale = 2f)
-            assertTrue(m.toString(), m.cellHeight.value >= (m.dateFontSp + m.amountFontSp) * 2f * WidgetMetrics.TEXT_BOX - 0.5f)
+            assertTrue(m.toString(), m.dayHeight.value >= (m.dateFontSp + m.amountFontSp) * 2f * WidgetMetrics.TEXT_BOX - 0.5f)
         }
         assertEquals(LedgerWidgetMode.LARGE, ledgerWidgetMode(LARGE))
         assertEquals(LedgerWidgetMode.COMPACT, ledgerWidgetMode(MEDIUM))

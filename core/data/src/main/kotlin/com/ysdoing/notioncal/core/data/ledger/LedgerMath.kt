@@ -103,7 +103,21 @@ data class LedgerSummary(
     val needsReview: List<LedgerTx>,
     /** LD-10 가져온 거래와 짝이 맞아 합계에서 뺀 앱입력 행(앱입력, 짝). */
     val matchedManual: List<Pair<LedgerTx, LedgerTx>>,
-)
+    /** LD-15 이 달의 무지출 날. 이 달 거래가 하나도 없어 알 수 없으면 null(0일과 다르다). */
+    val noSpendDays: List<LocalDate>? = null,
+) {
+    /**
+     * LD-15 주 합계: [firstDay]부터 7일 중 이 달의 날만 더한 지출·수입(예정 제외).
+     * 달이 걸친 첫·마지막 주는 이 달 날짜분만 센다(옆 달 칸이 두 달의 합계에 두 번 들어가지 않게).
+     */
+    fun weekMoney(firstDay: LocalDate): DayMoney {
+        val week = (0L..6L).map { firstDay.plusDays(it) }.filter { YearMonth.from(it) == month }
+        return DayMoney(
+            spend = week.sumOf { days[it]?.spend ?: 0L },
+            income = week.sumOf { days[it]?.income ?: 0L },
+        )
+    }
+}
 
 /**
  * 가계부 계산(순수 함수). Room은 범위의 행만 읽고 규칙은 여기서 적용한다.
@@ -223,7 +237,24 @@ object LedgerMath {
             duplicates = duplicates,
             needsReview = needsReview,
             matchedManual = matched,
+            noSpendDays = noSpendDays(month, days, asOf, today),
         )
+    }
+
+    /**
+     * LD-15 무지출 날: 이 달에서 반영 기준일과 어제 중 이른 날까지 지출이 없는 날(환불만 있는 날 포함).
+     * 반영 기준일 뒤는 거래를 아직 가져오지 않았을 뿐일 수 있고(LD-09), 오늘은 아직 끝나지 않아 세지 않는다.
+     * 이 달 거래가 하나도 없으면 데이터가 없는 것인지 정말 무지출인지 알 수 없어 null이다.
+     * shortcut: 가져온 첫 거래보다 앞선 날은 구분하지 못한다(첫 가져오기가 달 중간이면 그 앞날도 센다), 필요하면 첫 거래일을 읽어 온다.
+     */
+    private fun noSpendDays(month: YearMonth, days: Map<LocalDate, DayMoney>, asOf: LocalDate?, today: LocalDate): List<LocalDate>? {
+        val hasData = days.any { (date, money) -> YearMonth.from(date) == month && (money.spend != 0L || money.income != 0L) }
+        if (!hasData || asOf == null) return null
+        val last = minOf(asOf, today.minusDays(1))
+        return generateSequence(month.atDay(1)) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(last) && YearMonth.from(it) == month }
+            .filter { (days[it]?.spend ?: 0L) <= 0L }
+            .toList()
     }
 
     fun monthKey(month: YearMonth): String = month.toString()
