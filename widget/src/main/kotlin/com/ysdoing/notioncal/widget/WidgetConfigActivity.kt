@@ -84,7 +84,7 @@ class WidgetConfigActivity : ComponentActivity() {
      * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
      * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 설정 화면이 없다.
      */
-    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST }
+    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW }
 
     private val kind by lazy {
         when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
@@ -93,6 +93,7 @@ class WidgetConfigActivity : ComponentActivity() {
             LedgerWidgetReceiver::class.java.name -> Kind.LEDGER
             DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> Kind.DDAY
             DdayListWidgetReceiver::class.java.name -> Kind.DDAY_LIST
+            ViewWidgetReceiver::class.java.name -> Kind.VIEW
             else -> Kind.MONTH
         }
     }
@@ -147,7 +148,9 @@ class WidgetConfigActivity : ComponentActivity() {
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = if (kind == Kind.MONTH) {
+            val events = if (kind == Kind.VIEW) {
+                emptyList()
+            } else if (kind == Kind.MONTH) {
                 deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
             } else {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
@@ -155,7 +158,8 @@ class WidgetConfigActivity : ComponentActivity() {
             config = saved
             val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
             val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays)
+            val views = if (kind == Kind.VIEW) deps.views().observeRegistered().first() else emptyList()
+            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views)
         }
         val data = loaded ?: return
 
@@ -183,6 +187,20 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 if (data.ddays.isEmpty()) {
                     Text(stringResource(R.string.widget_config_dday_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            // VW-04: 위젯마다 보여 줄 보기(앱 설정의 '보기 추가'로 등록한 것 중에서).
+            if (kind == Kind.VIEW) {
+                Section(stringResource(R.string.widget_config_view))
+                data.views.forEach { view ->
+                    Row(Modifier.selectableRow(config.viewId == view.viewId) { config = config.copy(viewId = view.viewId) }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = config.viewId == view.viewId, onClick = null)
+                        Text(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+                if (data.views.isEmpty()) {
+                    Text(stringResource(R.string.widget_config_view_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -293,6 +311,7 @@ class WidgetConfigActivity : ComponentActivity() {
         val sources: List<DataSourceEntity>,
         val ledger: LedgerBoard? = null,
         val ddays: List<Dday> = emptyList(),
+        val views: List<com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity> = emptyList(),
     )
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
@@ -317,6 +336,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 Kind.LEDGER -> {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
+                }
+                Kind.VIEW -> {
+                    val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 Kind.DDAY, Kind.DDAY_LIST -> {
                     val state = DdayWidgetState(data.ddays, config, today)

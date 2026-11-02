@@ -88,6 +88,10 @@ class DatabaseRecoveryTest {
         // DD-01 디데이 고정은 앱 상태라 남고, 날씨 예보 캐시는 비워진다.
         db.ddayDao().upsert(com.ysdoing.notioncal.core.data.db.DdayPinEntity("p-synced", countMode = "UP"))
         db.weatherDao().upsertDays(listOf(com.ysdoing.notioncal.core.data.db.WeatherDayEntity(java.time.LocalDate.of(2026, 10, 19), 0, 1.0, 0.0, 0, 1)))
+        // VW-04 보기 등록은 앱 상태라 남고(위젯 설정이 viewId로 가리킨다), 행 스냅샷은 비워진다.
+        val registered = com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = "이름", syncedAt = 800, lastError = "Network")
+        db.viewDao().upsert(registered)
+        db.viewDao().replace(registered, listOf(com.ysdoing.notioncal.core.data.db.ViewRowEntity("v1", 0, "p1", "u", "첫째")))
         db.eventDao().upsert(listOf(event("p-synced", 0), event("local-new", 1)))
         db.outboxDao().insert(
             OutboxEntity(pageId = "local-new", dataSourceId = "ds", op = "CREATE", changes = """{"title":"x"}""",
@@ -143,6 +147,12 @@ class DatabaseRecoveryTest {
             assertTrue(db.ledgerDao().observeBudgets().first().isEmpty())
             assertEquals(listOf("p-synced" to "UP"), db.ddayDao().all().map { it.pageId to it.countMode })
             assertEquals(null, db.weatherDao().observeFetchedAt().first())
+            // 보기 등록은 남고 행 캐시는 비워진다. 받은 시각·오류는 지워서 위젯이 '표시할 행 없음'이 아니라 '아직 받지 못함'을 알리게 한다.
+            val view = db.viewDao().all().single()
+            assertEquals("할 일", view.name)
+            assertEquals(0L, view.syncedAt)
+            assertNull(view.lastError)
+            assertTrue(db.viewDao().rows("v1").isEmpty())
 
             assertNull(db.eventDao().get("p-synced")) // 캐시는 비워짐
             assertEquals(1, db.eventDao().get("local-new")!!.pendingOps) // 미전송 일정은 남음

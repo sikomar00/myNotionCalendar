@@ -40,6 +40,9 @@ interface WidgetDependencies {
     /** DD-03~05 고정한 디데이(Room만 읽는다). */
     fun ddays(): DdayRepository
 
+    /** VW-03 노션 보기 스냅샷(Room만 읽는다). */
+    fun views(): com.ysdoing.notioncal.core.data.view.ViewRepository
+
     /** WX-04 날씨 캐시(Room만 읽는다). */
     fun weather(): com.ysdoing.notioncal.core.data.weather.WeatherRepository
 

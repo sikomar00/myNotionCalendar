@@ -36,6 +36,8 @@ data class WidgetConfig(
     val ddayPageId: String? = null,
     /** WX-04 머리에 오늘 날씨. */
     val showWeather: Boolean = false,
+    /** VW-04 보기 위젯이 보여 줄 보기. null이면 아직 고르지 않음. */
+    val viewId: String? = null,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -57,6 +59,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     hideAmounts = hideAmounts,
     ddayPageId = ddayPageId,
     showWeather = showWeather,
+    viewId = viewId,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -73,6 +76,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     hideAmounts = hideAmounts,
     ddayPageId = ddayPageId,
     showWeather = showWeather,
+    viewId = viewId,
 )
 
 @Singleton

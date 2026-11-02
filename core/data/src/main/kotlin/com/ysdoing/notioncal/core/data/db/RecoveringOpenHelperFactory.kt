@@ -13,7 +13,8 @@ import java.io.File
  * 없거나(다운그레이드 포함) 스키마 검증에 실패하면, 지울 수 없는 것만 꺼내 두고 파일을 새로 만든 뒤 되돌려 넣는다.
  *
  * - 남기는 것: DB 등록·속성 매핑(data_sources), 위젯 설정(widget_configs), 미전송 쓰기(outbox)와 그 일정(events.pendingOps > 0),
- *   가계부 중복 '둘 다 유지' 선택(ledger_dup_keeps, LD-08).
+ *   가계부 중복 '둘 다 유지' 선택(ledger_dup_keeps, LD-08), 디데이 고정(dday_pins), 노션 보기 등록(view_snapshots, VW-04).
+ *   보기 등록은 위젯 설정(widget_configs.viewId)이 가리키므로 함께 남긴다. 보기 행(view_rows)은 캐시라 버린다.
  * - 버리는 것: 일정 캐시·동기화 기록·충돌 기록. 다음 동기화가 전체 조회로 다시 채운다.
  * - 토큰·일반 설정은 DataStore에 있어 영향이 없다.
  *
@@ -95,6 +96,8 @@ class RecoveringOpenHelperFactory(
             }
             // 복구한 DB는 일정이 비었으므로 다음 동기화가 증분이 아니라 전체 조회가 되게 한다.
             db.execSQL("UPDATE data_sources SET lastSyncAt = NULL, lastFullSyncAt = NULL")
+            // 보기 행도 비었으므로 받은 시각·오류를 지워, 위젯이 '표시할 행 없음'이 아니라 '아직 받지 못함'을 알리게 한다.
+            db.execSQL("UPDATE view_snapshots SET syncedAt = 0, lastError = NULL")
             val log = ContentValues().apply {
                 put("at", now())
                 put("trigger", "CACHE_RESET")
@@ -164,6 +167,7 @@ class RecoveringOpenHelperFactory(
             "outbox" to null,
             "ledger_dup_keeps" to null,
             "dday_pins" to null,
+            "view_snapshots" to null,
             "events" to Where("pendingOps", "pendingOps > 0"),
         )
 

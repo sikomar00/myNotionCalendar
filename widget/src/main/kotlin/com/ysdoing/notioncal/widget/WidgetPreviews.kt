@@ -108,6 +108,15 @@ object WidgetPreviews {
         return DdayWidgetState(ddays, WidgetConfig(0, ddayPageId = "preview-1"), today)
     }
 
+    /** 예시 보기(VW-03). 개인 데이터가 아니다. */
+    fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
+        val rows = listOf("장보기" to "집", "보고서 제출" to "일", "운동" to "건강").mapIndexed { i, (title, tag) ->
+            com.ysdoing.notioncal.core.data.view.ViewRow("preview-$i", "", listOf(title, tag, "10/2${i + 1}"))
+        }
+        val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "할 일", "table", listOf("이름", "분류", "날짜"), rows, now, null)
+        return ViewWidgetState(board, WidgetConfig(0, viewId = "preview"), now)
+    }
+
     /**
      * 위젯들의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
      * 모두 성공하면 true.
@@ -125,6 +134,7 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(DdaySmallWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }

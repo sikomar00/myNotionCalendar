@@ -1,0 +1,246 @@
+package com.ysdoing.notioncal.widget
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.TextView
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.glance.action.actionParametersOf
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
+import androidx.glance.appwidget.GlanceRemoteViews
+import androidx.glance.appwidget.testing.unit.hasRunCallbackClickAction
+import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
+import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
+import androidx.glance.testing.unit.hasClickAction
+import androidx.glance.testing.unit.hasContentDescriptionEqualTo
+import androidx.glance.testing.unit.hasTestTag
+import androidx.glance.testing.unit.hasTextEqualTo
+import androidx.test.core.app.ApplicationProvider
+import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
+import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewRow
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * VW-03 넓으면 표(열 머리 + 행)·좁으면 목록(제목 + 둘째 줄), 행 탭 → 노션 페이지, 머리 탭 → 새로고침.
+ * VW-06 고르지 않음·보기 없음·빈 보기·실패·오래됨 상태를 글자로 알린다.
+ */
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(qualifiers = "w420dp-h900dp-xxhdpi")
+class ViewWidgetTest {
+    private val context = ApplicationProvider.getApplicationContext<Context>()
+    private val now = 1_800_000_000_000L
+    private val wide = DpSize(320.dp, 200.dp)
+    private val narrow = DpSize(150.dp, 200.dp)
+
+    private fun board(rows: List<ViewRow> = listOf(ViewRow("p1", "https://notion.so/p1", listOf("장보기", "집", "10/21"))), syncedAt: Long = now, error: String? = null) =
+        ViewBoard("v1", "할 일", "table", listOf("이름", "분류", "날짜"), rows, syncedAt, error)
+
+    private fun state(board: ViewBoard?, viewId: String? = "v1") = ViewWidgetState(board, WidgetConfig(1, viewId = viewId), now)
+
+    @Test
+    fun wideDrawsTableWithColumnHeaders() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        listOf("이름", "분류", "날짜", "장보기", "집", "10/21").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+    }
+
+    @Test
+    fun narrowDrawsTitleWithSecondLineOnly() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("장보기")).assertExists()
+        onNode(hasTextEqualTo("집")).assertExists()
+        onNode(hasTextEqualTo("이름")).assertDoesNotExist()
+        onNode(hasTextEqualTo("10/21")).assertDoesNotExist()
+    }
+
+    @Test
+    fun rowOpensNotionPageAndHeaderRefreshes() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        val open = Intent(Intent.ACTION_VIEW, "https://notion.so/p1".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        onNode(hasTestTag("viewRow")).assert(hasStartActivityClickAction(open))
+        onNode(hasTestTag("viewHeader")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun statesAreSpelledOutInText() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(null, viewId = null), systemFontScale = 1f) }
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_choose))).assertExists()
+    }
+
+    @Test
+    fun missingEmptyFailedAndStaleBoards() {
+        // 보기를 지웠거나 노션에서 사라짐: 설정은 있고 스냅샷이 없다.
+        assertEquals(null, state(null).board)
+        // 상태 한 줄: 정상이면 없음, 못 받음·실패·12시간 지남이면 글자로 알린다.
+        assertNull(viewStatusText(context, board(), now))
+        assertEquals(context.getString(R.string.view_widget_not_synced), viewStatusText(context, board(syncedAt = 0), now))
+        val failed = viewStatusText(context, board(error = "Network"), now)!!
+        assertEquals(true, failed.startsWith("동기화 실패"))
+        val stale = viewStatusText(context, board(syncedAt = now - 13 * 60 * 60 * 1000L), now)!!
+        assertEquals(true, stale.startsWith("오래됨"))
+    }
+
+    @Test
+    fun goneViewTellsInTextAndTapOpensWidgetSettings() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // VW-06: 노션에서 보기가 지워졌거나(404) 권한이 없으면 글자로 알리고, 눌러서 위젯 설정을 연다(다시 고르기).
+        setContext(context)
+        setAppWidgetSize(wide)
+        val gone = board(error = VIEW_ERROR_NOT_FOUND)
+        provideComposable { ViewWidgetContent(state(gone), systemFontScale = 1f) }
+        assertTrue(viewStatusText(context, gone, now)!!.startsWith("노션에서 보기를 찾을 수 없음"))
+        onNode(hasTestTag("viewStatus")).assert(hasStartActivityClickAction(viewConfigIntent(context, 1)))
+    }
+
+    @Test
+    fun transientFailureStaysARefreshHeaderNotASettingsLink() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board(error = "Network")), systemFontScale = 1f) }
+        onNode(hasTestTag("viewStatus")).assertExists()
+        onNode(hasTestTag("viewStatus")).assert(!hasClickAction())
+    }
+
+    @Test
+    fun notChosenViewOpensWidgetSettings() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(null, viewId = null), systemFontScale = 1f) }
+        onNode(hasTestTag("viewNote")).assert(hasStartActivityClickAction(viewConfigIntent(context, 1)))
+    }
+
+    @Test
+    fun unregisteredViewOpensWidgetSettings() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(null), systemFontScale = 1f) }
+        onNode(hasTestTag("viewNote")).assert(hasStartActivityClickAction(viewConfigIntent(context, 1)))
+    }
+
+    @Test
+    fun headerNamesTheViewForScreenReaders() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // 접근성 설명이 글자를 대신하므로 '새로고침'만 읽히면 어느 보기인지 알 수 없다.
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
+        onNode(hasTestTag("viewHeader")).assert(hasContentDescriptionEqualTo("할 일, 새로고침"))
+    }
+
+    @Test
+    fun untitledViewShowsTheDefaultLabelInTheHeader() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board().copy(name = "")), systemFontScale = 1f) }
+        onNode(hasTestTag("viewHeader")).assert(hasTextEqualTo(context.getString(R.string.view_widget_label)))
+        onNode(hasTestTag("viewHeader")).assert(hasContentDescriptionEqualTo("${context.getString(R.string.view_widget_label)}, 새로고침"))
+    }
+
+    private fun fiftyRows() = (1..50).map { ViewRow("p$it", "https://notion.so/p$it", listOf("할 일 $it", "집", "10/21")) }
+
+    @Test
+    fun fiftyRowsAreAllDrawnAndTappable() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board(fiftyRows())), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(50)
+        onAllNodes(hasTestTag("viewRow")).assertAll(hasClickAction())
+    }
+
+    @Test
+    fun headerAndOneRowFitTheSmallestWidgetAtNormalFonts() {
+        // 2×2(110dp)에서 머리와 목록 한 줄이 통째로 보인다. 글자 배율 100%에서 시스템 글꼴이 상한(1.3)을 넘어도 같다.
+        // 배율 150% + 시스템 1.3에서는 첫 줄이 일부만 보이고 스크롤된다(한계, PRD VW-03에 적음).
+        listOf(1.0f, 1.15f, 1.3f, 2.0f).forEach { system ->
+            val m = viewMetrics(userScale = 1f, systemFontScale = system)
+            assertTrue("시스템 글꼴 $system", m.header + m.listRow <= 110.dp - VIEW_PADDING_V * 2)
+        }
+    }
+
+    private suspend fun render(size: DpSize, content: @Composable () -> Unit) {
+        val remoteViews = GlanceRemoteViews().compose(context, size) { content() }.remoteViews
+        val activity = Robolectric.buildActivity(Activity::class.java).create().get()
+        val frame = FrameLayout(activity)
+        frame.addView(remoteViews.apply(activity, frame))
+        frame.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+    }
+
+    private fun textsIn(view: View): List<String> = when (view) {
+        is TextView -> listOf(view.text.toString())
+        is ViewGroup -> (0 until view.childCount).flatMap { textsIn(view.getChildAt(it)) }
+        else -> emptyList()
+    }
+
+    /** 위젯 설정 화면의 미리보기와 같은 방식(변환 → View에 적용 → 측정·배치)으로 그려, 화면에 나온 글자를 모은다. */
+    private suspend fun renderedTexts(size: DpSize, state: ViewWidgetState, staticRows: Boolean): List<String> {
+        val remoteViews = GlanceRemoteViews().compose(context, size) { ViewWidgetContent(state, systemFontScale = 1f, staticRows = staticRows) }.remoteViews
+        val activity = Robolectric.buildActivity(Activity::class.java).create().get()
+        val frame = FrameLayout(activity)
+        frame.addView(remoteViews.apply(activity, frame))
+        val density = activity.resources.displayMetrics.density
+        val w = (size.width.value * density).toInt()
+        val h = (size.height.value * density).toInt()
+        frame.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        frame.layout(0, 0, w, h)
+        return textsIn(frame)
+    }
+
+    @Test
+    fun settingsPreviewShowsTheRowsNotOnlyTheHeaders() = runTest(timeout = 3.minutes) {
+        // 기기에서 위젯 설정 화면의 미리보기는 머리와 열 머리만 나오고 행이 비었다. 설정 화면은 변환 결과를 View에 직접 적용하는데
+        // 그 방식에서는 목록(LazyColumn)의 행이 그려지지 않는다(Agenda도 같게 재현). 그래서 미리보기는 고정 Column으로 행을 그린다.
+        val texts = renderedTexts(DpSize(330.dp, 380.dp), WidgetPreviews.viewState(), staticRows = true)
+        assertTrue("열 머리가 나온다: $texts", "이름" in texts && "분류" in texts)
+        assertTrue("행이 나온다: $texts", "장보기" in texts && "보고서 제출" in texts)
+    }
+
+    @Test
+    fun staticPreviewKeepsAtMostEightRowsSoGlanceChildLimitHolds() = runTest(timeout = 3.minutes) {
+        val texts = renderedTexts(DpSize(330.dp, 380.dp), state(board(fiftyRows())), staticRows = true)
+        assertTrue("앞 8행은 나온다: $texts", "할 일 1" in texts && "할 일 8" in texts)
+        assertTrue("9번째 행부터는 미리보기에 없다", "할 일 9" !in texts)
+    }
+
+    @Test
+    fun translatesToRemoteViewsInEverySizeAndFont() = runTest(timeout = 3.minutes) {
+        // Row·Column 자식 10개 제한 등은 실제 RemoteViews 변환에서만 드러난다(PRD §13).
+        val sizes = listOf(DpSize(110.dp, 110.dp), DpSize(280.dp, 110.dp), DpSize(280.dp, 299.dp), DpSize(411.dp, 800.dp))
+        val boards = listOf(board(fiftyRows()), board(emptyList()), board(fiftyRows(), error = VIEW_ERROR_NOT_FOUND), null)
+        for (size in sizes) for (b in boards) for (font in listOf(70, 150)) {
+            val s = ViewWidgetState(b, WidgetConfig(1, fontScale = font, viewId = "v1"), now)
+            render(size) { ViewWidgetContent(s, systemFontScale = 1.3f) }
+        }
+    }
+
+    @Test
+    fun tableColumnsFitTheWidth() {
+        assertEquals(1, tableColumnCount(80.dp, 5))
+        assertEquals(4, tableColumnCount(320.dp, 5)) // (320-20)/72 = 4
+        assertEquals(2, tableColumnCount(320.dp, 2)) // 열이 적으면 열 수까지만
+        assertEquals(1, tableColumnCount(320.dp, 0)) // 보이는 열이 없어도 깨지지 않는다
+    }
+}

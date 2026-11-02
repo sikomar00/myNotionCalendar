@@ -69,6 +69,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 fun SettingsRoute(
     onBack: () -> Unit,
     onAddDatabase: () -> Unit,
+    onAddView: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenDday: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -115,6 +116,7 @@ fun SettingsRoute(
                 )
             }
             OutlinedButton(onClick = onAddDatabase) { Text(stringResource(R.string.settings_add_database)) }
+            OutlinedButton(onClick = onAddView) { Text(stringResource(R.string.settings_add_view)) }
 
             HorizontalDivider()
             Section(stringResource(R.string.settings_section_general))

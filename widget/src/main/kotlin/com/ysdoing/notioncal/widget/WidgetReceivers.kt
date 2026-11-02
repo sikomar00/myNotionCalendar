@@ -64,6 +64,11 @@ class DdayListWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = DdayListWidget()
 }
 
+/** VW-03 노션 보기 위젯. */
+class ViewWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = ViewWidget()
+}
+
 /** WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). */
 class TabbedWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = TabbedWidget()
