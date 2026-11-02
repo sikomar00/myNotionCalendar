@@ -25,6 +25,9 @@ out/
 google-services.json
 sentry.properties
 
+# 개인 일정·프로필 사진이 든 참고 이미지(커밋 금지)
+Refs/
+
 # OS
 .DS_Store
 Thumbs.db

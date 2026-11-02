@@ -27,8 +27,8 @@ data class AppSettings(
     val weekStart: DayOfWeek = DayOfWeek.SUNDAY,
     /** MV-05 완료 항목 숨김. 기본은 취소선으로 표시(PRD §15). */
     val hideDone: Boolean = false,
-    /** NS-06 주기 동기화 간격(15·30·60분). PRD §15 기본 15분. */
-    val syncIntervalMinutes: Int = 15,
+    /** NS-06 주기 동기화 간격(15·30·60분). 기본 30분(2026-11-02 사용자 결정, PRD §15). */
+    val syncIntervalMinutes: Int = AppSettings.DEFAULT_SYNC_INTERVAL,
     /** WI-02 퀵 추가 기본 DB. null이면 첫 번째로 켠 DB. */
     val defaultDataSourceId: String? = null,
     /** S25-03 첫 실행 절전 안내 카드를 닫았는지. */
@@ -74,6 +74,8 @@ data class AppSettings(
 
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
+        /** 2026-11-02 사용자 결정: 주기 동기화는 30분(배터리와 최신성의 균형). 사용자가 고른 값이 있으면 그대로 둔다. */
+        const val DEFAULT_SYNC_INTERVAL = 30
     }
 }
 
@@ -87,15 +89,15 @@ class SettingsRepository @Inject constructor(
             AppSettings(
                 weekStart = prefs[WEEK_START]?.let { runCatching { DayOfWeek.valueOf(it) }.getOrNull() } ?: DayOfWeek.SUNDAY,
                 hideDone = prefs[HIDE_DONE] ?: false,
-                syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: 15,
+                syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: AppSettings.DEFAULT_SYNC_INTERVAL,
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
                 dynamicColor = prefs[DYNAMIC_COLOR] ?: false,
+                showWeekNumbers = prefs[SHOW_WEEK_NUMBERS] ?: false,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
-                showWeekNumbers = prefs[SHOW_WEEK_NUMBERS] ?: false,
                 remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
                 reminderRules = ReminderRules(
                     timedMinutes = prefs[TIMED_REMINDERS]?.let { saved ->
@@ -166,12 +168,12 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
-    suspend fun setShowHolidays(show: Boolean) {
-        dataStore.edit { it[SHOW_HOLIDAYS] = show }
     suspend fun setShowWeekNumbers(show: Boolean) {
         dataStore.edit { it[SHOW_WEEK_NUMBERS] = show }
     }
 
+    suspend fun setShowHolidays(show: Boolean) {
+        dataStore.edit { it[SHOW_HOLIDAYS] = show }
         widgetRefresher.requestUpdate()
     }
 
@@ -252,9 +254,9 @@ class SettingsRepository @Inject constructor(
         val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
         // 2026-10-16 앱 정체성(노션 문서 색)을 기본으로 하면서 키를 바꿨다. 예전 키(dynamic_color, 기본 켬)의 값은 읽지 않는다.
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_v2")
+        val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
-        val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
         val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")
