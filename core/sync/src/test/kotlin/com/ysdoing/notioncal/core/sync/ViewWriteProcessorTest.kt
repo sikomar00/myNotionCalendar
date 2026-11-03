@@ -54,13 +54,31 @@ class ViewWriteProcessorTest {
             "Name":{"id":"title","name":"Name","type":"title"},
             "Done":{"id":"dn","name":"Done","type":"checkbox"},
             "When":{"id":"wh","name":"When","type":"date"},
-            "Status":{"id":"st","name":"Status","type":"status"}}}""",
+            "Status":{"id":"st","name":"Status","type":"status"},
+            "Pages":{"id":"pg","name":"Pages","type":"number"}}}""",
+    )
+
+    /** 노션에 있는 p1의 현재 속성(SY-05 전송 전 충돌 확인이 읽는다). 기본은 행을 받아 둘 때와 같은 값이다. */
+    private var remote: PageDto? = remotePage(done = false, status = "o1", pages = 12.0)
+    private var pageLookups = 0
+
+    private fun remotePage(done: Boolean, status: String, pages: Double?) = PageDto(
+        id = "p1", lastEditedTime = "2026-11-03T00:00:00.000Z",
+        properties = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"Name":{"type":"title","title":[{"plain_text":"첫째"}]},
+               "Done":{"type":"checkbox","checkbox":$done},
+               "Status":{"type":"status","status":{"id":"$status","name":"x"}},
+               "Pages":{"type":"number","number":${pages ?: "null"}}}""",
+        ).let { it as kotlinx.serialization.json.JsonObject },
     )
 
     private val notionReader = object : NotionReader {
         override suspend fun dataSource(dataSourceId: String) = schema
         override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult = error("쓰기 처리는 조회하지 않는다")
-        override suspend fun pageOrNull(pageId: String): PageDto? = error("쓰기 처리는 단건 조회하지 않는다")
+        override suspend fun pageOrNull(pageId: String): PageDto? {
+            pageLookups++
+            return remote
+        }
     }
 
     private val notionWriter = object : NotionWriter {
@@ -95,13 +113,14 @@ class ViewWriteProcessorTest {
             ViewColumn("wh", "When", "date"),
             ViewColumn("dn", "Done", "checkbox"),
             ViewColumn("st", "Status", "status", listOf(ViewChoice("o1", "할 일"), ViewChoice("o2", "진행 중"))),
+            ViewColumn("pg", "Pages", "number"),
         )
         val snapshot = ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = "Name\u001FDone\u001FStatus", columnInfo = ViewJson.encodeColumns(columns))
         db.viewDao().upsert(snapshot)
         db.viewDao().replace(
             snapshot,
             listOf(
-                ViewRowEntity("v1", 0, "p1", "u1", "첫째\u001F\u001F할 일", ViewJson.encodeTyped(mapOf("dn" to JsonPrimitive(false), "st" to JsonPrimitive("o1")))),
+                ViewRowEntity("v1", 0, "p1", "u1", "첫째\u001F\u001F할 일", ViewJson.encodeTyped(mapOf("dn" to JsonPrimitive(false), "st" to JsonPrimitive("o1"), "pg" to JsonPrimitive(12.0)))),
             ),
         )
     }
@@ -129,6 +148,8 @@ class ViewWriteProcessorTest {
             DataSourceDto.serializer(),
             """{"id":"ds","properties":{"Done":{"id":"dn","name":"완료 여부","type":"checkbox"},"Status":{"id":"st","name":"Status","type":"status"}}}""",
         )
+        // 노션에서 속성 이름을 바꾸면 페이지 JSON의 키도 새 이름이다.
+        remote = remote!!.copy(properties = JsonObject(remote!!.properties.mapKeys { (name, _) -> if (name == "Done") "완료 여부" else name }))
         val outcome = processor().process()
         assertEquals(2, outcome.sent)
         assertEquals(0, outcome.remaining)
@@ -225,6 +246,60 @@ class ViewWriteProcessorTest {
         assertEquals(NotionError.Network, outcome.retryError)
         assertEquals(1, outcome.remaining)
         assertEquals(0, viewRequests.size) // 연결이 안 되는 지금 보기를 다시 받지 않는다(다음 동기화가 한다)
+    }
+
+    // --- SY-05 전송 전 충돌 확인: 노션 값이 기준값과 다르면 노션 값 우선
+
+    @Test
+    fun aNotionEditSinceTheBaseWinsAndIsRecordedAsAConflict() = runTest {
+        writer().toggle("v1", "p1", "dn") // 기준값은 해제(false)
+        remote = remotePage(done = true, status = "o1", pages = 12.0) // 그 사이 노션에서 체크함
+        val outcome = processor().process()
+        assertEquals(listOf(0, 1, 0), listOf(outcome.sent, outcome.dropped, outcome.remaining))
+        assertEquals(0, sent.size) // 노션에 쓰지 않았다
+        val conflict = db.conflictDao().all().single()
+        assertEquals(listOf("PROP:Done", OutboxProcessor.KIND_CONFLICT, "true", "true"), listOf(conflict.field, conflict.kind, conflict.localValue, conflict.remoteValue))
+        assertEquals(listOf("v1"), viewRequests) // 보기를 다시 받아 위젯을 노션 값으로 되돌린다
+    }
+
+    @Test
+    fun aStaleReadingPageCountDoesNotOverwriteWhatNotionHas() = runTest {
+        // M5b 한계 해소: 위젯이 보여 준 12쪽에 10을 더해 22를 쓰려 했는데 그 사이 노션이 100이 됐다면 100을 지키고 충돌로 남긴다.
+        writer().add("v1", "p1", "pg", 10.0)
+        remote = remotePage(done = false, status = "o1", pages = 100.0)
+        val outcome = processor().process()
+        assertEquals(1, outcome.dropped)
+        assertEquals(0, sent.size)
+        assertEquals("PROP:Pages", db.conflictDao().all().single().field)
+    }
+
+    @Test
+    fun aWriteWhoseBaseStillMatchesIsSentAfterOneLookup() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0), listOf(outcome.sent, outcome.dropped))
+        assertEquals(1, pageLookups)
+        assertEquals(0, db.conflictDao().all().size)
+    }
+
+    @Test
+    fun aWriteWithoutABaseIsSentWithoutLookingNotionUp() = runTest {
+        // 기준값이 없는 쓰기(이전 버전에서 쌓인 것)는 확인하지 않고 보낸다.
+        val row = db.viewDao().row("v1", "p1")!!
+        db.viewDao().enqueue(row, com.ysdoing.notioncal.core.data.db.ViewWriteEntity(viewId = "v1", pageId = "p1", dataSourceId = "ds", propId = "dn", propType = "checkbox", value = "true", createdAt = 1))
+        remote = remotePage(done = true, status = "o2", pages = 1.0) // 달라도 상관없다
+        val outcome = processor().process()
+        assertEquals(1, outcome.sent)
+        assertEquals(0, pageLookups)
+    }
+
+    @Test
+    fun aWriteForAPageGoneFromNotionIsRejectedNotSent() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        remote = null
+        val outcome = processor().process()
+        assertEquals(listOf(0, 1), listOf(outcome.sent, outcome.dropped))
+        assertEquals(OutboxProcessor.KIND_REJECTED, db.conflictDao().all().single().kind)
     }
 
     // --- 새 항목 만들기

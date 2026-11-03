@@ -7,6 +7,7 @@ import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
@@ -19,9 +20,14 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** 한 항목을 보낸 결과: 보냄 / 노션 값이 이겨 충돌로 남기고 버림 / 보낼 수 없어 '노션 반영 실패'로 버림. */
+private enum class SendResult { SENT, SUPERSEDED, REJECTED }
 
 /** 한 번 처리한 결과. [retryError]가 있으면 일시 오류로 멈춘 것이라 나중에 다시 실행한다. */
 data class ViewWriteOutcome(val sent: Int, val dropped: Int, val remaining: Int, val retryError: NotionError?)
@@ -64,69 +70,99 @@ class ViewWriteProcessor @Inject constructor(
         var retryError: NotionError? = null
         while (true) {
             val write = dao.firstWrite() ?: break
-            val creating = write.propType == VIEW_WRITE_CREATE
-            // 끝없이 실패하는 바꿈 하나가 그 보기의 새로 받기를 영원히 막지 않게 한다. 새 항목은 잃지 않으려고 횟수로 버리지 않는다.
-            var sendable = creating || write.attempts < MAX_ATTEMPTS
-            if (sendable) {
-                try {
-                    val schema = schemas.getOrPut(write.dataSourceId) { reader.dataSource(write.dataSourceId) }
-                    sendable = send(write, schema)
-                } catch (e: NotionException) {
-                    if (e.error is NotionError.Validation || e.error == NotionError.NotShared) {
-                        sendable = false
-                    } else {
-                        dao.markWriteFailed(write.id, e.error.storedName())
-                        retryError = e.error
-                        break
-                    }
+            val result = try {
+                trySend(write, schemas)
+            } catch (e: NotionException) {
+                if (e.error is NotionError.Validation || e.error == NotionError.NotShared) {
+                    SendResult.REJECTED
+                } else {
+                    dao.markWriteFailed(write.id, e.error.storedName())
+                    retryError = e.error
+                    break
                 }
             }
-            if (sendable) {
-                dao.deleteWriteById(write.id)
-                sent++
-                if (creating) refresh += write.viewId
-            } else {
-                reject(write)
-                refresh += write.viewId
-                dropped++
+            when (result) {
+                SendResult.SENT -> {
+                    dao.deleteWriteById(write.id)
+                    sent++
+                    if (write.propType == VIEW_WRITE_CREATE) refresh += write.viewId // 새 행이 위젯에 나타나게
+                }
+                SendResult.SUPERSEDED -> {
+                    dao.deleteWriteById(write.id) // 노션 값이 이겼고 충돌로 남겼다
+                    refresh += write.viewId
+                    dropped++
+                }
+                SendResult.REJECTED -> {
+                    reject(write)
+                    refresh += write.viewId
+                    dropped++
+                }
             }
         }
         if (sent + dropped > 0) widgets.requestUpdate()
         return Drain(ViewWriteOutcome(sent, dropped, dao.pendingWriteCount(), retryError), refresh)
     }
 
-    /** 한 항목을 노션에 보낸다. 보냈으면 true, 보낼 수 없어(값이 깨졌거나 속성이 지워짐) 버려야 하면 false. 노션 오류는 던진다. */
-    private suspend fun send(write: ViewWriteEntity, schema: DataSourceDto): Boolean =
-        if (write.propType == VIEW_WRITE_CREATE) create(write, schema) else update(write, schema)
-
-    private suspend fun update(write: ViewWriteEntity, schema: DataSourceDto): Boolean {
-        // 키는 보내는 순간의 속성 이름이다. 속성이 지워졌다면 ID를 키로 보내도 노션이 오류 없이 무시하므로 보내지 않고 되돌린다.
-        val key = schema.properties.values.firstOrNull { it.id == write.propId }?.name ?: return false
-        val value = ViewJson.parseValue(write.value) ?: return false
-        val properties = encodeViewValue(key, write.propType, value) ?: return false
-        writer.updatePage(write.pageId, properties)
-        return true
+    /**
+     * 한 항목을 보낸다. 끝없이 실패하는 바꿈 하나가 그 보기의 새로 받기를 영원히 막지 않게 [MAX_ATTEMPTS]번 실패하면 버린다.
+     * 새 항목은 잃지 않으려고 횟수로 버리지 않는다. 일시 오류는 던져 큐 전체를 멈춘다.
+     */
+    private suspend fun trySend(write: ViewWriteEntity, schemas: MutableMap<String, DataSourceDto>): SendResult {
+        val creating = write.propType == VIEW_WRITE_CREATE
+        if (!creating && write.attempts >= MAX_ATTEMPTS) return SendResult.REJECTED
+        val schema = schemas.getOrPut(write.dataSourceId) { reader.dataSource(write.dataSourceId) }
+        return if (creating) create(write, schema) else update(write, schema)
     }
 
-    /** 새 항목을 만든다. 값이 깨졌거나 제목 속성이 지워졌으면 보내지 않고 false. */
-    private suspend fun create(write: ViewWriteEntity, schema: DataSourceDto): Boolean {
-        val spec = ViewJson.parseCreate(write.value) ?: return false
-        val titleKey = schema.properties.values.firstOrNull { it.id == write.propId }?.name ?: return false
+    /**
+     * 속성 하나를 바꾼다(SY-05). 기준값이 있으면 보내기 직전에 노션 값을 다시 읽어, 그 사이 노션에서 바뀌었다면 보내지 않고 노션 값을 남긴다
+     * (충돌로 기록, [SendResult.SUPERSEDED]). 기준값이 없는 쓰기(이전 버전에서 쌓인 것)는 확인 없이 보낸다.
+     */
+    private suspend fun update(write: ViewWriteEntity, schema: DataSourceDto): SendResult {
+        // 키는 보내는 순간의 속성 이름이다. 속성이 지워졌다면 ID를 키로 보내도 노션이 오류 없이 무시하므로 보내지 않고 되돌린다.
+        val property = schema.properties.values.firstOrNull { it.id == write.propId } ?: return SendResult.REJECTED
+        val value = ViewJson.parseValue(write.value) ?: return SendResult.REJECTED
+        val properties = encodeViewValue(property.name, write.propType, value) ?: return SendResult.REJECTED
+        if (write.baseValue != null) {
+            val page = reader.pageOrNull(write.pageId)?.takeIf { !it.inTrash } ?: return SendResult.REJECTED
+            val remote = typedValue(ViewColumn(property.id, property.name, property.type), page.properties[property.name] as? JsonObject)
+            if (remote.toString() != write.baseValue) {
+                recordConflict(write, property.name, remote)
+                return SendResult.SUPERSEDED
+            }
+        }
+        writer.updatePage(write.pageId, properties)
+        return SendResult.SENT
+    }
+
+    private suspend fun recordConflict(write: ViewWriteEntity, propertyName: String, remote: JsonElement) {
+        db.conflictDao().insert(
+            ConflictEntity(
+                pageId = write.pageId, title = rowTitle(write), field = "PROP:$propertyName",
+                localValue = write.value, remoteValue = ViewJson.valueText(remote),
+                kind = OutboxProcessor.KIND_CONFLICT, at = clock.millis(),
+            ),
+        )
+    }
+
+    private suspend fun rowTitle(write: ViewWriteEntity): String =
+        dao.row(write.viewId, write.pageId)?.cells?.substringBefore(VIEW_CELL_SEPARATOR).orEmpty()
+
+    /** 새 항목을 만든다. 값이 깨졌거나 제목 속성이 지워졌으면 보내지 않고 [SendResult.REJECTED]. */
+    private suspend fun create(write: ViewWriteEntity, schema: DataSourceDto): SendResult {
+        val spec = ViewJson.parseCreate(write.value) ?: return SendResult.REJECTED
+        val titleKey = schema.properties.values.firstOrNull { it.id == write.propId }?.name ?: return SendResult.REJECTED
         // 날짜 속성이 지워졌다면 날짜만 빼고 항목은 만든다(제목이 더 중요하다).
         val dateKey = spec.dateProp?.let { id -> schema.properties.values.firstOrNull { it.id == id }?.name }
         writer.createPage(write.dataSourceId, encodeViewCreate(titleKey, spec.title, dateKey, spec.date))
-        return true
+        return SendResult.SENT
     }
 
     /** 버린 항목을 앱 월 화면의 '노션 반영 실패'에 남긴다(조용히 사라지지 않게). */
     private suspend fun reject(write: ViewWriteEntity) {
         dao.deleteWriteById(write.id)
         val creating = write.propType == VIEW_WRITE_CREATE
-        val title = if (creating) {
-            ViewJson.parseCreate(write.value)?.title.orEmpty()
-        } else {
-            dao.row(write.viewId, write.pageId)?.cells?.substringBefore(VIEW_CELL_SEPARATOR).orEmpty()
-        }
+        val title = if (creating) ViewJson.parseCreate(write.value)?.title.orEmpty() else rowTitle(write)
         db.conflictDao().insert(
             ConflictEntity(
                 pageId = write.pageId, title = title, field = "PAGE", localValue = if (creating) "CREATE" else "UPDATE", remoteValue = null,
