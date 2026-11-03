@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.view.CoverStore
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewChoice
@@ -109,7 +110,7 @@ class ViewWriteProcessorTest {
     fun tearDown() = db.close()
 
     private fun processor(): ViewWriteProcessor {
-        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock)
+        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(java.nio.file.Files.createTempDirectory("covers").toFile()), CoverDownload { null }))
         return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
     }
 

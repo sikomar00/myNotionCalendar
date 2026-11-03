@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
+import com.ysdoing.notioncal.core.data.view.CoverStore
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import kotlinx.serialization.json.JsonPrimitive
 import com.ysdoing.notioncal.core.notion.NotionError
@@ -26,6 +27,9 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import kotlinx.coroutines.flow.first
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -100,7 +104,12 @@ class ViewSyncTest {
     private suspend fun register(vararg ids: String) =
         ids.forEach { db.viewDao().upsert(ViewSnapshotEntity(it, "ds", "이름", "table")) }
 
-    private fun sync() = ViewSync(reader, db.viewDao(), { widgetUpdates++ }, clock)
+    private val coverDir = java.nio.file.Files.createTempDirectory("covers").toFile()
+    private var coverBytes: ByteArray? = null
+    private val coverRequests = mutableListOf<String>()
+    private val covers = CoverSync(CoverStore(coverDir), CoverDownload { url -> coverRequests += url; coverBytes })
+
+    private fun sync() = ViewSync(reader, db.viewDao(), { widgetUpdates++ }, clock, covers)
 
     @Test
     fun savesVisibleColumnsWithTitleFirstAndRequestsWidgetUpdate() = runTest {
@@ -374,5 +383,60 @@ class ViewSyncTest {
         val view = db.viewDao().all().single()
         assertEquals(listOf("Name", "Done"), view.columns.split(VIEW_CELL_SEPARATOR)) // 제목이 첫 열
         assertEquals("title", ViewJson.columns(view.columnInfo).first().type)
+    }
+
+    // --- M5 책 위젯: 표지 주소·읽은 비율은 보이는 열과 무관하게 속성에서 읽고, 표지를 받아 둔다.
+
+    private fun bookPage(id: String, cover: String?, ing: Int, total: Int) = PageDto(
+        id = id,
+        url = "https://notion.so/$id",
+        lastEditedTime = "2026-10-22T00:00:00.000Z",
+        properties = Json.parseToJsonElement(
+            """{"Name":{"type":"title","title":[{"plain_text":"책 $id"}]},
+                "cover":{"type":"files","files":[${if (cover == null) "" else """{"type":"external","external":{"url":"$cover"}}"""}]},
+                "ing":{"type":"number","number":$ing},"page":{"type":"number","number":$total}}""",
+        ).jsonObject,
+    )
+
+    @Test
+    fun rowsCarryTheCoverUrlAndProgressEvenWhenThoseColumnsAreHidden() = runTest {
+        register("v1")
+        rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 30, 300), bookPage("b2", null, 0, 100))
+        sync().syncAll()
+        val rows = db.viewDao().observeRows("v1").first()
+        assertEquals("https://img.example/1.jpg", rows[0].coverUrl)
+        assertEquals(0.1f, rows[0].progress!!, 0.0001f)
+        assertEquals("", rows[1].coverUrl) // 표지 없음
+        assertEquals(0f, rows[1].progress)
+    }
+
+    @Test
+    fun coversAreDownloadedOnceAndAFailureKeepsTheSnapshot() = runTest {
+        register("v1")
+        rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 1, 10))
+        coverBytes = byteArrayOf(1, 2, 3)
+        sync().syncAll()
+        assertEquals(listOf("https://img.example/1.jpg"), coverRequests)
+        assertTrue(CoverStore(coverDir).has("https://img.example/1.jpg"))
+        sync().syncAll()
+        assertEquals(1, coverRequests.size) // 받아 둔 표지는 다시 받지 않는다
+        // 새 책의 표지를 못 받아도 보기 동기화는 성공이고 행은 그대로 들어간다
+        coverBytes = null
+        rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 1, 10), bookPage("b2", "https://img.example/2.jpg", 2, 10))
+        sync().syncAll()
+        assertEquals(2, db.viewDao().observeRows("v1").first().size)
+        assertNull(db.viewDao().snapshot("v1")!!.lastError)
+    }
+
+    @Test
+    fun syncAllPrunesCoversNoViewUsesAnymore() = runTest {
+        register("v1")
+        rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 1, 10))
+        coverBytes = byteArrayOf(1)
+        sync().syncAll()
+        rowPages = listOf(bookPage("b2", "https://img.example/2.jpg", 1, 10))
+        sync().syncAll()
+        assertFalse(CoverStore(coverDir).has("https://img.example/1.jpg")) // 책이 빠지면 표지 파일도 정리
+        assertTrue(CoverStore(coverDir).has("https://img.example/2.jpg"))
     }
 }

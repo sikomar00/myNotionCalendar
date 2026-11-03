@@ -27,6 +27,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 
+/** 한 보기에서 표지를 받는 책 수 상한(책 위젯은 6권까지 그린다). */
+private const val COVER_LIMIT = 12
+
 /** 노션 오류가 아닌 예상 밖 예외(직렬화·Room 등)로 한 보기가 실패했을 때 남기는 값. */
 private const val ERROR_UNEXPECTED = "Unexpected"
 
@@ -40,6 +43,7 @@ class ViewSync @Inject constructor(
     private val dao: ViewDao,
     private val widgets: WidgetRefresher,
     private val clock: Clock,
+    private val covers: CoverSync,
 ) {
     suspend fun syncAll() {
         var changed = false
@@ -50,6 +54,8 @@ class ViewSync @Inject constructor(
             // 연결·토큰·속도 제한·서버 장애는 다른 보기도 똑같이 실패하므로 더 부르지 않는다.
             if (error != null && error.isSharedAcrossViews()) break
         }
+        // 표지 파일은 등록한 모든 보기의 주소를 모아 정리한다(보기 하나만 보고 지우면 다른 보기의 표지가 사라진다).
+        covers.prune(dao.coverUrls())
         if (changed) widgets.requestUpdate()
     }
 
@@ -67,6 +73,7 @@ class ViewSync @Inject constructor(
         val fetchedAt = clock.millis() // 받는 도중에 위젯에서 바꾼 보기는 replace가 덮어쓰지 않는다
         val (meta, rows) = snapshot(registered, schemas)
         dao.replace(meta, rows, fetchedAt)
+        covers.fetch(rows.take(COVER_LIMIT).map { it.coverUrl }) // 위젯이 그리는 앞쪽 책만 받는다(실패해도 보기 동기화는 성공)
         null
     } catch (e: NotionException) {
         dao.markError(registered.viewId, e.error.storedName())
@@ -113,7 +120,7 @@ class ViewSync @Inject constructor(
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { displayValue(page.properties[it] as? JsonObject ?: JsonObject(emptyMap())) }
             val typed = writable.filter { it.writable }.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
-            ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed))
+            ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed), coverUrlOf(page.properties), progressOf(page.properties))
         }
         return meta to rows
     }

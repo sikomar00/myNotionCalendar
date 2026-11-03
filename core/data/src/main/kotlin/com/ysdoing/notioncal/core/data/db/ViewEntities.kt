@@ -53,6 +53,10 @@ data class ViewRowEntity(
     val cells: String,
     /** v14: 쓸 수 있는 속성의 원래 값(속성 ID → 체크·선택지 ID·숫자)을 JSON으로. 표시용 [cells]와 따로 둔다. */
     @ColumnInfo(defaultValue = "") val typed: String = "",
+    /** v15(M5): 책 위젯이 그릴 표지 이미지 주소(https). 보기에 보이는 열과 무관하게 파일 속성에서 읽는다. 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val coverUrl: String = "",
+    /** v15(M5): 읽은 비율 0~1. 계산할 속성이 없으면 null. */
+    val progress: Float? = null,
 )
 
 /**
@@ -179,6 +183,10 @@ abstract class ViewDao {
         enqueue(changed, write)
         return true
     }
+
+    /** 등록한 모든 보기의 표지 주소(표지 파일 정리에서 남길 것을 정한다). */
+    @Query("SELECT DISTINCT coverUrl FROM view_rows WHERE coverUrl != ''")
+    abstract suspend fun coverUrls(): List<String>
 
     @Query("DELETE FROM view_snapshots WHERE viewId = :viewId")
     protected abstract suspend fun deleteView(viewId: String)

@@ -12,6 +12,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -27,6 +29,18 @@ object SyncModule {
                 if (debugFlags.fakeAuthFailure.first()) DebugFlags.FAKE_TOKEN else secretStore.token()
             }
         }
+
+    /** M5 표지 내려받기: 노션 클라이언트(토큰 헤더·재시도 인터셉터)와 **다른** 클라이언트. 인터셉터가 하나도 없다. */
+    @Provides
+    fun provideCoverDownload(): CoverDownload = CoverDownloader(
+        client = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .followSslRedirects(false) // https → http로 내려가는 리다이렉트는 따라가지 않는다
+            .build(),
+        scale = { CoverScaler.scale(it) },
+    )
 
     @Provides
     fun provideSyncRequester(scheduler: SyncScheduler): SyncRequester = scheduler
