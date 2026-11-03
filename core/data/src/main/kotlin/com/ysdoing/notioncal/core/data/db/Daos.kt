@@ -1,6 +1,8 @@
 package com.ysdoing.notioncal.core.data.db
 
 import androidx.room.Dao
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
+import com.ysdoing.notioncal.core.data.SYNC_LOG_VIEWS
 import androidx.room.OnConflictStrategy
 import androidx.room.Insert
 import androidx.room.Query
@@ -190,10 +192,10 @@ interface SyncLogDao {
     @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatest(): Flow<SyncLogEntity?>
 
-    @Query("SELECT * FROM sync_log WHERE result != 'ERROR' ORDER BY at DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM sync_log WHERE result != 'ERROR' AND trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestSuccess(): Flow<SyncLogEntity?>
 
-    @Query("SELECT * FROM sync_log WHERE result != 'OK' ORDER BY at DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM sync_log WHERE result != 'OK' AND trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestFailure(): Flow<SyncLogEntity?>
 
     @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT :limit")

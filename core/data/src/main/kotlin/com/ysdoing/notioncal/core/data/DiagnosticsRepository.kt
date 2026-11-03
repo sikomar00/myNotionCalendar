@@ -82,7 +82,7 @@ class DiagnosticsRepository @Inject constructor(
 
             section("동기화 기록 (최근 ${logs.size}건)")
             logs.forEach { l ->
-                appendLine("${time(l.at)} ${l.trigger} ${l.result} ${l.durationMs}ms 받음 ${l.pulled} 보냄 ${l.pushed}${l.error?.let { " 오류 $it" } ?: ""}")
+                appendLine("${time(l.at)} ${l.trigger} ${l.result} ${l.durationMs}ms 받음 ${l.pulled} 보냄 ${l.pushed}${if (l.requests > 0) " 요청 ${l.requests}" else ""}${l.error?.let { " 오류 $it" } ?: ""}")
             }
 
             section("전송 대기 (${outbox.size}건)")

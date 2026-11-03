@@ -15,11 +15,14 @@ import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.applying
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.data.db.OutboxEntity
 import com.ysdoing.notioncal.core.data.parseColorOptions
 import com.ysdoing.notioncal.core.data.toEntity
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionReader
 import com.ysdoing.notioncal.core.notion.NotionWriter
@@ -71,6 +74,7 @@ class OutboxProcessor @Inject constructor(
     private val clock: Clock,
     private val widgetRefresher: WidgetRefresher,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val requests: RequestCounter = RequestCounter(),
 ) {
     private val mutex = Mutex()
     private val outbox get() = db.outboxDao()
@@ -79,6 +83,8 @@ class OutboxProcessor @Inject constructor(
     suspend fun process(): OutboxOutcome = withContext(io) {
         mutex.withLock {
             val schemas = HashMap<String, DataSourceDto>()
+            val startedAt = clock.millis()
+            val requestsBefore = requests.total
             var sent = 0
             val sentPages = LinkedHashSet<String>()
             val createdSources = LinkedHashSet<String>()
@@ -128,8 +134,20 @@ class OutboxProcessor @Inject constructor(
                 }
             }
             if (sent > 0) widgetRefresher.requestUpdate()
+            if (sent > 0 || retryError != null) logCycle(startedAt, requestsBefore, sent, retryError)
             OutboxOutcome(sent, outbox.all().size, retryError, sentPages, createdSources)
         }
+    }
+
+    /** PF-11·SY-04: 이번 아웃박스 주기의 보낸 수와 요청 수를 sync_log에 남긴다(헤더의 '마지막 동기화'에는 쓰이지 않는 종류). */
+    private suspend fun logCycle(startedAt: Long, requestsBefore: Long, sent: Int, error: NotionError?) {
+        db.syncLogDao().record(
+            SyncLogEntity(
+                at = clock.millis(), trigger = SYNC_LOG_OUTBOX, result = if (error == null) "OK" else "ERROR",
+                durationMs = clock.millis() - startedAt, pulled = 0, pushed = sent, error = error?.let { it::class.simpleName },
+                requests = (requests.total - requestsBefore).toInt(),
+            ),
+        )
     }
 
     /** 노션에 만들어진 진짜 페이지 id를 돌려준다. */

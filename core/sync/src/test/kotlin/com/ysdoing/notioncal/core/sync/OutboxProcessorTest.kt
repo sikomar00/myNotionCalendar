@@ -11,11 +11,13 @@ import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.parseExtraValues
 import com.ysdoing.notioncal.core.data.parsePropCatalog
 import com.ysdoing.notioncal.core.data.SelectValue
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -48,8 +50,10 @@ class OutboxProcessorTest {
     private val notion = FakeNotionStore { now }
     private lateinit var writer: EventWriter
 
-    private fun processor() = OutboxProcessor(notion, notion, db, clock, WidgetRefresher.None, UnconfinedTestDispatcher())
-    private fun engine() = NotionSyncEngine(notion, db, clock, UnconfinedTestDispatcher(), WidgetRefresher.None)
+    /** 가짜 노션은 HTTP를 거치지 않아, 호출마다 계수기를 올려 주기당 요청 수 기록(PF-11)을 시험한다. */
+    private val requests = RequestCounter()
+    private fun processor() = OutboxProcessor(notion, notion, db, clock, WidgetRefresher.None, UnconfinedTestDispatcher(), requests)
+    private fun engine() = NotionSyncEngine(notion, db, clock, UnconfinedTestDispatcher(), WidgetRefresher.None, requests = requests)
 
     @Before
     fun setUp() {
@@ -405,6 +409,37 @@ class OutboxProcessorTest {
         assertTrue(notion.pages.getValue(page.id).done)
         assertTrue(conflicts().isEmpty())
         assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anOutboxCycleLogsHowManyItSentAndHowManyRequestsItUsed() = runTest {
+        // PF-11·SY-04: 아웃박스 주기도 sync_log에 한 줄(보낸 수, 요청 수)을 남긴다. 헤더의 '마지막 동기화'는 이 줄로 바뀌지 않는다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        notion.onCall = { requests.hit() } // 가짜 노션의 호출을 계수기에 올린다
+        val before = requests.total
+
+        processor().process()
+
+        val log = db.syncLogDao().recent(1).single()
+        assertEquals(SYNC_LOG_OUTBOX, log.trigger)
+        assertEquals(listOf(1, "OK"), listOf(log.pushed, log.result))
+        assertEquals((requests.total - before).toInt(), log.requests)
+        assertTrue(log.requests > 0)
+    }
+
+    @Test
+    fun aReadSyncCycleLogsItsRequestCountToo() = runTest {
+        seeded()
+        notion.onCall = { requests.hit() }
+        val before = requests.total
+
+        engine().sync(SyncTrigger.PERIODIC)
+
+        val log = db.syncLogDao().recent(1).single()
+        assertEquals("PERIODIC", log.trigger)
+        assertEquals((requests.total - before).toInt(), log.requests)
+        assertTrue(log.requests > 0)
     }
 
     @Test

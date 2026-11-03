@@ -33,6 +33,7 @@ import com.ysdoing.notioncal.core.data.db.EventEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionReader
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
@@ -79,6 +80,7 @@ class NotionSyncEngine @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
     private val widgetRefresher: WidgetRefresher,
     private val ddayNotice: DdayRemovedNotice = DdayRemovedNotice.None,
+    private val requests: RequestCounter = RequestCounter(),
 ) {
     private val mutex = Mutex()
 
@@ -90,6 +92,7 @@ class NotionSyncEngine @Inject constructor(
     suspend fun sync(trigger: SyncTrigger, onlyDataSourceId: String? = null): SyncOutcome = withContext(io) {
         mutex.withLock {
             val startedAt = clock.millis()
+            val requestsBefore = requests.total
             var pulled = 0
             var failures = 0
             var lastError: NotionError? = null
@@ -131,6 +134,7 @@ class NotionSyncEngine @Inject constructor(
                     pulled = pulled,
                     pushed = 0,
                     error = lastError?.let { it::class.simpleName },
+                    requests = (requests.total - requestsBefore).toInt(), // PF-11
                 ),
             )
             // WG-07: 위젯 머리줄의 동기화 시각·오류 점을 맞춘다(일정이 그대로여도).

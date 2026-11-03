@@ -34,6 +34,13 @@ interface SyncScheduleInfo {
     }
 }
 
+/**
+ * sync_log에 남기는 아웃박스·보기 주기 줄의 종류(PF-11 요청 수). 일정 동기화 줄(trigger = [SyncTrigger] 이름)과 달리 헤더의 '마지막 동기화'·
+ * '마지막 실패'에는 쓰이지 않고 진단 목록·내보내기에만 남는다.
+ */
+const val SYNC_LOG_OUTBOX = "OUTBOX"
+const val SYNC_LOG_VIEWS = "VIEW_SYNC"
+
 /** NS-04: 아웃박스에 쌓인 쓰기를 노션으로 보내 달라는 요청. 구현은 :core:sync(OutboxWorker). */
 fun interface OutboxRequester {
     fun request()

@@ -16,16 +16,21 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.ysdoing.notioncal.core.data.SYNC_LOG_VIEWS
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncScheduleInfo
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.db.SyncLogDao
+import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.Clock
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,6 +44,9 @@ class SyncWorker @AssistedInject constructor(
     private val viewWrites: ViewWriteProcessor,
     private val mirror: PhoneCalendarMirror,
     private val views: ViewSync,
+    private val syncLog: SyncLogDao,
+    private val clock: Clock,
+    private val requests: RequestCounter,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -52,7 +60,16 @@ class SyncWorker @AssistedInject constructor(
         // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
         mirror.refreshIfEnabled()
         // VW-01: 등록한 노션 보기 스냅샷도 같은 주기에 맞춘다(실패해도 위 결과에 영향 없음).
+        val viewsStartedAt = clock.millis()
+        val viewsBefore = requests.total
         views.syncAll()
+        // PF-11: 보기 주기의 요청 수를 남긴다(보기 수 × 쪽 수만큼 늘어난다). 실패는 보기마다 view_snapshots에 남아 여기서는 OK로 적는다.
+        syncLog.record(
+            SyncLogEntity(
+                at = clock.millis(), trigger = SYNC_LOG_VIEWS, result = "OK", durationMs = clock.millis() - viewsStartedAt,
+                pulled = 0, pushed = 0, error = null, requests = (requests.total - viewsBefore).toInt(),
+            ),
+        )
         // 연결·서버 문제는 WorkManager 백오프로 다시 시도한다. 토큰·공유 문제는 사용자가 고쳐야 하므로 끝낸다.
         return if (outcome.error.isRetryable() || writeOutcome.retryError.isRetryable()) Result.retry() else Result.success()
     }
