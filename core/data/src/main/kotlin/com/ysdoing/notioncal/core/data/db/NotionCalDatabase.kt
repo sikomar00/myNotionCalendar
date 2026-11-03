@@ -32,6 +32,8 @@ import java.time.LocalDate
  * - 13: widget_configs.viewId(VW-04, AutoMigration)
  * - 14: 보기 행 쓰기(M3). view_snapshots.columnInfo·view_rows.typed 열과 view_writes(보내지 않은 바꿈 큐) 추가, AutoMigration
  * - 15: 책 위젯(M5). view_rows.coverUrl(표지 주소, 기본 빈 글자)·progress(읽은 비율, null 가능) 추가, AutoMigration
+ * - 16: Phase 10 기반. source_schemas(소스 스키마 전체, 캐시) 추가, view_writes.baseValue(충돌 확인용 이전 값)·
+ *      sync_log.requests(주기당 요청 수, 기본 0)·view_rows(pageId) 인덱스 추가, AutoMigration
  */
 @Database(
     entities = [
@@ -52,10 +54,11 @@ import java.time.LocalDate
         ViewSnapshotEntity::class,
         ViewRowEntity::class,
         ViewWriteEntity::class,
+        SourceSchemaEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15), AutoMigration(from = 15, to = 16)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {

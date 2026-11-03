@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data.db
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.Insert
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -44,7 +45,7 @@ data class ViewSnapshotEntity(
 )
 
 /** 보기의 한 행(VW-02로 글자가 된 값). [cells]는 [VIEW_CELL_SEPARATOR]로 이은 열 순서의 값. */
-@Entity(tableName = "view_rows", primaryKeys = ["viewId", "position"])
+@Entity(tableName = "view_rows", primaryKeys = ["viewId", "position"], indices = [Index("pageId")])
 data class ViewRowEntity(
     val viewId: String,
     val position: Int,
@@ -76,6 +77,19 @@ data class ViewWriteEntity(
     val createdAt: Long,
     val attempts: Int = 0,
     val lastError: String? = null,
+    /** v16(SY-05): 바꾸기 전 노션 값(JSON 원시값, 모르면 null). 보내기 직전에 노션 값과 비교해 충돌을 가린다. */
+    val baseValue: String? = null,
+)
+
+/**
+ * v16(CN-02): 소스(데이터 소스)의 스키마 전체(속성 ID·이름·유형·옵션·상태 그룹·수식 결과 유형 등, 노션 응답 JSON)를 보기 동기화가 저장한다.
+ * 같은 소스의 보기가 여럿이어도 한 줄이다. 위젯·편집 시트는 이것으로 속성을 알고 노션을 부르지 않는다(캐시).
+ */
+@Entity(tableName = "source_schemas")
+data class SourceSchemaEntity(
+    @PrimaryKey val dataSourceId: String,
+    val schemaJson: String,
+    val fetchedAt: Long,
 )
 
 @Dao
@@ -115,6 +129,16 @@ abstract class ViewDao {
 
     @Query("UPDATE view_rows SET cells = :cells, typed = :typed, progress = :progress WHERE viewId = :viewId AND pageId = :pageId")
     protected abstract suspend fun updateRow(viewId: String, pageId: String, cells: String, typed: String, progress: Float?)
+
+    @Upsert
+    abstract suspend fun upsertSchema(schema: SourceSchemaEntity)
+
+    @Query("SELECT * FROM source_schemas WHERE dataSourceId = :dataSourceId")
+    abstract suspend fun schema(dataSourceId: String): SourceSchemaEntity?
+
+    /** 이 페이지가 든 보기(전송이 끝난 뒤 그 보기를 다시 받는다, SY-06). */
+    @Query("SELECT DISTINCT viewId FROM view_rows WHERE pageId = :pageId")
+    abstract suspend fun viewsContaining(pageId: String): List<String>
 
     @Insert
     protected abstract suspend fun insertWrite(write: ViewWriteEntity)

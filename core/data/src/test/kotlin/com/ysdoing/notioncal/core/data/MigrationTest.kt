@@ -456,4 +456,30 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v15 → v16(Phase 10 기반): 기존 데이터는 그대로이고 새 열은 기본값, 새 표와 인덱스를 쓸 수 있다. */
+    @Test
+    fun v15ToV16AddsSchemaCacheBaseValueRequestCountAndPageIndex() = runTest {
+        helper.createDatabase(15).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '읽는 중', 'gallery', '제목', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells, typed, coverUrl, progress) VALUES ('v1', 0, 'pg', 'https://n', '책', '{}', 'https://img/1.jpg', 0.12)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts) VALUES ('v1', 'pg', 'ds1', 'ing', 'number', '40.0', 7, 2)")
+            db.execSQL("INSERT INTO sync_log (at, trigger, result, durationMs, pulled, pushed, error) VALUES (9, 'PERIODIC', 'OK', 120, 3, 1, NULL)")
+        }
+        helper.runMigrationsAndValidate(16).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            val row = dao.row("v1", "pg")!!
+            assertEquals(listOf("https://img/1.jpg", 0.12f), listOf(row.coverUrl, row.progress)) // 표지·읽은 비율 보존
+            val write = dao.firstWrite()!!
+            assertEquals(listOf("40.0", 2, null), listOf(write.value, write.attempts, write.baseValue)) // 대기 중인 쓰기 보존
+            assertEquals(0, db.syncLogDao().recent(5).single().requests)
+            assertEquals(listOf("v1"), dao.viewsContaining("pg"))
+            dao.upsertSchema(com.ysdoing.notioncal.core.data.db.SourceSchemaEntity("ds1", "{\"id\":\"ds1\"}", 1))
+            assertEquals("{\"id\":\"ds1\"}", dao.schema("ds1")!!.schemaJson)
+        } finally {
+            db.close()
+        }
+    }
 }
