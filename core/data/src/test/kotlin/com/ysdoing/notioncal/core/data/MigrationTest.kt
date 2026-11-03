@@ -434,4 +434,26 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v14 → v15(책 위젯 M5): 기존 행은 그대로이고 표지 주소는 빈 글자·읽은 비율은 null이며, 새 값을 쓸 수 있다. */
+    @Test
+    fun v14ToV15AddsCoverUrlAndProgress() = runTest {
+        helper.createDatabase(14).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '읽는 중', 'gallery', '제목', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells, typed) VALUES ('v1', 0, 'pg', 'https://n', '책', '{}')")
+        }
+        helper.runMigrationsAndValidate(15).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            val row = dao.row("v1", "pg")!!
+            assertEquals(listOf("책", "{}", "", null), listOf(row.cells, row.typed, row.coverUrl, row.progress))
+            dao.upsert(dao.snapshot("v1")!!)
+            dao.replace(dao.snapshot("v1")!!, listOf(row.copy(coverUrl = "https://img/1.jpg", progress = 0.4f)))
+            assertEquals(listOf("https://img/1.jpg", 0.4f), dao.row("v1", "pg")!!.let { listOf(it.coverUrl, it.progress) })
+            assertEquals(listOf("https://img/1.jpg"), dao.coverUrls())
+        } finally {
+            db.close()
+        }
+    }
 }
