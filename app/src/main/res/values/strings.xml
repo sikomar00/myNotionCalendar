@@ -64,7 +64,7 @@
     <string name="settings_holidays_denied">권한이 없어 공휴일을 표시하지 않습니다. 노션 일정은 그대로입니다.</string>
     <string name="settings_holidays_open_app_settings">앱 설정에서 허용</string>
     <string name="settings_week_numbers">주 번호 표시</string>
-    <string name="settings_week_numbers_note">월 화면 왼쪽에 주차를 보여 줍니다. 1월 1일이 든 주가 1주입니다.</string>
+    <string name="settings_week_numbers_note">월 화면과 월간 위젯(중간·큰 크기) 왼쪽에 주차를 보여 줍니다. 1월 1일이 든 주가 1주입니다.</string>
     <string name="settings_dynamic_color">배경화면 색 쓰기(Material You)</string>
     <string name="settings_dynamic_color_note">앱 화면 색을 배경화면에 맞춥니다. 일정 색은 그대로입니다.</string>
     <string name="settings_sync_interval">노션 자동 동기화 주기</string>

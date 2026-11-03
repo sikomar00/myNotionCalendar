@@ -45,6 +45,9 @@ data class WidgetMetrics(
     val showDots: Boolean,
     /** 실제로 그려지는 글자 배율(기기 글꼴, 상한 [MAX_SYSTEM_TEXT_SCALE]). 글자 폭에 맞춰 넣을지 정할 때 쓴다. */
     val textScale: Float = 1f,
+    /** M6 주차 열 폭(0이면 없음). 날짜 칸의 0.8배, 작음 단계에서는 그리지 않는다. [cellWidth]는 이만큼 줄어든 폭이다. */
+    val weekNumberWidth: Dp = 0.dp,
+    val weekNumberFontSp: Float = 0f,
 ) {
     /** WS-05: 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않는다(글자가 칸을 넘친다). */
     val overflows: Boolean get() = mode != WidgetMode.SMALL && dateLabelHeight + chipTextHeight > weekHeight + 0.5.dp
@@ -61,6 +64,7 @@ data class WidgetMetrics(
         private val DOT_SPACE = 6.dp
         private const val MIN_DOT_DATE_FONT = 6.5f
         const val MAX_LANES = 6
+        private const val WEEK_NUMBER_RATIO = 0.8f
 
         /** 위젯 글자가 기기 글꼴 크기를 따라 커지는 상한. */
         const val MAX_SYSTEM_TEXT_SCALE = 1.3f
@@ -85,16 +89,16 @@ data class WidgetMetrics(
          * 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않으면 한 단계 작은 레이아웃으로 바꿔 다시 계산한다(큼 → 중간 → 작음).
          * 작음은 줄 높이를 고정하고 글자를 줄이므로 넘치지 않는다.
          */
-        fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): WidgetMetrics {
+        fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float, showWeekNumbers: Boolean = false): WidgetMetrics {
             var mode = widgetMode(size)
             while (true) {
-                val metrics = compute(size, config, systemFontScale, mode)
+                val metrics = compute(size, config, systemFontScale, mode, showWeekNumbers)
                 if (mode == WidgetMode.SMALL || !metrics.overflows) return metrics
                 mode = if (mode == WidgetMode.LARGE) WidgetMode.MEDIUM else WidgetMode.SMALL
             }
         }
 
-        private fun compute(size: DpSize, config: WidgetConfig, systemFontScale: Float, mode: WidgetMode): WidgetMetrics {
+        private fun compute(size: DpSize, config: WidgetConfig, systemFontScale: Float, mode: WidgetMode, showWeekNumbers: Boolean): WidgetMetrics {
             val scale = config.fontScale / 100f
             val small = mode == WidgetMode.SMALL
             // 실제로 그려지는 배율과, 그 배율이 되도록 sp에 곱할 값.
@@ -113,6 +117,8 @@ data class WidgetMetrics(
             val header = if (small) SMALL_HEADER_HEIGHT else maxOf(if (mode == WidgetMode.LARGE) LARGE_HEADER_HEIGHT else HEADER_HEIGHT, lineHeight(headerFont) + 4.dp)
             val weekday = if (small) SMALL_WEEKDAY_HEIGHT else maxOf(WEEKDAY_HEIGHT, lineHeight(weekdayFont, TEXT_BOX))
             val contentWidth = size.width - PADDING * 2
+            // 주차 열은 날짜 칸의 0.8배(분할 위젯과 같은 비율). 폭만 줄이므로 주 높이·일정 줄 수는 달라지지 않는다.
+            val weekNumberWidth = if (showWeekNumbers && !small) contentWidth * (WEEK_NUMBER_RATIO / (7 + WEEK_NUMBER_RATIO)) else 0.dp
             val weekHeight = (size.height - PADDING * 2 - header - weekday) / 6
             // 작음(2×2, 4×2)은 주 한 줄 높이가 10~18dp까지 줄어든다. 점 자리를 먼저 남기고 날짜 숫자를 맞춘다.
             // 그래도 숫자가 너무 작아지면(6.5sp 미만) 점을 포기하고 숫자만 겹치지 않게 그린다.
@@ -139,7 +145,7 @@ data class WidgetMetrics(
                 mode = mode,
                 headerHeight = header,
                 weekdayHeight = weekday,
-                cellWidth = contentWidth / 7,
+                cellWidth = (contentWidth - weekNumberWidth) / 7,
                 weekHeight = weekHeight,
                 dateLabelHeight = dateLabel,
                 laneHeight = lane,
@@ -151,6 +157,8 @@ data class WidgetMetrics(
                 weekdayFontSp = weekdayFont * spFactor,
                 showDots = small && showDots,
                 textScale = textScale,
+                weekNumberWidth = weekNumberWidth,
+                weekNumberFontSp = dateFont * 0.8f * spFactor,
             )
         }
     }

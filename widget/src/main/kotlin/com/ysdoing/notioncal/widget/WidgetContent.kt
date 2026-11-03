@@ -74,6 +74,8 @@ data class WidgetUiState(
     val holidays: Map<LocalDate, String> = emptyMap(),
     /** WX-04 머리의 오늘 날씨(위젯 설정에서 켠 위젯만). */
     val weather: WidgetWeather = WidgetWeather(),
+    /** M6 앱 설정 '주차 표시'(기본 끔). 켜면 중간·큼 단계에 주차 열이 생기고 칸 폭이 그만큼 줄어든다. 일정 줄 수·머리 높이는 그대로다. */
+    val showWeekNumbers: Boolean = false,
 )
 
 /**
@@ -99,7 +101,7 @@ fun WidgetContent(
     framed: Boolean = true,
 ) {
     val context = LocalContext.current
-    val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale)
+    val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale, state.showWeekNumbers)
     val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val start = gridStart(state.month, state.weekStart)
     val outer = if (framed) {

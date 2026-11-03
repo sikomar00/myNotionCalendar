@@ -37,6 +37,7 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.calendar.WeekLayout
 import com.ysdoing.notioncal.core.data.calendar.chipLabel
+import com.ysdoing.notioncal.core.data.calendar.weekNumber
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -46,6 +47,7 @@ import java.util.Locale
 @Composable
 internal fun WeekdayRow(weekStart: DayOfWeek, metrics: WidgetMetrics, palette: WidgetPalette) {
     Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.weekdayHeight)) {
+        if (metrics.weekNumberWidth > 0.dp) Spacer(GlanceModifier.width(metrics.weekNumberWidth))
         repeat(7) { i ->
             val day = weekStart.plus(i.toLong())
             Text(
@@ -95,6 +97,7 @@ private fun WeekContent(
     Column(modifier = GlanceModifier.fillMaxSize()) {
         if (divider) Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
         Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
+            if (metrics.weekNumberWidth > 0.dp) WeekNumber(weekStart, state.weekStart, metrics, palette)
             repeat(7) { col ->
                 val date = weekStart.plusDays(col.toLong())
                 DateLabel(date, YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
@@ -107,14 +110,15 @@ private fun WeekContent(
         } else {
             val layout = WeekLayout.layout(weekStart, state.events, metrics.lanes)
             repeat(metrics.lanes) { lane ->
-                Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight)) {
+                // 주차 열만큼 들여쓴다(Spacer를 두면 줄마다 View가 늘어 빽빽한 큰 위젯이 Glance View 개수 한도를 넘는다).
+                Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight).padding(start = metrics.weekNumberWidth)) {
                     laneSegments(layout, lane).forEach { segment -> Segment(segment, metrics, palette) }
                 }
             }
         }
     }
     // 칸 어디를 눌러도 그 날짜의 퀵 시트(WI-01)를 연다.
-    Row(modifier = GlanceModifier.fillMaxSize()) {
+    Row(modifier = GlanceModifier.fillMaxSize().padding(start = metrics.weekNumberWidth)) {
         repeat(7) { col ->
             val date = weekStart.plusDays(col.toLong())
             val count = state.events.count { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
@@ -136,6 +140,17 @@ private fun WeekContent(
             ) {}
         }
     }
+}
+
+/** M6 주 첫날의 주차(앱 월 화면·분할 위젯과 같은 계산). 흐린 글자로 날짜 줄 맨 앞에. */
+@Composable
+private fun WeekNumber(weekFirstDay: LocalDate, weekStart: DayOfWeek, metrics: WidgetMetrics, palette: WidgetPalette) {
+    Text(
+        text = weekNumber(weekFirstDay, weekStart).toString(),
+        modifier = GlanceModifier.width(metrics.weekNumberWidth).semantics { testTag = "weekNumber" },
+        style = TextStyle(color = palette.subtle, fontSize = metrics.weekNumberFontSp.sp, textAlign = TextAlign.Center),
+        maxLines = 1,
+    )
 }
 
 @Composable
@@ -203,7 +218,7 @@ private fun DotRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: W
 @Composable
 private fun SingleLineRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: WidgetMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
-    Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight)) {
+    Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight).padding(start = metrics.weekNumberWidth)) {
         repeat(7) { col ->
             val date = weekStart.plusDays(col.toLong())
             val dayEvents = events.filter { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
