@@ -90,6 +90,11 @@
     <string name="widget_config_spacing_wide">넓게</string>
     <string name="widget_config_hide_done">완료 항목 숨기기</string>
     <string name="widget_config_save">저장</string>
+    <string name="widget_config_reset">초기화</string>
+    <string name="widget_config_tab_all">모든 탭</string>
+    <string name="widget_config_tab_all_note">습관 탭은 이 설정만 따릅니다.</string>
+    <string name="widget_config_tab_calendar">일정 탭</string>
+    <string name="widget_config_tab_ledger">가계부 탭</string>
     <string name="dday_small_widget_label">디데이(1칸)</string>
     <string name="dday_small_widget_description">고정한 디데이 하나를 크게 보여줍니다</string>
     <string name="dday_wide_widget_label">디데이(2칸)</string>
