@@ -452,11 +452,11 @@ class ViewWidgetTest {
     }
 
     @Test
-    fun readOnlyRowsStayCompactAndTapRowsReachTheTapMinimum() {
-        // 눌러 바꿀 칸이 없는 행은 이전(약 26dp)에서 크게 늘지 않는다. 눌러 바꿀 칸이 있는 행은 44dp(+틈 4dp)로 누르기 쉽게 한다.
+    fun rowsStayCompactForDensity() {
+        // 밀도 우선(사용자 결정 2026-11-03): 눌러 바꿀 칸이 없는 행은 이전(약 26dp)에서 크게 늘지 않고, 있는 행도 이전(32dp)보다 조금만 높다.
         val m = viewMetrics(userScale = 1f, systemFontScale = 1f)
         assertTrue("읽기 전용 표 행 ${m.tableRow}", m.tableRow <= 32.dp)
-        assertTrue(TAP_ROW_MIN + 4.dp >= 48.dp)
+        assertTrue("눌러 바꾸는 행 $TAP_ROW_MIN", TAP_ROW_MIN <= 36.dp)
     }
 
     @Test

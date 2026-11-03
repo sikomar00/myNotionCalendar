@@ -41,10 +41,16 @@ import com.ysdoing.notioncal.core.data.view.ViewRow
 /** 설정 화면 미리보기에 그리는 최대 행 수. Glance 한 컨테이너의 자식은 10개 이하여야 한다. */
 internal const val PREVIEW_ROWS = 8
 
-/** 행 타일 위아래 틈. 눌러 바꿀 칸이 있는 행은 타일을 [TAP_ROW_MIN] 이상으로 높여(틈 포함 약 48dp) 누르기 쉽게 한다(WL-4.2). */
+/**
+ * 행 타일 위아래 틈. 눌러 바꿀 칸이 있는 행은 타일을 [TAP_ROW_MIN] 이상으로 높인다. 밀도 우선(사용자 결정 2026-11-03)이라
+ * 눌림 기준 48dp(WL-4.2)는 채우지 않고 이전(32dp)보다 조금만 높인다. 눌림 폭은 48dp다.
+ */
 private val ROW_GAP = 2.dp
-internal val TAP_ROW_MIN = 44.dp
+internal val TAP_ROW_MIN = 34.dp
 private val CHECK_SIZE = 24.dp
+
+/** 표에서 체크 열 머리 글자를 원형 체크의 왼쪽 가장자리에 맞추는 들여쓰기(눌림 폭 48dp 안에서 원이 가운데라 생긴다). */
+internal val CHECK_INSET = (TAP_TARGET - CHECK_SIZE) / 2
 private val TILE_PADDING_H = 6.dp
 
 /** 행·칸을 그릴 때 쓰는 글자 모양과 색. */

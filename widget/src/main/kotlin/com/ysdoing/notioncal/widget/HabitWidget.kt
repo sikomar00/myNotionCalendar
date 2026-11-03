@@ -100,7 +100,10 @@ data class HabitMetrics(
     val smallFontSp: Float,
     val heroFontSp: Float,
     val heroHeight: Dp,
-    /** 이름 아래 알약('연속 12일' 등, 약 76dp)이 이름 칸에 들어갈 때만 그린다. 좁은 위젯은 알약이 잘리지 않게 뺀다. */
+    /**
+     * 이름 아래 알약('연속 12일' 등, 약 76dp)을 그릴지. 줄이 한 줄 더 높아지므로 높이가 넉넉한 4×4만, 그리고 이름 칸에 들어갈 때만 그린다
+     * (밀도 우선, 사용자 결정 2026-11-03: 2×2·4×2는 한 화면에 보이는 습관 수를 지킨다).
+     */
     val showMessage: Boolean,
 ) {
     companion object {
@@ -108,10 +111,12 @@ data class HabitMetrics(
         val PADDING_V = 4.dp
         /** 2×2 오늘 칸: 눌림 영역을 48dp로(WL-4.2). 4×2·4×4는 폭이 모자라 칸 폭이 이보다 좁다(위젯 머리 버튼과 같은 예외). */
         private val SMALL_CELL = 28.dp
-        private val MIN_ROW = 44.dp
 
         /** 이름 칸 안쪽 여백(왼쪽 10dp + 오른쪽 4dp)과 알약이 들어갈 폭. */
         private val NAME_INSET = 14.dp
+
+        /** '이번 주 n/목표' 글자가 타일 오른쪽 가장자리에 붙지 않게 두는 여백(글자 칸 안쪽). */
+        val COUNT_INSET = 6.dp
         private val MESSAGE_PILL_WIDTH = 76.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): HabitMetrics {
@@ -125,18 +130,18 @@ data class HabitMetrics(
             val small = 10f * scale
             val hero = 30f * scale
             val contentWidth = size.width - PADDING_H * 2
-            val countWidth = (small * textScale * 2.4f).dp + 4.dp
+            val countWidth = (small * textScale * 2.4f).dp + 4.dp + COUNT_INSET
             val smallCellWidth = TAP_TARGET
             val nameWidth = if (mode == HabitWidgetMode.SMALL) contentWidth - smallCellWidth - 8.dp else (contentWidth - countWidth) * 0.32f
             val cellWidth = if (mode == HabitWidgetMode.SMALL) smallCellWidth else (contentWidth - nameWidth - countWidth) / 7
             val cellSize = if (mode == HabitWidgetMode.SMALL) SMALL_CELL else (cellWidth - 4.dp).coerceIn(14.dp, 28.dp)
-            val showMessage = nameWidth - NAME_INSET >= MESSAGE_PILL_WIDTH
+            val showMessage = mode == HabitWidgetMode.LARGE && nameWidth - NAME_INSET >= MESSAGE_PILL_WIDTH
             return HabitMetrics(
                 mode = mode,
                 // 머리: 아이콘 원 + 제목 + 부제 두 줄.
                 headerHeight = maxOf(40.dp, box(header) + box(small) + 4.dp),
-                // 줄: 이름 + 연속 알약 두 줄, 칸 원형 아이콘. 눌림 높이 44dp 이상.
-                rowHeight = maxOf(MIN_ROW, cellSize + 8.dp, box(name) + (if (showMessage) box(small) else 0.dp) + 8.dp),
+                // 줄: 이름 한 줄(4×4는 연속 알약까지 두 줄), 칸 원형 아이콘. 밀도 우선이라 눌림 높이를 48dp로 늘리지 않는다.
+                rowHeight = maxOf(cellSize + 6.dp, box(name) + (if (showMessage) box(small) else 0.dp) + 8.dp),
                 dayLabelHeight = box(small) + 2.dp,
                 cellWidth = cellWidth,
                 cellSize = cellSize,
@@ -336,7 +341,7 @@ private fun HabitRowTile(summary: HabitSummary, today: LocalDate, metrics: Habit
             }
             Text(
                 text = "${status.weekCount}/${status.weekTarget}",
-                modifier = GlanceModifier.width(metrics.countWidth),
+                modifier = GlanceModifier.width(metrics.countWidth).padding(end = HabitMetrics.COUNT_INSET),
                 style = TextStyle(
                     color = if (status.weekAchieved) palette.text else palette.subtle,
                     fontSize = metrics.smallFontSp.sp,

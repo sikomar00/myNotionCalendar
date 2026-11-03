@@ -117,7 +117,7 @@ class HabitWidgetTest {
         onAllNodes(hasTestTag("habitRow")).assertCountEquals(8)
         for (size in listOf(SMALL, MEDIUM, LARGE)) {
             val m = HabitMetrics.of(size, config, systemFontScale = 2f)
-            assertTrue(m.toString(), m.rowHeight.value >= m.nameFontSp * 2f * WidgetMetrics.TEXT_BOX)
+            assertTrue(m.toString(), m.rowHeight.value >= m.nameFontSp * (if (m.showMessage) 2f else 1f) * WidgetMetrics.TEXT_BOX)
             assertTrue(m.toString(), m.headerHeight.value >= m.headerFontSp * 2f * WidgetMetrics.TEXT_BOX)
         }
     }
@@ -146,10 +146,10 @@ class HabitWidgetTest {
     fun streakPillIsLeftOutWhereTheNameColumnCannotHoldIt() {
         // 알약(약 76dp)이 이름 칸에 안 들어가는 좁은 위젯은 알약을 그리지 않아 중간에서 잘리지 않는다.
         fun shows(size: DpSize) = HabitMetrics.of(size, WidgetConfig(1), 1f).showMessage
-        assertTrue(shows(MEDIUM))
-        assertTrue(shows(SMALL))
-        assertTrue(!shows(DpSize(110.dp, 110.dp)))
-        assertTrue(!shows(DpSize(250.dp, 152.dp)))
+        assertTrue(shows(LARGE))
+        assertTrue(!shows(MEDIUM)) // 밀도 우선: 4×2·2×2는 알약 줄을 두지 않는다
+        assertTrue(!shows(SMALL))
+        assertTrue(!shows(DpSize(250.dp, 380.dp))) // 4×4여도 이름 칸이 좁으면 뺀다
     }
 
     @Test
@@ -161,13 +161,12 @@ class HabitWidgetTest {
         onAllNodes(hasTestTag("habitHero")).assertCountEquals(0)
     }
 
-    /** 습관 줄(눌림 높이)은 모든 크기에서 44dp 이상이다. 칸 폭은 4×2·4×4에서 좁아 48dp를 못 채우는 예외다(2×2는 48dp). */
+    /** 밀도 우선: 4×2·2×2 습관 줄은 36dp 이하(한 줄 + 원형 칸), 알약 두 줄이 있는 4×4도 46dp 이하다. 눌림 폭은 2×2에서 48dp. */
     @Test
-    fun rowsAreTallEnoughToTap() {
-        for (size in listOf(SMALL, MEDIUM, LARGE)) {
-            val m = HabitMetrics.of(size, WidgetConfig(1), systemFontScale = 1f)
-            assertTrue(m.toString(), m.rowHeight.value >= 44f)
-        }
+    fun rowsStayCompactForDensity() {
+        assertTrue(HabitMetrics.of(SMALL, WidgetConfig(1), 1f).rowHeight.value <= 36f)
+        assertTrue(HabitMetrics.of(MEDIUM, WidgetConfig(1), 1f).rowHeight.value <= 36f)
+        assertTrue(HabitMetrics.of(LARGE, WidgetConfig(1), 1f).rowHeight.value <= 46f)
         assertTrue(HabitMetrics.of(SMALL, WidgetConfig(1), 1f).cellWidth.value >= 48f)
     }
 

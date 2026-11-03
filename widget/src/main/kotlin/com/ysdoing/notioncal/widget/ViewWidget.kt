@@ -223,7 +223,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     val width = LocalSize.current.width
     val columns = tableColumnCount(width, board.columns.size)
     val tableColumns = columns.takeIf { width >= TABLE_MIN_WIDTH && it > 1 }
-    if (tableColumns != null) ViewTableHeader(board.columns.take(tableColumns), m, palette)
+    if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette)
     ViewRows(board, tableColumns, ViewLook(m, palette), staticRows)
 }
 
@@ -254,12 +254,13 @@ private fun ViewStatusLine(board: ViewBoard, state: ViewWidgetState, m: ViewMetr
 }
 
 @Composable
-private fun ViewTableHeader(names: List<String>, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewTableHeader(board: ViewBoard, count: Int, m: ViewMetrics, palette: WidgetPalette) {
     Row(GlanceModifier.fillMaxWidth().height(m.tableHeader).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        names.forEach { name ->
+        board.columns.take(count).forEachIndexed { i, name ->
+            val isCheck = board.tappableAt(i)?.type == "checkbox"
             Text(
                 name,
-                modifier = GlanceModifier.defaultWeight(),
+                modifier = GlanceModifier.defaultWeight().padding(start = if (isCheck) CHECK_INSET else 0.dp),
                 style = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
