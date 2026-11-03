@@ -12,6 +12,8 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.Proxy
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
@@ -76,6 +78,21 @@ class CoverDownloader(
         const val MAX_REDIRECTS = 3
     }
 }
+
+/**
+ * 표지 내려받기 전용 클라이언트. 노션 클라이언트와 달리 인터셉터가 없다(토큰 헤더 없음). 방어 설정:
+ * - [PublicOnlyDns]: 이름이 사설·로컬 주소로 풀리면 연결하지 않는다.
+ * - `proxy(NO_PROXY)`: 시스템 프록시를 쓰면 대상 이름을 프록시가 풀어 위 DNS 방어를 지나치므로 프록시를 쓰지 않는다(프록시가 필수인 망에서는 표지만 못 받는다).
+ * - `followRedirects(false)`: 리다이렉트는 [CoverDownloader]가 한 단계씩 같은 규칙으로 따라간다.
+ */
+fun coverHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    .connectTimeout(10, TimeUnit.SECONDS)
+    .readTimeout(10, TimeUnit.SECONDS)
+    .callTimeout(20, TimeUnit.SECONDS)
+    .proxy(Proxy.NO_PROXY)
+    .dns(PublicOnlyDns)
+    .followRedirects(false)
+    .build()
 
 /** 받은 이미지를 [maxWidth]×[maxHeight] 안으로 줄여(키우지 않는다) JPEG로 다시 쓴다. 이미지가 아니거나 너무 크면 null. */
 object CoverScaler {

@@ -107,11 +107,31 @@ class CoverSyncTest {
     @Test
     fun publicAddressRule() {
         fun public(ip: String) = PublicHosts.isPublic(java.net.InetAddress.getByName(ip))
-        listOf("8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "100.63.255.255", "100.128.0.1").forEach { assertTrue(it, public(it)) }
         listOf(
-            "127.0.0.1", "0.0.0.0", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "224.0.0.1",
-            "100.64.0.1", "100.127.255.255", "::1", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1",
+            "8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "100.63.255.255", "100.128.0.1", "192.0.1.1", "198.20.0.1", "223.255.255.255",
+            "2002:0808:0808::1", // 6to4로 감춘 8.8.8.8
+            "64:ff9b::0808:0808", // NAT64로 감춘 8.8.8.8
+        ).forEach { assertTrue(it, public(it)) }
+        listOf(
+            "127.0.0.1", "0.0.0.0", "0.1.2.3", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "224.0.0.1",
+            "100.64.0.1", "100.127.255.255", "192.0.0.5", "198.18.0.1", "198.19.255.255", "240.0.0.1", "255.255.255.255",
+            "::1", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1",
+            "::ffff:192.168.0.1", // IPv4 매핑(자바가 IPv4로 바꿈)
+            "::192.168.0.1", // IPv4 호환
+            "64:ff9b::c0a8:1", // NAT64로 감춘 192.168.0.1
+            "64:ff9b::7f00:1", // NAT64로 감춘 127.0.0.1
+            "2002:c0a8:0001::1", // 6to4로 감춘 192.168.0.1
+            "2002:7f00:0001::", // 6to4로 감춘 127.0.0.1
         ).forEach { assertFalse(it, public(it)) }
+    }
+
+    @Test
+    fun coverClientBypassesNoGuardViaAProxyOrARedirect() {
+        val client = coverHttpClient()
+        assertEquals(java.net.Proxy.NO_PROXY, client.proxy) // 프록시가 대상 이름을 풀면 DNS 방어를 지나친다
+        assertTrue(client.dns === PublicOnlyDns)
+        assertFalse(client.followRedirects) // 리다이렉트는 CoverDownloader가 규칙을 적용하며 따라간다
+        assertTrue(client.interceptors.isEmpty() && client.networkInterceptors.isEmpty()) // 노션 토큰 헤더를 붙이는 인터셉터 없음
     }
 
     @Test
