@@ -116,14 +116,15 @@ class BookWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialBoard = initialConfig.viewId?.let { deps.views().observe(it).first() }
         val initialCovers = loadCovers(deps, initialBoard)
-        val initialKey = coverKey(deps, initialBoard)
+        val initialKey = coverKey(initialBoard, deps.covers().version.value)
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val board by remember(config.viewId) { config.viewId?.let { deps.views().observe(it) } ?: flowOf(null) }
                 .collectAsState(initialBoard)
-            // 행이 그대로여도 표지 파일만 나중에 받아질 수 있다(동기화가 행을 쓴 뒤 표지를 받는다). 파일 상태가 바뀌면 다시 읽는다.
-            // 처음 한 번은 위에서 읽은 것을 그대로 쓰고(같은 JPEG를 두 번 디코딩하지 않는다), 열쇠가 바뀔 때만 읽는다.
-            val key = coverKey(deps, board)
+            // 행이 그대로여도 표지 파일만 나중에 받아질 수 있다(동기화가 행을 쓴 뒤 표지를 받는다). 표지 저장소의 번호(메모리 값)가 바뀌면 다시 읽는다.
+            // 구성 중에는 디스크를 건드리지 않는다(StrictMode). 처음 한 번은 위에서 읽은 것을 그대로 쓰고(같은 JPEG를 두 번 디코딩하지 않는다), 열쇠가 바뀔 때만 읽는다.
+            val coverVersion by remember { deps.covers().version }.collectAsState()
+            val key = coverKey(board, coverVersion)
             var loadedKey by remember { mutableStateOf(initialKey) }
             var covers by remember { mutableStateOf(initialCovers) }
             LaunchedEffect(key) {
@@ -137,11 +138,9 @@ class BookWidget : GlanceAppWidget() {
         }
     }
 
-    /** 보기 행(주소 포함)과 받아 둔 표지 파일의 상태. 둘 중 하나라도 바뀌면 표지를 다시 읽는다. */
-    private fun coverKey(deps: WidgetDependencies, board: ViewBoard?): Pair<List<ViewRow>?, Long> {
-        val rows = board?.rows?.take(CoverBudget.MAX_COVERS)
-        return rows to (rows?.let { deps.covers().stamp(it.map(ViewRow::coverUrl)) } ?: 0L)
-    }
+    /** 보기 행(주소 포함)과 표지 저장소 번호. 둘 중 하나라도 바뀌면 표지를 다시 읽는다. */
+    private fun coverKey(board: ViewBoard?, coverVersion: Int): Pair<List<ViewRow>?, Int> =
+        board?.rows?.take(CoverBudget.MAX_COVERS) to coverVersion
 
     /** 파일 읽기·디코딩은 IO 스레드에서. */
     private suspend fun loadCovers(deps: WidgetDependencies, board: ViewBoard?): Covers =
@@ -261,10 +260,16 @@ private fun BookTile(book: ViewRow, layout: BookLayout, covers: Covers, m: ViewM
     }
 }
 
-/** 읽은 비율 막대: 칸 폭의 트랙 위에 채움. 비율을 모르면(null) 그리지 않는다. 진행 중이면 최소 폭을 둬 보이게 한다. */
+/**
+ * 읽은 비율 막대: 칸 폭의 트랙 위에 채움. 비율을 모르면(null) 그리지 않되 자리는 비워 둔다(옆 책과 제목 줄이 어긋나지 않게, 실기기에서 확인).
+ * 진행 중이면 최소 폭을 둬 보이게 한다.
+ */
 @Composable
 private fun ProgressBar(progress: Float?, width: Dp, palette: WidgetPalette) {
-    if (progress == null) return
+    if (progress == null) {
+        Spacer(GlanceModifier.size(width, BAR_HEIGHT))
+        return
+    }
     Box(GlanceModifier.size(width, BAR_HEIGHT).background(palette.tileHigh).cornerRadius(BAR_HEIGHT / 2).semantics { testTag = "bookProgress" }) {
         if (progress > 0f) Box(GlanceModifier.size(maxOf(width * progress, BAR_HEIGHT), BAR_HEIGHT).background(palette.green).cornerRadius(BAR_HEIGHT / 2)) {}
     }

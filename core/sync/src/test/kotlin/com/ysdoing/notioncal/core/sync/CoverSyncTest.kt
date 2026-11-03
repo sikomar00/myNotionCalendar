@@ -131,7 +131,10 @@ class CoverSyncTest {
         assertEquals(java.net.Proxy.NO_PROXY, client.proxy) // 프록시가 대상 이름을 풀면 DNS 방어를 지나친다
         assertTrue(client.dns === PublicOnlyDns)
         assertFalse(client.followRedirects) // 리다이렉트는 CoverDownloader가 규칙을 적용하며 따라간다
-        assertTrue(client.interceptors.isEmpty() && client.networkInterceptors.isEmpty()) // 노션 토큰 헤더를 붙이는 인터셉터 없음
+        assertFalse(client.fastFallback) // 소켓 태그(StrictMode)가 붙으려면 소켓이 호출 스레드에서 열려야 한다
+        // 노션 토큰 헤더를 붙이는 인터셉터가 없다: 있는 것은 소켓에 태그만 다는 인터셉터 하나뿐이다.
+        assertTrue(client.networkInterceptors.isEmpty())
+        assertTrue(client.interceptors.all { it is com.ysdoing.notioncal.core.notion.http.SocketTagInterceptor })
     }
 
     @Test
@@ -228,16 +231,16 @@ class CoverSyncTest {
     }
 
     @Test
-    fun stampChangesWhenACoverFileAppearsOrChanges() {
-        val store = CoverStore(dir)
-        val urls = listOf("https://a.example/1.jpg", "https://a.example/2.jpg")
-        val empty = store.stamp(urls)
-        store.save(urls[0], jpegLike)
-        val one = store.stamp(urls)
-        assertFalse(empty == one)
-        store.save(urls[0], jpegLike + byteArrayOf(1))
-        assertFalse(one == store.stamp(urls)) // 같은 주소의 파일이 바뀌어도 달라진다
-        assertEquals(store.stamp(urls), store.stamp(urls))
+    fun versionRisesOnlyWhenCoverFilesChange() {
+        val store = CoverStore(dir, pruneGraceMillis = 0)
+        val start = store.version.value
+        store.save("https://a.example/1.jpg", jpegLike)
+        assertEquals(start + 1, store.version.value) // 새 표지가 저장되면 위젯이 다시 읽는다
+        store.prune(listOf("https://a.example/1.jpg"))
+        assertEquals(start + 1, store.version.value) // 지울 것이 없으면 그대로
+        store.prune(emptyList())
+        assertEquals(start + 2, store.version.value) // 파일을 지웠다
+        assertFalse(store.has("https://a.example/1.jpg"))
     }
 
     @Test

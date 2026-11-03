@@ -11,6 +11,7 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import androidx.core.graphics.createBitmap
 import com.ysdoing.notioncal.core.data.view.CoverStore
+import com.ysdoing.notioncal.core.notion.http.SocketTagInterceptor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -93,10 +94,14 @@ class CoverDownloader(
     }
 }
 
+/** 표지 내려받기 소켓의 트래픽 태그(노션 클라이언트 `NOTION_SOCKET_TAG`와 구분). */
+const val COVER_SOCKET_TAG = 0x4E02
+
 /**
  * 표지 내려받기 전용 클라이언트. 노션 클라이언트와 달리 인터셉터가 없다(토큰 헤더 없음). 방어 설정:
  * - [PublicOnlyDns]: 이름이 사설·로컬 주소로 풀리면 연결하지 않는다.
  * - `proxy(NO_PROXY)`: 시스템 프록시를 쓰면 대상 이름을 프록시가 풀어 위 DNS 방어를 지나치므로 프록시를 쓰지 않는다(프록시가 필수인 망에서는 표지만 못 받는다).
+ * - 인터셉터는 소켓 태그([SocketTagInterceptor]) 하나뿐이다(헤더·토큰을 붙이지 않는다).
  * - `followRedirects(false)`: 리다이렉트는 [CoverDownloader]가 한 단계씩 같은 규칙으로 따라간다.
  */
 fun coverHttpClient(): OkHttpClient = OkHttpClient.Builder()
@@ -104,6 +109,9 @@ fun coverHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .readTimeout(10, TimeUnit.SECONDS)
     .callTimeout(20, TimeUnit.SECONDS)
     .proxy(Proxy.NO_PROXY)
+    // 빠른 대체 연결은 별도 스레드에서 소켓을 열어 스레드 태그가 안 붙는다(노션 클라이언트와 같은 이유로 끈다, 실기기에서 UntaggedSocket으로 확인).
+    .fastFallback(false)
+    .addInterceptor(SocketTagInterceptor(COVER_SOCKET_TAG)) // 헤더를 건드리지 않는다. 소켓에 태그만 달아 StrictMode UntaggedSocket을 막는다(PF-03)
     .dns(PublicOnlyDns)
     .followRedirects(false)
     .build()

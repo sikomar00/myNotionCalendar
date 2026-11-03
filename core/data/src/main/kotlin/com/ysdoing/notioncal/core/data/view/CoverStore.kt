@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.security.MessageDigest
 import javax.inject.Singleton
 
@@ -36,6 +38,7 @@ class CoverStore(
         target.delete()
         check(temp.renameTo(target)) { "표지 파일을 저장하지 못했습니다" }
         failureMarker(url).delete()
+        _version.value++
     }
 
     /** 받지 못한 표지를 [FAILURE_RETRY_MILLIS] 동안 다시 받지 않게 표시한다(없는 주소를 동기화마다 두드리지 않게). */
@@ -50,14 +53,13 @@ class CoverStore(
         return marker.isFile && now - marker.lastModified() < FAILURE_RETRY_MILLIS
     }
 
+    private val _version = MutableStateFlow(0)
+
     /**
-     * [urls]에 해당하는 표지 파일의 상태를 하나의 값으로(이름·크기·수정 시각). 위젯이 받아 둔 표지가 바뀌었는지 알아
-     * 다시 읽을지 정하는 열쇠다(보기 행이 그대로여도 표지만 나중에 받아질 수 있다).
+     * 받아 둔 표지가 바뀔 때마다(저장·정리로 지움) 올라가는 번호. 메모리 값이라 읽어도 디스크를 건드리지 않는다.
+     * 위젯은 이것을 구독해 보기 행이 그대로여도 표지만 나중에 받아졌을 때 다시 읽는다(위젯을 그리는 도중 메인 스레드에서 파일을 읽지 않는다, StrictMode).
      */
-    fun stamp(urls: Collection<String>): Long =
-        urls.filter { it.isNotEmpty() }.map(::fileFor).filter { it.length() > 0 }.fold(17L) { acc, f ->
-            31 * (31 * (31 * acc + f.name.hashCode()) + f.length()) + f.lastModified()
-        }
+    val version: StateFlow<Int> get() = _version
 
     /**
      * [keepUrls]에 없는 파일(남은 임시 파일·실패 표시 포함)을 지우고, 합계가 상한을 넘으면 오래된 것부터 지운다.
@@ -65,13 +67,15 @@ class CoverStore(
      */
     fun prune(keepUrls: Collection<String>, now: Long = System.currentTimeMillis()) = synchronized(lock) {
         val keep = keepUrls.filter { it.isNotEmpty() }.flatMap { listOf(fileFor(it).name, failureMarker(it).name) }.toSet()
-        dir.listFiles().orEmpty().filter { it.name !in keep && now - it.lastModified() >= pruneGraceMillis }.forEach { it.delete() }
+        val removed = dir.listFiles().orEmpty().filter { it.name !in keep && now - it.lastModified() >= pruneGraceMillis }.count { it.delete() }
         var total = dir.listFiles().orEmpty().filter { it.name.endsWith(".jpg") }.sumOf { it.length() }
+        var trimmed = 0
         for (file in dir.listFiles().orEmpty().filter { it.name.endsWith(".jpg") }.sortedBy { it.lastModified() }) {
             if (total <= maxTotalBytes) break
             total -= file.length()
-            file.delete()
+            if (file.delete()) trimmed++
         }
+        if (removed + trimmed > 0) _version.value++
     }
 
     private fun failureMarker(url: String) = File(dir, "${keyOf(url)}.fail")
