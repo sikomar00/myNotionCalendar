@@ -76,6 +76,14 @@ class ViewSync @Inject constructor(
         return withTimeoutOrNull(COVER_PHASE_MILLIS) { covers.fetch(urls) } ?: false
     }
 
+    /**
+     * SY-06: 전송이 끝난 페이지가 든 보기만 다시 받는다(필터에서 빠지고 순서가 정해지고 '반영 대기'가 풀리게). 그 페이지를 가진 보기가
+     * 없으면 아무것도 하지 않는다.
+     */
+    suspend fun syncContaining(pageIds: Collection<String>) {
+        pageIds.flatMap { dao.viewsContaining(it) }.toSet().forEach { sync(it) }
+    }
+
     /** 방금 등록한 보기 하나만 받는다(등록 화면). 다른 보기를 기다리게 하지 않는다. */
     suspend fun sync(viewId: String) {
         val registered = dao.all().firstOrNull { it.viewId == viewId } ?: return

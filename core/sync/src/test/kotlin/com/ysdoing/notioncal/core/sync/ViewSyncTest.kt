@@ -522,6 +522,19 @@ class ViewSyncTest {
     }
 
     @Test
+    fun syncContainingReadsOnlyTheViewsThatHoldThosePages() = runTest {
+        register("v1", "v2", "v3")
+        rowPages = listOf(bookPage("b1", null, 1, 10))
+        sync().syncAll() // v1·v2·v3 모두 b1 행을 갖는다
+        db.viewDao().replace(db.viewDao().snapshot("v3")!!, emptyList()) // v3는 b1을 갖지 않는다
+        requested.clear()
+
+        sync().syncContaining(listOf("b1", "없는 페이지"))
+
+        assertEquals(setOf("v1", "v2"), requested.toSet()) // 그 페이지가 든 보기만 다시 받는다(SY-06)
+    }
+
+    @Test
     fun coversAreDownloadedOnceAndAFailureKeepsTheSnapshot() = runTest {
         register("v1")
         rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 1, 10))

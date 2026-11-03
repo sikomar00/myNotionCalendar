@@ -408,6 +408,21 @@ class OutboxProcessorTest {
     }
 
     @Test
+    fun theOutcomeNamesTheSentPagesSoTheirViewsCanBeRefreshed() = runTest {
+        // SY-06: 보낸 페이지(생성은 만들어진 진짜 id)가 든 보기를 다시 받으려고 결과가 보낸 페이지를 알려 준다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        writer.trash("p2")
+
+        val outcome = processor().process()
+
+        val created = notion.pages.values.single { it.title == "새 일정" }.id
+        assertEquals(setOf("p1", created, "p2"), outcome.sentPageIds)
+        assertTrue(tempId !in outcome.sentPageIds)
+    }
+
+    @Test
     fun aRetriedUpdateThatNotionAlreadyAppliedIsNotAConflict() = runTest {
         // 워커가 멈추기 전에 노션이 이미 받은 편집을 재시도하면, 노션 값이 내 값과 같으니 충돌이 아니다.
         seeded()

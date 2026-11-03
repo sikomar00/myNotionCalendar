@@ -45,7 +45,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** 한 번 처리한 결과. [retryError]가 있으면 일시 오류로 멈춘 것이라 나중에 다시 실행한다. */
-data class OutboxOutcome(val sent: Int, val remaining: Int, val retryError: NotionError?)
+data class OutboxOutcome(val sent: Int, val remaining: Int, val retryError: NotionError?, val sentPageIds: Set<String> = emptySet())
 
 /**
  * 아웃박스 작업을 노션에 보낸다(NS-04, NS-05, PRD §8.5-5·6·8).
@@ -72,6 +72,7 @@ class OutboxProcessor @Inject constructor(
         mutex.withLock {
             val schemas = HashMap<String, DataSourceDto>()
             var sent = 0
+            val sentPages = LinkedHashSet<String>()
             var retryError: NotionError? = null
             while (true) {
                 val row = outbox.all().firstOrNull() ?: break
@@ -91,10 +92,10 @@ class OutboxProcessor @Inject constructor(
                     val schema = schemas.getOrPut(source.dataSourceId) { reader.dataSource(source.dataSourceId) }
                     val mapper = NotionPageMapper(mapping, schema)
                     val encoder = PropertyEncoder(mapping, source.doneOption, source.undoneOption, schema)
-                    when (OutboxOp.valueOf(row.op)) {
+                    sentPages += when (OutboxOp.valueOf(row.op)) {
                         OutboxOp.CREATE -> create(row, source, mapper, encoder)
-                        OutboxOp.UPDATE -> update(row, source, mapper, encoder)
-                        OutboxOp.TRASH -> trash(row)
+                        OutboxOp.UPDATE -> update(row, source, mapper, encoder).let { row.pageId }
+                        OutboxOp.TRASH -> trash(row).let { row.pageId }
                     }
                     sent++
                 } catch (e: NotionException) {
@@ -109,11 +110,12 @@ class OutboxProcessor @Inject constructor(
                 }
             }
             if (sent > 0) widgetRefresher.requestUpdate()
-            OutboxOutcome(sent, outbox.all().size, retryError)
+            OutboxOutcome(sent, outbox.all().size, retryError, sentPages)
         }
     }
 
-    private suspend fun create(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder) {
+    /** 노션에 만들어진 진짜 페이지 id를 돌려준다. */
+    private suspend fun create(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder): String {
         val change = decodeChange(row.changes)
         // 지난 시도에서 실제로 보낸 내용(없으면 지금 내용). 끊긴 생성을 찾을 때와, 그 뒤에 고친 것을 가를 때 쓴다.
         val lastSent = row.baseValues?.let(::decodeChange) ?: change
@@ -126,6 +128,7 @@ class OutboxProcessor @Inject constructor(
         }
         val sentNow = if (existing != null) lastSent else change
         db.withTransaction { finishCreate(row, page, sentNow, source, mapper) }
+        return page.id
     }
 
     private suspend fun finishCreate(row: OutboxEntity, page: PageDto, sent: EventChange, source: DataSourceEntity, mapper: NotionPageMapper) {
