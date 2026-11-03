@@ -54,6 +54,10 @@ interface OutboxDao {
     @Query("UPDATE outbox SET attempts = attempts + 1 WHERE id = :id")
     suspend fun markAttempt(id: Long)
 
+    /** 생성을 보내기 직전: 시도를 세고 보낸 내용([sent], EventChange JSON)을 남긴다. 끊긴 뒤 그 내용으로 만들어진 페이지를 찾고, 그 뒤 고친 것을 가른다. */
+    @Query("UPDATE outbox SET attempts = attempts + 1, baseValues = :sent WHERE id = :id")
+    suspend fun markSending(id: Long, sent: String)
+
     @Query("UPDATE outbox SET lastError = :error WHERE id = :id")
     suspend fun markError(id: Long, error: String?)
 

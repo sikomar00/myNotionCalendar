@@ -115,62 +115,71 @@ class OutboxProcessor @Inject constructor(
 
     private suspend fun create(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder) {
         val change = decodeChange(row.changes)
-        // §8.5-8: 지난번 생성이 시간 초과·서버 오류로 끝났다면 실제로는 만들어졌을 수 있다. 다시 보내기 전에 찾아본다.
-        val title = change.title
-        val existing = if (row.attempts > 0 && title != null) findCreated(row, source, title) else null
+        // 지난 시도에서 실제로 보낸 내용(없으면 지금 내용). 끊긴 생성을 찾을 때와, 그 뒤에 고친 것을 가를 때 쓴다.
+        val lastSent = row.baseValues?.let(::decodeChange) ?: change
+        // §8.5-8: 지난번 생성이 시간 초과·취소로 끝났다면 실제로는 만들어졌을 수 있다. 다시 보내기 전에 찾아본다.
+        val existing = if (row.attempts > 0) findCreated(row, source, mapper, lastSent) else null
         val page = existing ?: run {
-            outbox.markAttempt(row.id) // 응답을 못 받고 끊겨도(취소·중단) 노션이 이미 만들었을 수 있다: 다음에 먼저 찾아본다(SY-08 ②)
+            // 응답을 못 받고 끊겨도 노션이 이미 만들었을 수 있다: 시도를 세고 보낸 내용을 남겨 다음에 먼저 찾아본다(SY-08 ②).
+            outbox.markSending(row.id, OutboxJson.encodeToString(EventChange.serializer(), change))
             writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
         }
-        db.withTransaction {
-            // HB-02: 보내는 사이 사용자가 지웠다(EventWriter.trash가 잠금 밖에서 임시 행과 이 작업을 지움). 만들어진 페이지를
-            // 반영하면 체크가 되살아나므로 반영하지 않고 휴지통 작업을 대신 쌓는다(같은 실행에서 이어 보낸다).
-            val sent = outbox.get(row.id)
-            if (sent == null) {
-                outbox.insert(
-                    OutboxEntity(
-                        pageId = page.id, dataSourceId = source.dataSourceId, op = OutboxOp.TRASH.name, changes = "{}",
-                        baseValues = null, baseLastEdited = null, createdAt = clock.millis(),
-                    ),
-                )
-                return@withTransaction
-            }
-            events.renamePage(row.pageId, page.id)
-            outbox.renamePage(row.pageId, page.id)
-            outbox.delete(row.id)
-            val created = mapper.map(page).event
-            // SY-08 ③: 합쳐진 편집은 만들어진 페이지에 UPDATE로 이어 보낸다(지우면 유실된다). 보내는 사이 고친 것은 바뀐 필드만,
-            // 끊긴 지난 시도에서 찾아 쓴 페이지는 거기에 무엇이 반영됐는지 모르니 전부 다시 보낸다(같은 값이라 멀쩡하다).
-            val unsent = if (existing != null) decodeChange(sent.changes) else decodeChange(sent.changes).changedFrom(change)
-            if (!unsent.isEmpty) queueEditAfterCreate(unsent, sent, page.id, created)
-            applyServerPage(page.id, created, source)
-        }
+        val sentNow = if (existing != null) lastSent else change
+        db.withTransaction { finishCreate(row, page, sentNow, source, mapper) }
     }
 
-    private suspend fun queueEditAfterCreate(edit: EventChange, sent: OutboxEntity, pageId: String, created: RemoteEvent?) {
-        val base = created?.valuesFor(edit)?.let { OutboxJson.encodeToString(EventChange.serializer(), it) }
+    private suspend fun finishCreate(row: OutboxEntity, page: PageDto, sent: EventChange, source: DataSourceEntity, mapper: NotionPageMapper) {
+        // HB-02: 보내는 사이 사용자가 지웠다(EventWriter.trash가 잠금 밖에서 임시 행과 이 작업을 지움). 만들어진 페이지를
+        // 반영하면 체크가 되살아나므로 반영하지 않고 휴지통 작업을 대신 쌓는다(같은 실행에서 이어 보낸다).
+        val current = outbox.get(row.id)
+        if (current == null) {
+            outbox.insert(
+                OutboxEntity(
+                    pageId = page.id, dataSourceId = source.dataSourceId, op = OutboxOp.TRASH.name, changes = "{}",
+                    baseValues = null, baseLastEdited = null, createdAt = clock.millis(),
+                ),
+            )
+            return
+        }
+        // 동기화가 이미 이 페이지를 받아 뒀다면(끊긴 생성 뒤 같은 실행의 읽기) 그 행이 진짜이니 임시 일정만 지운다(키 충돌 방지).
+        if (page.id != row.pageId && events.get(page.id) != null) events.delete(listOf(row.pageId)) else events.renamePage(row.pageId, page.id)
+        outbox.renamePage(row.pageId, page.id)
+        outbox.delete(row.id)
+        val created = mapper.map(page).event
+        // SY-08 ③: 보낸 뒤에 합쳐진 편집은 만들어진 페이지에 UPDATE로 이어 보낸다(지우면 유실된다). 기준값은 보낸 값이라, 그 사이
+        // 노션에서 같은 필드를 고쳤다면 충돌로 가려진다(노션 값 우선).
+        val edit = decodeChange(current.changes).changedFrom(sent)
+        if (!edit.isEmpty) queueEdit(page.id, source, edit, sent.restrictedTo(edit))
+        applyServerPage(page.id, created, source)
+    }
+
+    private suspend fun queueEdit(pageId: String, source: DataSourceEntity, edit: EventChange, base: EventChange) {
         outbox.insert(
             OutboxEntity(
-                pageId = pageId, dataSourceId = sent.dataSourceId, op = OutboxOp.UPDATE.name,
+                pageId = pageId, dataSourceId = source.dataSourceId, op = OutboxOp.UPDATE.name,
                 changes = OutboxJson.encodeToString(EventChange.serializer(), edit),
-                baseValues = base, baseLastEdited = created?.lastEditedTime?.toEpochMilli(), createdAt = clock.millis(),
+                baseValues = OutboxJson.encodeToString(EventChange.serializer(), base), baseLastEdited = null, createdAt = clock.millis(),
             ),
         )
     }
 
     /**
-     * 끊긴 생성이 이미 노션에 만들어졌는지 찾아본다. 같은 제목으로 먼저 만든 다른 로컬 일정이 맡은 페이지는 이 작업의 것이 아니다
-     * (찾아 쓰면 임시 ID를 바꿀 때 키가 충돌해 큐가 막힌다). 이 조회는 미리 해 보는 확인일 뿐이라, 노션이 거부(400)해도 못 찾은 것으로
-     * 보고 생성을 계속한다(로컬 일정을 '거부됨'으로 지우지 않는다).
+     * 끊긴 생성이 이미 노션에 만들어졌는지 찾아본다: 보냈던 제목·날짜와 같은 페이지. 그 사이 로컬에서 제목을 고쳤어도 보낸 제목으로 찾는다.
+     * 같은 제목·날짜로 먼저 만든 다른 일정의 페이지를 피하려고 아직 로컬에 없는 페이지를 먼저 쓰고, 동기화가 이미 받아 둔 페이지도 후보다.
+     * 이 조회는 미리 해 보는 확인일 뿐이라 노션이 거부(400)해도 못 찾은 것으로 보고 생성을 계속한다(shortcut: 그러면 중복이 생길 수
+     * 있다. 사용자의 새 일정을 잃는 것보다 낫다고 보았다).
      */
-    private suspend fun findCreated(row: OutboxEntity, source: DataSourceEntity, title: String): PageDto? {
+    private suspend fun findCreated(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, sent: EventChange): PageDto? {
+        val title = sent.title ?: return null
         val since = Instant.ofEpochMilli(row.createdAt).minus(CREATE_LOOKBACK)
         val found = try {
             reader.queryAll(source.dataSourceId, QueryFilters.createdWithTitle(source.titlePropId, title.trim(), since))
         } catch (e: NotionException) {
             if (e.error is NotionError.Validation) return null else throw e
         }
-        return found.pages.firstOrNull { !it.inTrash && events.get(it.id) == null }
+        val sentDate = sent.date?.startDate
+        val candidates = found.pages.filter { !it.inTrash && (sentDate == null || mapper.map(it).event?.startDate?.toString() == sentDate) }
+        return candidates.firstOrNull { events.get(it.id) == null } ?: candidates.firstOrNull()
     }
 
     private suspend fun update(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder) {
@@ -377,7 +386,18 @@ internal fun EventChange.toPageWrite(catalog: List<ExtraProp> = emptyList()) = P
     },
 )
 
-/** [old]와 다른 필드만 남긴다(생성을 보내는 사이 고친 것만 이어 보내려고). */
+/** [edit]에 든 필드만 남긴다(그 필드의 기준값으로 쓰려고). */
+private fun EventChange.restrictedTo(edit: EventChange) = EventChange(
+    title = title.takeIf { edit.title != null },
+    date = date.takeIf { edit.date != null },
+    done = done.takeIf { edit.done != null },
+    select = select.takeIf { edit.select != null },
+    props = props?.filterKeys { edit.props?.containsKey(it) == true },
+    link = link.takeIf { edit.link != null },
+    ledger = ledger.takeIf { edit.ledger != null },
+)
+
+/** [old]와 다른 필드만 남긴다(생성을 보낸 뒤 고친 것만 이어 보내려고). */
 private fun EventChange.changedFrom(old: EventChange) = EventChange(
     title = title.takeIf { it != old.title },
     date = date.takeIf { it != old.date },

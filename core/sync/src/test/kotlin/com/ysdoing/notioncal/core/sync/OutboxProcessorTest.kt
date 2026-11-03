@@ -339,7 +339,71 @@ class OutboxProcessorTest {
         processor().process()
 
         assertTrue(conflicts().none { it.kind == "REJECTED" })
+        // 알려진 절충(shortcut): 조회가 거부되면 이미 만들어진 페이지를 못 찾아 하나 더 만든다. 사용자의 새 일정을 잃는 것보다 낫다고 보았다.
+        assertEquals(2, notion.pages.values.count { it.title == "새 일정" })
         assertNull(db.eventDao().get(tempId)) // 임시 ID는 진짜 페이지로 바뀌었다
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aRenameBetweenAttemptsStillFindsTheInterruptedCreate() = runTest {
+        // 끊긴 생성 뒤 재시도 전에 로컬에서 제목을 고쳐도, 처음 보낸 제목으로 찾아 쓰고 새 제목은 이어서 보낸다(중복 없음).
+        seeded()
+        val tempId = writer.create("ds", "원래 이름", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        writer.update(tempId, EventChange(title = "바뀐 이름"))
+        tick(30)
+
+        processor().process()
+
+        val page = notion.pages.values.single { it.title == "바뀐 이름" || it.title == "원래 이름" }
+        assertEquals("바뀐 이름", page.title)
+        assertEquals("바뀐 이름", db.eventDao().get(page.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aPageThatSyncAlreadyPulledIsAdoptedNotDuplicated() = runTest {
+        // 끊긴 생성 뒤 같은 워커 실행의 읽기 동기화가 만들어진 페이지를 받아 뒀어도, 재시도가 그 페이지를 쓰고 하나 더 만들지 않는다.
+        seeded()
+        val tempId = writer.create("ds", "동기화가 먼저 받음", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        tick()
+        engine().sync(SyncTrigger.PERIODIC)
+        tick()
+        val pulled = notion.pages.values.single { it.title == "동기화가 먼저 받음" }
+        assertEquals("동기화가 먼저 받음", db.eventDao().get(pulled.id)!!.title) // 읽기가 이미 받아 뒀다
+
+        processor().process()
+
+        assertEquals(1, notion.pages.values.count { it.title == "동기화가 먼저 받음" })
+        assertNull(db.eventDao().get(tempId))
+        assertEquals("동기화가 먼저 받음", db.eventDao().get(pulled.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anAdoptedCreateDoesNotClobberANewerNotionEdit() = runTest {
+        // 끊긴 생성을 찾아 쓸 때, 그 사이 노션에서 고친 값(완료)을 처음 보낸 값으로 되돌려 덮지 않는다.
+        seeded()
+        writer.create("ds", "찾아 쓸 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        val page = notion.pages.values.single { it.title == "찾아 쓸 일정" }
+        notion.editRemotely(page.id) { done = true }
+        tick(30)
+
+        processor().process()
+
+        assertTrue(notion.pages.getValue(page.id).done)
+        assertTrue(conflicts().isEmpty())
         assertTrue(db.outboxDao().all().isEmpty())
     }
 

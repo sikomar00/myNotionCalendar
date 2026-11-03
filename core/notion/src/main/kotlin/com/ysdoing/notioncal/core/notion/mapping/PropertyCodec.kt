@@ -138,14 +138,15 @@ object PropertyCodec {
             is NotionValue.Files -> filesPayload(value) ?: return null
             is NotionValue.Check -> JsonPrimitive(value.checked)
             is NotionValue.Str -> if (value.type in WRITABLE_STRINGS) value.value?.let(::JsonPrimitive) ?: JsonNull else return null
-            is NotionValue.Relation -> idList(value.ids)
+            is NotionValue.Relation -> if (value.hasMore) return null else idList(value.ids) // 25개로 잘린 목록을 쓰면 나머지 연결이 지워진다
             is NotionValue.Formula, is NotionValue.Rollup, is NotionValue.UniqueId, is NotionValue.Raw -> return null
         }
         return buildJsonObject { put(value.type, payload) }
     }
 
+    /** 노션은 글자 조각 하나를 2000자까지 받는다. 더 길면 여러 조각으로 나눠 보낸다(잘라 버리면 긴 메모가 줄어든다). */
     private fun textPayload(text: String): JsonArray = buildJsonArray {
-        if (text.isNotEmpty()) add(buildJsonObject { putJsonObject("text") { put("content", text.take(PropertyEncoder.MAX_TITLE)) } })
+        text.chunked(PropertyEncoder.MAX_TITLE).forEach { piece -> add(buildJsonObject { putJsonObject("text") { put("content", piece) } }) }
     }
 
     /** id가 있으면 id로, 없으면 이름으로(select·multi_select는 새 옵션 이름을 노션이 만든다). 둘 다 없으면 값이 없다. */

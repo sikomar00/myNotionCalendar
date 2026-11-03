@@ -144,10 +144,17 @@ class PropertyCodecTest {
     }
 
     @Test
-    fun longTextIsCutAtTheNotionLimit() {
+    fun longTextIsSplitIntoPiecesAtTheNotionLimitNotCut() {
         val encoded = PropertyCodec.encode(NotionValue.Text("rich_text", "가".repeat(2500)))!!
-        val content = encoded["rich_text"]!!.let { (it as kotlinx.serialization.json.JsonArray)[0].jsonObject["text"]!!.jsonObject["content"] as JsonPrimitive }.content
-        assertEquals(2000, content.length)
+        val pieces = (encoded["rich_text"] as kotlinx.serialization.json.JsonArray).map { (it.jsonObject["text"]!!.jsonObject["content"] as JsonPrimitive).content }
+        assertEquals(listOf(2000, 500), pieces.map { it.length }) // 잘라 버리면 긴 메모가 줄어든다
+        assertEquals(NotionValue.Text("rich_text", "가".repeat(2500)), PropertyCodec.decode(JsonObject(encoded + ("type" to JsonPrimitive("rich_text")))))
+    }
+
+    @Test
+    fun aTruncatedRelationIsNotWritableBecauseItWouldDropTheRestOfTheLinks() {
+        assertNull(PropertyCodec.encode(NotionValue.Relation(listOf("page-1"), hasMore = true)))
+        assertNotNull(PropertyCodec.encode(NotionValue.Relation(listOf("page-1"), hasMore = false)))
     }
 
     @Test
