@@ -48,6 +48,16 @@ class AgendaWidgetTest {
     }
 
     @Test
+    fun syncFailureIsWrittenInWordsAndTheAddButtonStays() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 152.dp))
+        provideComposable { AgendaWidgetContent(AgendaWidget.uiState(today, WidgetConfig(1), events, sync = WidgetSync(lastSuccessAt = 1L, failed = true))) }
+        onNode(hasTextEqualTo("동기화 오류")).assertExists() // 색 점이 아니라 글자로 알린다
+        onNode(hasTestTag("add")).assertExists()
+        onNode(hasTestTag("agendaTitle")).assertExists()
+    }
+
+    @Test
     fun rendersRowsWithActions() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(DpSize(358.dp, 152.dp))

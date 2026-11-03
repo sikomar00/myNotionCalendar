@@ -207,6 +207,24 @@ class LedgerWidgetTest {
         assertEquals(LedgerWidgetMode.COMPACT, ledgerWidgetMode(MEDIUM))
     }
 
+    @Test
+    fun syncFailureIsWrittenInTheHeaderNotColorOnly() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(LedgerWidgetState(board(), WidgetConfig(1), WidgetSync(lastSuccessAt = 1L, failed = true)), systemFontScale = 1f) }
+        onNode(hasTestTag("syncError")).assert(hasContentDescriptionEqualTo(context.getString(R.string.widget_sync_error)))
+        onNode(hasTextEqualTo(context.getString(R.string.widget_sync_error_short))).assertExists()
+        onNode(hasTestTag("ledgerAdd")).assert(hasStartActivityClickAction(ledgerInputIntent(context, today))) // 오류여도 입력 버튼은 그대로
+    }
+
+    @Test
+    fun noSyncErrorMarkWhenSyncSucceeded() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("syncError")).assertCountEquals(0)
+    }
+
     private suspend fun render(size: DpSize, content: @Composable () -> Unit) {
         val remoteViews = GlanceRemoteViews().compose(context, size) { content() }.remoteViews
         val activity = Robolectric.buildActivity(Activity::class.java).create().get()

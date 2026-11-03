@@ -55,7 +55,8 @@ import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
 /** LD-03 가계부 위젯 한 개가 그릴 것. Room에서 읽은 값만 담는다. */
-data class LedgerWidgetState(val board: LedgerBoard, val config: WidgetConfig)
+/** [sync]는 마지막 동기화 결과: 실패면 머리에 경고 아이콘 + 글자로 알린다(WS-3, 색만으로 알리지 않음). */
+data class LedgerWidgetState(val board: LedgerBoard, val config: WidgetConfig, val sync: WidgetSync = WidgetSync())
 
 /** 크기 단계: 6주가 들어가면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주(4×2는 보통 1~2주). */
 enum class LedgerWidgetMode { LARGE, COMPACT }
@@ -94,8 +95,6 @@ data class LedgerMetrics(
         val PADDING_H = 8.dp
         val PADDING_V = 4.dp
         val BAR = 6.dp
-        /** LD-07 머리줄 '+' 버튼 너비(누르기 쉬운 폭). */
-        val ADD_WIDTH = 40.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): LedgerMetrics {
             val scale = config.fontScale / 100f
@@ -187,7 +186,8 @@ internal object LedgerSession {
         val today = LocalDate.now(APP_ZONE)
         val board by remember(today) { deps.ledger().observeBoard(YearMonth.from(today), today) }
             .collectAsState(initial.takeIf { it.today == today } ?: initial)
-        LedgerWidgetContent(LedgerWidgetState(board, config), fontScale, framed)
+        val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(WidgetSync())
+        LedgerWidgetContent(LedgerWidgetState(board, config, sync), fontScale, framed)
     }
 }
 
@@ -241,24 +241,29 @@ fun LedgerWidgetContent(
                     style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
-                Text(
-                    text = s.asOf?.let { context.getString(R.string.ledger_widget_as_of, it.monthValue, it.dayOfMonth) }
-                        ?: context.getString(R.string.ledger_widget_as_of_none),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
-                    maxLines = 1,
-                )
-                val add = context.getString(R.string.ledger_widget_add)
-                Box(
-                    GlanceModifier.width(LedgerMetrics.ADD_WIDTH).height(metrics.headerHeight)
-                        .clickable(actionStartActivity(ledgerInputIntent(context, board.today)))
-                        .semantics {
-                            contentDescription = add
-                            testTag = "ledgerAdd"
+                if (state.sync.failed) {
+                    // 실패하면 '기준일' 자리에 경고 아이콘 + 글자. 자리를 바꿔 쓰므로 줄 높이·칸 수는 그대로다.
+                    WidgetStatusLine(
+                        context.getString(R.string.widget_sync_error_short), error = true, palette = palette, fontSp = metrics.smallFontSp,
+                        modifier = GlanceModifier.semantics {
+                            contentDescription = context.getString(R.string.widget_sync_error)
+                            testTag = "syncError"
                         },
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    WidgetIcon(R.drawable.ic_widget_add, palette.accent, (metrics.headerHeight * 0.7f).coerceAtMost(24.dp))
+                    )
+                } else {
+                    Text(
+                        text = s.asOf?.let { context.getString(R.string.ledger_widget_as_of, it.monthValue, it.dayOfMonth) }
+                            ?: context.getString(R.string.ledger_widget_as_of_none),
+                        style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
+                        maxLines = 1,
+                    )
                 }
+                // LD-07 입력: 공통 채운 버튼(눌림 폭 48dp, 높이는 머리줄 그대로).
+                WidgetIconButton(
+                    R.drawable.ic_widget_add, context.getString(R.string.ledger_widget_add), "ledgerAdd",
+                    actionStartActivity(ledgerInputIntent(context, board.today)), palette,
+                    style = IconButtonStyle.FILLED, visual = (metrics.headerHeight - 2.dp).coerceAtMost(28.dp), height = metrics.headerHeight,
+                )
             }
             if (metrics.showSummary) {
                 // 예정·수입·예산을 가운뎃점 대신 사이를 띄운 세 덩이로(DESIGN.md). 자식 5개(Glance 10개 제한 안).
