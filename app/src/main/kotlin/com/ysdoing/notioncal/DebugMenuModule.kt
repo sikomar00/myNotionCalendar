@@ -11,6 +11,7 @@ import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.sync.CompareReport
 import com.ysdoing.notioncal.core.sync.Mismatch
 import com.ysdoing.notioncal.core.sync.NotionComparer
+import com.ysdoing.notioncal.core.sync.ViewComparer
 import com.ysdoing.notioncal.core.sync.NotionSyncEngine
 import com.ysdoing.notioncal.core.sync.PhoneCalendarMirror
 import com.ysdoing.notioncal.feature.diagnostics.DebugAction
@@ -35,6 +36,7 @@ object DebugMenuModule {
         sync: SyncRequester,
         engine: NotionSyncEngine,
         comparer: NotionComparer,
+        viewComparer: ViewComparer,
         mirror: PhoneCalendarMirror,
     ): DebugMenu = DebugMenu {
         if (!BuildConfig.DEBUG) return@DebugMenu emptyList()
@@ -43,7 +45,10 @@ object DebugMenuModule {
                 // §12 대조: 먼저 평소처럼 동기화(증분 + 이번 달 대조)한 뒤, 동기화 범위 전체를 노션과 비교한다.
                 val outcome = engine.sync(SyncTrigger.PULL_TO_REFRESH)
                 try {
-                    describeComparison(comparer.compare(), outcome.error)
+                    // Phase 10-7: 등록한 보기마다 노션 보기 쿼리(페이지 id·순서)와 위젯이 받아 둔 행도 비교한다.
+                    val views = viewComparer.compare()
+                    describeComparison(comparer.compare(), outcome.error) +
+                        if (views.isEmpty()) "" else "\n\n보기 대조(보기 쿼리 ↔ 위젯 행)\n" + views.joinToString("\n") { it.summary() }
                 } catch (e: NotionException) {
                     "비교하지 못했습니다: ${e.error::class.simpleName}"
                 }

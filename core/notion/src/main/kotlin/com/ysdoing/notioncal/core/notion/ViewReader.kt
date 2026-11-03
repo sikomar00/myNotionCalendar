@@ -26,11 +26,20 @@ interface ViewReader {
     suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int = VIEW_ROW_LIMIT): List<PageDto>
 
     /**
+     * 노션이 이 보기에 넣은 페이지 id를 보기의 순서대로 앞에서 [limit]개까지 받는다(보기 쿼리, 값은 없다). 앱은 값을 데이터 소스 쿼리로 받으므로
+     * 이것은 진단 '노션과 비교'가 위젯 행과 맞는지 대조할 때만 쓴다. 구현하지 않은 읽기 전용 구현은 빈 결과를 돌려준다.
+     */
+    suspend fun viewQueryIds(viewId: String, limit: Int = VIEW_ROW_LIMIT): ViewQueryIds = ViewQueryIds(emptyList(), complete = true)
+
+    /**
      * 위젯에서 값을 되쓸 때 필요한 속성 스키마(종류·선택지). 기본 구현은 빈 스키마라, 이것을 구현하지 않은 읽기 전용 구현은
      * 쓰기 정보 없이 행만 받는다.
      */
     suspend fun schema(dataSourceId: String): DataSourceDto = DataSourceDto(id = dataSourceId)
 }
+
+/** 보기 쿼리 결과. [complete]가 false면 노션이 쿼리당 한도(1만 건)에서 잘랐다(`request_status: incomplete`). */
+data class ViewQueryIds(val ids: List<String>, val complete: Boolean)
 
 /** 보기 필터와 빠른 필터를 `and`로 묶는다. 둘 다 없으면 null. */
 fun viewFilter(view: ViewDto): JsonObject? {

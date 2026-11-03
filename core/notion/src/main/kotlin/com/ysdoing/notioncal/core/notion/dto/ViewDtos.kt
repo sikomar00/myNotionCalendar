@@ -39,3 +39,20 @@ data class ViewPropertyDto(
     @SerialName("property_name") val propertyName: String = "",
     val visible: Boolean = true,
 )
+
+/** `POST /v1/views/{id}/queries` 본문. 쪽 크기만 받는다(필터·정렬은 보기가 갖고 있다). */
+@Serializable
+data class ViewQueryRequestDto(@SerialName("page_size") val pageSize: Int = 100)
+
+/**
+ * 보기 쿼리 응답(첫 쪽과 `GET …/queries/{query_id}`의 다음 쪽). [results]는 `{object:"page", id}`뿐이고 값은 주지 않는다(9-A).
+ * 결과는 15분 뒤 만료되고, 쿼리당 1만 건을 넘으면 [requestStatus]가 incomplete다.
+ */
+@Serializable
+data class ViewQueryDto(
+    val id: String = "",
+    val results: List<ViewRefDto> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
+    @SerialName("request_status") val requestStatus: RequestStatusDto? = null,
+)

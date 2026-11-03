@@ -59,6 +59,64 @@ class ViewReaderTest {
         assertEquals("c2", server.takeRequest().url.queryParameter("start_cursor"))
     }
 
+    // --- Phase 10-7 보기 쿼리(`POST /v1/views/{id}/queries`): 보기가 보여 주는 페이지 id를 순서대로. 값은 주지 않는다.
+
+    private fun queryPage(id: String, vararg pages: String, more: Boolean = false, cursor: String? = null, status: String? = null) =
+        ok(
+            """{"object":"view_query","id":"$id","results":[${pages.joinToString(",") { """{"object":"page","id":"$it"}""" }}],"has_more":$more,""" +
+                (cursor?.let { """"next_cursor":"$it",""" } ?: "") + (status?.let { """"request_status":{"type":"$it"},""" } ?: "") + """"type":"view_query"}""",
+        )
+
+    @Test
+    fun readsViewQueryIdsInViewOrderAcrossPages() = runTest {
+        server.enqueue(queryPage("q1", "a", "b", more = true, cursor = "c2"))
+        server.enqueue(queryPage("q1", "c"))
+        val result = reader.viewQueryIds("v1", limit = 200)
+        assertEquals(listOf("a", "b", "c"), result.ids)
+        assertEquals(true, result.complete)
+        val first = server.takeRequest()
+        assertEquals("POST", first.method)
+        assertEquals("/v1/views/v1/queries", first.url.encodedPath)
+        assertEquals(100, first.body!!.utf8().let { kotlinx.serialization.json.Json.parseToJsonElement(it).jsonObject["page_size"]!!.jsonPrimitive.content.toInt() })
+        val second = server.takeRequest()
+        assertEquals("/v1/views/v1/queries/q1", second.url.encodedPath)
+        assertEquals("c2", second.url.queryParameter("start_cursor"))
+    }
+
+    @Test
+    fun theLimitSizesTheFirstRequestAndStopsPaging() = runTest {
+        server.enqueue(queryPage("q1", "a", "b", more = true, cursor = "c2"))
+        val result = reader.viewQueryIds("v1", limit = 2) // 위젯은 앞 50행만 받는다: 그만큼만 비교한다
+        assertEquals(listOf("a", "b"), result.ids)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun anExpiredQueryIsCreatedAgainOnce() = runTest {
+        // 쿼리 결과는 15분 뒤 만료된다: 쪽을 넘기다 404면 처음부터 한 번 다시 만든다.
+        server.enqueue(queryPage("q1", "a", more = true, cursor = "c2"))
+        server.enqueue(MockResponse.Builder().code(404).body("""{"object":"error","status":404,"code":"object_not_found"}""").build())
+        server.enqueue(queryPage("q2", "a", "b"))
+        val result = reader.viewQueryIds("v1", limit = 200)
+        assertEquals(listOf("a", "b"), result.ids)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test
+    fun aViewThatCannotBeQueriedFailsAfterOneRetry() = runTest {
+        repeat(2) { server.enqueue(MockResponse.Builder().code(404).body("""{"object":"error","status":404,"code":"object_not_found"}""").build()) }
+        val error = runCatching { reader.viewQueryIds("v1") }.exceptionOrNull() as NotionException
+        assertEquals(NotionError.NotShared, error.error)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun anIncompleteStatusIsReported() = runTest {
+        // 쿼리당 1만 건을 넘으면 노션이 request_status: incomplete로 알린다.
+        server.enqueue(queryPage("q1", "a", status = "incomplete"))
+        assertEquals(false, reader.viewQueryIds("v1").complete)
+    }
+
     @Test
     fun listsViewIdsForADataSource() = runTest {
         server.enqueue(ok("""{"object":"list","results":[{"object":"view","id":"v1"},{"object":"view","id":"v2"}],"has_more":false}"""))
