@@ -79,7 +79,7 @@ class WidgetRemoteViewsTest {
 
     @Test
     fun denseMonthStaysFarBelowTheBinderLimit() = runTest(timeout = 3.minutes) {
-        // 날짜 칸 타일(2026-11-03)로 View가 늘었다. RemoteViews는 Binder(약 1MB, 프로세스 공용)로 넘어가므로 가장 큰 경우도 여유를 둔다.
+        // 주 타일(2026-11-03)·머리 버튼 모양이 바뀌었다. 주 타일은 View를 늘리지 않아야 한다(칸마다 깔면 Glance View 개수 한도 초과). RemoteViews는 Binder(약 1MB, 프로세스 공용)로 넘어가므로 가장 큰 경우도 여유를 둔다.
         for (size in listOf(large, huge)) {
             val remoteViews = GlanceRemoteViews().compose(context, size) { WidgetContent(WidgetSamples.state(WidgetSamples.dense, WidgetConfig(1, maxPerCell = 6))) }.remoteViews
             val parcel = android.os.Parcel.obtain()

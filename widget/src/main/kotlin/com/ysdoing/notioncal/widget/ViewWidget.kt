@@ -161,14 +161,19 @@ private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette
     val context = LocalContext.current
     // 이름 없는 보기도 노션에서 허용된다. 접근성 설명이 글자를 대신하므로 보기 이름을 함께 읽게 한다.
     val title = board?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.view_widget_label)
-    val description = context.getString(R.string.view_widget_header_description, title)
     val size = LocalSize.current
     val progress = board?.takeIf { size.height >= SUBTITLE_MIN_HEIGHT }?.let(::viewProgress)
     val height = if (progress != null) m.headerWithSub else m.header
+    val subtitle = progress?.let {
+        if (it.label == null) context.getString(R.string.view_widget_progress, it.done, it.total)
+        else context.getString(R.string.view_widget_progress_named, it.label, it.done, it.total)
+    }
+    // 제목 영역 전체가 눌림이라 설명이 안의 글자를 대신한다. 부제(완료 n/m)도 함께 읽히게 설명에 넣는다.
+    val description = context.getString(R.string.view_widget_header_description, listOfNotNull(title, subtitle).joinToString(", "))
     WidgetHeader(
         icon = R.drawable.ic_widget_checklist,
         title = title,
-        subtitle = progress?.let { context.getString(R.string.view_widget_progress, it.first, it.second) },
+        subtitle = subtitle,
         palette = palette,
         height = height,
         titleSp = m.headerSp * m.spFactor,
@@ -222,26 +227,18 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     ViewRows(board, tableColumns, ViewLook(m, palette), staticRows)
 }
 
-/** 빈 보기: 높이가 넉넉하면 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기), 낮으면 글자만(작은 위젯에서 잘리지 않게). */
+/** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */
 @Composable
 private fun ViewEmpty(board: ViewBoard, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
-    val message = context.getString(R.string.view_widget_empty)
-    val fontSp = 12f * m.spFactor
-    if (LocalSize.current.height < EMPTY_CARD_MIN_HEIGHT) {
-        Text(message, style = TextStyle(color = palette.subtle, fontSize = fontSp.sp))
-        return
-    }
     val canAdd = board.canCreate
     WidgetEmpty(
-        R.drawable.ic_widget_checklist, message, palette, fontSp,
+        R.drawable.ic_widget_checklist, context.getString(R.string.view_widget_empty), palette, 12f * m.spFactor,
         ctaText = if (canAdd) context.getString(R.string.view_widget_empty_cta) else null,
         ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId)) else null,
         ctaTag = "viewEmpty",
     )
 }
-
-private val EMPTY_CARD_MIN_HEIGHT = 170.dp
 
 /** 정상이면 나오지 않는다. 노션에서 보기를 찾을 수 없을 때만 눌러서 설정을 연다(다른 오류는 머리를 눌러 새로고침). */
 @Composable

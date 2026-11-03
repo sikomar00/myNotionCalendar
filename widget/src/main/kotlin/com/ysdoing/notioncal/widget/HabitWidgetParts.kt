@@ -59,19 +59,23 @@ internal fun HabitHero(board: HabitBoard, metrics: HabitMetrics, palette: Widget
 
 private val HERO_BAR = 116.dp
 
-/** 이름 아래 알약: 이어 가는 중이면 '연속 N일'(2일부터), 하루 쉬었으면 '오늘 하면 이어짐'(HB-04). 그 밖에는 없다. */
+/** 이름 아래 알약(이름 칸이 알약 폭보다 좁으면 [HabitMetrics.showMessage]가 꺼서 뺀다): 이어 가는 중이면 '연속 N일'(2일부터), 하루 쉬었으면 '오늘 하면 이어짐'(HB-04). 그 밖에는 없다. */
 @Composable
 internal fun HabitMessagePill(message: HabitMessage, metrics: HabitMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
-    when {
-        message is HabitMessage.Streak && message.days >= 2 -> WidgetPill(
-            context.getString(R.string.habit_widget_streak, message.days), palette.greenContainer, palette.onGreenContainer,
-            metrics.smallFontSp, GlanceModifier.padding(top = 2.dp), icon = R.drawable.ic_widget_flame,
-        )
-        message == HabitMessage.MissedYesterday -> WidgetPill(
-            context.getString(R.string.habit_widget_missed), palette.accentContainer, palette.onAccentContainer,
-            metrics.smallFontSp, GlanceModifier.padding(top = 2.dp),
-        )
+    val streak = (message as? HabitMessage.Streak)?.days?.takeIf { it >= 2 }
+    val missed = message == HabitMessage.MissedYesterday
+    if (!metrics.showMessage || (streak == null && !missed)) return
+    // 알약 위 여백 2dp는 Box로 둔다(알약 modifier의 padding은 알약 안쪽 여백이 된다).
+    Box(GlanceModifier.padding(top = 2.dp)) {
+        if (streak != null) {
+            WidgetPill(
+                context.getString(R.string.habit_widget_streak, streak), palette.greenContainer, palette.onGreenContainer,
+                metrics.smallFontSp, icon = R.drawable.ic_widget_flame,
+            )
+        } else {
+            WidgetPill(context.getString(R.string.habit_widget_missed), palette.accentContainer, palette.onAccentContainer, metrics.smallFontSp)
+        }
     }
 }
 

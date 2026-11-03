@@ -13,6 +13,7 @@ import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetTheme
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -35,7 +36,7 @@ class WidgetPartsTest {
             Column {
                 WidgetIconButton(R.drawable.ic_widget_refresh, "새로고침", "refresh", refresh, palette)
                 WidgetIconButton(R.drawable.ic_widget_add, "추가", "add", refresh, palette, style = IconButtonStyle.FILLED)
-                WidgetIconButton(R.drawable.ic_widget_next, "다음", "next", refresh, palette, style = IconButtonStyle.PLAIN)
+                WidgetIconButton(R.drawable.ic_widget_next, "다음", "next", refresh, palette, style = IconButtonStyle.TONAL)
             }
         }
         listOf("refresh" to "새로고침", "add" to "추가", "next" to "다음").forEach { (tag, description) ->
@@ -70,6 +71,21 @@ class WidgetPartsTest {
         onNode(hasTextEqualTo("습관")).assertExists()
         onNode(hasTextEqualTo("11월 3일 화요일")).assertExists()
         onNode(hasTestTag("refresh")).assertExists()
+    }
+
+    @Test
+    fun narrowWidgetDropsTheHeaderChipSoTheTitleKeepsItsRoom() {
+        assertTrue(headerShowsChip(250.dp))
+        assertTrue(!headerShowsChip(150.dp)) // 2×2: 칩 40dp + 버튼 48dp가 제목 자리를 거의 다 먹는다
+    }
+
+    @Test
+    fun emptyStateShrinksToOneTappableLineInALowWidget() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(320.dp, 110.dp))
+        provideComposable { WidgetEmpty(R.drawable.ic_widget_checklist, "표시할 행이 없습니다", palette, 12f, ctaText = "첫 항목 만들기", ctaAction = refresh) }
+        onNode(hasTextEqualTo("표시할 행이 없습니다. 첫 항목 만들기")).assertExists()
+        onNode(hasTestTag("emptyAction")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
     }
 
     @Test

@@ -9,7 +9,9 @@ import org.junit.Test
 /**
  * 월간 위젯은 새 스타일(2026-11-03)로 바뀌어도 면적당 보이는 일정 줄 수가 줄지 않는다(사용자 요구).
  * 아래 줄 수는 새 스타일 이전 레이아웃의 값이다. 머리 높이(24/34/48dp)도 그 이상 커지지 않는다.
- * 치수 계산([WidgetMetrics])을 바꾸면서 줄 수가 이보다 줄면 이 시험이 실패한다.
+ * 줄 수는 치수 계산([WidgetMetrics])이 정하므로 이 시험은 그 계산이 줄 수·머리 높이를 줄이면 실패한다.
+ * 그리는 쪽의 구조(주 타일은 이전 1dp 구분선 자리를 쓰고 View를 늘리지 않음)는 이 시험이 보지 않는다:
+ * 코드 주석(WidgetGrid.WeekRow)과 View 개수·크기 시험(WidgetRemoteViewsTest)이 지킨다.
  */
 class MonthDensityTest {
     private data class Baseline(val width: Int, val height: Int, val fontScale: Int, val systemFont: Float, val lanes: Int)

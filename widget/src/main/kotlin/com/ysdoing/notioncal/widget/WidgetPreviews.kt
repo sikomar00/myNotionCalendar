@@ -37,7 +37,7 @@ object WidgetPreviews {
     val MONTH_SIZE = DpSize(358.dp, 380.dp)
     val AGENDA_SIZE = DpSize(358.dp, 152.dp)
     val SPLIT_SIZE = DpSize(358.dp, 168.dp)
-    val HABIT_SIZE = DpSize(358.dp, 168.dp)
+    val HABIT_SIZE = DpSize(358.dp, 216.dp)
 
     private const val TAG = "NotionCalWidget"
 

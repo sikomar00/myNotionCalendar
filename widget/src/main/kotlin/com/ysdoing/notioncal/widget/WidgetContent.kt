@@ -237,13 +237,11 @@ internal fun appIntent(context: Context): Intent =
     (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-private val HEADER_BUTTON_WIDTH = 48.dp
-
 private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
 /**
- * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 폭 48dp(큼은 머리줄도 48dp라 48×48).
- * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 글자 폭 그대로 둔다(예외).
+ * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 원형 톤 버튼으로 폭 48dp(큼은 머리줄도 48dp라 48×48).
+ * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 아이콘 폭 그대로 둔다(예외).
  */
 @Composable
 private fun HeaderButton(
@@ -263,7 +261,7 @@ private fun HeaderButton(
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
-            .then(if (metrics.mode == WidgetMode.SMALL) GlanceModifier.padding(horizontal = 5.dp) else GlanceModifier.width(HEADER_BUTTON_WIDTH))
+            .padding(horizontal = 5.dp)
             .clickable(action)
             .semantics {
                 contentDescription = description

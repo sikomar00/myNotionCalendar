@@ -37,8 +37,7 @@
     <string name="habit_widget_empty_cta">습관 보기</string>
     <string name="habit_widget_label_short">습관</string>
     <string name="habit_widget_description">습관마다 최근 7일과 이번 주 횟수를 보여주고, 칸을 눌러 체크합니다</string>
-    <string name="habit_widget_title">습관 %1$d/%2$d</string>
-    <string name="habit_widget_empty">등록한 습관이 없습니다. 눌러서 앱 열기</string>
+    <string name="habit_widget_empty">등록한 습관이 없습니다</string>
     <string name="habit_widget_date">%1$d월 %2$d일 %3$s</string>
     <string name="habit_widget_done">함</string>
     <string name="habit_widget_not_done">안 함</string>
@@ -121,6 +120,7 @@
     <string name="view_widget_empty">표시할 행이 없습니다</string>
     <string name="view_widget_empty_cta">새 항목 만들기</string>
     <string name="view_widget_progress">완료 %1$d/%2$d</string>
+    <string name="view_widget_progress_named">%1$s %2$d/%3$d</string>
     <string name="view_widget_not_synced">아직 받지 못했습니다</string>
     <string name="view_widget_failed">동기화 실패, 마지막 성공 %1$s</string>
     <string name="view_widget_stale">오래됨, 마지막 성공 %1$s</string>

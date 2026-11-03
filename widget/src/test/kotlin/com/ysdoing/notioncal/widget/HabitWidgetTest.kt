@@ -143,6 +143,16 @@ class HabitWidgetTest {
     }
 
     @Test
+    fun streakPillIsLeftOutWhereTheNameColumnCannotHoldIt() {
+        // 알약(약 76dp)이 이름 칸에 안 들어가는 좁은 위젯은 알약을 그리지 않아 중간에서 잘리지 않는다.
+        fun shows(size: DpSize) = HabitMetrics.of(size, WidgetConfig(1), 1f).showMessage
+        assertTrue(shows(MEDIUM))
+        assertTrue(shows(SMALL))
+        assertTrue(!shows(DpSize(110.dp, 110.dp)))
+        assertTrue(!shows(DpSize(250.dp, 152.dp)))
+    }
+
+    @Test
     fun mediumHasRefreshButNoHero() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(MEDIUM)

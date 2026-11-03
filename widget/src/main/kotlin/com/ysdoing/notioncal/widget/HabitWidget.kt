@@ -100,6 +100,8 @@ data class HabitMetrics(
     val smallFontSp: Float,
     val heroFontSp: Float,
     val heroHeight: Dp,
+    /** 이름 아래 알약('연속 12일' 등, 약 76dp)이 이름 칸에 들어갈 때만 그린다. 좁은 위젯은 알약이 잘리지 않게 뺀다. */
+    val showMessage: Boolean,
 ) {
     companion object {
         val PADDING_H = 8.dp
@@ -107,6 +109,10 @@ data class HabitMetrics(
         /** 2×2 오늘 칸: 눌림 영역을 48dp로(WL-4.2). 4×2·4×4는 폭이 모자라 칸 폭이 이보다 좁다(위젯 머리 버튼과 같은 예외). */
         private val SMALL_CELL = 28.dp
         private val MIN_ROW = 44.dp
+
+        /** 이름 칸 안쪽 여백(왼쪽 10dp + 오른쪽 4dp)과 알약이 들어갈 폭. */
+        private val NAME_INSET = 14.dp
+        private val MESSAGE_PILL_WIDTH = 76.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): HabitMetrics {
             val mode = habitWidgetMode(size)
@@ -124,12 +130,13 @@ data class HabitMetrics(
             val nameWidth = if (mode == HabitWidgetMode.SMALL) contentWidth - smallCellWidth - 8.dp else (contentWidth - countWidth) * 0.32f
             val cellWidth = if (mode == HabitWidgetMode.SMALL) smallCellWidth else (contentWidth - nameWidth - countWidth) / 7
             val cellSize = if (mode == HabitWidgetMode.SMALL) SMALL_CELL else (cellWidth - 4.dp).coerceIn(14.dp, 28.dp)
+            val showMessage = nameWidth - NAME_INSET >= MESSAGE_PILL_WIDTH
             return HabitMetrics(
                 mode = mode,
                 // 머리: 아이콘 원 + 제목 + 부제 두 줄.
                 headerHeight = maxOf(40.dp, box(header) + box(small) + 4.dp),
                 // 줄: 이름 + 연속 알약 두 줄, 칸 원형 아이콘. 눌림 높이 44dp 이상.
-                rowHeight = maxOf(MIN_ROW, cellSize + 8.dp, box(name) + box(small) + 8.dp),
+                rowHeight = maxOf(MIN_ROW, cellSize + 8.dp, box(name) + (if (showMessage) box(small) else 0.dp) + 8.dp),
                 dayLabelHeight = box(small) + 2.dp,
                 cellWidth = cellWidth,
                 cellSize = cellSize,
@@ -141,6 +148,7 @@ data class HabitMetrics(
                 smallFontSp = small * spFactor,
                 heroFontSp = hero * spFactor,
                 heroHeight = box(hero),
+                showMessage = showMessage,
             )
         }
     }
@@ -342,8 +350,8 @@ private fun HabitRowTile(summary: HabitSummary, today: LocalDate, metrics: Habit
 }
 
 /**
- * 하루 칸. 누르면 그날을 토글한다(HB-02, 오늘과 지난 6일). 한 날은 강조색 네모 + ✓(색만으로 구분하지 않음, A11Y-03),
- * 하루 놓친 매일 습관의 오늘 칸은 강조색 테두리(HB-04), 시작 전은 빈칸.
+ * 하루 칸. 누르면 그날을 토글한다(HB-02, 오늘과 지난 6일). 한 날은 채운 초록 원 + 체크(색만으로 구분하지 않음, A11Y-03),
+ * 하루 놓친 매일 습관의 오늘 칸은 강조색 빈 원(HB-04), 안 한 날은 흐린 빈 원, 시작 전은 빈칸.
  * 2×2·4×2는 칸이 작아 48dp 터치 영역을 줄 수 없다(A11Y-02 예외, 위젯 머리 버튼과 같음).
  */
 @Composable

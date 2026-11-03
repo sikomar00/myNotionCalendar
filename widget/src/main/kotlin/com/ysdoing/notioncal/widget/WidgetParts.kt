@@ -6,7 +6,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
-import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.cornerRadius
@@ -41,7 +41,7 @@ internal val TAP_TARGET = 48.dp
 internal object WidgetShape {
     val TILE = 16.dp
 
-    /** 월간 날짜 칸처럼 작은 타일. */
+    /** 월간 주 타일처럼 면이 넓고 낮은 타일. */
     val CELL = 8.dp
 
     /** 알약(상태·날짜·연속일). 높이 24dp 안팎에서 끝이 완전히 둥글다. */
@@ -52,7 +52,7 @@ internal object WidgetShape {
 internal fun GlanceModifier.tile(palette: WidgetPalette, high: Boolean = false, radius: Dp = WidgetShape.TILE): GlanceModifier =
     background(if (high) palette.tileHigh else palette.tile).cornerRadius(radius)
 
-internal enum class IconButtonStyle { PLAIN, TONAL, FILLED }
+internal enum class IconButtonStyle { TONAL, FILLED }
 
 /**
  * 머리·행의 아이콘 버튼. 보이는 면은 [visual]이고 눌림 영역은 폭 [TAP_TARGET] x 높이 [height]다.
@@ -69,11 +69,7 @@ internal fun WidgetIconButton(
     visual: Dp = 36.dp,
     height: Dp = TAP_TARGET,
 ) {
-    val face = when (style) {
-        IconButtonStyle.PLAIN -> null
-        IconButtonStyle.TONAL -> palette.tileHigh
-        IconButtonStyle.FILLED -> palette.accent
-    }
+    val face = if (style == IconButtonStyle.FILLED) palette.accent else palette.tileHigh
     val tint = if (style == IconButtonStyle.FILLED) palette.todayText else palette.text
     Box(
         GlanceModifier.width(TAP_TARGET).height(height).clickable(action).semantics {
@@ -82,9 +78,8 @@ internal fun WidgetIconButton(
         },
         contentAlignment = Alignment.Center,
     ) {
-        val faceModifier = GlanceModifier.size(visual).let { if (face != null) it.background(face).cornerRadius(visual / 2) else it }
-        Box(faceModifier, contentAlignment = Alignment.Center) {
-            WidgetIcon(icon, tint, visual * 0.5f)
+        Box(GlanceModifier.size(visual).background(face).cornerRadius(visual / 2), contentAlignment = Alignment.Center) {
+            WidgetIcon(icon, tint, visual * 0.6f)
         }
     }
 }
@@ -111,7 +106,10 @@ internal fun WidgetCheck(
     }
 }
 
-/** 알약: 상태·날짜·연속일처럼 짧은 말 한 마디. [icon]은 글자 앞의 작은 벡터. */
+/**
+ * 알약: 상태·날짜·연속일처럼 짧은 말 한 마디. [icon]은 글자 앞의 작은 벡터.
+ * [modifier]에 padding을 넣지 않는다: Glance는 같은 View의 padding을 더해 알약 안쪽 여백이 되어 버린다. 바깥 여백은 감싸는 Box로 둔다.
+ */
 @Composable
 internal fun WidgetPill(
     text: String,
@@ -146,19 +144,20 @@ internal fun WidgetHeader(
     height: Dp,
     titleSp: Float,
     subSp: Float,
-    modifier: GlanceModifier = GlanceModifier,
     titleModifier: GlanceModifier = GlanceModifier,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
-    Row(modifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
+    Row(GlanceModifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
         Row(titleModifier.defaultWeight().height(height), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                GlanceModifier.size(HEADER_CHIP).background(palette.accentContainer).cornerRadius(HEADER_CHIP / 2),
-                contentAlignment = Alignment.Center,
-            ) {
-                WidgetIcon(icon, palette.onAccentContainer, HEADER_CHIP * 0.56f)
+            if (headerShowsChip(LocalSize.current.width)) {
+                Box(
+                    GlanceModifier.size(HEADER_CHIP).background(palette.accentContainer).cornerRadius(HEADER_CHIP / 2),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    WidgetIcon(icon, palette.onAccentContainer, HEADER_CHIP * 0.56f)
+                }
+                Spacer(GlanceModifier.width(8.dp))
             }
-            Spacer(GlanceModifier.width(8.dp))
             Column {
                 Text(title, style = TextStyle(color = palette.text, fontSize = titleSp.sp, fontWeight = FontWeight.Bold), maxLines = 1)
                 if (subtitle != null) Text(subtitle, style = TextStyle(color = palette.subtle, fontSize = subSp.sp), maxLines = 1)
@@ -169,6 +168,11 @@ internal fun WidgetHeader(
 }
 
 private val HEADER_CHIP = 32.dp
+
+/** 아이콘 칩(32dp + 간격 8dp)은 좁은 위젯(2×2)에서 제목 자리를 뺏고 48dp 버튼까지 겹치면 제목이 거의 안 남아 뺀다. */
+internal fun headerShowsChip(width: Dp): Boolean = width >= CHIP_MIN_WIDTH
+
+private val CHIP_MIN_WIDTH = 180.dp
 
 /** 상태 줄: 오류·오래됨은 경고 아이콘과 글자로 알린다(색만으로 알리지 않는다, A11Y-03). */
 @Composable
@@ -182,7 +186,10 @@ internal fun WidgetStatusLine(text: String, error: Boolean, palette: WidgetPalet
     }
 }
 
-/** 빈 상태: 아이콘 + 한 줄 + 행동 버튼(있으면). 눌림 영역은 높이 [TAP_TARGET]이다. */
+/**
+ * 빈 상태: 아이콘 + 한 줄 + 행동 버튼(있으면). 눌림 영역은 높이 [TAP_TARGET]이다.
+ * 위젯 높이가 [EMPTY_CARD_MIN_HEIGHT]보다 낮으면(2×2·4×2) 잘리지 않게 한 줄 글자로 줄이고, 행동이 있으면 그 줄을 눌러 한다.
+ */
 @Composable
 internal fun WidgetEmpty(
     @DrawableRes icon: Int,
@@ -193,6 +200,10 @@ internal fun WidgetEmpty(
     ctaAction: Action? = null,
     ctaTag: String = "emptyAction",
 ) {
+    if (LocalSize.current.height < EMPTY_CARD_MIN_HEIGHT) {
+        CompactEmpty(text, palette, fontSp, ctaText, ctaAction, ctaTag)
+        return
+    }
     Column(GlanceModifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         WidgetIcon(icon, palette.subtle, 28.dp)
         Spacer(GlanceModifier.height(4.dp))
@@ -206,8 +217,25 @@ internal fun WidgetEmpty(
                 },
                 contentAlignment = Alignment.Center,
             ) {
-                WidgetPill(ctaText, palette.accentContainer, palette.onAccentContainer, fontSp, GlanceModifier.padding(horizontal = 6.dp, vertical = 4.dp))
+                WidgetPill(ctaText, palette.accentContainer, palette.onAccentContainer, fontSp)
             }
         }
     }
+}
+
+private val EMPTY_CARD_MIN_HEIGHT = 170.dp
+
+@Composable
+private fun CompactEmpty(text: String, palette: WidgetPalette, fontSp: Float, ctaText: String?, ctaAction: Action?, ctaTag: String) {
+    val line = listOfNotNull(text, ctaText).joinToString(". ")
+    val base = GlanceModifier.fillMaxWidth().padding(vertical = 4.dp)
+    val modifier = if (ctaText != null && ctaAction != null) {
+        base.clickable(ctaAction).semantics {
+            contentDescription = ctaText
+            testTag = ctaTag
+        }
+    } else {
+        base
+    }
+    Text(line, modifier = modifier, style = TextStyle(color = palette.subtle, fontSize = fontSp.sp), maxLines = 2)
 }

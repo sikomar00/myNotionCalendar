@@ -364,9 +364,18 @@ class ViewWidgetTest {
     )
 
     @Test
-    fun progressCountsCheckedRowsThenCompleteGroupAndIsNullWithoutEither() {
-        assertEquals(1 to 2, viewProgress(todoBoard()))
-        assertEquals(1 to 3, viewProgress(groupedStatusBoard()))
+    fun progressPrefersTheCompleteGroupThenNamesTheCheckboxAndIsNullWithoutEither() {
+        assertEquals(ViewProgress(null, 1, 3), viewProgress(groupedStatusBoard()))
+        assertEquals(ViewProgress("완료", 1, 2), viewProgress(todoBoard())) // 상태에 완료 그룹이 없으면 체크박스를 열 이름과 함께 센다
+        // 체크박스와 완료 그룹 상태가 함께 있으면 상태를 센다('보관' 같은 체크박스를 완료로 부르지 않는다).
+        val both = groupedStatusBoard().let {
+            it.copy(
+                columns = it.columns + "보관", columnInfo = it.columnInfo + ViewColumn("pin", "보관", "checkbox"),
+                rows = it.rows.map { r -> r.copy(cells = r.cells + "✓") },
+            )
+        }
+        assertEquals(ViewProgress(null, 1, 3), viewProgress(both))
+        assertEquals(ViewProgress("보관", 1, 2), viewProgress(todoBoard().copy(columns = listOf("이름", "보관", "상태"), columnInfo = listOf(ViewColumn("t", "이름", "title"), ViewColumn("pin", "보관", "checkbox"), statusColumn))))
         assertNull(viewProgress(board())) // 체크·상태 열이 없는 보기는 진행이라는 개념이 없다
         assertNull(viewProgress(todoBoard().copy(rows = emptyList())))
     }
@@ -387,6 +396,8 @@ class ViewWidgetTest {
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
         onNode(hasTextEqualTo("완료 1/2")).assertExists()
+        // 제목 영역의 설명이 안의 글자를 대신하므로 부제도 함께 읽힌다.
+        onNode(hasTestTag("viewHeader")).assert(hasContentDescriptionEqualTo("투두, 완료 1/2, 새로고침"))
         onNode(hasTestTag("viewRefresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
         onNode(hasContentDescriptionEqualTo(context.getString(R.string.widget_refresh))).assertExists()
     }
@@ -422,12 +433,13 @@ class ViewWidgetTest {
     }
 
     @Test
-    fun emptyViewInASmallWidgetIsJustTheTextSoItIsNotCutOff() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun emptyViewInASmallWidgetIsOneTappableLineSoItIsNotCutOff() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(DpSize(150.dp, 110.dp))
         provideComposable { ViewWidgetContent(state(todoBoard().copy(rows = emptyList())), systemFontScale = 1f) }
-        onNode(hasTextEqualTo(context.getString(R.string.view_widget_empty))).assertExists()
-        onNode(hasTestTag("viewEmpty")).assertDoesNotExist()
+        val line = "${context.getString(R.string.view_widget_empty)}. ${context.getString(R.string.view_widget_empty_cta)}"
+        onNode(hasTextEqualTo(line)).assertExists()
+        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1"))) // 줄을 누르면 새 항목 시트
     }
 
     @Test

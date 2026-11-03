@@ -77,13 +77,11 @@ internal fun WeekRow(
     // 시안: 주마다 둥근 타일 한 장. 위 1dp 틈이 이전 구분선(1dp Spacer) 자리를 대신하므로 높이·일정 줄 수는 그대로고 View도 늘지 않는다.
     // (칸마다 타일을 깔면 View가 주당 14개 늘어 빽빽한 큰 위젯이 Glance의 View 개수 한도를 넘는다.)
     Box(modifier = frame.padding(top = 1.dp)) {
-        Box(modifier = GlanceModifier.fillMaxSize().tile(palette, radius = WEEK_TILE_RADIUS)) {
+        Box(modifier = GlanceModifier.fillMaxSize().tile(palette, radius = WidgetShape.CELL)) {
             WeekContent(weekStart, state, metrics, palette, context, divider = false)
         }
     }
 }
-
-private val WEEK_TILE_RADIUS = 8.dp
 
 @Composable
 private fun WeekContent(

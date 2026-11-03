@@ -67,20 +67,26 @@ internal fun ViewColumn.toneOf(value: String): StatusTone =
 
 private fun ViewBoard.columnAt(index: Int): ViewColumn? = columns.getOrNull(index)?.let { name -> columnInfo.firstOrNull { it.name == name } }
 
+/** 머리 부제 값. [label]이 null이면 '완료'(상태 열의 완료 그룹), 아니면 체크박스 열 이름이다. */
+internal data class ViewProgress(val label: String?, val done: Int, val total: Int)
+
 /**
- * 머리 부제 '완료 n/m'의 값. 체크박스 열이 있으면 체크된 행 수, 없으면 상태 열에서 완료 그룹인 행 수다.
+ * 머리 부제 '완료 n/m'의 값. 상태 열에 완료 그룹이 있으면 그 그룹의 행 수를 센다(체크박스보다 뜻이 확실하다).
+ * 없으면 첫 체크박스 열의 체크 수를 열 이름과 함께 쓴다('보관 3/10'처럼, 무엇을 센 값인지 거짓말하지 않는다).
  * 진행이라는 개념이 없는 보기(체크·상태 열 없음)나 빈 보기는 null.
  */
-internal fun viewProgress(board: ViewBoard): Pair<Int, Int>? {
+internal fun viewProgress(board: ViewBoard): ViewProgress? {
     if (board.rows.isEmpty()) return null
     val indices = board.columns.indices
-    indices.firstOrNull { board.columnAt(it)?.type == "checkbox" }?.let { i ->
-        return board.rows.count { it.cells.getOrNull(i).orEmpty().isNotEmpty() } to board.rows.size
+    indices.firstOrNull { i -> board.columnAt(i)?.let { it.type == "status" && it.hasCompleteGroup() } == true }?.let { i ->
+        val column = board.columnAt(i) ?: return null
+        return ViewProgress(null, board.rows.count { column.toneOf(it.cells.getOrNull(i).orEmpty()) == StatusTone.DONE }, board.rows.size)
     }
-    val i = indices.firstOrNull { board.columnAt(it)?.type == "status" } ?: return null
-    val column = board.columnAt(i) ?: return null
-    return board.rows.count { column.toneOf(it.cells.getOrNull(i).orEmpty()) == StatusTone.DONE } to board.rows.size
+    val i = indices.firstOrNull { board.columnAt(it)?.type == "checkbox" } ?: return null
+    return ViewProgress(board.columnAt(i)?.name, board.rows.count { it.cells.getOrNull(i).orEmpty().isNotEmpty() }, board.rows.size)
 }
+
+private fun ViewColumn.hasCompleteGroup(): Boolean = options.any { toneOf(it.name) == StatusTone.DONE }
 
 /** 행을 누르면 그 노션 페이지를 연다. 주소가 없으면 누를 수 없다. */
 private fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank() }?.let {
