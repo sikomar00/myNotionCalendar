@@ -28,7 +28,8 @@ class CoverSyncTest {
         dir.deleteRecursively()
     }
 
-    private fun downloader(allowInsecure: Boolean = true) = CoverDownloader(OkHttpClient(), scale = { it }, allowInsecure = allowInsecure)
+    private fun downloader(allowInsecure: Boolean = true) =
+        CoverDownloader(OkHttpClient.Builder().followRedirects(false).build(), scale = { it }, allowInsecure = allowInsecure, guard = { true }) // MockWebServer는 로컬 http
 
     private fun enqueue(body: ByteArray, type: String = "image/jpeg", code: Int = 200) {
         server.enqueue(MockResponse.Builder().code(code).addHeader("Content-Type", type).body(Buffer().write(body)).build())
@@ -64,6 +65,53 @@ class CoverSyncTest {
         assertNull(downloader(allowInsecure = false).download(server.url("/c.jpg").toString())) // http 주소
         assertNull(downloader().download("not a url"))
         assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun followsRedirectsOneHopAtATimeAndStopsAfterThree() = runTest {
+        server.start()
+        val final = server.url("/final.jpg")
+        server.enqueue(MockResponse.Builder().code(302).addHeader("Location", final.toString()).build())
+        enqueue(jpegLike)
+        assertArrayEquals(jpegLike, downloader().download(server.url("/start").toString()))
+        repeat(5) { server.enqueue(MockResponse.Builder().code(302).addHeader("Location", server.url("/loop").toString()).build()) }
+        assertNull(downloader().download(server.url("/loop").toString())) // 3번을 넘기면 거부
+    }
+
+    @Test
+    fun neverSendsARequestToALocalOrPrivateAddress() = runTest {
+        server.start()
+        // 실제 방어와 같은 구성: 이름은 PublicOnlyDns가, IP 주소를 직접 적은 주소는 기본 guard가 요청 전에 막는다.
+        val real = CoverDownloader(OkHttpClient.Builder().dns(PublicOnlyDns).followRedirects(false).build(), scale = { it }, allowInsecure = true)
+        enqueue(jpegLike)
+        assertNull(real.download(server.url("/c.jpg").toString())) // localhost → 루프백으로 풀려 연결하지 않는다
+        assertEquals(0, server.requestCount)
+        listOf("https://192.168.0.1/a.jpg", "https://10.0.0.5/a.jpg", "https://169.254.169.254/latest", "https://[::1]/a.jpg", "https://[fd00::1]/a.jpg", "https://100.64.0.1/a.jpg")
+            .forEach { assertNull(it, real.download(it)) }
+    }
+
+    @Test
+    fun aRedirectToAPrivateAddressIsRefused() = runTest {
+        server.start()
+        server.enqueue(MockResponse.Builder().code(302).addHeader("Location", "http://192.168.0.1/admin").build())
+        // 첫 요청은 허용(시험용 guard)하되 리다이렉트 목적지는 실제 규칙으로 막는다.
+        var calls = 0
+        val d = CoverDownloader(
+            OkHttpClient.Builder().followRedirects(false).build(), scale = { it }, allowInsecure = true,
+            guard = { url -> calls++ == 0 || PublicHosts.isAllowed(url) },
+        )
+        assertNull(d.download(server.url("/start").toString()))
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun publicAddressRule() {
+        fun public(ip: String) = PublicHosts.isPublic(java.net.InetAddress.getByName(ip))
+        listOf("8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700:4700::1111", "100.63.255.255", "100.128.0.1").forEach { assertTrue(it, public(it)) }
+        listOf(
+            "127.0.0.1", "0.0.0.0", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "224.0.0.1",
+            "100.64.0.1", "100.127.255.255", "::1", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1",
+        ).forEach { assertFalse(it, public(it)) }
     }
 
     @Test

@@ -37,7 +37,8 @@ object SyncModule {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS)
-            .followSslRedirects(false) // https → http로 내려가는 리다이렉트는 따라가지 않는다
+            .dns(PublicOnlyDns) // 이름이 사설·로컬 주소로 풀리면 연결하지 않는다(SSRF)
+            .followRedirects(false) // 리다이렉트는 CoverDownloader가 한 단계씩 같은 규칙으로 따라간다
             .build(),
         scale = { CoverScaler.scale(it) },
     )

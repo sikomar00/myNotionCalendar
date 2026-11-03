@@ -5,9 +5,11 @@ import android.graphics.BitmapFactory
 import com.ysdoing.notioncal.core.data.view.CoverStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import javax.inject.Inject
@@ -22,13 +24,16 @@ fun interface CoverDownload {
 /**
  * M5 표지 내려받기. **노션 토큰을 보내지 않는 별도 OkHttp 클라이언트**로 노션이 알려 준 이미지 주소를 부른다
  * (서점 이미지 서버 같은 제3자에게 토큰이 가면 안 된다, 불변 규칙). 이 클래스는 요청에 인증 헤더·쿠키를 붙이지 않는다.
- * 규칙: https만(리다이렉트로 http로 내려가도 거부), 이미지 형식만, 응답 [MAX_BYTES] 이하. 어기면 null이다.
+ * 규칙: https만, 공개 주소만([guard]와 클라이언트의 [PublicOnlyDns]), 이미지 형식만, 응답 [MAX_BYTES] 이하. 어기면 null이다.
+ * 리다이렉트는 클라이언트가 따라가지 않게 하고(`followRedirects(false)`) 여기서 [MAX_REDIRECTS]번까지 한 단계씩 같은 규칙으로 따라간다.
  */
 class CoverDownloader(
     private val client: OkHttpClient,
     private val scale: (ByteArray) -> ByteArray?,
     /** 시험용: MockWebServer는 http라 열어 둔다. 실제 앱에서는 항상 false. */
     private val allowInsecure: Boolean = false,
+    /** 요청 전에 주소를 검사한다(IP 주소를 직접 적은 경우). 시험에서만 바꾼다. */
+    private val guard: (HttpUrl) -> Boolean = PublicHosts::isAllowed,
 ) : CoverDownload {
     override suspend fun download(url: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
@@ -39,23 +44,36 @@ class CoverDownloader(
     }
 
     private fun fetch(url: String): ByteArray? {
-        val httpUrl = url.toHttpUrlOrNull() ?: return null
-        if (!httpUrl.isHttps && !allowInsecure) return null
-        val request = Request.Builder().url(httpUrl).header("Accept", "image/*").build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            if (!response.request.url.isHttps && !allowInsecure) return null
-            val body = response.body
-            if (body.contentType()?.type != "image") return null
-            if (body.contentLength() > MAX_BYTES) return null
-            val source = body.source()
-            if (source.request(MAX_BYTES + 1)) return null // 길이를 모르는 응답도 상한을 넘으면 거부
-            return scale(source.readByteArray())
+        var current = url.toHttpUrlOrNull() ?: return null
+        repeat(MAX_REDIRECTS + 1) {
+            if (!allowed(current)) return null
+            val request = Request.Builder().url(current).header("Accept", "image/*").build()
+            client.newCall(request).execute().use { response ->
+                if (response.isRedirect) {
+                    current = response.header("Location")?.let { response.request.url.resolve(it) } ?: return null
+                    return@repeat
+                }
+                return read(response)
+            }
         }
+        return null // 리다이렉트가 너무 많다
+    }
+
+    private fun allowed(url: HttpUrl): Boolean = (url.isHttps || allowInsecure) && guard(url)
+
+    private fun read(response: Response): ByteArray? {
+        if (!response.isSuccessful) return null
+        val body = response.body
+        if (body.contentType()?.type != "image") return null
+        if (body.contentLength() > MAX_BYTES) return null
+        val source = body.source()
+        if (source.request(MAX_BYTES + 1)) return null // 길이를 모르는 응답도 상한을 넘으면 거부
+        return scale(source.readByteArray())
     }
 
     companion object {
         const val MAX_BYTES = 2L * 1024 * 1024
+        const val MAX_REDIRECTS = 3
     }
 }
 
