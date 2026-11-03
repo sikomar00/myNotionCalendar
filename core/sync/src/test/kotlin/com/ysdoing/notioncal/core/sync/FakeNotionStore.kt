@@ -87,6 +87,9 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     /** 생성 요청이 노션에 반영된 뒤, 응답이 돌아가기 전에 실행한다(전송 중 해제 경쟁 재현). 한 번 쓰면 지운다. */
     var afterCreate: (suspend (PageDto) -> Unit)? = null
 
+    /** 조회(queryAll)가 이 오류로 실패하게 한다(중복 확인 조회가 거부되는 경우 재현). */
+    var queryError: NotionError? = null
+
     private val options = mapOf("opt-event" to ("Event" to "yellow"), "opt-learn" to ("Learn" to "blue"), "opt-habit" to ("Habit" to "red"))
 
     val schema: DataSourceDto = NotionJson.decodeFromString(
@@ -227,6 +230,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult {
         if (networkDown) throw NotionException(NotionError.Network)
+        queryError?.let { throw NotionException(it) }
         queries += dataSourceId to filter
         if (dataSourceId == BUDGET || dataSourceId == CATEGORY) {
             require(filter == null) { "예산·카테고리 마스터는 필터 없이 전체 조회한다" }

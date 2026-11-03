@@ -17,6 +17,7 @@ import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.notion.NotionError
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -224,6 +225,136 @@ class OutboxProcessorTest {
         assertNull(db.eventDao().get(tempId))
         val created = notion.pages.values.single { it.title == "영어 스터디 복습" }
         assertEquals(created.id, db.eventDao().get(created.id)!!.pageId)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    // --- SY-08(Phase 10-1): 아웃박스 결함 3건. 각각 고치기 전에 실패하는 시험이다.
+
+    @Test
+    fun editThenTrashLeavesNoLocalRowBehind() = runTest {
+        // ① 편집을 보낸 뒤 이어서 삭제하면, 편집 응답이 지운 일정을 다시 로컬에 되살리지 않는다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        writer.trash("p1")
+
+        processor().process()
+
+        assertNull(db.eventDao().get("p1"))
+        assertTrue(notion.pages.getValue("p1").inTrash)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aCreateInterruptedByCancellationDoesNotDuplicate() = runTest {
+        // ② 워커 중단(코루틴 취소)으로 생성 응답을 못 받아도 다음 실행이 먼저 찾아보고, 노션에 페이지가 1개만 생긴다.
+        seeded()
+        val tempId = writer.create("ds", "취소된 생성", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        assertEquals(1, db.outboxDao().all().single().attempts) // 보냈을 수 있으니 시도로 센다
+
+        tick(30)
+        processor().process()
+
+        assertEquals(1, notion.pages.values.count { it.title == "취소된 생성" })
+        assertNull(db.eventDao().get(tempId))
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anEditDuringAnInFlightCreateIsNotLost() = runTest {
+        // ③ 생성 요청을 보내는 사이 고친 내용은 생성 응답 뒤에 이어서 노션에 보낸다(합쳐진 행이 옛 내용으로 지워지지 않는다).
+        seeded()
+        val tempId = writer.create("ds", "처음 제목", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { writer.update(tempId, EventChange(title = "고친 제목")) }
+
+        processor().process()
+
+        val created = notion.pages.values.single { it.title == "고친 제목" || it.title == "처음 제목" }
+        assertEquals("고친 제목", created.title)
+        assertEquals("고친 제목", db.eventDao().get(created.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aRetriedCreateDoesNotAdoptAPageAnotherLocalEventAlreadyOwns() = runTest {
+        // 같은 제목으로 둘을 만들었고 둘째가 끊긴 뒤 재시도하면, 이미 첫째 일정이 맡은 페이지를 찾아 쓰지 않는다(키 충돌로 큐가 막힘).
+        seeded()
+        val first = writer.create("ds", "운동 반복", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        val second = writer.create("ds", "운동 반복", DateValue.allDay(LocalDate.of(2026, 10, 21)))
+        notion.afterCreate = { notion.afterCreate = { throw CancellationException("worker stopped") } } // 둘째 생성 뒤에 끊긴다
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        tick(30)
+
+        processor().process()
+
+        assertEquals(2, notion.pages.values.count { it.title == "운동 반복" })
+        assertNull(db.eventDao().get(first))
+        assertNull(db.eventDao().get(second))
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anEditMadeBetweenAnInterruptedCreateAndItsRetryReachesTheAdoptedPage() = runTest {
+        // 끊긴 생성을 재시도해 이미 만들어진 페이지를 찾아 쓸 때, 그 사이 합쳐진 편집도 그 페이지에 보낸다.
+        seeded()
+        val tempId = writer.create("ds", "원래 제목", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        writer.setDone(tempId, true) // 생성 작업에 합쳐진다
+        tick(30)
+
+        processor().process()
+
+        val page = notion.pages.values.single { it.title == "원래 제목" }
+        assertTrue(page.done)
+        assertTrue(db.eventDao().get(page.id)!!.done)
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aRejectedDuplicateLookupNeverDecidesTheFateOfTheCreate() = runTest {
+        // 중복 확인 조회를 노션이 400으로 거부해도 사용자의 새 일정을 '거부됨'으로 지우지 않는다.
+        seeded()
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process() // 시간 초과: 시도 1회
+        notion.queryError = NotionError.Validation("validation_error")
+        tick(30)
+
+        processor().process()
+
+        assertTrue(conflicts().none { it.kind == "REJECTED" })
+        assertNull(db.eventDao().get(tempId)) // 임시 ID는 진짜 페이지로 바뀌었다
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aRetriedUpdateThatNotionAlreadyAppliedIsNotAConflict() = runTest {
+        // 워커가 멈추기 전에 노션이 이미 받은 편집을 재시도하면, 노션 값이 내 값과 같으니 충돌이 아니다.
+        seeded()
+        writer.update("p1", EventChange(title = "새 제목"))
+        notion.editRemotely("p1") { title = "새 제목" } // 노션은 이미 받았다
+        tick()
+
+        processor().process()
+
+        assertTrue(conflicts().isEmpty())
+        assertEquals("새 제목", db.eventDao().get("p1")!!.title)
         assertTrue(db.outboxDao().all().isEmpty())
     }
 

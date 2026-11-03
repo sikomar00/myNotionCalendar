@@ -47,6 +47,16 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE id = :id")
     suspend fun get(id: Long): OutboxEntity?
 
+    /**
+     * 보내기 직전에 시도를 센다: 응답을 못 받고 끊겨도(취소·중단) 노션이 이미 받았을 수 있어서다(SY-08 ②).
+     * 행을 통째로 쓰지 않아, 보내는 사이 생성에 합쳐진 편집을 덮지 않는다(SY-08 ③).
+     */
+    @Query("UPDATE outbox SET attempts = attempts + 1 WHERE id = :id")
+    suspend fun markAttempt(id: Long)
+
+    @Query("UPDATE outbox SET lastError = :error WHERE id = :id")
+    suspend fun markError(id: Long, error: String?)
+
     @Query("DELETE FROM outbox WHERE id = :id")
     suspend fun delete(id: Long)
 
