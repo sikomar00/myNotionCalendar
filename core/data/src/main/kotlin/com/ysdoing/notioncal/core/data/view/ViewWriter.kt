@@ -44,6 +44,13 @@ class ViewWriter @Inject constructor(
         column.nextOption((current as? JsonPrimitive)?.contentOrNull)?.let { JsonPrimitive(it.id) }
     }
 
+    /**
+     * 속성 하나에 [value]를 쓴다(Phase 10-5, [ViewColumn.WRITABLE_TYPES] 전부). 값의 모양은 [ViewColumn.display]에 적혀 있고,
+     * 열 종류에 맞지 않으면(또는 없는 열·행이면) 아무것도 하지 않고 false다. 바꾸기 전 값이 큐의 기준값이 된다(전송 전 충돌 확인).
+     */
+    suspend fun set(viewId: String, pageId: String, propId: String, value: JsonElement): Boolean =
+        change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray()) { column, _, _ -> value.takeIf { column.accepts(it) } }
+
     /** 숫자에 [delta]를 더한다(값이 없으면 0에서 시작). 0.1을 여러 번 더해도 0.30000000000000004가 되지 않게 10진수로 더한다. */
     suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current, _ ->
         val base = current.number() ?: 0.0
@@ -120,7 +127,7 @@ class ViewWriter @Inject constructor(
             if (at in cells.indices) cells[at] = column.display(value)
             val write = ViewWriteEntity(
                 viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = propId, propType = column.type,
-                value = ViewJson.valueText(value), createdAt = clock.millis(),
+                value = ViewJson.valueText(value), createdAt = clock.millis(), baseValue = typed[propId]?.toString(),
             )
             val changedTyped = typed + (propId to value)
             after(row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(changedTyped)), changedTyped) to write

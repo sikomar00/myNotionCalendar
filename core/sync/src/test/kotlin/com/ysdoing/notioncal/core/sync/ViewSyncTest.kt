@@ -304,21 +304,65 @@ class ViewSyncTest {
         register("v1")
         sync().syncAll()
         val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
-        // 바꿀 수 있는 종류(체크·상태·선택·숫자)와 새 항목을 만들 때 쓰는 제목·날짜만. 메모(rich_text)는 읽기만 하므로 빠진다.
+        // 바꿀 수 있는 종류(제목·체크·상태·선택·숫자·날짜·메모 등, Phase 10-5). 보이는 열 순서대로, 스키마에 있는 것만.
         assertEquals(
-            listOf("Name" to "title", "Done" to "checkbox", "Status" to "status", "Pages" to "number", "When" to "date"),
+            listOf("Name" to "title", "Done" to "checkbox", "Status" to "status", "Pages" to "number", "When" to "date", "Note" to "rich_text"),
             columns.map { it.name to it.type },
         )
         val status = columns.single { it.id == "st" }
         assertEquals(listOf("o1" to "To-do", "o2" to null, "o3" to "Complete"), status.options.map { it.id to it.group })
         val rows = db.viewDao().rows("v1")
-        // 원래 값은 바꿀 수 있는 속성만 담는다(제목·날짜는 담지 않는다).
-        assertEquals(mapOf("dn" to JsonPrimitive(true), "st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(12.0)), ViewJson.typed(rows[0].typed))
+        // 원래 값은 바꿀 수 있는 속성만 담는다(값이 없는 날짜는 JsonNull, 메모는 글자).
+        assertEquals(
+            mapOf(
+                "title" to JsonPrimitive("a"), "dn" to JsonPrimitive(true), "st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(12.0),
+                "wh" to kotlinx.serialization.json.JsonNull, "nt" to JsonPrimitive("메모"),
+            ),
+            ViewJson.typed(rows[0].typed),
+        )
         assertEquals(JsonPrimitive(false), ViewJson.typed(rows[1].typed)["dn"])
         assertEquals("o3", (ViewJson.typed(rows[1].typed)["st"] as JsonPrimitive).content)
         assertEquals(kotlinx.serialization.json.JsonNull, ViewJson.typed(rows[1].typed)["pg"]) // 값이 비어 있다
         // 표시용 글자는 그대로다(날짜 열은 이 행에 값이 없어 빈 칸).
         assertEquals("a${VIEW_CELL_SEPARATOR}✓${VIEW_CELL_SEPARATOR}x${VIEW_CELL_SEPARATOR}12${VIEW_CELL_SEPARATOR}${VIEW_CELL_SEPARATOR}메모", rows[0].cells)
+    }
+
+    @Test
+    fun readsTheTypedValuesOfMultiSelectDateAndUrl() = runTest {
+        val tagsSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Tags":{"id":"tg","name":"Tags","type":"multi_select","multi_select":{"options":[{"id":"a","name":"집"},{"id":"b","name":"회사"}]}},
+                "When":{"id":"wh","name":"When","type":"date"},
+                "Link":{"id":"ur","name":"Link","type":"url"}}}""",
+        )
+        schema = tagsSchema
+        viewProperties = listOf("Name", "Tags", "When", "Link").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        rowPages = listOf(
+            PageDto(
+                id = "a", url = "https://notion.so/a", lastEditedTime = "2026-10-22T00:00:00.000Z",
+                properties = Json.parseToJsonElement(
+                    """{"Name":{"type":"title","title":[{"plain_text":"a"}]},
+                        "Tags":{"type":"multi_select","multi_select":[{"id":"a","name":"집"},{"id":"b","name":"회사"}]},
+                        "When":{"type":"date","date":{"start":"2026-11-04","end":"2026-11-05"}},
+                        "Link":{"type":"url","url":"https://a.b"}}""",
+                ).jsonObject,
+            ),
+        )
+        register("v1")
+        sync().syncAll()
+        val typed = ViewJson.typed(db.viewDao().rows("v1").single().typed)
+        assertEquals(kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive("a"), JsonPrimitive("b"))), typed["tg"])
+        assertEquals(
+            kotlinx.serialization.json.buildJsonObject {
+                put("start", JsonPrimitive("2026-11-04"))
+                put("end", JsonPrimitive("2026-11-05"))
+            },
+            typed["wh"],
+        )
+        assertEquals(JsonPrimitive("https://a.b"), typed["ur"])
+        assertEquals(listOf("집", "회사"), ViewJson.columns(db.viewDao().all().single().columnInfo).single { it.id == "tg" }.options.map { it.name }) // 새 옵션 이름 쓰기용
     }
 
     @Test
@@ -432,7 +476,10 @@ class ViewSyncTest {
         sync().syncAll()
         val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
         assertEquals(listOf("Name" to "", "ing" to ViewColumn.ROLE_PAGES_READ, "page" to ViewColumn.ROLE_PAGES_TOTAL), columns.map { it.name to it.role })
-        assertEquals(mapOf("ing" to JsonPrimitive(30.0), "pg" to JsonPrimitive(300.0)), ViewJson.typed(db.viewDao().rows("v1").single().typed))
+        assertEquals(
+            mapOf("title" to JsonPrimitive("책 b1"), "ing" to JsonPrimitive(30.0), "pg" to JsonPrimitive(300.0)),
+            ViewJson.typed(db.viewDao().rows("v1").single().typed),
+        )
         // 스키마를 못 읽어도 지난번 표시는 남는다(숨긴 열이라 보이는 열 목록에 없어도 지우지 않는다).
         schemaError = NotionError.Network
         sync().syncAll()

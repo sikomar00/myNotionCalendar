@@ -146,6 +146,9 @@ abstract class ViewDao {
     @Query("SELECT DISTINCT viewId FROM view_rows WHERE pageId = :pageId")
     abstract suspend fun viewsContaining(pageId: String): List<String>
 
+    @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId")
+    protected abstract suspend fun writeFor(viewId: String, pageId: String, propId: String): ViewWriteEntity?
+
     @Insert
     protected abstract suspend fun insertWrite(write: ViewWriteEntity)
 
@@ -191,8 +194,10 @@ abstract class ViewDao {
     @Transaction
     open suspend fun enqueue(row: ViewRowEntity, write: ViewWriteEntity) {
         updateRow(row.viewId, row.pageId, row.cells, row.typed, row.progress)
+        // 같은 속성의 대기분이 있으면 그 기준값(노션에 있던 값)을 이어받는다. 새 쓰기의 기준을 로컬에서 바꾼 값으로 잡으면 충돌 확인이 어긋난다.
+        val prior = writeFor(write.viewId, write.pageId, write.propId)
         deleteWrite(write.viewId, write.pageId, write.propId)
-        insertWrite(write)
+        insertWrite(if (prior != null) write.copy(baseValue = prior.baseValue) else write)
         markWritten(write.viewId, write.createdAt)
     }
 

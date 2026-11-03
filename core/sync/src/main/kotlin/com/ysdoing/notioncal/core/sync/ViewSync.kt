@@ -18,14 +18,17 @@ import com.ysdoing.notioncal.core.notion.NotionJson
 import com.ysdoing.notioncal.core.notion.ViewReader
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
+import com.ysdoing.notioncal.core.notion.mapping.NotionValue
+import com.ysdoing.notioncal.core.notion.mapping.PropertyCodec
 import com.ysdoing.notioncal.core.notion.mapping.displayValue
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import javax.inject.Inject
@@ -161,6 +164,7 @@ internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): 
         if (property.type !in ViewColumn.INFO_TYPES) return@mapNotNull null
         val options = when (property.type) {
             "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
+            "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name) }
             "status" -> {
                 val groups = property.status?.groups.orEmpty()
                 property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name) }
@@ -171,14 +175,32 @@ internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): 
     }
 }
 
-/** 행의 속성 JSON에서 [column]의 원래 값(체크 bool·선택지 ID·숫자)을 꺼낸다. 비어 있으면 JsonNull. */
+/**
+ * 행의 속성 JSON에서 [column]의 원래 값을 꺼낸다(코덱으로 읽은 값을 [ViewColumn.display]가 읽는 모양으로). 비어 있거나 속성이 없거나
+ * 열 종류와 다르면 JsonNull.
+ */
 internal fun typedValue(column: ViewColumn, property: JsonObject?): JsonElement {
-    val value = property?.get(column.type) ?: return JsonNull
-    return when (column.type) {
-        "checkbox" -> (value as? JsonPrimitive)?.booleanOrNull?.let(::JsonPrimitive) ?: JsonPrimitive(false)
-        "select", "status" -> ((value as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull?.let(::JsonPrimitive) ?: JsonNull
-        "number" -> (value as? JsonPrimitive)?.doubleOrNull?.let(::JsonPrimitive) ?: JsonNull
+    property ?: return JsonNull
+    val value = PropertyCodec.decode(property)
+    if (value.type != column.type) return JsonNull
+    return when (value) {
+        is NotionValue.Check -> JsonPrimitive(value.checked)
+        is NotionValue.Choice -> value.option?.id?.let(::JsonPrimitive) ?: JsonNull
+        is NotionValue.Num -> value.value?.let(::JsonPrimitive) ?: JsonNull
+        is NotionValue.Text -> JsonPrimitive(value.text)
+        is NotionValue.Str -> value.value?.let(::JsonPrimitive) ?: JsonNull
+        is NotionValue.Choices -> JsonArray(value.options.mapNotNull { option -> option.id?.let(::JsonPrimitive) })
+        is NotionValue.DateRange -> dateValue(value)
         else -> JsonNull
+    }
+}
+
+private fun dateValue(date: NotionValue.DateRange): JsonElement {
+    val start = date.start ?: return JsonNull
+    return buildJsonObject {
+        put("start", start)
+        date.end?.let { put("end", it) }
+        date.timeZone?.let { put("time_zone", it) }
     }
 }
 

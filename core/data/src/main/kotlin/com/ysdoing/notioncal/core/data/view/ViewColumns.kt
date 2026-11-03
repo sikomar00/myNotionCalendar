@@ -5,8 +5,10 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -27,7 +29,7 @@ data class ViewColumn(
     /** M5b 책 위젯용 표시([ROLE_PAGES_READ]·[ROLE_PAGES_TOTAL]). 보기에서 숨긴 속성도 이 표시로 쓰기 정보에 들어온다. 보통은 빈 글자. */
     val role: String = "",
 ) {
-    /** 위젯에서 바로 바꿀 수 있는 종류(체크·상태·선택·숫자). 나머지는 읽기만 한다. */
+    /** 앱에서 바꿀 수 있는 종류([WRITABLE_TYPES]). 나머지는 읽기만 한다. */
     val writable: Boolean get() = type in WRITABLE_TYPES
 
     /**
@@ -36,12 +38,42 @@ data class ViewColumn(
      */
     val tappable: Boolean get() = type == "checkbox" || (type in OPTION_TYPES && options.size >= 2)
 
-    /** 표시용 글자. [value]는 [ViewJson.typed]의 값(체크 bool, 선택지 ID, 숫자)이다. 노션 읽기 표기(displayValue)와 같다. */
+    /**
+     * 표시용 글자. [value]는 [ViewJson.typed]의 값이다: 체크 bool, 선택지 ID, 숫자, 글자(제목·텍스트·URL·이메일·전화),
+     * 선택지 ID 목록(다중 선택, 새 옵션은 `{"name":…}`), 날짜 `{"start":…,"end":…}`. 노션 읽기 표기(displayValue)와 같다.
+     */
     fun display(value: JsonElement?): String = when (type) {
         "checkbox" -> if ((value as? JsonPrimitive)?.booleanOrNull == true) "✓" else ""
         "select", "status" -> options.firstOrNull { it.id == (value as? JsonPrimitive)?.contentOrNull }?.name.orEmpty()
         "number" -> (value as? JsonPrimitive)?.doubleOrNull?.let { n -> if (n % 1.0 == 0.0 && abs(n) < MAX_PLAIN) n.toLong().toString() else n.toString() }.orEmpty()
+        "title", "rich_text", "url", "email", "phone_number" -> (value as? JsonPrimitive)?.contentOrNull.orEmpty()
+        "multi_select" -> (value as? JsonArray).orEmpty().joinToString(", ") { optionName(it) }
+        "date" -> (value as? JsonObject)?.let { dateText(it) }.orEmpty()
         else -> ""
+    }
+
+    private fun optionName(item: JsonElement): String =
+        options.firstOrNull { it.id == (item as? JsonPrimitive)?.contentOrNull }?.name
+            ?: ((item as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull.orEmpty()
+
+    private fun dateText(date: JsonObject): String {
+        val start = (date["start"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        val end = (date["end"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        return if (end.isEmpty()) start else "$start~$end"
+    }
+
+    /** [value]가 이 열에 쓸 수 있는 모양인가(잘못된 모양을 큐에 넣지 않는다). 비우기는 JsonNull(제목·상태는 비울 수 없다). */
+    fun accepts(value: JsonElement): Boolean {
+        val text = (value as? JsonPrimitive)?.takeIf { it.isString }
+        return when (type) {
+            "checkbox" -> (value as? JsonPrimitive)?.booleanOrNull != null
+            "select", "url", "email", "phone_number" -> value is JsonNull || text != null
+            "status", "title", "rich_text" -> text != null
+            "number" -> value is JsonNull || (value as? JsonPrimitive)?.doubleOrNull != null
+            "multi_select" -> value is JsonArray && value.all { (it as? JsonPrimitive)?.isString == true || it is JsonObject }
+            "date" -> value is JsonNull || ((value as? JsonObject)?.get("start") as? JsonPrimitive)?.isString == true
+            else -> false
+        }
     }
 
     /** [currentId] 다음 선택지(끝이면 처음). 눌러서 상태를 순환시킬 때 쓴다. 선택지가 없으면 null. */
@@ -55,11 +87,12 @@ data class ViewColumn(
         const val ROLE_PAGES_READ = "pagesRead"
         const val ROLE_PAGES_TOTAL = "pagesTotal"
 
-        val WRITABLE_TYPES = setOf("checkbox", "select", "status", "number")
+        /** 앱에서 쓸 수 있는 속성 유형(PRD §5.8 MVP 편집: 제목·텍스트·숫자·선택·다중 선택·상태·날짜·체크박스·URL·이메일·전화). */
+        val WRITABLE_TYPES = setOf("title", "rich_text", "number", "select", "multi_select", "status", "date", "checkbox", "url", "email", "phone_number")
         private val OPTION_TYPES = setOf("select", "status")
 
-        /** columnInfo에 담는 종류: 바꿀 수 있는 것에 더해, 새 항목을 만들 때 쓸 제목·날짜 열. */
-        val INFO_TYPES = WRITABLE_TYPES + setOf("title", "date")
+        /** columnInfo에 담는 종류. 제목·날짜는 새 항목을 만들 때도 쓴다. */
+        val INFO_TYPES = WRITABLE_TYPES
 
         /** 이보다 큰 정수는 Long으로 바꾸면 값이 틀어지므로 그대로 글자로 쓴다. */
         private const val MAX_PLAIN = 1e15

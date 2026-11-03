@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.notion.mapping
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.JsonObject
@@ -17,15 +18,33 @@ import kotlinx.serialization.json.putJsonObject
  * [value]는 체크 bool·선택지 ID·숫자이고 JsonNull이면 비운다(status는 비울 수 없어 호출하지 않는다). 모르는 종류는 null.
  */
 fun encodeViewValue(key: String, type: String, value: JsonElement?): JsonObject? {
-    val primitive = value as? JsonPrimitive
-    val typed: NotionValue = when (type) {
-        "checkbox" -> NotionValue.Check(primitive?.booleanOrNull ?: false)
-        "select", "status" -> NotionValue.Choice(type, primitive?.contentOrNull?.let { NotionValue.Option(it, null, null) })
-        "number" -> NotionValue.Num(primitive?.doubleOrNull)
-        else -> return null
-    }
+    val typed = viewValue(type, value) ?: return null
     return PropertyCodec.encode(typed)?.let { buildJsonObject { put(key, it) } }
 }
+
+/** 보기 행에 둔 값 JSON(체크 bool·선택지 ID·숫자·글자·ID 목록·날짜 객체, 비우기는 JsonNull)을 코덱 값으로. 모르는 종류는 null. */
+private fun viewValue(type: String, value: JsonElement?): NotionValue? {
+    val primitive = value as? JsonPrimitive
+    val text = primitive?.contentOrNull
+    return when (type) {
+        "checkbox" -> NotionValue.Check(primitive?.booleanOrNull ?: false)
+        "select", "status" -> NotionValue.Choice(type, text?.let { NotionValue.Option(it, null, null) })
+        "number" -> NotionValue.Num(primitive?.doubleOrNull)
+        "title", "rich_text" -> NotionValue.Text(type, text.orEmpty())
+        "url", "email", "phone_number" -> NotionValue.Str(type, text)
+        "multi_select" -> NotionValue.Choices((value as? JsonArray).orEmpty().mapNotNull(::viewOption))
+        "date" -> (value as? JsonObject)?.let { NotionValue.DateRange(it.text("start"), it.text("end"), it.text("time_zone")) } ?: NotionValue.DateRange(null, null, null)
+        else -> null
+    }
+}
+
+private fun viewOption(item: JsonElement): NotionValue.Option? = when (item) {
+    is JsonObject -> item.text("name")?.let { NotionValue.Option(null, it, null) }
+    is JsonPrimitive -> item.contentOrNull?.let { NotionValue.Option(it, null, null) }
+    else -> null
+}
+
+private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
 /**
  * 새 항목(`POST /pages`)의 properties. [titleKey]·[dateKey]는 보내는 순간 스키마의 속성 이름이다. [date]는 yyyy-MM-dd이고

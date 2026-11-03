@@ -304,4 +304,69 @@ class ViewWriterTest {
         assertEquals(JsonPrimitive(200.0), ViewJson.typed(bookRow().typed)["ing"])
         assertEquals(1, db.viewDao().pendingWriteCount()) // 같은 속성은 마지막 값 하나만
     }
+
+    // --- Phase 10-5: 일반 값 쓰기(제목·텍스트·다중 선택·날짜·URL·이메일·전화)
+
+    private suspend fun seedMixed() {
+        val info = listOf(
+            ViewColumn("t", "Name", "title"),
+            ViewColumn("tg", "Tags", "multi_select", listOf(ViewChoice("a", "집"), ViewChoice("b", "회사"))),
+            ViewColumn("wh", "When", "date"),
+            ViewColumn("ur", "Link", "url"),
+        )
+        val mixed = ViewSnapshotEntity("mx", "ds", "혼합", "table", columns = listOf("Name", "Tags", "When", "Link").joinToString(sep), syncedAt = 1, columnInfo = ViewJson.encodeColumns(info))
+        db.viewDao().upsert(mixed)
+        db.viewDao().replace(mixed, listOf(ViewRowEntity("mx", 0, "m1", "u", listOf("첫째", "집", "", "").joinToString(sep), ViewJson.encodeTyped(mapOf("t" to JsonPrimitive("첫째"), "tg" to kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive("a"))), "wh" to kotlinx.serialization.json.JsonNull, "ur" to kotlinx.serialization.json.JsonNull)))))
+    }
+
+    private suspend fun mixedCells() = db.viewDao().row("mx", "m1")!!.cells.split(sep)
+
+    @Test
+    fun setWritesTextAndShowsItLikeTheReadPath() = runTest {
+        seedMixed()
+        assertTrue(writer().set("mx", "m1", "t", JsonPrimitive("새 제목")))
+        assertEquals("새 제목", mixedCells()[0])
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("t", "title", "\"새 제목\""), listOf(write.propId, write.propType, write.value))
+        assertEquals("\"첫째\"", write.baseValue) // 바꾸기 전 값이 기준값(충돌 확인용)
+    }
+
+    @Test
+    fun setWritesMultiSelectDateAndUrl() = runTest {
+        seedMixed()
+        val both = kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive("a"), JsonPrimitive("b")))
+        assertTrue(writer().set("mx", "m1", "tg", both))
+        val range = kotlinx.serialization.json.buildJsonObject {
+            put("start", JsonPrimitive("2026-11-04"))
+            put("end", JsonPrimitive("2026-11-05"))
+        }
+        assertTrue(writer().set("mx", "m1", "wh", range))
+        assertTrue(writer().set("mx", "m1", "ur", JsonPrimitive("https://a.b")))
+        assertEquals(listOf("첫째", "집, 회사", "2026-11-04~2026-11-05", "https://a.b"), mixedCells())
+        assertEquals(3, db.viewDao().pendingWriteCount())
+        assertTrue(writer().set("mx", "m1", "ur", kotlinx.serialization.json.JsonNull)) // 비우기
+        assertEquals("", mixedCells()[3])
+    }
+
+    @Test
+    fun setRefusesAValueOfTheWrongShape() = runTest {
+        seedMixed()
+        assertFalse(writer().set("mx", "m1", "tg", JsonPrimitive(3))) // 다중 선택은 목록
+        assertFalse(writer().set("mx", "m1", "wh", JsonPrimitive("2026-11-04"))) // 날짜는 객체
+        assertFalse(writer().set("mx", "m1", "t", kotlinx.serialization.json.JsonNull)) // 제목은 비울 수 없다
+        assertFalse(writer().set("mx", "m1", "nope", JsonPrimitive("x")))
+        assertNull(db.viewDao().firstWrite())
+    }
+
+    @Test
+    fun coalescedWritesKeepTheOriginalBaseValue() = runTest {
+        // 같은 속성을 보내기 전에 두 번 바꿔도 기준값은 처음(노션에 있던) 값이다. 두 번째 쓰기의 기준을 로컬에서 바꾼 값으로 잡으면
+        // 전송 전 충돌 확인이 항상 '노션이 바뀜'으로 보인다.
+        seedMixed()
+        writer().set("mx", "m1", "t", JsonPrimitive("둘째"))
+        writer().set("mx", "m1", "t", JsonPrimitive("셋째"))
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("\"셋째\"", "\"첫째\""), listOf(write.value, write.baseValue))
+        assertEquals(1, db.viewDao().pendingWriteCount())
+    }
 }
