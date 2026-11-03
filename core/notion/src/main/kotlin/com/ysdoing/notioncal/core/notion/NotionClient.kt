@@ -74,7 +74,17 @@ class NotionClient @Inject constructor(
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
 
-    override suspend fun viewIds(dataSourceId: String): List<String> = call { api.views(dataSourceId) }.results.map { it.id }
+    /** CN-03: 보기 목록을 끝까지 받는다(100개씩 나뉘어 온다). */
+    override suspend fun viewIds(dataSourceId: String): List<String> {
+        val ids = mutableListOf<String>()
+        var cursor: String? = null
+        do {
+            val page = call { api.views(dataSourceId, startCursor = cursor) }
+            ids += page.results.map { it.id }
+            cursor = if (page.hasMore) page.nextCursor else null
+        } while (cursor != null)
+        return ids
+    }
 
     override suspend fun view(viewId: String): ViewDto = call { api.view(viewId) }
 

@@ -100,7 +100,30 @@ data class PropertySchemaDto(
     val status: StatusSchemaDto? = null,
     @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
     val relation: RelationSchemaDto? = null,
+    /** CN-02: 스키마 전체 저장용(숫자 형식·수식·롤업·ID 설정). 위젯·편집 시트가 속성을 알려고 쓴다. */
+    val number: NumberSchemaDto? = null,
+    val formula: FormulaSchemaDto? = null,
+    val rollup: RollupSchemaDto? = null,
+    @SerialName("unique_id") val uniqueId: UniqueIdSchemaDto? = null,
 )
+
+@Serializable
+data class NumberSchemaDto(val format: String? = null)
+
+@Serializable
+data class FormulaSchemaDto(val expression: String? = null)
+
+@Serializable
+data class RollupSchemaDto(
+    @SerialName("relation_property_name") val relationPropertyName: String? = null,
+    @SerialName("relation_property_id") val relationPropertyId: String? = null,
+    @SerialName("rollup_property_name") val rollupPropertyName: String? = null,
+    @SerialName("rollup_property_id") val rollupPropertyId: String? = null,
+    val function: String? = null,
+)
+
+@Serializable
+data class UniqueIdSchemaDto(val prefix: String? = null)
 
 @Serializable
 data class DataSourceDto(

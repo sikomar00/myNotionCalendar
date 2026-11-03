@@ -26,6 +26,7 @@ import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.test.runTest
@@ -117,6 +118,17 @@ class ViewWidgetTest {
         val gone = board(error = VIEW_ERROR_NOT_FOUND)
         provideComposable { ViewWidgetContent(state(gone), systemFontScale = 1f) }
         assertTrue(viewStatusText(context, gone, now)!!.startsWith("노션에서 보기를 찾을 수 없음"))
+        onNode(hasTestTag("viewStatus")).assert(hasStartActivityClickAction(viewConfigIntent(context, 1)))
+    }
+
+    @Test
+    fun unsupportedViewTellsInTextAndTapOpensWidgetSettings() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // SY-07: 노션이 보기 설정을 읽을 수 없는 보기(400)는 일시 오류가 아니라, 글자로 알리고 눌러서 다른 보기를 고르게 한다.
+        setContext(context)
+        setAppWidgetSize(wide)
+        val unsupported = board(error = VIEW_ERROR_UNSUPPORTED)
+        provideComposable { ViewWidgetContent(state(unsupported), systemFontScale = 1f) }
+        assertTrue(viewStatusText(context, unsupported, now)!!.startsWith("이 보기는 앱이 읽을 수 없음"))
         onNode(hasTestTag("viewStatus")).assert(hasStartActivityClickAction(viewConfigIntent(context, 1)))
     }
 

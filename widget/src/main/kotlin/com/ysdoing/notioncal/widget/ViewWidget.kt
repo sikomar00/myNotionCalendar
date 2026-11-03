@@ -107,6 +107,7 @@ internal fun viewConfigIntent(context: Context, appWidgetId: Int): Intent =
 /** VW-06 머리 아래 상태 한 줄. 색이 아니라 글자로 구분한다(A11Y-03). */
 internal fun viewStatusText(context: Context, board: ViewBoard, nowMillis: Long): String? = when {
     board.notFound -> context.getString(R.string.view_widget_not_found)
+    board.unsupported -> context.getString(R.string.view_widget_unsupported)
     board.syncedAt == 0L -> context.getString(R.string.view_widget_not_synced)
     board.lastError != null -> context.getString(R.string.view_widget_failed, timeText(board.syncedAt))
     nowMillis - board.syncedAt > STALE_MILLIS -> context.getString(R.string.view_widget_stale, timeText(board.syncedAt))
@@ -246,7 +247,7 @@ internal fun ViewStatusLine(board: ViewBoard, appWidgetId: Int, nowMillis: Long,
     val context = LocalContext.current
     val text = viewStatusText(context, board, nowMillis) ?: return
     val base = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
-    val modifier = if (board.notFound) base.clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))) else base
+    val modifier = if (board.notFound || board.unsupported) base.clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))) else base
     WidgetStatusLine(
         text, error = board.notFound || board.lastError != null, palette = palette, fontSp = m.subSp * m.spFactor,
         modifier = modifier.semantics { testTag = tag },

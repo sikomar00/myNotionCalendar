@@ -21,6 +21,12 @@ const val VIEW_CELL_SEPARATOR = "\u001F"
  */
 const val VIEW_ERROR_NOT_FOUND = "NotShared"
 
+/**
+ * [ViewSnapshotEntity.lastError]가 이 값이면 노션이 이 보기의 설정·행 요청을 400(Validation)으로 거부한다: 일시 오류가 아니라 앱이 읽을 수 없는
+ * 보기(SY-07)다. `ViewSync`가 `NotionError.Validation`을 이 값으로 적는다.
+ */
+const val VIEW_ERROR_UNSUPPORTED = "Validation"
+
 /** [ViewWriteEntity.propType]이 이 값이면 속성 바꿈이 아니라 새 항목 만들기다([ViewWriteEntity.value]는 ViewCreate JSON, pageId는 임시 값). */
 const val VIEW_WRITE_CREATE = "create"
 
@@ -219,12 +225,17 @@ abstract class ViewDao {
     @Query("DELETE FROM view_snapshots WHERE viewId = :viewId")
     protected abstract suspend fun deleteView(viewId: String)
 
+    /** 어떤 보기도 쓰지 않는 소스의 스키마 캐시를 지운다. */
+    @Query("DELETE FROM source_schemas WHERE dataSourceId NOT IN (SELECT dataSourceId FROM view_snapshots)")
+    protected abstract suspend fun deleteUnusedSchemas()
+
     /** 보기 등록을 지운다(행 스냅샷과 아직 보내지 않은 바꿈 포함: 등록을 지우면 그 보기에서 한 바꿈은 노션에 가지 않는다). */
     @Transaction
     open suspend fun remove(viewId: String) {
         deleteRows(viewId)
         deleteWrites(viewId)
         deleteView(viewId)
+        deleteUnusedSchemas()
     }
 
     /**

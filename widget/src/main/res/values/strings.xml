@@ -134,6 +134,7 @@
     <string name="view_widget_progress">완료 %1$d/%2$d</string>
     <string name="view_widget_progress_named">%1$s %2$d/%3$d</string>
     <string name="view_widget_not_synced">아직 받지 못했습니다</string>
+    <string name="view_widget_unsupported">이 보기는 앱이 읽을 수 없음, 눌러서 다른 보기 고르기</string>
     <string name="view_widget_failed">동기화 실패, 마지막 성공 %1$s</string>
     <string name="view_widget_stale">오래됨, 마지막 성공 %1$s</string>
     <string name="widget_config_view">보기</string>

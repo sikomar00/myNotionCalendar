@@ -50,6 +50,16 @@ class ViewReaderTest {
     """.trimIndent()
 
     @Test
+    fun listsEveryPageOfViewIdsNotOnlyTheFirst() = runTest {
+        // CN-03: 보기가 100개를 넘어 목록이 나뉘어 와도 끝까지 받는다(예전에는 첫 쪽만 읽었다).
+        server.enqueue(ok("""{"object":"list","results":[{"object":"view","id":"v1"},{"object":"view","id":"v2"}],"has_more":true,"next_cursor":"c2"}"""))
+        server.enqueue(ok("""{"object":"list","results":[{"object":"view","id":"v3"}],"has_more":false}"""))
+        assertEquals(listOf("v1", "v2", "v3"), reader.viewIds("ds1"))
+        assertNull(server.takeRequest().url.queryParameter("start_cursor"))
+        assertEquals("c2", server.takeRequest().url.queryParameter("start_cursor"))
+    }
+
+    @Test
     fun listsViewIdsForADataSource() = runTest {
         server.enqueue(ok("""{"object":"list","results":[{"object":"view","id":"v1"},{"object":"view","id":"v2"}],"has_more":false}"""))
         assertEquals(listOf("v1", "v2"), reader.viewIds("ds1"))

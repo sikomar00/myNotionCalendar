@@ -47,7 +47,11 @@ interface NotionApi {
     suspend fun updatePage(@Path("id") pageId: String, @Body body: UpdatePageDto): PageDto
 
     @GET("v1/views")
-    suspend fun views(@Query("data_source_id") dataSourceId: String, @Query("page_size") pageSize: Int = 100): ViewListDto
+    suspend fun views(
+        @Query("data_source_id") dataSourceId: String,
+        @Query("page_size") pageSize: Int = 100,
+        @Query("start_cursor") startCursor: String? = null,
+    ): ViewListDto
 
     @GET("v1/views/{id}")
     suspend fun view(@Path("id") viewId: String): ViewDto

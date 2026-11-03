@@ -3,8 +3,10 @@ package com.ysdoing.notioncal.core.sync
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
+import com.ysdoing.notioncal.core.data.db.SourceSchemaEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.view.CoverStore
 import com.ysdoing.notioncal.core.data.view.ViewColumn
@@ -12,6 +14,7 @@ import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
+import com.ysdoing.notioncal.core.notion.NotionJson
 import com.ysdoing.notioncal.core.notion.ViewReader
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
@@ -102,11 +105,17 @@ class ViewSync @Inject constructor(
             cache[dataSourceId]
         } else {
             try {
-                reader.schema(dataSourceId)
+                reader.schema(dataSourceId)?.also { saveSchema(dataSourceId, it) }
             } catch (e: NotionException) {
                 null
             }.also { cache[dataSourceId] = it }
         }
+
+    /** CN-02: 소스 스키마 전체를 저장한다(추가 요청 없이, 읽은 김에). 바뀐 것이 없으면 쓰지 않는다. */
+    private suspend fun saveSchema(dataSourceId: String, schema: DataSourceDto) {
+        val json = NotionJson.encodeToString(DataSourceDto.serializer(), schema)
+        if (dao.schema(dataSourceId)?.schemaJson != json) dao.upsertSchema(SourceSchemaEntity(dataSourceId, json, clock.millis()))
+    }
 
     private suspend fun snapshot(
         registered: ViewSnapshotEntity,
@@ -199,7 +208,7 @@ private fun NotionError.isSharedAcrossViews(): Boolean =
 internal fun NotionError.storedName(): String = when (this) {
     NotionError.NotShared -> VIEW_ERROR_NOT_FOUND
     NotionError.Unauthorized -> "Unauthorized"
-    is NotionError.Validation -> "Validation"
+    is NotionError.Validation -> VIEW_ERROR_UNSUPPORTED
     NotionError.RateLimited -> "RateLimited"
     NotionError.Network -> "Network"
     is NotionError.Server -> "Server"

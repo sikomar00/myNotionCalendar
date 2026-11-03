@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data.view
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,9 @@ data class ViewBoard(
 
     /** 노션에서 보기를 찾을 수 없다(지워졌거나 권한이 없음). 네트워크 실패 같은 일시 오류는 아니다. */
     val notFound: Boolean get() = lastError == VIEW_ERROR_NOT_FOUND
+
+    /** 노션이 이 보기를 400으로 거부한다(앱이 설정·행을 읽을 수 없는 종류의 보기). 일시 오류가 아니라 다른 보기를 골라야 한다. */
+    val unsupported: Boolean get() = lastError == VIEW_ERROR_UNSUPPORTED
 }
 
 /** VW-04·06 등록한 보기와 스냅샷을 Room에서 읽는다. 네트워크는 쓰지 않는다. */

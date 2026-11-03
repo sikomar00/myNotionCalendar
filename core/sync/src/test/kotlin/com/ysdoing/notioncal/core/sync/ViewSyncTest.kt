@@ -15,6 +15,7 @@ import com.ysdoing.notioncal.core.data.view.ViewJson
 import kotlinx.serialization.json.JsonPrimitive
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
+import com.ysdoing.notioncal.core.notion.NotionJson
 import com.ysdoing.notioncal.core.notion.ViewReader
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
@@ -447,6 +448,30 @@ class ViewSyncTest {
         // 보기에서 보이는 ing·page는 새로 더하지 않고 표시만 단다(같은 열이 둘이 되지 않게).
         val visible = listOf(ViewColumn("ing", "ing", "number"), ViewColumn("pg", "page", "number"))
         assertEquals(listOf(ViewColumn.ROLE_PAGES_READ, ViewColumn.ROLE_PAGES_TOTAL), withReadingRoles(visible, bookSchema).map { it.role })
+    }
+
+    @Test
+    fun savesTheWholeSchemaOfASourceAndKeepsItWhenItCannotBeReadLater() = runTest {
+        schema = bookSchema
+        register("v1", "v2") // 같은 소스의 보기가 둘이어도 스키마는 한 줄
+        rowPages = listOf(bookPage("b1", null, 1, 10))
+        sync().syncAll()
+        val saved = db.viewDao().schema("ds")!!
+        assertEquals(bookSchema, NotionJson.decodeFromString(DataSourceDto.serializer(), saved.schemaJson))
+        schemaError = NotionError.Network // 못 읽으면 지난번 것을 그대로 둔다
+        sync().syncAll()
+        assertEquals(saved, db.viewDao().schema("ds"))
+    }
+
+    @Test
+    fun removingTheLastViewOfASourceDropsItsSavedSchemaButNotWhileAnotherViewUsesIt() = runTest {
+        schema = bookSchema
+        register("v1", "v2")
+        sync().syncAll()
+        db.viewDao().remove("v1")
+        assertTrue(db.viewDao().schema("ds") != null) // v2가 아직 쓴다
+        db.viewDao().remove("v2")
+        assertNull(db.viewDao().schema("ds"))
     }
 
     @Test
