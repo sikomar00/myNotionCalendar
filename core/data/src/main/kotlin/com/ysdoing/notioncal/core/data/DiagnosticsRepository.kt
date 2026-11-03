@@ -93,8 +93,10 @@ class DiagnosticsRepository @Inject constructor(
 
             section("충돌·반영 실패 (최근 ${conflicts.size}건)")
             conflicts.forEach { c ->
-                val local = c.localValue?.let { if (c.field == "TITLE") Redactor.maskTitle(it) else it }
-                val remote = c.remoteValue?.let { if (c.field == "TITLE") Redactor.maskTitle(it) else it }
+                // 제목과 보기 행 속성(PROP:이름, 이름·전화·메일 같은 값)은 내보내는 글에서 가린다(SEC-02).
+                val masked = c.field == "TITLE" || c.field.startsWith("PROP:")
+                val local = c.localValue?.let { if (masked) Redactor.maskTitle(it) else it }
+                val remote = c.remoteValue?.let { if (masked) Redactor.maskTitle(it) else it }
                 appendLine("${time(c.at)} ${c.kind} ${Redactor.maskTitle(c.title)} ${c.field} 내 값 $local → 노션 $remote${if (c.seen) "" else " (미확인)"}")
             }
 

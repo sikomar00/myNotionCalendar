@@ -54,13 +54,16 @@ class ViewWriteProcessorTest {
             "Name":{"id":"title","name":"Name","type":"title"},
             "Done":{"id":"dn","name":"Done","type":"checkbox"},
             "When":{"id":"wh","name":"When","type":"date"},
-            "Status":{"id":"st","name":"Status","type":"status"},
+            "Status":{"id":"st","name":"Status","type":"status","status":{"options":[{"id":"o1","name":"할 일"},{"id":"o2","name":"진행 중"},{"id":"o3","name":"완료"}],"groups":[]}},
             "Pages":{"id":"pg","name":"Pages","type":"number"}}}""",
     )
 
     /** 노션에 있는 p1의 현재 속성(SY-05 전송 전 충돌 확인이 읽는다). 기본은 행을 받아 둘 때와 같은 값이다. */
     private var remote: PageDto? = remotePage(done = false, status = "o1", pages = 12.0)
     private var pageLookups = 0
+
+    /** 노션 값을 읽는 도중에 실행한다(보내는 중 상태 확인용). */
+    private var duringLookup: (suspend () -> Unit)? = null
 
     private fun remotePage(done: Boolean, status: String, pages: Double?) = PageDto(
         id = "p1", lastEditedTime = "2026-11-03T00:00:00.000Z",
@@ -77,6 +80,7 @@ class ViewWriteProcessorTest {
         override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult = error("쓰기 처리는 조회하지 않는다")
         override suspend fun pageOrNull(pageId: String): PageDto? {
             pageLookups++
+            duringLookup?.invoke()
             return remote
         }
     }
@@ -251,15 +255,36 @@ class ViewWriteProcessorTest {
     // --- SY-05 전송 전 충돌 확인: 노션 값이 기준값과 다르면 노션 값 우선
 
     @Test
-    fun aNotionEditSinceTheBaseWinsAndIsRecordedAsAConflict() = runTest {
-        writer().toggle("v1", "p1", "dn") // 기준값은 해제(false)
-        remote = remotePage(done = true, status = "o1", pages = 12.0) // 그 사이 노션에서 체크함
+    fun aNotionEditSinceTheBaseWinsAndIsRecordedAsAConflictWithReadableValues() = runTest {
+        writer().cycle("v1", "p1", "st") // 기준값은 할 일(o1), 내 값은 진행 중(o2)
+        remote = remotePage(done = false, status = "o3", pages = 12.0) // 그 사이 노션에서 완료(o3)로 바꿈
         val outcome = processor().process()
         assertEquals(listOf(0, 1, 0), listOf(outcome.sent, outcome.dropped, outcome.remaining))
         assertEquals(0, sent.size) // 노션에 쓰지 않았다
         val conflict = db.conflictDao().all().single()
-        assertEquals(listOf("PROP:Done", OutboxProcessor.KIND_CONFLICT, "true", "true"), listOf(conflict.field, conflict.kind, conflict.localValue, conflict.remoteValue))
+        // 배너에 옵션 ID·JSON이 아니라 이름으로 보인다.
+        assertEquals(listOf("PROP:Status", OutboxProcessor.KIND_CONFLICT, "진행 중", "완료"), listOf(conflict.field, conflict.kind, conflict.localValue, conflict.remoteValue))
         assertEquals(listOf("v1"), viewRequests) // 보기를 다시 받아 위젯을 노션 값으로 되돌린다
+    }
+
+    @Test
+    fun aWriteNotionAlreadyAppliedIsNotAConflictAndIsNotSentAgain() = runTest {
+        // 보낸 요청은 노션에 닿았는데 응답이 끊겨 다시 시도하는 경우: 노션 값이 이미 내 값이면 충돌이 아니고 다시 쓰지도 않는다.
+        writer().toggle("v1", "p1", "dn") // 해제(false) → 체크(true)
+        remote = remotePage(done = true, status = "o1", pages = 12.0)
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0), listOf(outcome.sent, outcome.dropped))
+        assertEquals(0, sent.size)
+        assertEquals(0, db.conflictDao().all().size)
+    }
+
+    @Test
+    fun aWriteIsMarkedAsBeingSentWhileNotionIsRead() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        var during: String? = null
+        duringLookup = { during = db.viewDao().firstWrite()?.lastError }
+        processor().process()
+        assertEquals("Sending", during) // 이때 같은 속성을 또 바꾸면 기준값을 이어받지 않는다(ViewDao.enqueue)
     }
 
     @Test
@@ -270,7 +295,8 @@ class ViewWriteProcessorTest {
         val outcome = processor().process()
         assertEquals(1, outcome.dropped)
         assertEquals(0, sent.size)
-        assertEquals("PROP:Pages", db.conflictDao().all().single().field)
+        val conflict = db.conflictDao().all().single()
+        assertEquals(listOf("PROP:Pages", "22", "100"), listOf(conflict.field, conflict.localValue, conflict.remoteValue))
     }
 
     @Test

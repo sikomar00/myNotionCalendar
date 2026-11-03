@@ -76,9 +76,10 @@ class OutboxWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val outcome = processor.process()
-        // SY-06: 보낸 일정이 든 보기를 바로 다시 받는다(주기 동기화를 기다리지 않는다). 연결이 안 되면 다음 동기화가 한다.
-        if (outcome.retryError == null) views.syncContaining(outcome.sentPageIds)
         val viewOutcome = viewWrites.process()
+        // SY-06: 보낸 일정이 든 보기(와 새로 만든 페이지가 들어갈 보기)를 바로 다시 받는다. 위젯에서 바꾼 보기 행을 먼저 보낸 뒤라
+        // 그 보기도 받는다. 연결이 안 되면 다음 동기화가 한다.
+        if (outcome.retryError == null) views.syncContaining(outcome.sentPageIds, outcome.createdInSources)
         val errors = listOfNotNull(outcome.retryError, viewOutcome.retryError)
         // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
         // 둘 중 하나라도 일시 오류면 다시 시도한다(한쪽 오류가 다른 쪽 재시도를 가리지 않게).

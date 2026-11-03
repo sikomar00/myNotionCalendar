@@ -146,7 +146,20 @@ object PropertyCodec {
 
     /** 노션은 글자 조각 하나를 2000자까지 받는다. 더 길면 여러 조각으로 나눠 보낸다(잘라 버리면 긴 메모가 줄어든다). */
     private fun textPayload(text: String): JsonArray = buildJsonArray {
-        text.chunked(PropertyEncoder.MAX_TITLE).forEach { piece -> add(buildJsonObject { putJsonObject("text") { put("content", piece) } }) }
+        splitForNotion(text).forEach { piece -> add(buildJsonObject { putJsonObject("text") { put("content", piece) } }) }
+    }
+
+    /** [PropertyEncoder.MAX_TITLE]자씩 나누되 서로게이트 쌍(이모지 등)은 가르지 않는다. */
+    private fun splitForNotion(text: String): List<String> {
+        val pieces = mutableListOf<String>()
+        var start = 0
+        while (start < text.length) {
+            var end = minOf(start + PropertyEncoder.MAX_TITLE, text.length)
+            if (end < text.length && Character.isHighSurrogate(text[end - 1])) end--
+            pieces += text.substring(start, end)
+            start = end
+        }
+        return pieces
     }
 
     /** id가 있으면 id로, 없으면 이름으로(select·multi_select는 새 옵션 이름을 노션이 만든다). 둘 다 없으면 값이 없다. */

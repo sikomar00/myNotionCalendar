@@ -27,6 +27,9 @@ const val VIEW_ERROR_NOT_FOUND = "NotShared"
  */
 const val VIEW_ERROR_UNSUPPORTED = "Validation"
 
+/** [ViewWriteEntity.lastError]가 이 값이면 처리기가 이 쓰기를 보내는 중이다(노션 값을 읽고 쓰는 동안). 이때 같은 속성을 또 바꾸면 기준값을 이어받지 않는다. */
+const val VIEW_WRITE_SENDING = "Sending"
+
 /** [ViewWriteEntity.propType]이 이 값이면 속성 바꿈이 아니라 새 항목 만들기다([ViewWriteEntity.value]는 ViewCreate JSON, pageId는 임시 값). */
 const val VIEW_WRITE_CREATE = "create"
 
@@ -89,7 +92,7 @@ data class ViewWriteEntity(
 
 /**
  * v16(CN-02): 소스(데이터 소스)의 스키마 전체(속성 ID·이름·유형·옵션·상태 그룹·수식 결과 유형 등, 노션 응답 JSON)를 보기 동기화가 저장한다.
- * 같은 소스의 보기가 여럿이어도 한 줄이다. 위젯·편집 시트는 이것으로 속성을 알고 노션을 부르지 않는다(캐시).
+ * 같은 소스의 보기가 여럿이어도 한 줄이다. [fetchedAt]은 마지막으로 **바뀐** 스키마를 저장한 시각이다(같으면 다시 쓰지 않는다). 위젯·편집 시트는 이것으로 속성을 알고 노션을 부르지 않는다(캐시).
  */
 @Entity(tableName = "source_schemas")
 data class SourceSchemaEntity(
@@ -146,6 +149,14 @@ abstract class ViewDao {
     @Query("SELECT DISTINCT viewId FROM view_rows WHERE pageId = :pageId")
     abstract suspend fun viewsContaining(pageId: String): List<String>
 
+    /** 처리기가 이 쓰기를 보내기 시작했다(노션 값을 읽기 전). [VIEW_WRITE_SENDING] 참고. 실패하면 [markWriteFailed]가 오류로 덮는다. */
+    @Query("UPDATE view_writes SET lastError = 'Sending' WHERE id = :id")
+    abstract suspend fun markWriteSending(id: Long)
+
+    /** 이 소스를 쓰는 보기들(방금 만든 페이지는 어느 보기 행에도 아직 없어 소스로 찾는다, SY-06). */
+    @Query("SELECT viewId FROM view_snapshots WHERE dataSourceId = :dataSourceId")
+    abstract suspend fun viewIdsOfSource(dataSourceId: String): List<String>
+
     @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId")
     protected abstract suspend fun writeFor(viewId: String, pageId: String, propId: String): ViewWriteEntity?
 
@@ -195,9 +206,10 @@ abstract class ViewDao {
     open suspend fun enqueue(row: ViewRowEntity, write: ViewWriteEntity) {
         updateRow(row.viewId, row.pageId, row.cells, row.typed, row.progress)
         // 같은 속성의 대기분이 있으면 그 기준값(노션에 있던 값)을 이어받는다. 새 쓰기의 기준을 로컬에서 바꾼 값으로 잡으면 충돌 확인이 어긋난다.
+        // 단 이미 보내는 중이면 그 값은 노션에 반영되는 중이라 이어받지 않는다(보낸 값을 노션의 다른 편집으로 보게 된다).
         val prior = writeFor(write.viewId, write.pageId, write.propId)
         deleteWrite(write.viewId, write.pageId, write.propId)
-        insertWrite(if (prior != null) write.copy(baseValue = prior.baseValue) else write)
+        insertWrite(if (prior != null && prior.lastError != VIEW_WRITE_SENDING) write.copy(baseValue = prior.baseValue) else write)
         markWritten(write.viewId, write.createdAt)
     }
 

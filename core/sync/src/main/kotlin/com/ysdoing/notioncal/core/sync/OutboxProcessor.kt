@@ -45,7 +45,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** 한 번 처리한 결과. [retryError]가 있으면 일시 오류로 멈춘 것이라 나중에 다시 실행한다. */
-data class OutboxOutcome(val sent: Int, val remaining: Int, val retryError: NotionError?, val sentPageIds: Set<String> = emptySet())
+data class OutboxOutcome(
+    val sent: Int,
+    val remaining: Int,
+    val retryError: NotionError?,
+    /** 이번에 노션에 보낸 페이지(생성은 만들어진 진짜 id). */
+    val sentPageIds: Set<String> = emptySet(),
+    /** 새 페이지를 만든 소스. 만든 페이지는 어느 보기 행에도 아직 없어 소스의 보기를 다시 받는다(SY-06). */
+    val createdInSources: Set<String> = emptySet(),
+)
 
 /**
  * 아웃박스 작업을 노션에 보낸다(NS-04, NS-05, PRD §8.5-5·6·8).
@@ -73,6 +81,7 @@ class OutboxProcessor @Inject constructor(
             val schemas = HashMap<String, DataSourceDto>()
             var sent = 0
             val sentPages = LinkedHashSet<String>()
+            val createdSources = LinkedHashSet<String>()
             var retryError: NotionError? = null
             while (true) {
                 val row = outbox.all().firstOrNull() ?: break
@@ -92,10 +101,19 @@ class OutboxProcessor @Inject constructor(
                     val schema = schemas.getOrPut(source.dataSourceId) { reader.dataSource(source.dataSourceId) }
                     val mapper = NotionPageMapper(mapping, schema)
                     val encoder = PropertyEncoder(mapping, source.doneOption, source.undoneOption, schema)
-                    sentPages += when (OutboxOp.valueOf(row.op)) {
-                        OutboxOp.CREATE -> create(row, source, mapper, encoder)
-                        OutboxOp.UPDATE -> update(row, source, mapper, encoder).let { row.pageId }
-                        OutboxOp.TRASH -> trash(row).let { row.pageId }
+                    when (OutboxOp.valueOf(row.op)) {
+                        OutboxOp.CREATE -> {
+                            sentPages += create(row, source, mapper, encoder)
+                            createdSources += source.dataSourceId
+                        }
+                        OutboxOp.UPDATE -> {
+                            update(row, source, mapper, encoder)
+                            sentPages += row.pageId
+                        }
+                        OutboxOp.TRASH -> {
+                            trash(row)
+                            sentPages += row.pageId
+                        }
                     }
                     sent++
                 } catch (e: NotionException) {
@@ -110,7 +128,7 @@ class OutboxProcessor @Inject constructor(
                 }
             }
             if (sent > 0) widgetRefresher.requestUpdate()
-            OutboxOutcome(sent, outbox.all().size, retryError, sentPages)
+            OutboxOutcome(sent, outbox.all().size, retryError, sentPages, createdSources)
         }
     }
 
@@ -181,6 +199,8 @@ class OutboxProcessor @Inject constructor(
             if (e.error is NotionError.Validation) return null else throw e
         }
         val sentDate = sent.date?.startDate
+        // shortcut: 후보가 모두 이미 로컬에 있으면(동기화가 받아 둔 페이지) 그중 하나를 이 작업의 것으로 본다. 같은 제목·날짜로 1분 안에
+        // 둘을 만들고 둘째가 끊기면 둘째를 만들지 않는다(조용히 합쳐짐). 끊긴 생성이 동기화에 먼저 읽힌 흔한 경우의 중복을 막는 쪽을 택했다.
         val candidates = found.pages.filter { !it.inTrash && (sentDate == null || mapper.map(it).event?.startDate?.toString() == sentDate) }
         return candidates.firstOrNull { events.get(it.id) == null } ?: candidates.firstOrNull()
     }

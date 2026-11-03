@@ -126,4 +126,17 @@ class DiagnosticsRepositoryTest {
         assertFalse(text.contains("치과 검진"))
         assertFalse(text.contains(fakeToken))
     }
+
+    @Test
+    fun reportMasksConflictValuesOfEveryPropertyNotOnlyTheTitle() = runTest {
+        // 보기 쓰기 충돌은 속성 값(이름·전화·메일 등)을 'PROP:<이름>'으로 남긴다. 내보내는 글에는 그 값이 나가지 않는다(SEC-02).
+        seed()
+        db.conflictDao().insert(
+            ConflictEntity(pageId = "p1", title = "병원 예약", field = "PROP:Phone", localValue = "010-1234-5678", remoteValue = "010-9999-0000", kind = "CONFLICT", at = 2_600),
+        )
+        val text = repo.report(header = emptyList(), sections = emptyList())
+        assertTrue(text.contains("PROP:Phone"))
+        assertFalse(text.contains("010-1234-5678"))
+        assertFalse(text.contains("010-9999-0000"))
+    }
 }

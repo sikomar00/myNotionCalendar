@@ -529,9 +529,22 @@ class ViewSyncTest {
         db.viewDao().replace(db.viewDao().snapshot("v3")!!, emptyList()) // v3는 b1을 갖지 않는다
         requested.clear()
 
-        sync().syncContaining(listOf("b1", "없는 페이지"))
+        sync().syncContaining(listOf("b1", "없는 페이지"), emptyList())
 
         assertEquals(setOf("v1", "v2"), requested.toSet()) // 그 페이지가 든 보기만 다시 받는다(SY-06)
+    }
+
+    @Test
+    fun syncContainingAlsoReadsEveryViewOfASourceForNewlyCreatedPages() = runTest {
+        // 방금 만든 페이지는 아직 어느 보기 행에도 없다. 그 소스의 보기를 모두 다시 받아야 새 행이 보인다(SY-06).
+        register("v1", "v2")
+        rowPages = listOf(bookPage("b1", null, 1, 10))
+        sync().syncAll()
+        requested.clear()
+
+        sync().syncContaining(emptyList(), listOf("ds", "다른 소스"))
+
+        assertEquals(setOf("v1", "v2"), requested.toSet())
     }
 
     @Test

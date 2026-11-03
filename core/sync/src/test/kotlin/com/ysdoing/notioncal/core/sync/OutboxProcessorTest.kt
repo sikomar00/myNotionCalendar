@@ -420,6 +420,7 @@ class OutboxProcessorTest {
         val created = notion.pages.values.single { it.title == "새 일정" }.id
         assertEquals(setOf("p1", created, "p2"), outcome.sentPageIds)
         assertTrue(tempId !in outcome.sentPageIds)
+        assertEquals(setOf("ds"), outcome.createdInSources) // 만든 페이지는 아직 어느 보기에도 없어 소스로 보기를 찾는다
     }
 
     @Test

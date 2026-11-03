@@ -62,15 +62,20 @@ data class ViewColumn(
         return if (end.isEmpty()) start else "$start~$end"
     }
 
+    /** 옵션 목록을 아는 열이면 그 안의 ID만 쓴다(없는 ID는 노션이 거부한다). 목록을 모르면(비어 있으면) 막지 않는다. */
+    private fun knownOption(id: String) = options.isEmpty() || options.any { it.id == id }
+
     /** [value]가 이 열에 쓸 수 있는 모양인가(잘못된 모양을 큐에 넣지 않는다). 비우기는 JsonNull(제목·상태는 비울 수 없다). */
     fun accepts(value: JsonElement): Boolean {
         val text = (value as? JsonPrimitive)?.takeIf { it.isString }
         return when (type) {
             "checkbox" -> (value as? JsonPrimitive)?.booleanOrNull != null
-            "select", "url", "email", "phone_number" -> value is JsonNull || text != null
-            "status", "title", "rich_text" -> text != null
+            "select" -> value is JsonNull || (text != null && knownOption(text.content))
+            "status" -> text != null && knownOption(text.content)
+            "url", "email", "phone_number" -> value is JsonNull || text != null
+            "title", "rich_text" -> text != null
             "number" -> value is JsonNull || (value as? JsonPrimitive)?.doubleOrNull != null
-            "multi_select" -> value is JsonArray && value.all { (it as? JsonPrimitive)?.isString == true || it is JsonObject }
+            "multi_select" -> value is JsonArray && value.all { item -> item is JsonObject || ((item as? JsonPrimitive)?.takeIf { it.isString }?.let { knownOption(it.content) } == true) }
             "date" -> value is JsonNull || ((value as? JsonObject)?.get("start") as? JsonPrimitive)?.isString == true
             else -> false
         }

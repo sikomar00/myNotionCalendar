@@ -359,6 +359,26 @@ class ViewWriterTest {
     }
 
     @Test
+    fun aWriteThatIsBeingSentDoesNotLendItsBaseToTheNextOne() = runTest {
+        // 보내는 중인 쓰기는 이미 노션에 반영되는 중이다. 다음 쓰기의 기준을 처음 값으로 이어받으면 보낸 값을 노션의 '다른 편집'으로 본다.
+        seedMixed()
+        writer().set("mx", "m1", "t", JsonPrimitive("둘째"))
+        db.viewDao().markWriteSending(db.viewDao().firstWrite()!!.id)
+        writer().set("mx", "m1", "t", JsonPrimitive("셋째"))
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("\"셋째\"", "\"둘째\""), listOf(write.value, write.baseValue)) // 기준은 직전에 보낸 값
+    }
+
+    @Test
+    fun blankStringsClearUrlLikeValuesAndUnknownOptionsAreRefused() = runTest {
+        seedMixed()
+        assertTrue(writer().set("mx", "m1", "ur", JsonPrimitive("  ")))
+        assertNull(db.viewDao().firstWrite()!!.value) // 공백은 비우기(노션이 빈 글자를 거부한다)
+        assertFalse(writer().set("mx", "m1", "tg", kotlinx.serialization.json.JsonArray(listOf(JsonPrimitive("zzz"))))) // 없는 옵션 ID
+        assertTrue(writer().set("mx", "m1", "tg", kotlinx.serialization.json.JsonArray(listOf(kotlinx.serialization.json.buildJsonObject { put("name", JsonPrimitive("새 태그")) })))) // 새 옵션은 이름으로
+    }
+
+    @Test
     fun coalescedWritesKeepTheOriginalBaseValue() = runTest {
         // 같은 속성을 보내기 전에 두 번 바꿔도 기준값은 처음(노션에 있던) 값이다. 두 번째 쓰기의 기준을 로컬에서 바꾼 값으로 잡으면
         // 전송 전 충돌 확인이 항상 '노션이 바뀜'으로 보인다.

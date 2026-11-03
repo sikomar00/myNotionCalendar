@@ -152,6 +152,16 @@ class PropertyCodecTest {
     }
 
     @Test
+    fun longTextNeverSplitsASurrogatePair() {
+        val text = "a".repeat(1999) + "😀" + "b" // 2000번째 자리에 이모지(2글자 분량)가 걸친다
+        val encoded = PropertyCodec.encode(NotionValue.Text("rich_text", text))!!
+        val pieces = (encoded["rich_text"] as kotlinx.serialization.json.JsonArray).map { (it.jsonObject["text"]!!.jsonObject["content"] as JsonPrimitive).content }
+        assertEquals(text, pieces.joinToString(""))
+        assertTrue(pieces.all { it.length <= 2000 })
+        assertTrue(pieces.none { it.isNotEmpty() && Character.isLowSurrogate(it.first()) || Character.isHighSurrogate(it.last()) })
+    }
+
+    @Test
     fun aTruncatedRelationIsNotWritableBecauseItWouldDropTheRestOfTheLinks() {
         assertNull(PropertyCodec.encode(NotionValue.Relation(listOf("page-1"), hasMore = true)))
         assertNotNull(PropertyCodec.encode(NotionValue.Relation(listOf("page-1"), hasMore = false)))

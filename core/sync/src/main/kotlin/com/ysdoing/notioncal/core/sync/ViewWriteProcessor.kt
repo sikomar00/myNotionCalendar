@@ -124,10 +124,14 @@ class ViewWriteProcessor @Inject constructor(
         val value = ViewJson.parseValue(write.value) ?: return SendResult.REJECTED
         val properties = encodeViewValue(property.name, write.propType, value) ?: return SendResult.REJECTED
         if (write.baseValue != null) {
+            dao.markWriteSending(write.id) // 읽고 쓰는 동안 같은 속성을 또 바꾸면 기준값을 이어받지 않게 표시한다
             val page = reader.pageOrNull(write.pageId)?.takeIf { !it.inTrash } ?: return SendResult.REJECTED
-            val remote = typedValue(ViewColumn(property.id, property.name, property.type), page.properties[property.name] as? JsonObject)
+            val column = viewColumn(property) ?: ViewColumn(property.id, property.name, property.type)
+            val remote = typedValue(column, page.properties[property.name] as? JsonObject)
+            // 노션 값이 이미 내 값이면(보낸 요청이 닿았는데 응답이 끊겼다) 충돌이 아니고 다시 쓰지도 않는다.
+            if (ViewJson.valueText(remote) == write.value) return SendResult.SENT
             if (remote.toString() != write.baseValue) {
-                recordConflict(write, property.name, remote)
+                recordConflict(write, column, value, remote)
                 return SendResult.SUPERSEDED
             }
         }
@@ -135,11 +139,12 @@ class ViewWriteProcessor @Inject constructor(
         return SendResult.SENT
     }
 
-    private suspend fun recordConflict(write: ViewWriteEntity, propertyName: String, remote: JsonElement) {
+    /** 충돌 기록: 배너에 옵션 ID·JSON이 아니라 사람이 읽는 글자(옵션 이름·날짜·숫자)로 남긴다. */
+    private suspend fun recordConflict(write: ViewWriteEntity, column: ViewColumn, mine: JsonElement, remote: JsonElement) {
         db.conflictDao().insert(
             ConflictEntity(
-                pageId = write.pageId, title = rowTitle(write), field = "PROP:$propertyName",
-                localValue = write.value, remoteValue = ViewJson.valueText(remote),
+                pageId = write.pageId, title = rowTitle(write), field = "PROP:${column.name}",
+                localValue = column.display(mine), remoteValue = column.display(remote),
                 kind = OutboxProcessor.KIND_CONFLICT, at = clock.millis(),
             ),
         )

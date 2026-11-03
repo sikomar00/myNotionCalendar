@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.sync
 
+import android.database.SQLException
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
@@ -18,6 +19,7 @@ import com.ysdoing.notioncal.core.notion.NotionJson
 import com.ysdoing.notioncal.core.notion.ViewReader
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
+import com.ysdoing.notioncal.core.notion.dto.PropertySchemaDto
 import com.ysdoing.notioncal.core.notion.mapping.NotionValue
 import com.ysdoing.notioncal.core.notion.mapping.PropertyCodec
 import com.ysdoing.notioncal.core.notion.mapping.displayValue
@@ -77,17 +79,21 @@ class ViewSync @Inject constructor(
     }
 
     /**
-     * SY-06: 전송이 끝난 페이지가 든 보기만 다시 받는다(필터에서 빠지고 순서가 정해지고 '반영 대기'가 풀리게). 그 페이지를 가진 보기가
-     * 없으면 아무것도 하지 않는다.
+     * SY-06: 전송이 끝난 페이지가 든 보기([pageIds])와, 새로 만든 페이지가 들어갈 소스의 보기([dataSourceIds])를 다시 받는다(필터에서
+     * 빠지고 순서가 정해지고 '반영 대기'가 풀리게). 해당하는 보기가 없으면 아무것도 하지 않는다.
      */
-    suspend fun syncContaining(pageIds: Collection<String>) {
-        pageIds.flatMap { dao.viewsContaining(it) }.toSet().forEach { sync(it) }
+    suspend fun syncContaining(pageIds: Collection<String>, dataSourceIds: Collection<String>) {
+        val viewIds = pageIds.flatMap { dao.viewsContaining(it) } + dataSourceIds.flatMap { dao.viewIdsOfSource(it) }
+        val schemas = HashMap<String, DataSourceDto?>() // 보기마다 같은 소스의 스키마를 다시 받지 않는다
+        viewIds.toSet().forEach { syncView(it, schemas) }
     }
 
     /** 방금 등록한 보기 하나만 받는다(등록 화면). 다른 보기를 기다리게 하지 않는다. */
-    suspend fun sync(viewId: String) {
+    suspend fun sync(viewId: String) = syncView(viewId, HashMap())
+
+    private suspend fun syncView(viewId: String, schemas: MutableMap<String, DataSourceDto?>) {
         val registered = dao.all().firstOrNull { it.viewId == viewId } ?: return
-        syncOne(registered, HashMap())
+        syncOne(registered, schemas)
         widgets.requestUpdate()
         if (fetchCovers(listOf(viewId))) widgets.requestUpdate()
     }
@@ -125,7 +131,11 @@ class ViewSync @Inject constructor(
     /** CN-02: 소스 스키마 전체를 저장한다(추가 요청 없이, 읽은 김에). 바뀐 것이 없으면 쓰지 않는다. */
     private suspend fun saveSchema(dataSourceId: String, schema: DataSourceDto) {
         val json = NotionJson.encodeToString(DataSourceDto.serializer(), schema)
-        if (dao.schema(dataSourceId)?.schemaJson != json) dao.upsertSchema(SourceSchemaEntity(dataSourceId, json, clock.millis()))
+        try {
+            if (dao.schema(dataSourceId)?.schemaJson != json) dao.upsertSchema(SourceSchemaEntity(dataSourceId, json, clock.millis()))
+        } catch (e: SQLException) {
+            // 캐시일 뿐이다: 저장하지 못해도 보기 행 갱신을 막지 않는다(다음 동기화가 다시 시도한다).
+        }
     }
 
     private suspend fun snapshot(
@@ -167,20 +177,22 @@ class ViewSync @Inject constructor(
  */
 internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): List<ViewColumn> {
     val byName = schema.properties.values.associateBy { it.name }
-    return columnNames.mapNotNull { name ->
-        val property = byName[name] ?: return@mapNotNull null
-        if (property.type !in ViewColumn.INFO_TYPES) return@mapNotNull null
-        val options = when (property.type) {
-            "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
-            "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name) }
-            "status" -> {
-                val groups = property.status?.groups.orEmpty()
-                property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name) }
-            }
-            else -> emptyList()
+    return columnNames.mapNotNull { name -> byName[name]?.let(::viewColumn) }
+}
+
+/** 스키마 속성 하나를 쓰기 정보로. 앱이 다루지 않는 종류(수식·롤업 등)는 null. 선택지는 옵션 목록(상태는 그룹 이름 포함)으로 담는다. */
+internal fun viewColumn(property: PropertySchemaDto): ViewColumn? {
+    if (property.type !in ViewColumn.INFO_TYPES) return null
+    val options = when (property.type) {
+        "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
+        "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name) }
+        "status" -> {
+            val groups = property.status?.groups.orEmpty()
+            property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name) }
         }
-        ViewColumn(property.id, property.name, property.type, options)
+        else -> emptyList()
     }
+    return ViewColumn(property.id, property.name, property.type, options)
 }
 
 /**

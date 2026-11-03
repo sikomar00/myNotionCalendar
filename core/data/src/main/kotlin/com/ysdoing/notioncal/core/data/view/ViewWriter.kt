@@ -8,6 +8,7 @@ import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -24,8 +25,8 @@ import javax.inject.Singleton
  * 로컬 행을 먼저 고치고(위젯에 바로 반영) 보내지 않은 바꿈 큐(view_writes)에 쌓는다. 전송은 :core:sync의 처리기가 한다.
  * 바꿀 수 없는 속성이거나 행·열 정보가 없으면 아무것도 하지 않고 false를 돌려준다.
  * 현재 값을 읽어 새 값을 만들고 저장하기까지가 한 트랜잭션이라, 이어 누른 탭이 서로의 값을 덮지 않는다.
- * 숫자는 마지막으로 받은 값에 더한다(노션에서 그 사이 바뀐 값과의 충돌은 보지 않는다, 일정 아웃박스와 다르다). 책 위젯의 ±쪽도 같다:
- * 노션에서 읽은 쪽을 고친 뒤 동기화되기 전에 위젯에서 누르면 낡은 값에 더한 값이 노션을 덮는다(동기화는 열 때·30분마다).
+ * 숫자는 마지막으로 받은 값에 더하고(책 위젯의 ±쪽도 같다), 바꾸기 전 값을 기준값으로 큐에 남긴다. 전송하는 쪽(:core:sync의
+ * `ViewWriteProcessor`)이 보내기 직전에 노션 값을 읽어, 그 사이 노션에서 바뀌었다면 노션 값을 남기고 충돌로 기록한다(SY-05).
  */
 @Singleton
 class ViewWriter @Inject constructor(
@@ -49,7 +50,11 @@ class ViewWriter @Inject constructor(
      * 열 종류에 맞지 않으면(또는 없는 열·행이면) 아무것도 하지 않고 false다. 바꾸기 전 값이 큐의 기준값이 된다(전송 전 충돌 확인).
      */
     suspend fun set(viewId: String, pageId: String, propId: String, value: JsonElement): Boolean =
-        change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray()) { column, _, _ -> value.takeIf { column.accepts(it) } }
+        change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray()) { column, _, _ -> blankToNull(column, value).takeIf { column.accepts(it) } }
+
+    /** URL·이메일·전화의 공백 글자는 비우기다(노션이 빈 글자를 거부하고, 로컬과 노션의 비어 있음이 어긋나지 않게). */
+    private fun blankToNull(column: ViewColumn, value: JsonElement): JsonElement =
+        if (column.type in BLANK_IS_EMPTY && value is JsonPrimitive && value.isString && value.content.isBlank()) JsonNull else value
 
     /** 숫자에 [delta]를 더한다(값이 없으면 0에서 시작). 0.1을 여러 번 더해도 0.30000000000000004가 되지 않게 10진수로 더한다. */
     suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current, _ ->
@@ -139,3 +144,5 @@ class ViewWriter @Inject constructor(
         return changed
     }
 }
+
+private val BLANK_IS_EMPTY = setOf("url", "email", "phone_number")
