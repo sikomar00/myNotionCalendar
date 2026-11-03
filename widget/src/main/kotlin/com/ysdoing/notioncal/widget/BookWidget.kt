@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -16,6 +17,8 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -31,6 +34,7 @@ import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
@@ -38,6 +42,7 @@ import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
+import androidx.glance.unit.ColorProvider
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
@@ -61,6 +66,13 @@ private val MAX_COVER_WIDTH = 110.dp
 private val MIN_COVER_HEIGHT = 56.dp
 private val TILE_GAP = 8.dp
 private val BAR_HEIGHT = 4.dp
+
+/** M5b 표지 아래쪽 모서리의 −/+ 버튼. 표지가 이보다 좁으면 두 버튼이 표지를 다 가려 그리지 않는다(표지 탭이 우선). */
+internal val STEP_MIN_COVER_WIDTH = 72.dp
+private val STEP_CHIP = 28.dp
+
+/** 한 번 누를 때 바뀌는 쪽 수(설정 없이 고정). */
+internal const val BOOK_PAGE_STEP = 10
 
 /** 표지 아래 글자: 진행 막대와 제목(FULL), 막대만(BAR), 없음(NONE). 칸이 낮으면 표지가 잘리지 않게 글자부터 뺀다. */
 internal enum class BookCaption { FULL, BAR, NONE }
@@ -138,9 +150,9 @@ class BookWidget : GlanceAppWidget() {
         }
     }
 
-    /** 보기 행(주소 포함)과 표지 저장소 번호. 둘 중 하나라도 바뀌면 표지를 다시 읽는다. */
-    private fun coverKey(board: ViewBoard?, coverVersion: Int): Pair<List<ViewRow>?, Int> =
-        board?.rows?.take(CoverBudget.MAX_COVERS) to coverVersion
+    /** 책(쪽 번호와 표지 주소)과 표지 저장소 번호. 읽은 비율만 바뀌는 ±쪽에서는 표지를 다시 읽지 않는다. */
+    private fun coverKey(board: ViewBoard?, coverVersion: Int): Pair<List<Pair<String, String>>?, Int> =
+        board?.rows?.take(CoverBudget.MAX_COVERS)?.map { it.pageId to it.coverUrl } to coverVersion
 
     /** 파일 읽기·디코딩은 IO 스레드에서. */
     private suspend fun loadCovers(deps: WidgetDependencies, board: ViewBoard?): Covers =
@@ -219,7 +231,7 @@ private fun BookBody(board: ViewBoard, state: BookWidgetState, m: ViewMetrics, p
             Row(verticalAlignment = Alignment.Top) {
                 rowBooks.forEachIndexed { i, book ->
                     if (i > 0) Spacer(GlanceModifier.width(TILE_GAP))
-                    BookTile(book, layout, state.covers, m, palette)
+                    BookTile(book, layout, state.covers, m, palette, board.viewId.takeIf { board.canAdjustPages })
                 }
             }
         }
@@ -228,22 +240,26 @@ private fun BookBody(board: ViewBoard, state: BookWidgetState, m: ViewMetrics, p
 
 /** 책 한 칸: 표지(없으면 제목 타일) + 읽은 비율 막대 + 제목 한 줄. 표지를 누르면 그 노션 페이지. */
 @Composable
-private fun BookTile(book: ViewRow, layout: BookLayout, covers: Covers, m: ViewMetrics, palette: WidgetPalette) {
+private fun BookTile(book: ViewRow, layout: BookLayout, covers: Covers, m: ViewMetrics, palette: WidgetPalette, stepViewId: String?) {
     val context = LocalContext.current
     val title = book.cells.firstOrNull().orEmpty().ifBlank { context.getString(R.string.widget_config_view_untitled) }
     val percent = book.progress?.let { (it * 100f + 0.001f).toInt().coerceIn(0, 100) } // 0.53f*100 = 52.999996: 그냥 내림하면 한 칸 모자라게 읽힌다
     val description = if (percent != null) context.getString(R.string.book_widget_tile_progress, title, percent) else title
     val open = rowAction(book)
     val tap = open?.let { GlanceModifier.clickable(it) } ?: GlanceModifier
+    val steps = stepViewId != null && layout.coverWidth >= STEP_MIN_COVER_WIDTH
     Column(GlanceModifier.width(layout.tileWidth), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(tap.size(layout.coverWidth, layout.coverHeight).semantics { testTag = "bookTile"; contentDescription = description }, contentAlignment = Alignment.Center) {
             if (covers.has(book.pageId)) {
                 covers.Draw(book.pageId, layout.coverWidth, layout.coverHeight, WidgetShape.TILE)
             } else {
-                Box(GlanceModifier.size(layout.coverWidth, layout.coverHeight).tile(palette).padding(6.dp).semantics { testTag = "bookNoCover" }, contentAlignment = Alignment.Center) {
-                    Text(title, style = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp, textAlign = TextAlign.Center), maxLines = 5)
+                // 버튼이 있으면 제목은 버튼 위 칸에만 쓴다(버튼 아래로 글자가 들어가 가려지지 않게).
+                val titleBox = GlanceModifier.size(layout.coverWidth, layout.coverHeight).tile(palette).padding(start = 6.dp, top = 6.dp, end = 6.dp, bottom = if (steps) STEP_CHIP + 10.dp else 6.dp)
+                Box(titleBox.semantics { testTag = "bookNoCover" }, contentAlignment = Alignment.Center) {
+                    Text(title, style = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp, textAlign = TextAlign.Center), maxLines = if (steps) 3 else 5)
                 }
             }
+            if (steps && stepViewId != null) PageSteppers(stepViewId, book.pageId, title)
         }
         if (layout.caption != BookCaption.NONE) {
             Spacer(GlanceModifier.height(4.dp))
@@ -257,6 +273,42 @@ private fun BookTile(book: ViewRow, layout: BookLayout, covers: Covers, m: ViewM
                 maxLines = 1,
             )
         }
+    }
+}
+
+/** M5b 표지 아래 모서리의 −/+ 버튼: 읽은 쪽을 [BOOK_PAGE_STEP]쪽씩 줄이거나 늘린다(보이는 면 28dp, 표지 탭과 겹치지 않게 모서리에만). */
+@Composable
+private fun PageSteppers(viewId: String, pageId: String, title: String) {
+    val context = LocalContext.current
+    Column(GlanceModifier.fillMaxSize()) {
+        Spacer(GlanceModifier.defaultWeight())
+        Row(GlanceModifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val less = context.getString(R.string.book_widget_pages_less, title, BOOK_PAGE_STEP)
+            val more = context.getString(R.string.book_widget_pages_more, title, BOOK_PAGE_STEP)
+            StepChip(R.drawable.ic_widget_minus, less, "bookPagesLess", pagesAction(viewId, pageId, -BOOK_PAGE_STEP))
+            Spacer(GlanceModifier.defaultWeight())
+            StepChip(R.drawable.ic_widget_add, more, "bookPagesMore", pagesAction(viewId, pageId, BOOK_PAGE_STEP))
+        }
+    }
+}
+
+private fun pagesAction(viewId: String, pageId: String, delta: Int) =
+    actionRunCallback<BookPagesAction>(actionParametersOf(ViewCellAction.ViewKey to viewId, ViewCellAction.PageKey to pageId, BookPagesAction.DeltaKey to delta))
+
+/** 표지가 무엇이든(밝은 표지·낮은 투명도) 보이도록 테마와 무관한 반투명 검정 면에 흰 아이콘. */
+private val STEP_FACE = ColorProvider(Color(0xB3000000))
+private val STEP_ICON = ColorProvider(Color.White)
+
+@Composable
+private fun StepChip(icon: Int, description: String, tag: String, action: Action) {
+    Box(
+        GlanceModifier.size(STEP_CHIP).background(STEP_FACE).cornerRadius(STEP_CHIP / 2).clickable(action).semantics {
+            contentDescription = description
+            testTag = tag
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        WidgetIcon(icon, STEP_ICON, STEP_CHIP * 0.6f)
     }
 }
 

@@ -22,7 +22,7 @@ data class ViewBoard(
     val rows: List<ViewRow>,
     val syncedAt: Long,
     val lastError: String?,
-    /** 보이는 속성의 정보(종류·선택지, 제목·날짜 열 포함). 비어 있으면 아직 받지 못해 바꾸거나 만들 수 없다. */
+    /** 쓰기 정보(종류·선택지, 제목·날짜 열 포함). 보이는 속성에 더해 책 위젯의 숨긴 읽은 쪽·전체 쪽이 `role`과 함께 들어 있을 수 있다(열 이름 목록 [columns]에는 없다). 비어 있으면 아직 받지 못해 바꾸거나 만들 수 없다. */
     val columnInfo: List<ViewColumn> = emptyList(),
 ) {
     /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
@@ -30,6 +30,9 @@ data class ViewBoard(
 
     /** 새 항목에 날짜를 넣을 열이 있다. */
     val hasDateColumn: Boolean get() = columnInfo.any { it.type == "date" }
+
+    /** M5b 책 위젯의 ±쪽: 읽은 쪽 속성을 안다(보기에서 숨겨져 있어도 된다). */
+    val canAdjustPages: Boolean get() = columnInfo.any { it.role == ViewColumn.ROLE_PAGES_READ }
 
     /** [index]번째 열이 위젯에서 눌러 바꿀 수 있는 속성이면 그 정보, 아니면 null. */
     fun tappableAt(index: Int): ViewColumn? =

@@ -37,7 +37,7 @@ data class ViewSnapshotEntity(
     val columns: String = "",
     val syncedAt: Long = 0,
     val lastError: String? = null,
-    /** v14: 보이는 속성의 쓰기 정보(속성 ID·종류·선택지)를 JSON으로. 비어 있으면 아직 못 받았거나 읽기만 한다(ViewColumn). */
+    /** v14: 보이는 속성의 쓰기 정보(속성 ID·종류·선택지)를 JSON으로. M5b부터 `role`이 달린 숨긴 읽은 쪽·전체 쪽도 들어 있다. 비어 있으면 아직 못 받았거나 읽기만 한다(ViewColumn). */
     @ColumnInfo(defaultValue = "") val columnInfo: String = "",
     /** v14: 위젯에서 마지막으로 바꾼 시각(epoch ms). 이보다 일찍 시작한 읽기는 결과를 덮어쓰지 않는다(보내는 도중에 받은 이전 값 방지). */
     @ColumnInfo(defaultValue = "0") val lastWriteAt: Long = 0,
@@ -113,8 +113,8 @@ abstract class ViewDao {
     @Query("SELECT * FROM view_rows WHERE viewId = :viewId AND pageId = :pageId")
     abstract suspend fun row(viewId: String, pageId: String): ViewRowEntity?
 
-    @Query("UPDATE view_rows SET cells = :cells, typed = :typed WHERE viewId = :viewId AND pageId = :pageId")
-    protected abstract suspend fun updateRow(viewId: String, pageId: String, cells: String, typed: String)
+    @Query("UPDATE view_rows SET cells = :cells, typed = :typed, progress = :progress WHERE viewId = :viewId AND pageId = :pageId")
+    protected abstract suspend fun updateRow(viewId: String, pageId: String, cells: String, typed: String, progress: Float?)
 
     @Insert
     protected abstract suspend fun insertWrite(write: ViewWriteEntity)
@@ -160,7 +160,7 @@ abstract class ViewDao {
      */
     @Transaction
     open suspend fun enqueue(row: ViewRowEntity, write: ViewWriteEntity) {
-        updateRow(row.viewId, row.pageId, row.cells, row.typed)
+        updateRow(row.viewId, row.pageId, row.cells, row.typed, row.progress)
         deleteWrite(write.viewId, write.pageId, write.propId)
         insertWrite(write)
         markWritten(write.viewId, write.createdAt)

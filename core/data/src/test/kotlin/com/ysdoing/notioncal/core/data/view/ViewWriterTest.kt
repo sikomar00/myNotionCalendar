@@ -216,4 +216,92 @@ class ViewWriterTest {
         assertEquals(0, db.viewDao().pendingWriteCount()) // 등록을 지운 보기의 바꿈은 노션에 가지 않는다
         assertEquals(0, requests)
     }
+
+    // --- M5b 책 위젯 ±쪽: 읽은 쪽 속성은 보기에서 숨겨져 있어도 된다(cells에는 없고 typed에만 있다).
+
+    private suspend fun seedBook(read: Double?, total: Double?, progress: Float? = 0.1f, roles: Boolean = true) {
+        val info = listOf(
+            ViewColumn("t", "Name", "title"),
+            ViewColumn("ing", "ing", "number", role = if (roles) ViewColumn.ROLE_PAGES_READ else ""),
+            ViewColumn("pg", "page", "number", role = if (roles) ViewColumn.ROLE_PAGES_TOTAL else ""),
+        )
+        val book = ViewSnapshotEntity("bk", "ds", "읽는 중", "gallery", columns = "Name", syncedAt = 1, columnInfo = ViewJson.encodeColumns(info))
+        val typed = mapOf("ing" to (read?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull), "pg" to (total?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull))
+        db.viewDao().upsert(book)
+        db.viewDao().replace(book, listOf(ViewRowEntity("bk", 0, "b1", "u", "책", ViewJson.encodeTyped(typed), progress = progress)))
+    }
+
+    private suspend fun bookRow() = db.viewDao().row("bk", "b1")!!
+
+    @Test
+    fun addPagesMovesTheHiddenReadPagesAndTheBarAtOnce() = runTest {
+        seedBook(30.0, 300.0)
+        assertTrue(writer().addPages("bk", "b1", 10))
+        val row = bookRow()
+        assertEquals(JsonPrimitive(40.0), ViewJson.typed(row.typed)["ing"])
+        assertEquals(40f / 300f, row.progress!!, 0.0001f)
+        assertEquals("책", row.cells) // 보이는 열(제목)은 그대로
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("ing", "number", "40.0", "ds", "b1"), listOf(write.propId, write.propType, write.value, write.dataSourceId, write.pageId))
+        assertEquals(1, widgetUpdates)
+        assertEquals(1, requests)
+    }
+
+    @Test
+    fun addPagesStopsAtTheTotalAndAtZero() = runTest {
+        seedBook(295.0, 300.0)
+        assertTrue(writer().addPages("bk", "b1", 10))
+        assertEquals(JsonPrimitive(300.0), ViewJson.typed(bookRow().typed)["ing"]) // 전체 쪽을 넘지 않는다
+        assertEquals(1f, bookRow().progress!!, 0f)
+        assertFalse(writer().addPages("bk", "b1", 10)) // 이미 끝: 바뀐 것이 없으니 큐에 더 쌓지 않는다
+        assertEquals(1, requests)
+        assertTrue(writer().addPages("bk", "b1", -500))
+        assertEquals(JsonPrimitive(0.0), ViewJson.typed(bookRow().typed)["ing"]) // 0 아래로 가지 않는다
+        assertEquals(0f, bookRow().progress!!, 0f)
+        assertFalse(writer().addPages("bk", "b1", -10))
+    }
+
+    @Test
+    fun plusNeverLowersAValueAlreadyAboveTheTotal() = runTest {
+        seedBook(350.0, 300.0) // 전체 쪽을 잘못 적은 경우
+        assertFalse(writer().addPages("bk", "b1", 10)) // +가 350을 300으로 깎지 않는다
+        assertEquals(JsonPrimitive(350.0), ViewJson.typed(bookRow().typed)["ing"])
+        assertTrue(writer().addPages("bk", "b1", -10))
+        assertEquals(JsonPrimitive(340.0), ViewJson.typed(bookRow().typed)["ing"]) // −는 10쪽만 줄인다
+    }
+
+    @Test
+    fun addPagesStartsFromZeroWhenNothingWasRead() = runTest {
+        seedBook(null, 200.0, progress = null)
+        assertTrue(writer().addPages("bk", "b1", 10))
+        assertEquals(0.05f, bookRow().progress!!, 0.0001f)
+    }
+
+    @Test
+    fun withoutAKnownTotalTheBarIsLeftForTheNextSyncAndThereIsNoUpperLimit() = runTest {
+        seedBook(30.0, null, progress = 0.4f)
+        assertTrue(writer().addPages("bk", "b1", 10))
+        assertEquals(JsonPrimitive(40.0), ViewJson.typed(bookRow().typed)["ing"])
+        assertEquals(0.4f, bookRow().progress!!, 0f)
+    }
+
+    @Test
+    fun addPagesRefusesWhenThereIsNoReadPagesColumnOrRow() = runTest {
+        seedBook(30.0, 300.0, roles = false)
+        assertFalse(writer().addPages("bk", "b1", 10))
+        assertFalse(writer().addPages("v1", "p1", 10)) // 쪽수 속성이 없는 보기
+        assertFalse(writer().addPages("none", "b1", 10))
+        seedBook(30.0, 300.0)
+        assertFalse(writer().addPages("bk", "no-row", 10))
+        assertNull(db.viewDao().firstWrite())
+        assertEquals(0, widgetUpdates + requests)
+    }
+
+    @Test
+    fun quickTapsOnPlusAreAllCounted() = runTest {
+        seedBook(0.0, 1000.0)
+        (1..20).map { async { writer().addPages("bk", "b1", 10) } }.awaitAll()
+        assertEquals(JsonPrimitive(200.0), ViewJson.typed(bookRow().typed)["ing"])
+        assertEquals(1, db.viewDao().pendingWriteCount()) // 같은 속성은 마지막 값 하나만
+    }
 }

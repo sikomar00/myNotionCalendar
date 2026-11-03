@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import com.ysdoing.notioncal.core.data.view.CoverStore
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import kotlinx.serialization.json.JsonPrimitive
 import com.ysdoing.notioncal.core.notion.NotionError
@@ -411,6 +412,41 @@ class ViewSyncTest {
         assertEquals(0.1f, rows[0].progress!!, 0.0001f)
         assertEquals("", rows[1].coverUrl) // 표지 없음
         assertEquals(0f, rows[1].progress)
+    }
+
+    private val bookSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"ds","properties":{
+            "Name":{"id":"title","name":"Name","type":"title"},
+            "cover":{"id":"cv","name":"cover","type":"files"},
+            "ing":{"id":"ing","name":"ing","type":"number"},
+            "page":{"id":"pg","name":"page","type":"number"}}}""",
+    )
+
+    @Test
+    fun hiddenReadingNumbersAreTaggedForTheBookWidgetAndKeptInTheRows() = runTest {
+        schema = bookSchema
+        register("v1")
+        rowPages = listOf(bookPage("b1", null, 30, 300))
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to "", "ing" to ViewColumn.ROLE_PAGES_READ, "page" to ViewColumn.ROLE_PAGES_TOTAL), columns.map { it.name to it.role })
+        assertEquals(mapOf("ing" to JsonPrimitive(30.0), "pg" to JsonPrimitive(300.0)), ViewJson.typed(db.viewDao().rows("v1").single().typed))
+        // 스키마를 못 읽어도 지난번 표시는 남는다(숨긴 열이라 보이는 열 목록에 없어도 지우지 않는다).
+        schemaError = NotionError.Network
+        sync().syncAll()
+        assertEquals(2, ViewJson.columns(db.viewDao().all().single().columnInfo).count { it.role.isNotEmpty() })
+    }
+
+    @Test
+    fun readingRolesNeedAPairByNameAndLeaveOtherViewsAlone() {
+        val none = withReadingRoles(listOf(ViewColumn("t", "Name", "title")), writableSchema) // Pages 하나뿐이라 짝이 아니다
+        assertEquals(listOf(""), none.map { it.role })
+        val onlyRead = Json { ignoreUnknownKeys = true }.decodeFromString(DataSourceDto.serializer(), """{"id":"ds","properties":{"ing":{"id":"ing","name":"ing","type":"number"}}}""")
+        assertEquals(listOf(ViewColumn.ROLE_PAGES_READ), withReadingRoles(emptyList(), onlyRead).map { it.role }) // 전체 쪽은 몰라도 ±는 된다
+        // 보기에서 보이는 ing·page는 새로 더하지 않고 표시만 단다(같은 열이 둘이 되지 않게).
+        val visible = listOf(ViewColumn("ing", "ing", "number"), ViewColumn("pg", "page", "number"))
+        assertEquals(listOf(ViewColumn.ROLE_PAGES_READ, ViewColumn.ROLE_PAGES_TOTAL), withReadingRoles(visible, bookSchema).map { it.role })
     }
 
     @Test

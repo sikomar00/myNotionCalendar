@@ -1,5 +1,7 @@
 package com.ysdoing.notioncal.core.sync
 
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -97,3 +99,17 @@ private fun fraction(n: Double, percent: Boolean): Float = when {
     n <= 1.0 -> n
     else -> n / 100
 }.toFloat().coerceIn(0f, 1f)
+
+/**
+ * M5b 읽은 쪽·전체 쪽 숫자 속성에 [ViewColumn.role]을 달아 쓰기 정보에 넣는다. [progressOf]의 `ing`·`page` 짝과 같은 이름 규칙이고,
+ * 보기에서 숨긴 속성이라도 스키마에 있으면 들어온다(위젯 행은 그 값을 `view_rows.typed`에 함께 둔다). 짝이 없으면 그대로다.
+ */
+internal fun withReadingRoles(columns: List<ViewColumn>, schema: DataSourceDto): List<ViewColumn> {
+    val numbers = schema.properties.values.filter { it.type == "number" }
+    val read = numbers.firstOrNull { CURRENT_PAGE.matches(it.name) && !TOTAL_PAGES.matches(it.name) } ?: return columns
+    val total = numbers.firstOrNull { TOTAL_PAGES.matches(it.name) && !CURRENT_PAGE.matches(it.name) }
+    val roles = listOfNotNull(read to ViewColumn.ROLE_PAGES_READ, total?.let { it to ViewColumn.ROLE_PAGES_TOTAL })
+    val tagged = columns.map { column -> roles.firstOrNull { (property, _) -> property.id == column.id }?.let { column.copy(role = it.second) } ?: column }
+    val missing = roles.filter { (property, _) -> tagged.none { it.id == property.id } }
+    return tagged + missing.map { (property, role) -> ViewColumn(property.id, property.name, "number", role = role) }
+}

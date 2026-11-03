@@ -22,6 +22,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -52,7 +53,10 @@ class BookWidgetTest {
     private fun row(i: Int, progress: Float? = 0.3f, cover: Boolean = true) =
         ViewRow("p$i", "https://notion.so/p$i", listOf("책 $i"), if (cover) "https://img.example/$i.jpg" else "", progress)
 
-    private fun board(rows: List<ViewRow>, error: String? = null, syncedAt: Long = now) = ViewBoard("v1", "읽는 중", "gallery", listOf("제목"), rows, syncedAt, error)
+    private val readPages = ViewColumn("ing", "ing", "number", role = ViewColumn.ROLE_PAGES_READ)
+
+    private fun board(rows: List<ViewRow>, error: String? = null, syncedAt: Long = now, steppable: Boolean = false) =
+        ViewBoard("v1", "읽는 중", "gallery", listOf("제목"), rows, syncedAt, error, if (steppable) listOf(readPages) else emptyList())
 
     private fun covers(rows: List<ViewRow>) = Covers.of(rows.filter { it.coverUrl.isNotEmpty() }.associate { it.pageId to Bitmap.createBitmap(10, 15, Bitmap.Config.RGB_565) })
 
@@ -184,6 +188,69 @@ class BookWidgetTest {
         val drawn = bookLayout(150.dp - 20.dp, 150.dp - 8.dp - viewMetrics(1f, 1f).header, 14.dp, 6).capacity
         assertTrue("작은 위젯은 6권을 다 그리지 않는다: $drawn", drawn < 6)
         onAllNodes(hasTestTag("bookTile")).assertCountEquals(minOf(drawn, 6).coerceAtLeast(1))
+    }
+
+    // --- M5b −/+ 쪽 버튼
+
+    @Test
+    fun eachCoverGetsMinusAndPlusThatRunTheStepAction() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val rows = listOf(row(1), row(2))
+        provideComposable { BookWidgetContent(state(rows, board = board(rows, steppable = true)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("bookPagesLess")).assertCountEquals(2)
+        onAllNodes(hasTestTag("bookPagesMore")).assertCountEquals(2)
+        onNode(hasContentDescriptionEqualTo("책 1, 10쪽 더 읽기")).assert(
+            hasRunCallbackClickAction<BookPagesAction>(actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PageKey to "p1", BookPagesAction.DeltaKey to 10)),
+        )
+        onNode(hasContentDescriptionEqualTo("책 2, 10쪽 줄이기")).assert(
+            hasRunCallbackClickAction<BookPagesAction>(actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PageKey to "p2", BookPagesAction.DeltaKey to -10)),
+        )
+        // 표지 탭은 그대로 노션 페이지를 연다.
+        val open = Intent(Intent.ACTION_VIEW, "https://notion.so/p1".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        onAllNodes(hasTestTag("bookTile"))[0].assert(hasStartActivityClickAction(open))
+    }
+
+    @Test
+    fun noButtonsWithoutAReadPagesProperty() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val rows = listOf(row(1))
+        provideComposable { BookWidgetContent(state(rows, board = board(rows)), systemFontScale = 1f) } // 쪽수 속성이 없는 보기
+        onAllNodes(hasTestTag("bookPagesMore")).assertCountEquals(0)
+        onAllNodes(hasTestTag("bookPagesLess")).assertCountEquals(0)
+    }
+
+    @Test
+    fun coversNarrowerThanTheButtonsNeedKeepOnlyTheirNotionTap() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(small)
+        val rows = listOf(row(1))
+        val layout = bookLayout(small.width - 20.dp, small.height - 8.dp - viewMetrics(1f, 1f).header, 14.dp, 1)
+        assertTrue("시험 전제: 표지 ${layout.coverWidth}가 ${STEP_MIN_COVER_WIDTH}보다 좁아야 한다", layout.coverWidth < STEP_MIN_COVER_WIDTH)
+        provideComposable { BookWidgetContent(state(rows, board = board(rows, steppable = true)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("bookPagesMore")).assertCountEquals(0)
+        onAllNodes(hasTestTag("bookTile")).assertCountEquals(1)
+    }
+
+    @Test
+    fun aBookWithoutACoverKeepsItsTitleAboveTheButtons() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val rows = listOf(row(1, cover = false))
+        provideComposable { BookWidgetContent(state(rows, board = board(rows, steppable = true)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("bookNoCover")).assertCountEquals(1)
+        onAllNodes(hasTestTag("bookPagesMore")).assertCountEquals(1) // 표지가 없어도 쪽수는 바꿀 수 있다
+    }
+
+    @Test
+    fun translatesToRemoteViewsWithTheButtonsInEverySizeAndFont() = runTest(timeout = 3.minutes) {
+        // 표지마다 버튼 둘(각 View 서넛)이 더해져도 View 개수·자식 10개 한도 안이다(가장 빽빽한 6권).
+        val rows = (1..8).map { row(it, progress = if (it % 3 == 0) null else it / 10f, cover = it % 2 == 1) }
+        for (size in listOf(DpSize(110.dp, 110.dp), DpSize(280.dp, 150.dp), DpSize(358.dp, 380.dp), DpSize(411.dp, 800.dp))) for (font in listOf(70, 150)) {
+            val s = BookWidgetState(board(rows, steppable = true), WidgetConfig(1, fontScale = font, viewId = "v1"), covers(rows), now)
+            render(size) { BookWidgetContent(s, systemFontScale = 1.3f) }
+        }
     }
 
     private suspend fun render(size: DpSize, content: @androidx.compose.runtime.Composable () -> Unit) {

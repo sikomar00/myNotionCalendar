@@ -19,7 +19,14 @@ data class ViewChoice(val id: String, val name: String, val group: String? = nul
 
 /** 보기에 보이는 속성 하나의 쓰기 정보. 위젯은 이것으로 어떤 탭을 어떤 값으로 바꿀 수 있는지 안다. */
 @Serializable
-data class ViewColumn(val id: String, val name: String, val type: String, val options: List<ViewChoice> = emptyList()) {
+data class ViewColumn(
+    val id: String,
+    val name: String,
+    val type: String,
+    val options: List<ViewChoice> = emptyList(),
+    /** M5b 책 위젯용 표시([ROLE_PAGES_READ]·[ROLE_PAGES_TOTAL]). 보기에서 숨긴 속성도 이 표시로 쓰기 정보에 들어온다. 보통은 빈 글자. */
+    val role: String = "",
+) {
     /** 위젯에서 바로 바꿀 수 있는 종류(체크·상태·선택·숫자). 나머지는 읽기만 한다. */
     val writable: Boolean get() = type in WRITABLE_TYPES
 
@@ -45,6 +52,9 @@ data class ViewColumn(val id: String, val name: String, val type: String, val op
     }
 
     companion object {
+        const val ROLE_PAGES_READ = "pagesRead"
+        const val ROLE_PAGES_TOTAL = "pagesTotal"
+
         val WRITABLE_TYPES = setOf("checkbox", "select", "status", "number")
         private val OPTION_TYPES = setOf("select", "status")
 

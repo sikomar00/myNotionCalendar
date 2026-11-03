@@ -5,6 +5,7 @@ import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.ViewDao
+import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -23,7 +24,8 @@ import javax.inject.Singleton
  * 로컬 행을 먼저 고치고(위젯에 바로 반영) 보내지 않은 바꿈 큐(view_writes)에 쌓는다. 전송은 :core:sync의 처리기가 한다.
  * 바꿀 수 없는 속성이거나 행·열 정보가 없으면 아무것도 하지 않고 false를 돌려준다.
  * 현재 값을 읽어 새 값을 만들고 저장하기까지가 한 트랜잭션이라, 이어 누른 탭이 서로의 값을 덮지 않는다.
- * 숫자는 마지막으로 받은 값에 더한다(노션에서 그 사이 바뀐 값과의 충돌은 보지 않는다, 일정 아웃박스와 다르다).
+ * 숫자는 마지막으로 받은 값에 더한다(노션에서 그 사이 바뀐 값과의 충돌은 보지 않는다, 일정 아웃박스와 다르다). 책 위젯의 ±쪽도 같다:
+ * 노션에서 읽은 쪽을 고친 뒤 동기화되기 전에 위젯에서 누르면 낡은 값에 더한 값이 노션을 덮는다(동기화는 열 때·30분마다).
  */
 @Singleton
 class ViewWriter @Inject constructor(
@@ -33,20 +35,49 @@ class ViewWriter @Inject constructor(
     private val clock: Clock,
 ) {
     /** 체크박스를 뒤집는다. */
-    suspend fun toggle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "checkbox") { _, current ->
+    suspend fun toggle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "checkbox") { _, current, _ ->
         JsonPrimitive((current as? JsonPrimitive)?.booleanOrNull != true)
     }
 
     /** select·status를 다음 선택지로 바꾼다(끝이면 처음). */
-    suspend fun cycle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "select", "status") { column, current ->
+    suspend fun cycle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "select", "status") { column, current, _ ->
         column.nextOption((current as? JsonPrimitive)?.contentOrNull)?.let { JsonPrimitive(it.id) }
     }
 
     /** 숫자에 [delta]를 더한다(값이 없으면 0에서 시작). 0.1을 여러 번 더해도 0.30000000000000004가 되지 않게 10진수로 더한다. */
-    suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current ->
-        val base = (current as? JsonPrimitive)?.doubleOrNull ?: 0.0
+    suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current, _ ->
+        val base = current.number() ?: 0.0
         JsonPrimitive(BigDecimal.valueOf(base).add(BigDecimal.valueOf(delta)).toDouble())
     }
+
+    /**
+     * 책 위젯 ±쪽: 읽은 쪽 속성(보기에서 숨겨져 있어도 된다)에 [delta]쪽을 더한다. 0 아래로, 전체 쪽(알면)을 넘어 가지 않는다.
+     * 읽은 비율은 읽은 쪽÷전체 쪽으로 바로 다시 계산해 막대가 움직이고(노션 수식과 같다고 보는 근사, 다음 동기화가 맞춘다), 바뀐 것이 없으면 false.
+     */
+    suspend fun addPages(viewId: String, pageId: String, delta: Int): Boolean {
+        val columns = ViewJson.columns(dao.snapshot(viewId)?.columnInfo.orEmpty())
+        val read = columns.firstOrNull { it.role == ViewColumn.ROLE_PAGES_READ } ?: return false
+        val total = columns.firstOrNull { it.role == ViewColumn.ROLE_PAGES_TOTAL }
+        return change(
+            viewId, pageId, read.id, "number",
+            after = { row, typed -> row.copy(progress = readFraction(typed, read, total) ?: row.progress) },
+        ) { _, current, typed ->
+            val before = current.number() ?: 0.0
+            // 이미 전체 쪽을 넘은 값(전체 쪽을 잘못 적은 경우)은 +가 깎지 않는다: 상한은 지금 값과 전체 쪽 중 큰 쪽이다.
+            val limit = maxOf(totalPages(typed, total) ?: Double.MAX_VALUE, before)
+            val after = (before + delta).coerceIn(0.0, limit)
+            if (after == before) null else JsonPrimitive(after)
+        }
+    }
+
+    private fun readFraction(typed: Map<String, JsonElement>, read: ViewColumn, total: ViewColumn?): Float? {
+        val pages = totalPages(typed, total) ?: return null
+        return ((typed[read.id].number() ?: 0.0) / pages).toFloat().coerceIn(0f, 1f)
+    }
+
+    private fun totalPages(typed: Map<String, JsonElement>, total: ViewColumn?): Double? = total?.let { typed[it.id].number() }?.takeIf { it > 0 }
+
+    private fun JsonElement?.number(): Double? = (this as? JsonPrimitive)?.doubleOrNull
 
     /**
      * 새 항목(제목 + 선택 날짜)을 만든다. 로컬 행은 만들지 않고 큐에만 쌓는다. 노션이 만든 뒤 처리기가 이 보기를 바로 다시 받아 행이 나타난다.
@@ -77,12 +108,13 @@ class ViewWriter @Inject constructor(
         pageId: String,
         propId: String,
         vararg types: String,
-        next: (ViewColumn, JsonElement?) -> JsonElement?,
+        after: (ViewRowEntity, Map<String, JsonElement>) -> ViewRowEntity = { row, _ -> row },
+        next: (ViewColumn, JsonElement?, Map<String, JsonElement>) -> JsonElement?,
     ): Boolean {
         val changed = dao.mutate(viewId, pageId) { snapshot, row ->
             val column = ViewJson.columns(snapshot.columnInfo).firstOrNull { it.id == propId && it.type in types } ?: return@mutate null
             val typed = ViewJson.typed(row.typed)
-            val value = next(column, typed[propId]) ?: return@mutate null
+            val value = next(column, typed[propId], typed) ?: return@mutate null
             val cells = row.cells.split(VIEW_CELL_SEPARATOR).toMutableList()
             val at = snapshot.columns.split(VIEW_CELL_SEPARATOR).indexOf(column.name)
             if (at in cells.indices) cells[at] = column.display(value)
@@ -90,7 +122,8 @@ class ViewWriter @Inject constructor(
                 viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = propId, propType = column.type,
                 value = ViewJson.valueText(value), createdAt = clock.millis(),
             )
-            row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(typed + (propId to value))) to write
+            val changedTyped = typed + (propId to value)
+            after(row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(changedTyped)), changedTyped) to write
         }
         if (changed) {
             widgets.requestUpdate()
