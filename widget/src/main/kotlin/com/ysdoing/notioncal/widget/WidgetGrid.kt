@@ -69,50 +69,73 @@ internal fun WeekRow(
     palette: WidgetPalette,
     context: Context,
 ) {
-    Box(modifier = GlanceModifier.fillMaxWidth().height(metrics.weekHeight)) {
-        Column(modifier = GlanceModifier.fillMaxSize()) {
-            Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
-            Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
-                repeat(7) { col ->
-                    val date = weekStart.plusDays(col.toLong())
-                    DateLabel(date, YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
-                }
+    val frame = GlanceModifier.fillMaxWidth().height(metrics.weekHeight)
+    if (metrics.mode == WidgetMode.SMALL) {
+        Box(modifier = frame) { WeekContent(weekStart, state, metrics, palette, context, divider = true) }
+        return
+    }
+    // 시안: 주마다 둥근 타일 한 장. 위 1dp 틈이 이전 구분선(1dp Spacer) 자리를 대신하므로 높이·일정 줄 수는 그대로고 View도 늘지 않는다.
+    // (칸마다 타일을 깔면 View가 주당 14개 늘어 빽빽한 큰 위젯이 Glance의 View 개수 한도를 넘는다.)
+    Box(modifier = frame.padding(top = 1.dp)) {
+        Box(modifier = GlanceModifier.fillMaxSize().tile(palette, radius = WEEK_TILE_RADIUS)) {
+            WeekContent(weekStart, state, metrics, palette, context, divider = false)
+        }
+    }
+}
+
+private val WEEK_TILE_RADIUS = 8.dp
+
+@Composable
+private fun WeekContent(
+    weekStart: LocalDate,
+    state: WidgetUiState,
+    metrics: WidgetMetrics,
+    palette: WidgetPalette,
+    context: Context,
+    divider: Boolean,
+) {
+    Column(modifier = GlanceModifier.fillMaxSize()) {
+        if (divider) Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
+        Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
+            repeat(7) { col ->
+                val date = weekStart.plusDays(col.toLong())
+                DateLabel(date, YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
             }
-            if (metrics.mode == WidgetMode.SMALL) {
-                if (metrics.showDots) DotRow(weekStart, state.events, metrics)
-            } else if (metrics.lanes == 1) {
-                SingleLineRow(weekStart, state.events, metrics, palette)
-            } else {
-                val layout = WeekLayout.layout(weekStart, state.events, metrics.lanes)
-                repeat(metrics.lanes) { lane ->
-                    Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight)) {
-                        laneSegments(layout, lane).forEach { segment -> Segment(segment, metrics, palette) }
-                    }
+        }
+        if (metrics.mode == WidgetMode.SMALL) {
+            if (metrics.showDots) DotRow(weekStart, state.events, metrics)
+        } else if (metrics.lanes == 1) {
+            SingleLineRow(weekStart, state.events, metrics, palette)
+        } else {
+            val layout = WeekLayout.layout(weekStart, state.events, metrics.lanes)
+            repeat(metrics.lanes) { lane ->
+                Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight)) {
+                    laneSegments(layout, lane).forEach { segment -> Segment(segment, metrics, palette) }
                 }
             }
         }
-        // 칸 어디를 눌러도 그 날짜의 퀵 시트(WI-01)를 연다.
-        Row(modifier = GlanceModifier.fillMaxSize()) {
-            repeat(7) { col ->
-                val date = weekStart.plusDays(col.toLong())
-                val count = state.events.count { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
-                // Spacer에는 클릭이 붙지 않아(실기기 확인) 빈 Box로 터치 영역을 만든다.
-                Box(
-                    GlanceModifier
-                        .width(metrics.cellWidth)
-                        .fillMaxHeight()
-                        // WI-01: 그날 퀵 시트(목록·체크·추가)가 홈 화면 위에 뜬다.
-                        .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
-                        .semantics {
-                            contentDescription = listOfNotNull(
-                                "${date.monthValue}월 ${date.dayOfMonth}일",
-                                state.holidays[date],
-                                "일정 ${count}개",
-                            ).joinToString(", ")
-                            testTag = "day"
-                        },
-                ) {}
-            }
+    }
+    // 칸 어디를 눌러도 그 날짜의 퀵 시트(WI-01)를 연다.
+    Row(modifier = GlanceModifier.fillMaxSize()) {
+        repeat(7) { col ->
+            val date = weekStart.plusDays(col.toLong())
+            val count = state.events.count { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
+            // Spacer에는 클릭이 붙지 않아(실기기 확인) 빈 Box로 터치 영역을 만든다.
+            Box(
+                GlanceModifier
+                    .width(metrics.cellWidth)
+                    .fillMaxHeight()
+                    // WI-01: 그날 퀵 시트(목록·체크·추가)가 홈 화면 위에 뜬다.
+                    .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
+                    .semantics {
+                        contentDescription = listOfNotNull(
+                            "${date.monthValue}월 ${date.dayOfMonth}일",
+                            state.holidays[date],
+                            "일정 ${count}개",
+                        ).joinToString(", ")
+                        testTag = "day"
+                    },
+            ) {}
         }
     }
 }
@@ -247,7 +270,8 @@ private fun Segment(segment: LaneSegment, metrics: WidgetMetrics, palette: Widge
         placed != null -> {
             val event = placed.event
             val color = Color(NotionColors.argb(event.colorHex))
-            val style = chipStyle(event, metrics, palette)
+            // 완료 막대는 주 타일 위에서 흐린 글자(흑연)가 4.5:1에 못 미치는 색이 있어(라이트 최저 4.1:1) 본문색을 쓴다. 취소선이 완료를 알린다.
+            val style = chipStyle(event, metrics, palette).let { if (event.isMultiDay && event.done && !event.showsEmphasis) it.copy(color = palette.text) else it }
             val label = chipLabel(event, placed.continuesBefore)
             if (event.isMultiDay) {
                 Box(

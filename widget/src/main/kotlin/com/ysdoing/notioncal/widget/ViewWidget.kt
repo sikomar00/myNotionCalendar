@@ -16,8 +16,6 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
-import androidx.glance.action.Action
-import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -26,19 +24,15 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.itemsIndexed
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
-import androidx.glance.layout.Box
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
@@ -49,8 +43,6 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.ViewBoard
-import com.ysdoing.notioncal.core.data.view.ViewColumn
-import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
@@ -78,7 +70,9 @@ internal data class ViewMetrics(
     val titleSp: Float,
     val subSp: Float,
     val headerSp: Float,
+    /** 제목만 있는 머리와, 제목 아래 부제('완료 n/m')가 있는 머리의 높이. 눌림 버튼이 들어가도록 40dp 이상이다. */
     val header: Dp,
+    val headerWithSub: Dp,
     val tableHeader: Dp,
     val listRow: Dp,
     val tableRow: Dp,
@@ -95,16 +89,13 @@ internal fun viewMetrics(userScale: Float, systemFontScale: Float): ViewMetrics 
         titleSp = titleSp,
         subSp = subSp,
         headerSp = headerSp,
-        header = maxOf(32.dp, box(headerSp) + 8.dp),
+        header = maxOf(40.dp, box(headerSp) + 8.dp),
+        headerWithSub = maxOf(44.dp, box(headerSp) + box(subSp) + 4.dp),
         tableHeader = box(subSp) + 4.dp,
-        listRow = box(titleSp) + box(subSp) + 6.dp,
-        tableRow = box(titleSp) + 6.dp,
+        // 행은 타일이라 위아래 여백을 조금 더 둔다(틈 4dp는 행 밖).
+        listRow = box(titleSp) + box(subSp) + 10.dp,
+        tableRow = box(titleSp) + 10.dp,
     )
-}
-
-/** 행을 누르면 그 노션 페이지를 연다. 주소가 없으면 누를 수 없다. */
-private fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank() }?.let {
-    actionStartActivity(Intent(Intent.ACTION_VIEW, it.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 /** VW-06 보기를 다시 고르러 위젯 설정을 연다. 설정 액티비티는 위젯 ID를 `EXTRA_APPWIDGET_ID`로 받는다(길게 눌러 다시 설정할 때와 같다). */
@@ -161,41 +152,49 @@ internal fun viewAddIntent(context: Context, viewId: String): Intent =
         .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
-/** 머리: 보기 이름(누르면 새로고침)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 오른쪽 '+'. */
+/**
+ * 머리(공통 [WidgetHeader]): 체크리스트 아이콘 + 보기 이름(누르면 새로고침) + 부제 '완료 n/m'(높이가 넉넉하고 진행을 셀 수 있을 때),
+ * 오른쪽에 새로고침(넓을 때)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 '+'.
+ */
 @Composable
 private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     // 이름 없는 보기도 노션에서 허용된다. 접근성 설명이 글자를 대신하므로 보기 이름을 함께 읽게 한다.
     val title = board?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.view_widget_label)
     val description = context.getString(R.string.view_widget_header_description, title)
-    val canAdd = board?.canCreate == true
-    Row(GlanceModifier.fillMaxWidth().height(m.header), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            title,
-            modifier = GlanceModifier.defaultWeight().height(m.header).clickable(actionRunCallback<RefreshAction>()).semantics {
-                contentDescription = description
-                testTag = "viewHeader"
-            },
-            style = TextStyle(color = palette.text, fontSize = (m.headerSp * m.spFactor).sp, fontWeight = FontWeight.Bold),
-            maxLines = 1,
-        )
-        if (canAdd && board != null) {
-            val add = context.getString(R.string.view_widget_add_description, title)
-            Box(
-                GlanceModifier.width(ADD_WIDTH).height(m.header).clickable(actionStartActivity(viewAddIntent(context, board.viewId))).semantics {
-                    contentDescription = add
-                    testTag = "viewAdd"
-                },
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                WidgetIcon(R.drawable.ic_widget_add, palette.accent, 22.dp)
-            }
+    val size = LocalSize.current
+    val progress = board?.takeIf { size.height >= SUBTITLE_MIN_HEIGHT }?.let(::viewProgress)
+    val height = if (progress != null) m.headerWithSub else m.header
+    WidgetHeader(
+        icon = R.drawable.ic_widget_checklist,
+        title = title,
+        subtitle = progress?.let { context.getString(R.string.view_widget_progress, it.first, it.second) },
+        palette = palette,
+        height = height,
+        titleSp = m.headerSp * m.spFactor,
+        subSp = m.subSp * m.spFactor,
+        titleModifier = GlanceModifier.clickable(actionRunCallback<RefreshAction>()).semantics {
+            contentDescription = description
+            testTag = "viewHeader"
+        },
+    ) {
+        if (board != null && size.width >= REFRESH_MIN_WIDTH) {
+            WidgetIconButton(
+                R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "viewRefresh", actionRunCallback<RefreshAction>(), palette, height = height,
+            )
+        }
+        if (board?.canCreate == true) {
+            WidgetIconButton(
+                R.drawable.ic_widget_add, context.getString(R.string.view_widget_add_description, title), "viewAdd",
+                actionStartActivity(viewAddIntent(context, board.viewId)), palette, style = IconButtonStyle.FILLED, height = height,
+            )
         }
     }
 }
 
-/** 머리 '+' 버튼 너비(누르기 쉬운 폭). */
-private val ADD_WIDTH = 40.dp
+/** 부제는 3줄 높이쯤부터, 새로고침 버튼은 4칸 폭쯤부터 둔다(2×2에서 머리와 한 줄이 함께 보여야 한다). */
+private val SUBTITLE_MIN_HEIGHT = 140.dp
+private val REFRESH_MIN_WIDTH = 200.dp
 
 /** 고르지 않았거나 등록이 지워진 보기: 글자로 알리고, 누르면 위젯 설정에서 다시 고른다. */
 @Composable
@@ -203,8 +202,9 @@ private fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: Wi
     val context = LocalContext.current
     Text(
         context.getString(message),
-        modifier = GlanceModifier.fillMaxWidth().clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))).semantics { testTag = "viewNote" },
-        style = TextStyle(color = palette.subtle, fontSize = (12f * m.spFactor).sp),
+        modifier = GlanceModifier.fillMaxWidth().tile(palette).padding(12.dp)
+            .clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))).semantics { testTag = "viewNote" },
+        style = TextStyle(color = palette.text, fontSize = (12f * m.spFactor).sp),
     )
 }
 
@@ -212,34 +212,53 @@ private fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: Wi
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
     ViewStatusLine(board, state, m, palette)
     if (board.rows.isEmpty()) {
-        Text(LocalContext.current.getString(R.string.view_widget_empty), style = TextStyle(color = palette.subtle, fontSize = (12f * m.spFactor).sp))
+        ViewEmpty(board, m, palette)
         return
     }
     val width = LocalSize.current.width
     val columns = tableColumnCount(width, board.columns.size)
     val tableColumns = columns.takeIf { width >= TABLE_MIN_WIDTH && it > 1 }
     if (tableColumns != null) ViewTableHeader(board.columns.take(tableColumns), m, palette)
-    ViewRows(board, tableColumns, m, palette, staticRows)
+    ViewRows(board, tableColumns, ViewLook(m, palette), staticRows)
 }
+
+/** 빈 보기: 높이가 넉넉하면 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기), 낮으면 글자만(작은 위젯에서 잘리지 않게). */
+@Composable
+private fun ViewEmpty(board: ViewBoard, m: ViewMetrics, palette: WidgetPalette) {
+    val context = LocalContext.current
+    val message = context.getString(R.string.view_widget_empty)
+    val fontSp = 12f * m.spFactor
+    if (LocalSize.current.height < EMPTY_CARD_MIN_HEIGHT) {
+        Text(message, style = TextStyle(color = palette.subtle, fontSize = fontSp.sp))
+        return
+    }
+    val canAdd = board.canCreate
+    WidgetEmpty(
+        R.drawable.ic_widget_checklist, message, palette, fontSp,
+        ctaText = if (canAdd) context.getString(R.string.view_widget_empty_cta) else null,
+        ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId)) else null,
+        ctaTag = "viewEmpty",
+    )
+}
+
+private val EMPTY_CARD_MIN_HEIGHT = 170.dp
 
 /** 정상이면 나오지 않는다. 노션에서 보기를 찾을 수 없을 때만 눌러서 설정을 연다(다른 오류는 머리를 눌러 새로고침). */
 @Composable
 private fun ViewStatusLine(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     val text = viewStatusText(context, board, state.nowMillis) ?: return
-    val base = GlanceModifier.fillMaxWidth()
+    val base = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
     val modifier = if (board.notFound) base.clickable(actionStartActivity(viewConfigIntent(context, state.config.appWidgetId))) else base
-    Text(
-        text,
+    WidgetStatusLine(
+        text, error = board.notFound || board.lastError != null, palette = palette, fontSp = m.subSp * m.spFactor,
         modifier = modifier.semantics { testTag = "viewStatus" },
-        style = TextStyle(color = palette.text, fontSize = (m.subSp * m.spFactor).sp),
-        maxLines = 1,
     )
 }
 
 @Composable
 private fun ViewTableHeader(names: List<String>, m: ViewMetrics, palette: WidgetPalette) {
-    Row(GlanceModifier.fillMaxWidth().height(m.tableHeader), verticalAlignment = Alignment.CenterVertically) {
+    Row(GlanceModifier.fillMaxWidth().height(m.tableHeader).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         names.forEach { name ->
             Text(
                 name,
@@ -249,112 +268,6 @@ private fun ViewTableHeader(names: List<String>, m: ViewMetrics, palette: Widget
             )
         }
     }
-}
-
-/** 설정 화면 미리보기에 그리는 최대 행 수. Glance 한 컨테이너의 자식은 10개 이하여야 한다. */
-internal const val PREVIEW_ROWS = 8
-
-/** [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. [staticRows]면 목록 대신 고정 Column이다. */
-@Composable
-private fun ViewRows(board: ViewBoard, tableColumns: Int?, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
-    if (staticRows) {
-        Column(GlanceModifier.fillMaxSize()) { board.rows.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, m, palette) } }
-        return
-    }
-    LazyColumn(GlanceModifier.fillMaxSize()) {
-        itemsIndexed(board.rows, itemId = { _, row -> row.pageId.hashCode().toLong() }) { _, row -> ViewRowItem(board, row, tableColumns, m, palette) }
-    }
-}
-
-@Composable
-private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, m: ViewMetrics, palette: WidgetPalette) {
-    // 눌러 바꿀 칸이 있는 보기는 행을 TAP_MIN 이상으로 높여 누르기 쉽게 한다.
-    val base = if (tableColumns != null) m.tableRow else m.listRow
-    val height = if (board.columnInfo.any { it.tappable }) maxOf(base, TAP_MIN) else base
-    val modifier = rowModifier(row, height)
-    if (tableColumns != null) ViewTableRow(board, row, tableColumns, modifier, height, m, palette) else ViewListRow(board, row, modifier, height, m, palette)
-}
-
-private fun rowModifier(row: ViewRow, height: Dp): GlanceModifier {
-    val base = GlanceModifier.fillMaxWidth().height(height)
-    return (rowAction(row)?.let { base.clickable(it) } ?: base).semantics { testTag = "viewRow" }
-}
-
-@Composable
-private fun ViewTableRow(board: ViewBoard, row: ViewRow, columns: Int, modifier: GlanceModifier, height: Dp, m: ViewMetrics, palette: WidgetPalette) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        for (i in 0 until columns) {
-            ViewCell(board, row, i, GlanceModifier.defaultWeight(), TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp), height)
-        }
-    }
-}
-
-/**
- * 목록: 눌러 바꿀 체크박스 열이 있으면 맨 앞에 두고, 제목 아래 둘째 줄은 제목·체크박스 다음 열이다(그 열도 눌러 바꿀 수 있으면 눌러진다).
- * 제목과 체크박스뿐인 보기는 둘째 줄이 없다.
- */
-@Composable
-private fun ViewListRow(board: ViewBoard, row: ViewRow, modifier: GlanceModifier, height: Dp, m: ViewMetrics, palette: WidgetPalette) {
-    val check = board.columns.indices.firstOrNull { board.tappableAt(it)?.type == "checkbox" }
-    val second = board.columns.indices.firstOrNull { it != 0 && it != check }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        if (check != null) {
-            ViewCell(board, row, check, GlanceModifier.width(CHECK_WIDTH), TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp), height)
-        }
-        Column(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
-            Text(row.cells.firstOrNull().orEmpty(), style = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp), maxLines = 1)
-            if (second != null) {
-                ViewCell(board, row, second, GlanceModifier.fillMaxWidth(), TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp), height / 2)
-            }
-        }
-    }
-}
-
-/** 눌러 바꿀 칸의 폭(목록의 체크박스)과, 눌러 바꿀 칸이 있는 행의 최소 높이. */
-private val CHECK_WIDTH = 32.dp
-private val TAP_MIN = 32.dp
-
-/**
- * 칸 하나. 눌러 바꿀 체크·상태·선택 열이면 [tapHeight] 높이의 눌림 영역이고(글자는 세로 가운데, 체크박스는 ☐·☑),
- * 아니면 글자만이다(행을 누르면 노션 페이지).
- */
-@Composable
-private fun ViewCell(board: ViewBoard, row: ViewRow, index: Int, modifier: GlanceModifier, style: TextStyle, tapHeight: Dp) {
-    val column = board.tappableAt(index)
-    val raw = row.cells.getOrElse(index) { "" }
-    if (column == null) {
-        Text(raw, modifier = modifier, style = style, maxLines = 1)
-        return
-    }
-    val context = LocalContext.current
-    val checkbox = column.type == "checkbox"
-    val text = if (checkbox) (if (raw.isNotEmpty()) CHECKED else UNCHECKED) else raw
-    val description = tapDescription(context, row.cells.firstOrNull().orEmpty(), column, raw)
-    val tap = actionRunCallback<ViewCellAction>(
-        actionParametersOf(
-            ViewCellAction.ViewKey to board.viewId, ViewCellAction.PageKey to row.pageId,
-            ViewCellAction.PropKey to column.id, ViewCellAction.TypeKey to column.type,
-        ),
-    )
-    Box(
-        modifier.height(tapHeight).clickable(tap).semantics {
-            contentDescription = description
-            testTag = "viewCellTap"
-        },
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Text(text, style = style, maxLines = 1)
-    }
-}
-
-private const val CHECKED = "☑"
-private const val UNCHECKED = "☐"
-
-/** 눌러 바꾸는 칸의 낭독: 행 제목, 열 이름, 지금 값, 누르면 어떻게 되는지. */
-internal fun tapDescription(context: Context, title: String, column: ViewColumn, value: String): String = when {
-    column.type == "checkbox" && value.isNotEmpty() -> context.getString(R.string.view_widget_cell_checked, title, column.name)
-    column.type == "checkbox" -> context.getString(R.string.view_widget_cell_unchecked, title, column.name)
-    else -> context.getString(R.string.view_widget_cell_option, title, column.name, value.ifEmpty { context.getString(R.string.view_widget_cell_none) })
 }
 
 /** VW-03 노션 보기 위젯. Room 스냅샷만 읽는다(WG-02). */

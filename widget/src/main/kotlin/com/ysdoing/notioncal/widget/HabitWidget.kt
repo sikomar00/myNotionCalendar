@@ -53,14 +53,12 @@ import androidx.glance.text.TextStyle
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
-import com.ysdoing.notioncal.core.data.calendar.gridStart
 import com.ysdoing.notioncal.core.data.habit.DayMark
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
 import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
@@ -100,11 +98,15 @@ data class HabitMetrics(
     val headerFontSp: Float,
     val nameFontSp: Float,
     val smallFontSp: Float,
+    val heroFontSp: Float,
+    val heroHeight: Dp,
 ) {
     companion object {
         val PADDING_H = 8.dp
         val PADDING_V = 4.dp
-        private val SMALL_CELL = 26.dp
+        /** 2×2 오늘 칸: 눌림 영역을 48dp로(WL-4.2). 4×2·4×4는 폭이 모자라 칸 폭이 이보다 좁다(위젯 머리 버튼과 같은 예외). */
+        private val SMALL_CELL = 28.dp
+        private val MIN_ROW = 44.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): HabitMetrics {
             val mode = habitWidgetMode(size)
@@ -115,15 +117,19 @@ data class HabitMetrics(
             val header = 13f
             val name = 12f * scale
             val small = 10f * scale
+            val hero = 30f * scale
             val contentWidth = size.width - PADDING_H * 2
             val countWidth = (small * textScale * 2.4f).dp + 4.dp
-            val nameWidth = if (mode == HabitWidgetMode.SMALL) contentWidth - SMALL_CELL - 8.dp else (contentWidth - countWidth) * 0.32f
-            val cellWidth = if (mode == HabitWidgetMode.SMALL) SMALL_CELL + 8.dp else (contentWidth - nameWidth - countWidth) / 7
+            val smallCellWidth = TAP_TARGET
+            val nameWidth = if (mode == HabitWidgetMode.SMALL) contentWidth - smallCellWidth - 8.dp else (contentWidth - countWidth) * 0.32f
+            val cellWidth = if (mode == HabitWidgetMode.SMALL) smallCellWidth else (contentWidth - nameWidth - countWidth) / 7
             val cellSize = if (mode == HabitWidgetMode.SMALL) SMALL_CELL else (cellWidth - 4.dp).coerceIn(14.dp, 28.dp)
             return HabitMetrics(
                 mode = mode,
-                headerHeight = maxOf(28.dp, box(header) + 4.dp),
-                rowHeight = maxOf(cellSize, box(name)) + 4.dp,
+                // 머리: 아이콘 원 + 제목 + 부제 두 줄.
+                headerHeight = maxOf(40.dp, box(header) + box(small) + 4.dp),
+                // 줄: 이름 + 연속 알약 두 줄, 칸 원형 아이콘. 눌림 높이 44dp 이상.
+                rowHeight = maxOf(MIN_ROW, cellSize + 8.dp, box(name) + box(small) + 8.dp),
                 dayLabelHeight = box(small) + 2.dp,
                 cellWidth = cellWidth,
                 cellSize = cellSize,
@@ -133,6 +139,8 @@ data class HabitMetrics(
                 headerFontSp = header * spFactor,
                 nameFontSp = name * spFactor,
                 smallFontSp = small * spFactor,
+                heroFontSp = hero * spFactor,
+                heroHeight = box(hero),
             )
         }
     }
@@ -206,12 +214,11 @@ fun HabitWidgetContent(
     val board = state.board
     Column(outer.padding(horizontal = HabitMetrics.PADDING_H, vertical = HabitMetrics.PADDING_V)) {
         if (showHeader) HabitHeader(board, metrics, palette)
+        if (showHeader && metrics.mode == HabitWidgetMode.LARGE && board.habits.isNotEmpty()) HabitHero(board, metrics, palette)
         if (board.habits.isEmpty()) {
-            Text(
-                text = context.getString(R.string.habit_widget_empty),
-                modifier = GlanceModifier.fillMaxWidth().defaultWeight().clickable(actionStartActivity(habitTabIntent(context)))
-                    .semantics { testTag = "habitEmpty" },
-                style = TextStyle(color = palette.subtle, fontSize = metrics.nameFontSp.sp),
+            WidgetEmpty(
+                R.drawable.ic_widget_habit, context.getString(R.string.habit_widget_empty), palette, metrics.nameFontSp,
+                ctaText = context.getString(R.string.habit_widget_empty_cta), ctaAction = actionStartActivity(habitTabIntent(context)), ctaTag = "habitEmpty",
             )
         } else {
             LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
@@ -240,25 +247,29 @@ internal fun habitTabIntent(context: Context): Intent =
         .putExtra(AppIntents.EXTRA_TAB, AppIntents.TAB_HABIT)
         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+/** 머리: 새싹 아이콘 + '습관' + 오늘 n/m 완료. 제목을 누르면 습관 탭, 4×2 이상은 새로고침 버튼. */
 @Composable
 private fun HabitHeader(board: HabitBoard, metrics: HabitMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
-    Row(
-        modifier = GlanceModifier.fillMaxWidth().height(metrics.headerHeight).clickable(actionStartActivity(habitTabIntent(context)))
-            .semantics { testTag = "habitTitle" },
-        verticalAlignment = Alignment.CenterVertically,
+    WidgetHeader(
+        icon = R.drawable.ic_widget_habit,
+        title = context.getString(R.string.habit_widget_label_short),
+        subtitle = board.habits.takeIf { it.isNotEmpty() }?.let { context.getString(R.string.habit_widget_subtitle, board.doneToday, it.size) },
+        palette = palette,
+        height = metrics.headerHeight,
+        titleSp = metrics.headerFontSp,
+        subSp = metrics.smallFontSp,
+        titleModifier = GlanceModifier.clickable(actionStartActivity(habitTabIntent(context))).semantics { testTag = "habitTitle" },
     ) {
-        Text(
-            text = if (board.habits.isEmpty()) {
-                context.getString(R.string.habit_widget_label_short)
-            } else {
-                context.getString(R.string.habit_widget_title, board.doneToday, board.habits.size)
-            },
-            style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
-            maxLines = 1,
-        )
+        if (metrics.mode != HabitWidgetMode.SMALL) {
+            WidgetIconButton(
+                R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "habitRefresh", actionRunCallback<RefreshAction>(),
+                palette, visual = 32.dp, height = metrics.headerHeight,
+            )
+        }
     }
 }
+
 
 /** 7일 칸 위의 요일 줄. 오늘은 굵게. 자식: 이름 자리 + 7 + 숫자 자리 = 9개(Glance 10개 제한). */
 @Composable
@@ -285,22 +296,30 @@ private fun DayLabels(today: LocalDate, metrics: HabitMetrics, palette: WidgetPa
     }
 }
 
-/** 습관 한 줄. 작음: 이름 + 오늘 칸. 중간·큼: 이름 + 7일 칸 + 이번 주 n/목표. */
+/** 습관 한 줄: 타일 사이 간격(위아래 2dp씩)을 바깥 상자의 여백으로 두고 타일을 그린다. */
 @Composable
 private fun HabitRow(summary: HabitSummary, today: LocalDate, metrics: HabitMetrics, palette: WidgetPalette) {
+    Box(GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)) { HabitRowTile(summary, today, metrics, palette) }
+}
+
+/** 타일 안: 작음은 이름 + 오늘 칸, 중간·큼은 이름 + 7일 칸 + 이번 주 n/목표. */
+@Composable
+private fun HabitRowTile(summary: HabitSummary, today: LocalDate, metrics: HabitMetrics, palette: WidgetPalette) {
     val habit = summary.habit
     val status = summary.status
     val name = listOfNotNull(habit.emoji, habit.name).joinToString(" ")
     Row(
-        GlanceModifier.fillMaxWidth().height(metrics.rowHeight).semantics { testTag = "habitRow" },
+        GlanceModifier.fillMaxWidth().height(metrics.rowHeight).tile(palette).semantics { testTag = "habitRow" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = name,
-            modifier = GlanceModifier.width(metrics.nameWidth).padding(end = 4.dp),
-            style = TextStyle(color = palette.text, fontSize = metrics.nameFontSp.sp),
-            maxLines = 1,
-        )
+        Column(GlanceModifier.width(metrics.nameWidth).padding(start = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = name,
+                style = TextStyle(color = palette.text, fontSize = metrics.nameFontSp.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+            )
+            HabitMessagePill(status.message, metrics, palette)
+        }
         if (metrics.mode == HabitWidgetMode.SMALL) {
             DayCell(habit.pageId, habit.name, status.last7.last(), isToday = true, highlight = status.highlightToday, metrics, palette)
         } else {
@@ -351,75 +370,12 @@ private fun DayCell(habitId: String, habitName: String, mark: DayMark, isToday: 
         contentAlignment = Alignment.Center,
     ) {
         val size = metrics.cellSize
+        // 한 날은 채운 초록 원(체크 모양), 놓친 뒤 오늘은 강조 테두리 원, 안 한 날은 테두리 원. 모양과 낭독으로도 구분한다(A11Y-03).
         when {
-            mark.done -> Box(
-                GlanceModifier.size(size).cornerRadius(4.dp).background(palette.accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("✓", style = TextStyle(color = palette.todayText, fontSize = (metrics.smallFontSp * 1.1f).sp, fontWeight = FontWeight.Bold))
-            }
-            highlight -> Box(
-                GlanceModifier.size(size).cornerRadius(4.dp).background(palette.accent).padding(2.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(GlanceModifier.fillMaxSize().cornerRadius(3.dp).background(palette.track)) {}
-            }
+            mark.done -> WidgetIcon(R.drawable.ic_widget_check_circle, palette.green, size)
+            highlight -> WidgetIcon(R.drawable.ic_widget_circle, palette.accent, size)
             mark.beforeStart -> Spacer(GlanceModifier.size(size))
-            else -> Box(GlanceModifier.size(size).cornerRadius(4.dp).background(palette.track)) {}
-        }
-    }
-}
-
-/**
- * HB-03 4×4 이번 달 잔디: 그날 진행 중 습관 중 한 비율을 4단계 농도로. 요일 줄 + 주 줄(최대 6) = 자식 7개.
- * 아직 오지 않은 날은 빈칸, 다른 달 날짜는 그리지 않는다.
- */
-@Composable
-private fun MonthGrass(state: HabitWidgetState, metrics: HabitMetrics, palette: WidgetPalette) {
-    val context = LocalContext.current
-    val board = state.board
-    val month = YearMonth.from(board.today)
-    val ids = board.habits.map { it.habit.pageId }
-    val doneByDay = ids.flatMap { board.doneDates[it].orEmpty() }.groupingBy { it }.eachCount()
-    val fullDays = (1..board.today.dayOfMonth).count { doneByDay[month.atDay(it)] == ids.size }
-    val start = gridStart(month, state.weekStart)
-    val weeks = ((month.atEndOfMonth().toEpochDay() - start.toEpochDay()) / 7 + 1).toInt()
-    Column(
-        GlanceModifier.fillMaxWidth().padding(bottom = 4.dp).semantics {
-            contentDescription = context.getString(R.string.habit_widget_grass, month.monthValue, fullDays)
-            testTag = "habitGrass"
-        },
-    ) {
-        Row(GlanceModifier.fillMaxWidth().height(metrics.dayLabelHeight)) {
-            repeat(7) { i ->
-                Text(
-                    text = state.weekStart.plus(i.toLong()).getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
-                    modifier = GlanceModifier.defaultWeight(),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
-                    maxLines = 1,
-                )
-            }
-        }
-        repeat(weeks) { week ->
-            Row(GlanceModifier.fillMaxWidth().height(metrics.grassHeight + 2.dp)) {
-                repeat(7) { col ->
-                    val date = start.plusDays(week * 7L + col)
-                    Box(GlanceModifier.defaultWeight().height(metrics.grassHeight + 2.dp).padding(1.dp)) {
-                        if (YearMonth.from(date) == month) {
-                            val color = when {
-                                date.isAfter(board.today) -> null
-                                ids.isEmpty() -> palette.track
-                                else -> palette.grassLevel((doneByDay[date] ?: 0).toFloat() / ids.size)
-                            }
-                            Box(
-                                GlanceModifier.fillMaxSize().cornerRadius(2.dp)
-                                    .then(if (color != null) GlanceModifier.background(color) else GlanceModifier)
-                                    .semantics { testTag = "habitGrassDay" },
-                            ) {}
-                        }
-                    }
-                }
-            }
+            else -> WidgetIcon(R.drawable.ic_widget_circle, palette.subtle, size)
         }
     }
 }

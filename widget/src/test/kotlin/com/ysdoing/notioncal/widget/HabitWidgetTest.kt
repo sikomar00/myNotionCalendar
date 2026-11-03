@@ -71,7 +71,9 @@ class HabitWidgetTest {
         onAllNodes(hasTestTag("habitRow")).assertCountEquals(5)
         onAllNodes(hasTestTag("habitToday")).assertCountEquals(5)
         onAllNodes(hasTestTag("habitCell")).assertCountEquals(0)
-        onNode(hasTextEqualTo("습관 5/5")).assertExists()
+        onNode(hasTextEqualTo("오늘 5/5 완료")).assertExists() // 머리 부제(2×2는 히어로가 없다)
+        onAllNodes(hasTestTag("habitHero")).assertCountEquals(0)
+        onAllNodes(hasTestTag("habitRefresh")).assertCountEquals(0)
         // 오늘 칸을 누르면 그 습관의 오늘을 토글한다.
         onNode(hasTestTag("habitToday").and(hasContentDescriptionEqualTo("명상, 오늘, 함")))
             .assert(hasRunCallbackClickAction<HabitToggleAction>(actionParametersOf(HabitToggleAction.HabitKey to "h1", HabitToggleAction.DayKey to today.toEpochDay())))
@@ -126,5 +128,44 @@ class HabitWidgetTest {
         setAppWidgetSize(MEDIUM)
         provideComposable { HabitWidgetContent(HabitWidgetState(HabitBoard(today, emptyList()), WidgetConfig(1), DayOfWeek.SUNDAY), systemFontScale = 1f) }
         onNode(hasTestTag("habitEmpty")).assert(hasClickAction())
+    }
+
+    @Test
+    fun largeShowsHeroAndStreakPills() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { HabitWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("habitHero")).assert(hasContentDescriptionEqualTo("오늘 습관 5개 중 5개 완료"))
+        // 매일 습관 중 2일 이상 이어 가는 것만 알약을 단다(1일째는 연속이 아니다, 주 목표 습관은 n/목표로 보인다).
+        listOf("연속 2일", "연속 3일", "연속 4일").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTextEqualTo("연속 1일")).assertDoesNotExist()
+        onNode(hasTestTag("habitRefresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun mediumHasRefreshButNoHero() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(MEDIUM)
+        provideComposable { HabitWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("habitRefresh")).assertExists()
+        onAllNodes(hasTestTag("habitHero")).assertCountEquals(0)
+    }
+
+    /** 습관 줄(눌림 높이)은 모든 크기에서 44dp 이상이다. 칸 폭은 4×2·4×4에서 좁아 48dp를 못 채우는 예외다(2×2는 48dp). */
+    @Test
+    fun rowsAreTallEnoughToTap() {
+        for (size in listOf(SMALL, MEDIUM, LARGE)) {
+            val m = HabitMetrics.of(size, WidgetConfig(1), systemFontScale = 1f)
+            assertTrue(m.toString(), m.rowHeight.value >= 44f)
+        }
+        assertTrue(HabitMetrics.of(SMALL, WidgetConfig(1), 1f).cellWidth.value >= 48f)
+    }
+
+    @Test
+    fun emptyBoardOffersToOpenTheHabitTab() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(MEDIUM)
+        provideComposable { HabitWidgetContent(HabitWidgetState(HabitBoard(today, emptyList()), WidgetConfig(1), DayOfWeek.SUNDAY), systemFontScale = 1f) }
+        onNode(hasContentDescriptionEqualTo("습관 보기")).assertExists()
     }
 }

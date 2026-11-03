@@ -78,6 +78,20 @@ class WidgetRemoteViewsTest {
     }
 
     @Test
+    fun denseMonthStaysFarBelowTheBinderLimit() = runTest(timeout = 3.minutes) {
+        // 날짜 칸 타일(2026-11-03)로 View가 늘었다. RemoteViews는 Binder(약 1MB, 프로세스 공용)로 넘어가므로 가장 큰 경우도 여유를 둔다.
+        for (size in listOf(large, huge)) {
+            val remoteViews = GlanceRemoteViews().compose(context, size) { WidgetContent(WidgetSamples.state(WidgetSamples.dense, WidgetConfig(1, maxPerCell = 6))) }.remoteViews
+            val parcel = android.os.Parcel.obtain()
+            remoteViews.writeToParcel(parcel, 0)
+            val bytes = parcel.dataSize()
+            parcel.recycle()
+            println("MONTH_PARCEL ${size.width}x${size.height} = $bytes bytes")
+            org.junit.Assert.assertTrue("$size RemoteViews $bytes bytes", bytes < 400_000)
+        }
+    }
+
+    @Test
     fun screenshotMaterialYou() = runTest {
         renderView(large, WidgetSamples.state(config = WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU)))
             .captureRoboImage("src/test/screenshots/widget_material_you.png")

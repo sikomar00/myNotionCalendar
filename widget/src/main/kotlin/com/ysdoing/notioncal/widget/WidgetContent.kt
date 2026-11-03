@@ -181,7 +181,10 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
             }
         }
         // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
-        HeaderButton(R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
+        HeaderButton(
+            R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
+            actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette, IconButtonStyle.FILLED,
+        )
         // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 48dp 버튼 4개가 들어가는 큼에서만 보인다.
         if (metrics.mode == WidgetMode.LARGE) {
             HeaderButton(R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
@@ -243,7 +246,20 @@ private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionPara
  * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 글자 폭 그대로 둔다(예외).
  */
 @Composable
-private fun HeaderButton(@DrawableRes icon: Int, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
+private fun HeaderButton(
+    @DrawableRes icon: Int,
+    description: String,
+    tag: String,
+    action: Action,
+    metrics: WidgetMetrics,
+    palette: WidgetPalette,
+    style: IconButtonStyle = IconButtonStyle.TONAL,
+) {
+    if (metrics.mode != WidgetMode.SMALL) {
+        // 시안: 원형 톤 버튼. 머리 높이는 일정 줄 수를 지키려고 그대로 두고(34·48dp), 눌림 폭만 48dp다.
+        WidgetIconButton(icon, description, tag, action, palette, style, visual = minOf(32.dp, metrics.headerHeight - 4.dp), height = metrics.headerHeight)
+        return
+    }
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
@@ -308,6 +324,14 @@ class WidgetPalette private constructor(
     val expense: ColorProvider,
     /** HB-03 잔디 농도(낮음·중간·모두). */
     private val grass: List<ColorProvider>,
+    /** 위젯 톤(시안): 타일·버튼 면, 강조 컨테이너, 초록(습관·완료). 바탕과 같은 불투명도를 따른다. */
+    val tile: ColorProvider,
+    val tileHigh: ColorProvider,
+    val accentContainer: ColorProvider,
+    val onAccentContainer: ColorProvider,
+    val green: ColorProvider,
+    val greenContainer: ColorProvider,
+    val onGreenContainer: ColorProvider,
 ) {
     /** HB-03 잔디: 그날 한 비율 [ratio](0~1)를 4단계(없음·절반 미만·모두 미만·모두)로. */
     fun grassLevel(ratio: Float): ColorProvider = when {
@@ -334,15 +358,25 @@ class WidgetPalette private constructor(
         val divider: Color,
         val accent: Color,
         val track: Color,
+        val tile: Color,
+        val tileHigh: Color,
+        val accentContainer: Color,
+        val onAccentContainer: Color,
     )
 
     companion object {
         // 앱과 같은 화면 틀 색(DesignTokens). 다른 달 날짜(outside)만 위젯 전용 값(3:1 이상).
         private val LIGHT = with(DesignTokens.Light) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT), Color(SURFACE_HIGHEST))
+            Scheme(
+                Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT), Color(SURFACE_HIGHEST),
+                WidgetTones.LIGHT.tile, WidgetTones.LIGHT.tileHigh, WidgetTones.LIGHT.accentContainer, WidgetTones.LIGHT.onAccentContainer,
+            )
         }
         private val DARK = with(DesignTokens.Dark) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT), Color(0xFF3A3A3A))
+            Scheme(
+                Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT), Color(0xFF3A3A3A),
+                WidgetTones.DARK.tile, WidgetTones.DARK.tileHigh, WidgetTones.DARK.accentContainer, WidgetTones.DARK.onAccentContainer,
+            )
         }
         // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
         // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
@@ -362,12 +396,16 @@ class WidgetPalette private constructor(
                     c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral2_200),
                     c(android.R.color.system_neutral2_500), c(android.R.color.system_neutral2_800), c(android.R.color.system_accent1_200),
                     c(android.R.color.system_neutral2_700),
+                    c(android.R.color.system_neutral1_800), c(android.R.color.system_neutral1_700),
+                    c(android.R.color.system_accent1_700), c(android.R.color.system_accent1_100),
                 )
             } else {
                 Scheme(
                     c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral2_700),
                     c(android.R.color.system_neutral2_400), c(android.R.color.system_neutral2_100), c(android.R.color.system_accent1_600),
                     c(android.R.color.system_neutral2_200),
+                    c(android.R.color.system_neutral1_100), c(android.R.color.system_neutral1_200),
+                    c(android.R.color.system_accent1_100), c(android.R.color.system_accent1_900),
                 )
             }
         }
@@ -414,6 +452,13 @@ class WidgetPalette private constructor(
                 income = pair(Color(DesignTokens.Light.INCOME), Color(DesignTokens.Dark.INCOME)),
                 expense = pair(Color(DesignTokens.Light.EXPENSE), Color(DesignTokens.Dark.EXPENSE)),
                 grass = listOf(0.35f, 0.65f, 1f).map { a -> pick({ it.accent.copy(alpha = a) }) },
+                tile = pick({ it.tile }, bg = true),
+                tileHigh = pick({ it.tileHigh }, bg = true),
+                accentContainer = pick({ it.accentContainer }),
+                onAccentContainer = pick({ it.onAccentContainer }),
+                green = pair(WidgetTones.LIGHT.green, WidgetTones.DARK.green),
+                greenContainer = pair(WidgetTones.LIGHT.greenContainer, WidgetTones.DARK.greenContainer),
+                onGreenContainer = pair(WidgetTones.LIGHT.onGreenContainer, WidgetTones.DARK.onGreenContainer),
             )
         }
     }

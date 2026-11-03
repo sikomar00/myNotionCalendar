@@ -159,7 +159,7 @@ class ViewWidgetTest {
         setContext(context)
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(board().copy(name = "")), systemFontScale = 1f) }
-        onNode(hasTestTag("viewHeader")).assert(hasTextEqualTo(context.getString(R.string.view_widget_label)))
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_label))).assertExists()
         onNode(hasTestTag("viewHeader")).assert(hasContentDescriptionEqualTo("${context.getString(R.string.view_widget_label)}, 새로고침"))
     }
 
@@ -268,7 +268,7 @@ class ViewWidgetTest {
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(4) // 두 행 x (체크 + 상태)
-        listOf("☐", "☑", "할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        listOf("할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() } // 체크는 글자가 아니라 원형 벡터라 낭독 문구로 찾는다
         onNode(hasContentDescriptionEqualTo("장보기, 완료 체크 안 됨, 눌러서 체크"))
             .assert(hasRunCallbackClickAction<ViewCellAction>(tap("dn", "checkbox", "p1")))
         onNode(hasContentDescriptionEqualTo("보고서, 완료 체크됨, 눌러서 해제"))
@@ -286,7 +286,7 @@ class ViewWidgetTest {
         setAppWidgetSize(narrow)
         provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(4) // 체크박스 + 둘째 줄(상태)
-        listOf("장보기", "보고서", "☐", "☑", "할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        listOf("장보기", "보고서", "할 일", "진행 중").forEach { onNode(hasTextEqualTo(it)).assertExists() }
         onNode(hasTextEqualTo("완료")).assertDoesNotExist() // 열 이름은 표에서만
     }
 
@@ -348,8 +348,103 @@ class ViewWidgetTest {
         )
         provideComposable { ViewWidgetContent(state(titleAndCheck), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(2) // 행마다 하나(둘째 줄에 같은 칸이 또 나오지 않는다)
-        onAllNodes(hasTextEqualTo("☐")).assertCountEquals(1)
-        onAllNodes(hasTextEqualTo("☑")).assertCountEquals(1)
+        onAllNodes(hasContentDescriptionEqualTo("장보기, 완료 체크 안 됨, 눌러서 체크")).assertCountEquals(1)
+        onAllNodes(hasContentDescriptionEqualTo("보고서, 완료 체크됨, 눌러서 해제")).assertCountEquals(1)
+    }
+
+    // --- 2026-11-03 새 디자인: 머리 부제(완료 n/m)·새로고침·빈 상태 CTA·상태 알약 색.
+
+    private fun groupedStatusBoard() = ViewBoard(
+        "v1", "작업", "table", listOf("이름", "상태"),
+        listOf(ViewRow("p1", "u1", listOf("a", "할 일")), ViewRow("p2", "u2", listOf("b", "진행 중")), ViewRow("p3", "u3", listOf("c", "완료"))), now, null,
+        listOf(
+            ViewColumn("t", "이름", "title"),
+            ViewColumn("st", "상태", "status", listOf(ViewChoice("o1", "할 일", "To-do"), ViewChoice("o2", "진행 중", "In progress"), ViewChoice("o3", "완료", "Complete"))),
+        ),
+    )
+
+    @Test
+    fun progressCountsCheckedRowsThenCompleteGroupAndIsNullWithoutEither() {
+        assertEquals(1 to 2, viewProgress(todoBoard()))
+        assertEquals(1 to 3, viewProgress(groupedStatusBoard()))
+        assertNull(viewProgress(board())) // 체크·상태 열이 없는 보기는 진행이라는 개념이 없다
+        assertNull(viewProgress(todoBoard().copy(rows = emptyList())))
+    }
+
+    @Test
+    fun statusToneFollowsTheGroupInEnglishOrKorean() {
+        val status = groupedStatusBoard().columnInfo[1]
+        assertEquals(StatusTone.NEUTRAL, status.toneOf("할 일"))
+        assertEquals(StatusTone.ACTIVE, status.toneOf("진행 중"))
+        assertEquals(StatusTone.DONE, status.toneOf("완료"))
+        assertEquals(StatusTone.NEUTRAL, status.toneOf("없는 값"))
+        assertEquals(StatusTone.DONE, ViewColumn("s", "상태", "status", listOf(ViewChoice("o", "끝", "완료"))).toneOf("끝"))
+    }
+
+    @Test
+    fun headerShowsProgressWhenTallEnoughAndRefreshWhenWideEnough() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("완료 1/2")).assertExists()
+        onNode(hasTestTag("viewRefresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+        onNode(hasContentDescriptionEqualTo(context.getString(R.string.widget_refresh))).assertExists()
+    }
+
+    @Test
+    fun smallWidgetKeepsOnlyTheTitleAndAddInTheHeader() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // 2×2에서는 머리와 한 줄이 함께 보여야 해서 부제·새로고침 버튼을 뺀다(머리 이름을 누르면 새로고침은 그대로).
+        setContext(context)
+        setAppWidgetSize(DpSize(110.dp, 110.dp))
+        provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("완료 1/2")).assertDoesNotExist()
+        onNode(hasTestTag("viewRefresh")).assertDoesNotExist()
+        onNode(hasTestTag("viewAdd")).assertExists()
+        onNode(hasTestTag("viewHeader")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun emptyViewOffersCreatingAnItemWhenTheViewCanCreate() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(320.dp, 240.dp))
+        provideComposable { ViewWidgetContent(state(todoBoard().copy(rows = emptyList())), systemFontScale = 1f) }
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_empty))).assertExists()
+        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1")))
+    }
+
+    @Test
+    fun emptyViewWithoutWriteInfoOrInASmallWidgetHasNoCreateButton() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(320.dp, 240.dp))
+        provideComposable { ViewWidgetContent(state(board(emptyList())), systemFontScale = 1f) }
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_empty))).assertExists()
+        onNode(hasTestTag("viewEmpty")).assertDoesNotExist()
+    }
+
+    @Test
+    fun emptyViewInASmallWidgetIsJustTheTextSoItIsNotCutOff() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(150.dp, 110.dp))
+        provideComposable { ViewWidgetContent(state(todoBoard().copy(rows = emptyList())), systemFontScale = 1f) }
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_empty))).assertExists()
+        onNode(hasTestTag("viewEmpty")).assertDoesNotExist()
+    }
+
+    @Test
+    fun failedSyncIsWrittenWithAWarningLineNotColorOnly() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board(error = "Network")), systemFontScale = 1f) }
+        onNode(hasTestTag("viewStatus")).assertExists()
+        onNode(hasTextEqualTo(viewStatusText(context, board(error = "Network"), now)!!)).assertExists()
+    }
+
+    @Test
+    fun readOnlyRowsStayCompactAndTapRowsReachTheTapMinimum() {
+        // 눌러 바꿀 칸이 없는 행은 이전(약 26dp)에서 크게 늘지 않는다. 눌러 바꿀 칸이 있는 행은 44dp(+틈 4dp)로 누르기 쉽게 한다.
+        val m = viewMetrics(userScale = 1f, systemFontScale = 1f)
+        assertTrue("읽기 전용 표 행 ${m.tableRow}", m.tableRow <= 32.dp)
+        assertTrue(TAP_ROW_MIN + 4.dp >= 48.dp)
     }
 
     @Test
