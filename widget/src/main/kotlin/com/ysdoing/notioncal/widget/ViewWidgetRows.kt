@@ -95,7 +95,7 @@ internal fun viewProgress(board: ViewBoard): ViewProgress? {
 private fun ViewColumn.hasCompleteGroup(): Boolean = options.any { toneOf(it.name) == StatusTone.DONE }
 
 /** 행을 누르면 그 노션 페이지를 연다. 주소가 없으면 누를 수 없다. */
-private fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank() }?.let {
+internal fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank() }?.let {
     actionStartActivity(Intent(Intent.ACTION_VIEW, it.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 

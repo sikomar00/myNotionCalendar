@@ -123,6 +123,19 @@
                 android:resource="@xml/view_widget_info" />
         </receiver>
 
+        <!-- M5a 책 갤러리 위젯(표지 + 읽은 비율). -->
+        <receiver
+            android:name=".BookWidgetReceiver"
+            android:exported="true"
+            android:label="@string/book_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/book_widget_info" />
+        </receiver>
+
         <!-- WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). -->
         <receiver
             android:name=".TabbedWidgetReceiver"

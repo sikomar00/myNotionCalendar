@@ -69,6 +69,11 @@ class ViewWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = ViewWidget()
 }
 
+/** M5a 책 갤러리 위젯(표지 + 읽은 비율). */
+class BookWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = BookWidget()
+}
+
 /** WG-11 통합 탭 위젯(📅 일정 · ✅ 습관 · 💰 가계부). */
 class TabbedWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = TabbedWidget()

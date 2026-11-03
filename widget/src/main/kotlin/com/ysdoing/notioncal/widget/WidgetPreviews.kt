@@ -117,6 +117,15 @@ object WidgetPreviews {
         return ViewWidgetState(board, WidgetConfig(0, viewId = "preview"), now)
     }
 
+    /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */
+    internal fun bookState(now: Long = System.currentTimeMillis()): BookWidgetState {
+        val rows = listOf("예시 책 하나" to 0.35f, "예시 책 둘" to 0.8f).mapIndexed { i, (title, progress) ->
+            com.ysdoing.notioncal.core.data.view.ViewRow("preview-book-$i", "", listOf(title), "", progress)
+        }
+        val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "읽는 중", "gallery", listOf("제목"), rows, now, null)
+        return BookWidgetState(board, WidgetConfig(0, viewId = "preview"), Covers.EMPTY, now)
+    }
+
     /**
      * 위젯들의 생성 미리보기를 시스템에 올린다(Android 15 이상). 시스템이 호출 횟수를 제한하므로 앱이 버전마다 한 번만 부른다.
      * 모두 성공하면 true.
@@ -135,6 +144,7 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(BookWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }
