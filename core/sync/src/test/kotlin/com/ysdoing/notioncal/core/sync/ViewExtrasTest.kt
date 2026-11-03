@@ -68,6 +68,15 @@ class ViewExtrasTest {
     }
 
     @Test
+    fun progressPairMatchingIgnoresCaseAndAcceptsCommonNames() {
+        assertEquals(0.5f, progressOf(props("""{"Current Page":{"type":"number","number":100},"Total Pages":{"type":"number","number":200}}""")))
+        assertEquals(0.25f, progressOf(props("""{"ING":{"type":"number","number":50},"Pages":{"type":"number","number":200}}""")))
+        assertEquals(0.1f, progressOf(props("""{"읽은 쪽":{"type":"number","number":20},"전체 쪽":{"type":"number","number":200}}""")))
+        // 같은 속성을 현재와 전체로 둘 다 쓰지 않는다
+        assertNull(progressOf(props("""{"Total Pages":{"type":"number","number":200}}""")))
+    }
+
+    @Test
     fun namedProgressBeatsThePagePair() {
         val p = props("""{"진행률":{"type":"formula","formula":{"type":"number","number":0.5}},"ing":{"type":"number","number":30},"page":{"type":"number","number":248}}""")
         assertEquals(0.5f, progressOf(p))

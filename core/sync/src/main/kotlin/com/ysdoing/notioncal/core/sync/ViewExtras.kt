@@ -12,7 +12,6 @@ import kotlinx.serialization.json.doubleOrNull
 
 private val COVER_NAMES = listOf("cover", "표지", "image", "이미지", "thumbnail")
 private val PROGRESS_NAMES = listOf("진행", "progress", "percent", "%")
-private val PAIRS = listOf("ing" to "page", "current" to "total", "읽은" to "전체")
 
 private fun JsonElement?.type(): String = ((this as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull.orEmpty()
 
@@ -35,41 +34,62 @@ private fun firstFileUrl(files: JsonElement?): String {
     return (holder["url"] as? JsonPrimitive)?.contentOrNull.orEmpty().takeIf { it.startsWith("https://") }.orEmpty()
 }
 
+/** 이름이 [names] 중 하나와 같거나(대소문자 무시) [partial]에 든 말을 포함하면 짝의 한쪽으로 본다. */
+private class NameRule(val names: List<String>, val partial: List<String> = emptyList()) {
+    fun matches(name: String) = names.any { it.equals(name, ignoreCase = true) } || partial.any { name.contains(it, ignoreCase = true) }
+}
+
+private val CURRENT_PAGE = NameRule(listOf("ing", "read", "current"), partial = listOf("current", "읽은"))
+private val TOTAL_PAGES = NameRule(listOf("page", "pages", "total"), partial = listOf("total", "전체"))
+
+/** 숫자 값과, %가 붙은 글자 수식으로 나온 이름들. */
+private class Numbers(val values: Map<String, Double>, val percentText: Set<String>)
+
 /**
  * 읽은 비율(0~1). 계산할 수 없으면 null(막대를 그리지 않는다).
  * 1) 이름에 진행·progress·percent·%가 든 숫자나 수식 값: 글자에 %가 있으면 퍼센트, 아니면 0~1이면 비율이고 1보다 크면 퍼센트다.
- * 2) 없으면 (ing, page)처럼 현재 쪽과 전체 쪽이 짝인 숫자 속성: 현재 ÷ 전체.
+ * 2) 없으면 현재 쪽과 전체 쪽이 짝인 숫자 속성(`ing`·`page`, `Current Page`·`Total Pages`처럼 대소문자 무관): 현재 ÷ 전체.
  */
 internal fun progressOf(properties: Map<String, JsonElement>): Float? {
-    val numbers = LinkedHashMap<String, Double>()
+    val numbers = collectNumbers(properties)
+    return namedProgress(numbers) ?: pairProgress(numbers.values)
+}
+
+private fun collectNumbers(properties: Map<String, JsonElement>): Numbers {
+    val values = LinkedHashMap<String, Double>()
     val percentText = HashSet<String>()
     for ((name, value) in properties) {
         val obj = value as? JsonObject ?: continue
-        when (val type = obj.type()) {
-            "number" -> (obj[type] as? JsonPrimitive)?.doubleOrNull?.let { numbers[name] = it }
-            "formula" -> {
-                val result = obj["formula"] as? JsonObject ?: continue
-                when (result.type()) {
-                    "number" -> (result["number"] as? JsonPrimitive)?.doubleOrNull?.let { numbers[name] = it }
-                    "string" -> (result["string"] as? JsonPrimitive)?.contentOrNull?.trim()?.let { text ->
-                        text.removeSuffix("%").trim().toDoubleOrNull()?.let {
-                            numbers[name] = it
-                            if (text.endsWith("%")) percentText += name
-                        }
-                    }
-                }
+        when (obj.type()) {
+            "number" -> primitiveNumber(obj["number"])?.let { values[name] = it }
+            "formula" -> formulaNumber(obj["formula"] as? JsonObject)?.let { (n, isPercent) ->
+                values[name] = n
+                if (isPercent) percentText += name
             }
         }
     }
-    numbers.entries.firstOrNull { (name, _) -> PROGRESS_NAMES.any { name.contains(it, ignoreCase = true) } }?.let { (name, n) ->
-        return fraction(n, name in percentText)
+    return Numbers(values, percentText)
+}
+
+private fun primitiveNumber(element: JsonElement?): Double? = (element as? JsonPrimitive)?.doubleOrNull
+
+/** 수식 결과가 숫자면 그 값, 글자면 `40%`·`40`을 읽는다. (값, 퍼센트 글자인지). */
+private fun formulaNumber(result: JsonObject?): Pair<Double, Boolean>? = when (result?.type()) {
+    "number" -> primitiveNumber(result["number"])?.let { it to false }
+    "string" -> (result["string"] as? JsonPrimitive)?.contentOrNull?.trim()?.let { text ->
+        text.removeSuffix("%").trim().toDoubleOrNull()?.let { it to text.endsWith("%") }
     }
-    for ((current, total) in PAIRS) {
-        val done = numbers.entries.firstOrNull { it.key.equals(current, ignoreCase = true) || (current.length > 3 && it.key.contains(current)) }?.value
-        val all = numbers.entries.firstOrNull { it.key.equals(total, ignoreCase = true) || (total.length > 3 && it.key.contains(total)) }?.value
-        if (done != null && all != null && all > 0) return (done / all).toFloat().coerceIn(0f, 1f)
-    }
-    return null
+    else -> null
+}
+
+private fun namedProgress(numbers: Numbers): Float? =
+    numbers.values.entries.firstOrNull { (name, _) -> PROGRESS_NAMES.any { name.contains(it, ignoreCase = true) } }
+        ?.let { (name, n) -> fraction(n, name in numbers.percentText) }
+
+private fun pairProgress(values: Map<String, Double>): Float? {
+    val done = values.entries.firstOrNull { CURRENT_PAGE.matches(it.key) && !TOTAL_PAGES.matches(it.key) }?.value
+    val total = values.entries.firstOrNull { TOTAL_PAGES.matches(it.key) && !CURRENT_PAGE.matches(it.key) }?.value
+    return if (done != null && total != null && total > 0) (done / total).toFloat().coerceIn(0f, 1f) else null
 }
 
 private fun fraction(n: Double, percent: Boolean): Float = when {

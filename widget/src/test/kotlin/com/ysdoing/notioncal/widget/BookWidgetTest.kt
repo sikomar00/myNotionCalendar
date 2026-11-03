@@ -151,11 +151,28 @@ class BookWidgetTest {
         assertEquals(3, six.columns)
         assertEquals(2, six.rows)
         assertEquals(6, six.capacity)
-        // 좁고 낮은 2×2: 한 줄, 표지는 최소 높이 아래로 줄지 않는다(제목·막대와 함께 잘려도 타일은 하나 이상 보인다)
-        val tiny = bookLayout(130.dp, 90.dp, 14.dp, books = 6)
-        assertEquals(1, tiny.rows)
-        assertTrue(tiny.columns >= 1)
-        assertTrue(tiny.coverHeight >= 72.dp)
+    }
+
+    @Test
+    fun aTileRowNeverTallerThanTheBodyAndCaptionsDropFirst() {
+        // 낮은 몸통에서는 표지를 몸통보다 크게 두지 않고 아래 글자(제목 → 막대)부터 뺀다(잘림 방지).
+        val sizes = listOf(120.dp to 60.dp, 130.dp to 90.dp, 150.dp to 120.dp, 200.dp to 160.dp, 340.dp to 300.dp, 340.dp to 600.dp)
+        for ((w, h) in sizes) for (books in listOf(1, 2, 6)) {
+            val layout = bookLayout(w, h, 14.dp, books)
+            val rowHeight = (h - 8.dp * (layout.rows - 1)) / layout.rows
+            assertTrue("$w×$h ${books}권: 타일 ${layout.tileHeight(14.dp)} > 줄 $rowHeight", layout.tileHeight(14.dp) <= rowHeight + 0.5.dp)
+        }
+        assertEquals(BookCaption.NONE, bookLayout(120.dp, 60.dp, 14.dp, 1).caption)
+        assertEquals(BookCaption.FULL, bookLayout(340.dp, 600.dp, 14.dp, 2).caption)
+    }
+
+    @Test
+    fun screenReadersGetTheExactPercentNotOneLess() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // 0.53f * 100 = 52.999996: 내림하면 52%로 읽힌다.
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { BookWidgetContent(state(listOf(row(1, progress = 0.53f))), systemFontScale = 1f) }
+        onNode(hasContentDescriptionEqualTo("책 1, 53% 읽음")).assertExists()
     }
 
     @Test

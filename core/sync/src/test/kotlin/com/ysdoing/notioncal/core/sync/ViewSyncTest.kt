@@ -99,7 +99,10 @@ class ViewSyncTest {
     }
 
     @After
-    fun tearDown() = db.close()
+    fun tearDown() {
+        db.close()
+        coverDir.deleteRecursively()
+    }
 
     private suspend fun register(vararg ids: String) =
         ids.forEach { db.viewDao().upsert(ViewSnapshotEntity(it, "ds", "이름", "table")) }
@@ -107,7 +110,7 @@ class ViewSyncTest {
     private val coverDir = java.nio.file.Files.createTempDirectory("covers").toFile()
     private var coverBytes: ByteArray? = null
     private val coverRequests = mutableListOf<String>()
-    private val covers = CoverSync(CoverStore(coverDir), CoverDownload { url -> coverRequests += url; coverBytes })
+    private val covers = CoverSync(CoverStore(coverDir, pruneGraceMillis = 0), CoverDownload { url -> coverRequests += url; coverBytes })
 
     private fun sync() = ViewSync(reader, db.viewDao(), { widgetUpdates++ }, clock, covers)
 
@@ -426,6 +429,23 @@ class ViewSyncTest {
         sync().syncAll()
         assertEquals(2, db.viewDao().observeRows("v1").first().size)
         assertNull(db.viewDao().snapshot("v1")!!.lastError)
+        // 못 받은 주소는 한동안 다시 두드리지 않는다
+        val before = coverRequests.size
+        sync().syncAll()
+        assertEquals(before, coverRequests.size)
+    }
+
+    @Test
+    fun coversAreFetchedAfterTheWidgetsWereToldTheDataChanged() = runTest {
+        register("v1")
+        rowPages = listOf(bookPage("b1", "https://img.example/1.jpg", 1, 10))
+        coverBytes = byteArrayOf(1)
+        var updatesWhenDownloading = -1
+        val observing = CoverSync(CoverStore(coverDir, pruneGraceMillis = 0), CoverDownload { updatesWhenDownloading = widgetUpdates; coverBytes })
+        ViewSync(reader, db.viewDao(), { widgetUpdates++ }, clock, observing).syncAll()
+        // 느린 이미지 서버가 위젯 갱신을 붙잡지 않는다: 표지를 받기 전에 이미 한 번 갱신했고, 새로 받았으면 한 번 더 갱신한다.
+        assertEquals(1, updatesWhenDownloading)
+        assertEquals(2, widgetUpdates)
     }
 
     @Test

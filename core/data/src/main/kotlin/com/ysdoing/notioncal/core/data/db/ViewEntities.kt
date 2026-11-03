@@ -184,6 +184,10 @@ abstract class ViewDao {
         return true
     }
 
+    /** 한 보기의 앞쪽 [limit]권 표지 주소(저장된 행 기준, 위치 순). */
+    @Query("SELECT coverUrl FROM view_rows WHERE viewId = :viewId AND coverUrl != '' ORDER BY position LIMIT :limit")
+    abstract suspend fun coverUrls(viewId: String, limit: Int): List<String>
+
     /** 등록한 모든 보기의 표지 주소(표지 파일 정리에서 남길 것을 정한다). */
     @Query("SELECT DISTINCT coverUrl FROM view_rows WHERE coverUrl != ''")
     abstract suspend fun coverUrls(): List<String>

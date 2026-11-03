@@ -147,7 +147,7 @@ class CoverSyncTest {
 
     @Test
     fun syncDownloadsOnlyMissingCoversAndPruneKeepsTheOnesInUse() = runTest {
-        val store = CoverStore(dir)
+        val store = CoverStore(dir, pruneGraceMillis = 0)
         val calls = mutableListOf<String>()
         val sync = CoverSync(store, CoverDownload { calls += it; jpegLike })
         sync.fetch(listOf("https://a.example/1.jpg", "https://a.example/2.jpg", "", "https://a.example/1.jpg"))
@@ -160,17 +160,89 @@ class CoverSyncTest {
     }
 
     @Test
-    fun aFailingDownloadOrWriteNeverBreaksTheSync() = runTest {
-        val sync = CoverSync(CoverStore(dir), CoverDownload { error("boom") })
-        sync.fetch(listOf("https://a.example/1.jpg")) // 예외가 밖으로 나오지 않는다
-        val none = CoverSync(CoverStore(dir), CoverDownload { null })
-        none.fetch(listOf("https://a.example/2.jpg"))
-        assertFalse(CoverStore(dir).has("https://a.example/2.jpg"))
+    fun aFailingDownloadOrWriteNeverBreaksTheSyncAndIsNotRetriedRightAway() = runTest {
+        var calls = 0
+        val store = CoverStore(dir)
+        val sync = CoverSync(store, CoverDownload { calls++; error("boom") })
+        assertFalse(sync.fetch(listOf("https://a.example/1.jpg"))) // 예외가 밖으로 나오지 않는다
+        assertEquals(1, calls)
+        assertTrue(store.failedRecently("https://a.example/1.jpg"))
+        sync.fetch(listOf("https://a.example/1.jpg"))
+        assertEquals(1, calls) // 실패한 주소는 한동안 다시 두드리지 않는다(동기화마다 기다리지 않게)
+        // 시간이 지나면(여기서는 표시를 지워) 다시 시도한다
+        File(dir, "${CoverStore.keyOf("https://a.example/1.jpg")}.fail").setLastModified(1000L)
+        sync.fetch(listOf("https://a.example/1.jpg"))
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun fetchReportsWhetherAnythingNewWasSaved() = runTest {
+        val sync = CoverSync(CoverStore(dir), CoverDownload { jpegLike })
+        assertTrue(sync.fetch(listOf("https://a.example/1.jpg")))
+        assertFalse(sync.fetch(listOf("https://a.example/1.jpg"))) // 이미 있어 새로 받은 것이 없다
+        assertFalse(sync.fetch(emptyList()))
+    }
+
+    @Test
+    fun downloadsRunAtMostThreeAtATime() = runTest {
+        var running = 0
+        var peak = 0
+        val sync = CoverSync(CoverStore(dir), CoverDownload {
+            running++
+            peak = maxOf(peak, running)
+            kotlinx.coroutines.yield()
+            running--
+            jpegLike
+        })
+        sync.fetch((1..10).map { "https://a.example/$it.jpg" })
+        assertTrue("동시 $peak", peak in 2..3)
+    }
+
+    @Test
+    fun coversWhoseIdentityIsInTheQueryStayDistinctWhileSignaturesAreIgnored() {
+        val a = "https://books.example/content?id=AAA&printsec=frontcover"
+        val b = "https://books.example/content?id=BBB&printsec=frontcover"
+        assertFalse(CoverStore.keyOf(a) == CoverStore.keyOf(b)) // 책마다 다른 표지(쿼리에 책 번호)
+        assertEquals(CoverStore.keyOf(a), CoverStore.keyOf("https://books.example/content?printsec=frontcover&id=AAA")) // 순서 무관
+        val signed1 = "https://prod-files.example/u/c.png?X-Amz-Signature=aaa&X-Amz-Expires=3600&x-id=GetObject"
+        val signed2 = "https://prod-files.example/u/c.png?x-amz-signature=bbb&X-Amz-Date=2026&X-Amz-Expires=7200"
+        assertEquals(CoverStore.keyOf(signed1), CoverStore.keyOf(signed2)) // 서명은 바뀌어도 같은 파일
+        assertFalse(CoverStore.keyOf(signed1) == CoverStore.keyOf("https://prod-files.example/u/other.png?X-Amz-Signature=aaa"))
+    }
+
+    @Test
+    fun pruneNeverDeletesFilesWrittenJustNow() {
+        // 정리가 도는 사이 다른 동기화가 막 저장한 표지·임시 파일을 지우지 않는다(기본 유예 10분).
+        val store = CoverStore(dir)
+        store.save("https://a.example/new.jpg", jpegLike)
+        File(dir, "half.jpg.tmp").writeBytes(jpegLike)
+        store.prune(emptyList())
+        assertTrue(store.has("https://a.example/new.jpg"))
+        assertTrue(File(dir, "half.jpg.tmp").exists())
+        // 오래된 것은 지운다
+        store.fileFor("https://a.example/new.jpg").setLastModified(1000L)
+        File(dir, "half.jpg.tmp").setLastModified(1000L)
+        store.prune(emptyList())
+        assertFalse(store.has("https://a.example/new.jpg"))
+        assertFalse(File(dir, "half.jpg.tmp").exists())
+    }
+
+    @Test
+    fun stampChangesWhenACoverFileAppearsOrChanges() {
+        val store = CoverStore(dir)
+        val urls = listOf("https://a.example/1.jpg", "https://a.example/2.jpg")
+        val empty = store.stamp(urls)
+        store.save(urls[0], jpegLike)
+        val one = store.stamp(urls)
+        assertFalse(empty == one)
+        store.save(urls[0], jpegLike + byteArrayOf(1))
+        assertFalse(one == store.stamp(urls)) // 같은 주소의 파일이 바뀌어도 달라진다
+        assertEquals(store.stamp(urls), store.stamp(urls))
     }
 
     @Test
     fun storeEnforcesTheTotalSizeCapDroppingOldestFirst() {
-        val store = CoverStore(dir, maxTotalBytes = 2500)
+        val store = CoverStore(dir, maxTotalBytes = 2500, pruneGraceMillis = 0)
         listOf("1", "2", "3").forEachIndexed { i, id ->
             store.save("https://a.example/$id.jpg", jpegLike)
             store.fileFor("https://a.example/$id.jpg").setLastModified(1000L + i)

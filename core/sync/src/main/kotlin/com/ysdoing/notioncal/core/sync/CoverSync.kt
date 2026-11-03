@@ -1,15 +1,29 @@
+// minSdk 31이라 플랫폼 ExifInterface(스트림 생성자)가 이미 보안 수정을 포함한다. androidx 버전은 그 이전 API를 위한 것이라 새 라이브러리를 들이지 않는다.
+@file:Suppress("ExifInterface")
+
 package com.ysdoing.notioncal.core.sync
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Matrix
+import android.media.ExifInterface
+import androidx.core.graphics.createBitmap
 import com.ysdoing.notioncal.core.data.view.CoverStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.Proxy
@@ -94,7 +108,10 @@ fun coverHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .followRedirects(false)
     .build()
 
-/** 받은 이미지를 [maxWidth]×[maxHeight] 안으로 줄여(키우지 않는다) JPEG로 다시 쓴다. 이미지가 아니거나 너무 크면 null. */
+/**
+ * 받은 이미지를 [maxWidth]×[maxHeight] 안으로 줄여(키우지 않는다) JPEG로 다시 쓴다. 이미지가 아니거나 너무 크면 null.
+ * JPEG로 다시 쓰면 EXIF 방향 태그가 사라지므로 **방향을 먼저 바로잡고**(휴대폰 사진 표지가 눕지 않게), 투명한 PNG는 **흰 바탕**에 올려 쓴다(검게 나오지 않게).
+ */
 object CoverScaler {
     private const val MAX_SOURCE_SIDE = 8000
 
@@ -104,15 +121,44 @@ object CoverScaler {
         val (w, h) = bounds.outWidth to bounds.outHeight
         if (w <= 0 || h <= 0 || w > MAX_SOURCE_SIDE || h > MAX_SOURCE_SIDE) return null
         val decode = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(w, h, maxWidth, maxHeight) }
-        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decode) ?: return null
-        val (tw, th) = fitWithin(bitmap.width, bitmap.height, maxWidth, maxHeight)
-        val scaled = if (tw == bitmap.width && th == bitmap.height) bitmap else Bitmap.createScaledBitmap(bitmap, tw, th, true)
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decode) ?: return null
+        val upright = rotated(decoded, exifRotation(bytes))
+        val (tw, th) = fitWithin(upright.width, upright.height, maxWidth, maxHeight)
+        val sized = if (tw == upright.width && th == upright.height) upright else Bitmap.createScaledBitmap(upright, tw, th, true)
+        val flat = onWhite(sized)
         return try {
-            ByteArrayOutputStream().also { scaled.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
+            ByteArrayOutputStream().also { flat.compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
         } finally {
-            if (scaled !== bitmap) scaled.recycle()
-            bitmap.recycle()
+            listOf(flat, sized, upright, decoded).distinct().forEach { it.recycle() }
         }
+    }
+
+    /** EXIF 방향 태그가 요구하는 회전 각도(0·90·180·270). 읽을 수 없으면 0. */
+    internal fun exifRotation(bytes: ByteArray): Int = try {
+        when (ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270
+            else -> 0
+        }
+    } catch (e: IOException) {
+        0
+    }
+
+    private fun rotated(bitmap: Bitmap, degrees: Int): Bitmap {
+        if (degrees == 0) return bitmap
+        val matrix = Matrix().apply { postRotate(degrees.toFloat()) }
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun onWhite(bitmap: Bitmap): Bitmap {
+        if (!bitmap.hasAlpha()) return bitmap
+        val flat = createBitmap(bitmap.width, bitmap.height)
+        Canvas(flat).apply {
+            drawColor(Color.WHITE)
+            drawBitmap(bitmap, 0f, 0f, null)
+        }
+        return flat
     }
 }
 
@@ -132,32 +178,49 @@ internal fun sampleSizeFor(width: Int, height: Int, maxWidth: Int, maxHeight: In
 
 /**
  * 보기 동기화가 부르는 표지 처리. 받은 파일이 없는 주소만 받고(노션에 올린 파일은 주소가 새로 서명돼도 같은 파일이라 다시 받지 않는다),
- * 표지는 꾸밈이라 어떤 실패도 보기 동기화를 실패로 만들지 않는다.
+ * 표지는 꾸밈이라 어떤 실패도 보기 동기화를 실패로 만들지 않는다. 받지 못한 주소는 [CoverStore.FAILURE_RETRY_MILLIS] 동안 다시 두드리지 않는다
+ * (없는 주소·막힌 주소를 동기화마다 기다리지 않게). 동시에 [PARALLEL]개까지 받는다.
  */
 @Singleton
 class CoverSync @Inject constructor(
     private val store: CoverStore,
     private val downloader: CoverDownload,
 ) {
-    suspend fun fetch(urls: Collection<String>) {
-        for (url in urls.filter { it.isNotEmpty() }.distinct()) {
-            if (store.has(url)) continue
-            try {
-                downloader.download(url)?.let { store.save(url, it) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // 파일 쓰기 실패 등: 이 표지만 건너뛴다.
-            }
+    /** 새로 받아 저장한 표지가 있으면 true(위젯을 다시 그려야 한다). */
+    suspend fun fetch(urls: Collection<String>): Boolean = coroutineScope {
+        val todo = urls.filter { it.isNotEmpty() }.distinct().filter { !store.has(it) && !store.failedRecently(it) }
+        val gate = Semaphore(PARALLEL)
+        todo.map { url -> async { gate.withPermit { fetchOne(url) } } }.awaitAll().any { it }
+    }
+
+    private suspend fun fetchOne(url: String): Boolean {
+        val saved = try {
+            downloader.download(url)?.let { store.save(url, it) } != null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false // 파일 쓰기 실패 등: 이 표지만 건너뛴다.
         }
+        if (!saved) markFailed(url)
+        return saved
+    }
+
+    private fun markFailed(url: String) = try {
+        store.markFailed(url)
+    } catch (e: IOException) {
+        // 표시를 못 써도 다음 동기화에서 다시 시도할 뿐이다.
     }
 
     /** 등록한 모든 보기의 표지 주소([keepUrls])에 없는 파일을 정리한다. 한 보기만 보고 지우면 다른 보기의 표지가 사라지므로 전체 동기화 끝에서만 부른다. */
     fun prune(keepUrls: Collection<String>) {
         try {
             store.prune(keepUrls)
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             // 정리는 다음 동기화에서 다시 한다.
         }
+    }
+
+    companion object {
+        private const val PARALLEL = 3
     }
 }

@@ -27,8 +27,8 @@ internal object CoverBudget {
     /** 비트맵 한 장 상한(바이트). */
     const val MAX_BITMAP_BYTES = 200_000
 
-    /** 위젯 하나가 한꺼번에 그리는 표지 수 상한. */
-    const val MAX_COVERS = 6
+    /** 위젯 하나가 한꺼번에 그리는 표지 수 상한. 동기화가 한 보기에서 받는 수와 같은 상수다. */
+    const val MAX_COVERS = CoverStore.MAX_COVERS_PER_VIEW
 }
 
 /** 위젯이 그릴 표지 묶음(페이지 ID → 비트맵). 비트맵을 다루는 코드는 이 클래스 안에만 있다. */

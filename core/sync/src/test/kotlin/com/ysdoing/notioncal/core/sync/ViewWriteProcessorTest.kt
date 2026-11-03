@@ -106,11 +106,16 @@ class ViewWriteProcessorTest {
         )
     }
 
+    private val coverDir = java.nio.file.Files.createTempDirectory("covers").toFile()
+
     @After
-    fun tearDown() = db.close()
+    fun tearDown() {
+        db.close()
+        coverDir.deleteRecursively()
+    }
 
     private fun processor(): ViewWriteProcessor {
-        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(java.nio.file.Files.createTempDirectory("covers").toFile()), CoverDownload { null }))
+        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(coverDir), CoverDownload { null }))
         return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
     }
 

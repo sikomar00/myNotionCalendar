@@ -6,6 +6,7 @@ import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.view.CoverStore
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewChoice
@@ -22,13 +23,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 
-/** 한 보기에서 표지를 받는 책 수 상한(책 위젯은 6권까지 그린다). */
-private const val COVER_LIMIT = 12
+/** 표지 내려받기에 쓸 수 있는 시간. 넘으면 그만두고 나머지는 다음 동기화에서 받는다. */
+private const val COVER_PHASE_MILLIS = 45_000L
 
 /** 노션 오류가 아닌 예상 밖 예외(직렬화·Room 등)로 한 보기가 실패했을 때 남기는 값. */
 private const val ERROR_UNEXPECTED = "Unexpected"
@@ -54,9 +56,18 @@ class ViewSync @Inject constructor(
             // 연결·토큰·속도 제한·서버 장애는 다른 보기도 똑같이 실패하므로 더 부르지 않는다.
             if (error != null && error.isSharedAcrossViews()) break
         }
+        if (changed) widgets.requestUpdate()
+        // 표지는 위젯을 먼저 갱신한 뒤에 받는다(데이터가 바뀌면 즉시 갱신, 느린 이미지 서버가 동기화를 붙잡지 않게). 새로 받았으면 한 번 더 갱신한다.
+        val saved = fetchCovers(dao.all().map { it.viewId })
         // 표지 파일은 등록한 모든 보기의 주소를 모아 정리한다(보기 하나만 보고 지우면 다른 보기의 표지가 사라진다).
         covers.prune(dao.coverUrls())
-        if (changed) widgets.requestUpdate()
+        if (saved) widgets.requestUpdate()
+    }
+
+    /** 저장된 행의 앞쪽 표지를 받는다. 시간이 [COVER_PHASE_MILLIS]를 넘으면 그만두고 나머지는 다음 동기화에 맡긴다. 새로 받은 표지가 있으면 true. */
+    private suspend fun fetchCovers(viewIds: Collection<String>): Boolean {
+        val urls = viewIds.flatMap { dao.coverUrls(it, CoverStore.MAX_COVERS_PER_VIEW) }
+        return withTimeoutOrNull(COVER_PHASE_MILLIS) { covers.fetch(urls) } ?: false
     }
 
     /** 방금 등록한 보기 하나만 받는다(등록 화면). 다른 보기를 기다리게 하지 않는다. */
@@ -64,6 +75,7 @@ class ViewSync @Inject constructor(
         val registered = dao.all().firstOrNull { it.viewId == viewId } ?: return
         syncOne(registered, HashMap())
         widgets.requestUpdate()
+        if (fetchCovers(listOf(viewId))) widgets.requestUpdate()
     }
 
     /** 보기 하나를 받아 스냅샷을 바꾼다. 실패하면 이전 스냅샷을 두고 오류만 남기며, 노션 오류는 돌려준다(성공이거나 예상 밖 예외면 null). */
@@ -73,7 +85,6 @@ class ViewSync @Inject constructor(
         val fetchedAt = clock.millis() // 받는 도중에 위젯에서 바꾼 보기는 replace가 덮어쓰지 않는다
         val (meta, rows) = snapshot(registered, schemas)
         dao.replace(meta, rows, fetchedAt)
-        covers.fetch(rows.take(COVER_LIMIT).map { it.coverUrl }) // 위젯이 그리는 앞쪽 책만 받는다(실패해도 보기 동기화는 성공)
         null
     } catch (e: NotionException) {
         dao.markError(registered.viewId, e.error.storedName())

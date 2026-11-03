@@ -56,7 +56,7 @@ internal fun tableColumnCount(width: Dp, columns: Int): Int =
     ((width - PADDING_H * 2) / COLUMN_MIN).toInt().coerceIn(1, maxOf(columns, 1))
 
 internal val COLUMN_MIN = 72.dp
-private val PADDING_H = 10.dp
+internal val PADDING_H = 10.dp
 internal val VIEW_PADDING_V = 4.dp
 private val TABLE_MIN_WIDTH = 220.dp
 private const val STALE_MILLIS = 12 * 60 * 60 * 1000L
@@ -199,23 +199,23 @@ private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette
 
 /** 부제는 3줄 높이쯤부터, 새로고침 버튼은 4칸 폭쯤부터 둔다(2×2에서 머리와 한 줄이 함께 보여야 한다). */
 private val SUBTITLE_MIN_HEIGHT = 140.dp
-private val REFRESH_MIN_WIDTH = 200.dp
+internal val REFRESH_MIN_WIDTH = 200.dp
 
 /** 고르지 않았거나 등록이 지워진 보기: 글자로 알리고, 누르면 위젯 설정에서 다시 고른다. */
 @Composable
-private fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
+internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette, tag: String = "viewNote") {
     val context = LocalContext.current
     Text(
         context.getString(message),
         modifier = GlanceModifier.fillMaxWidth().tile(palette).padding(12.dp)
-            .clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))).semantics { testTag = "viewNote" },
+            .clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))).semantics { testTag = tag },
         style = TextStyle(color = palette.text, fontSize = (12f * m.spFactor).sp),
     )
 }
 
 @Composable
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
-    ViewStatusLine(board, state, m, palette)
+    ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
     if (board.rows.isEmpty()) {
         ViewEmpty(board, m, palette)
         return
@@ -240,16 +240,16 @@ private fun ViewEmpty(board: ViewBoard, m: ViewMetrics, palette: WidgetPalette) 
     )
 }
 
-/** 정상이면 나오지 않는다. 노션에서 보기를 찾을 수 없을 때만 눌러서 설정을 연다(다른 오류는 머리를 눌러 새로고침). */
+/** 정상이면 나오지 않는다. 노션에서 보기를 찾을 수 없을 때만 눌러서 설정을 연다(다른 오류는 머리를 눌러 새로고침). 책 위젯도 함께 쓴다. */
 @Composable
-private fun ViewStatusLine(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette) {
+internal fun ViewStatusLine(board: ViewBoard, appWidgetId: Int, nowMillis: Long, m: ViewMetrics, palette: WidgetPalette, tag: String = "viewStatus") {
     val context = LocalContext.current
-    val text = viewStatusText(context, board, state.nowMillis) ?: return
+    val text = viewStatusText(context, board, nowMillis) ?: return
     val base = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
-    val modifier = if (board.notFound) base.clickable(actionStartActivity(viewConfigIntent(context, state.config.appWidgetId))) else base
+    val modifier = if (board.notFound) base.clickable(actionStartActivity(viewConfigIntent(context, appWidgetId))) else base
     WidgetStatusLine(
         text, error = board.notFound || board.lastError != null, palette = palette, fontSp = m.subSp * m.spFactor,
-        modifier = modifier.semantics { testTag = "viewStatus" },
+        modifier = modifier.semantics { testTag = tag },
     )
 }
 
