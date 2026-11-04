@@ -39,5 +39,9 @@ object SyncModule {
     fun provideSyncScheduleInfo(scheduler: SyncScheduler): SyncScheduleInfo = scheduler
 
     @Provides
-    fun provideOutboxRequester(scheduler: SyncScheduler): OutboxRequester = OutboxRequester { scheduler.requestOutbox() }
+    fun provideOutboxRequester(scheduler: SyncScheduler): OutboxRequester = object : OutboxRequester {
+        override fun request() = scheduler.requestOutbox()
+
+        override fun requestAfter(delayMs: Long) = scheduler.requestOutbox(delayMs)
+    }
 }

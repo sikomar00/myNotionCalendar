@@ -501,4 +501,25 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v17 → v18(Phase 11c): 전송 지연(sendAfter)·보기 필터 원본·숫자 ± 단계값·프리셋 열은 기본값이고, 대기 중인 쓰기는 지연 없이 그대로 나간다. */
+    @Test
+    fun v17ToV18AddsSendAfterFilterJsonNumberStepAndPresets() = runTest {
+        helper.createDatabase(17).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts) VALUES ('v1', 'p1', 'ds1', 'dn', 'checkbox', 'true', 9, 1)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1')")
+        }
+        helper.runMigrationsAndValidate(18).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val write = db.viewDao().firstDueWrite(now = 10)!!
+            assertEquals(listOf("true", 1, 0L), listOf(write.value, write.attempts, write.sendAfter)) // 옛 쓰기는 바로 보낼 수 있다
+            assertEquals("", db.viewDao().snapshot("v1")!!.filterJson)
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf(1.0, ""), listOf(widget.numberStep, widget.presetsJson))
+        } finally {
+            db.close()
+        }
+    }
 }

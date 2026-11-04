@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data.view
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.db.EventEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
@@ -66,6 +67,22 @@ class ViewWriterTest {
     fun tearDown() = db.close()
 
     private fun writer() = ViewWriter(db.viewDao(), db.eventDao(), { widgetUpdates++ }, { requests++ }, clock)
+
+    /** 지연 요청을 따로 기록하는 요청기(request()는 즉시, requestAfter()는 지연). */
+    private val delays = mutableListOf<Long>()
+    private fun delayedWriter(at: Clock = clock) = ViewWriter(
+        db.viewDao(), db.eventDao(), { widgetUpdates++ },
+        object : OutboxRequester {
+            override fun request() {
+                requests++
+            }
+
+            override fun requestAfter(delayMs: Long) {
+                delays += delayMs
+            }
+        },
+        at,
+    )
 
     private suspend fun cells() = db.viewDao().row("v1", "p1")!!.cells.split(sep)
 
@@ -216,6 +233,44 @@ class ViewWriterTest {
         assertFalse(writer().create("v1", "장보기", null))
         assertEquals(0, db.viewDao().pendingWriteCount()) // 등록을 지운 보기의 바꿈은 노션에 가지 않는다
         assertEquals(0, requests)
+    }
+
+    // --- Phase 11c 전송 지연(IX-03·05): 즉시 동작은 sendAfter를 뒤로 두고 쌓는다. 연타는 같은 쓰기를 덮으며 시각을 뒤로 민다.
+
+    @Test
+    fun anInstantActionIsQueuedWithASendAfterAndAWakeUpAtThatTime() = runTest {
+        assertTrue(delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS))
+        assertEquals(clock.millis() + 4_000, db.viewDao().firstWrite()!!.sendAfter)
+        assertEquals(listOf(4_000L), delays) // 그 시각에 처리기를 깨워 달라는 요청
+        assertEquals(0, requests) // 즉시 보내 달라는 요청은 하지 않는다
+        assertEquals(1, widgetUpdates) // 위젯은 바로 다시 그린다(행은 이미 바뀌었다)
+    }
+
+    @Test
+    fun aWriteWithoutADelayKeepsSendAfterZeroAndRequestsAtOnce() = runTest {
+        delayedWriter().toggle("v1", "p1", "dn")
+        assertEquals(0L, db.viewDao().firstWrite()!!.sendAfter)
+        assertEquals(1, requests)
+        assertEquals(emptyList<Long>(), delays)
+    }
+
+    @Test
+    fun tenQuickTapsAreOneWriteWhoseSendAfterMovesBackEachTime() = runTest {
+        repeat(10) { i ->
+            delayedWriter(Clock.offset(clock, java.time.Duration.ofMillis(i * 100L))).toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        }
+        assertEquals(1, db.viewDao().pendingWriteCount()) // 10연타 → 쓰기 1건(요청 1회)
+        assertEquals(clock.millis() + 900 + 4_000, db.viewDao().firstWrite()!!.sendAfter)
+        // 10번 뒤집으면 처음 값(false)으로 돌아오고, 기준값은 처음 노션 값(false) 그대로다.
+        assertEquals(listOf("false", "false"), db.viewDao().firstWrite()!!.let { listOf(it.value, it.baseValue) })
+    }
+
+    @Test
+    fun theEarliestFutureSendAfterIsKnownSoTheQueueCanWakeAgain() = runTest {
+        delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = 4_000)
+        delayedWriter().cycle("v1", "p1", "st", sendDelayMs = 9_000)
+        assertEquals(clock.millis() + 4_000, db.viewDao().earliestSendAfter(clock.millis()))
+        assertNull(db.viewDao().earliestSendAfter(clock.millis() + 10_000)) // 모두 지났으면 없다
     }
 
     // --- Phase 11b ED-05 휴지통: 모든 보기에서 행을 바로 지우고 큐에 한 건을 쌓는다(영구 삭제가 아니라 `in_trash`).

@@ -41,6 +41,10 @@ data class WidgetConfigEntity(
     val viewId: String? = null,
     /** v17(Phase 11a): 보드 위젯이 보여 주는 첫 열의 위치(‹ ›로 넘긴다). 다른 위젯은 쓰지 않는다. */
     @ColumnInfo(defaultValue = "0") val viewPage: Int = 0,
+    /** v18(Phase 11c IX-03): 숫자 ± 한 번에 더하고 빼는 값. */
+    @ColumnInfo(defaultValue = "1.0") val numberStep: Double = 1.0,
+    /** v18(Phase 11c AD-05): 프리셋 목록(JSON, 위젯당 최대 5개). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val presetsJson: String = "",
 )
 
 @Dao

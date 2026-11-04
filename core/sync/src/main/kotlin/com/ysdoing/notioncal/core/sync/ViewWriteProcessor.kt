@@ -70,7 +70,7 @@ class ViewWriteProcessor @Inject constructor(
         var dropped = 0
         var retryError: NotionError? = null
         while (true) {
-            val write = dao.firstWrite() ?: break
+            val write = dao.firstDueWrite(clock.millis()) ?: break // 지연 중인 쓰기(sendAfter가 아직 안 됨)는 남겨 둔다
             val result = try {
                 trySend(write, schemas)
             } catch (e: NotionException) {

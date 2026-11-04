@@ -142,14 +142,21 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /** 아웃박스 전송 요청(EventWriter가 쓰기 직후 부른다). 실행 중이면 뒤에 이어 붙여 새로 쌓인 작업도 보낸다. */
-    fun requestOutbox() {
-        val request = OneTimeWorkRequestBuilder<OutboxWorker>()
+    /**
+     * 아웃박스 전송 요청(EventWriter가 쓰기 직후 부른다). 실행 중이면 뒤에 이어 붙여 새로 쌓인 작업도 보낸다.
+     * [delayMs]가 있으면(Phase 11c 지연 쓰기의 전송 시각) 별도 이름의 작업을 그만큼 미뤄 건다. 같은 이름이라 연타하면 마지막 시각 하나만 남고,
+     * 즉시 요청이 지연 뒤에 줄 서지 않는다. 지연이 늦어져도 쓰기는 큐에 남아 다음 실행(앱 열기·주기 동기화) 때 나간다.
+     */
+    fun requestOutbox(delayMs: Long = 0) {
+        val builder = OneTimeWorkRequestBuilder<OutboxWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
             .addTag(TAG)
-            .build()
-        workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        if (delayMs > 0) {
+            workManager.enqueueUniqueWork(OUTBOX_DELAYED_NAME, ExistingWorkPolicy.REPLACE, builder.setInitialDelay(delayMs, TimeUnit.MILLISECONDS).build())
+        } else {
+            workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
+        }
     }
 
     /** S25-04: 예약된 주기 작업의 다음 실행 시각. 삼성 절전 상태에 따라 실제 실행은 늦어질 수 있다. */
@@ -166,6 +173,7 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
     private companion object {
         const val UNIQUE_NAME = "notion-sync"
         const val OUTBOX_NAME = "notion-outbox"
+        const val OUTBOX_DELAYED_NAME = "notion-outbox-delayed"
         const val PERIODIC_NAME = "notion-sync-periodic"
         const val TAG = "notion-sync"
     }

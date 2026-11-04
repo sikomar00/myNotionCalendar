@@ -45,6 +45,12 @@ const val SYNC_LOG_VIEWS = "VIEW_SYNC"
 fun interface OutboxRequester {
     fun request()
 
+    /**
+     * [delayMs] 뒤에 한 번 보내 달라고 요청한다(Phase 11c: 지연 중인 쓰기의 전송 시각에 처리기를 깨운다). 지연을 모르는 구현은 바로 요청한다 —
+     * 지연 중인 쓰기는 처리기가 보내지 않으므로 해롭지 않다.
+     */
+    fun requestAfter(delayMs: Long) = request()
+
     companion object {
         val None = OutboxRequester { }
     }

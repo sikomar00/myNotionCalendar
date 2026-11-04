@@ -40,6 +40,10 @@ data class WidgetConfig(
     val viewId: String? = null,
     /** 보드 위젯의 열 넘김 위치(Phase 11a). */
     val viewPage: Int = 0,
+    /** 숫자 ± 한 번에 더하고 빼는 값(Phase 11c IX-03). */
+    val numberStep: Double = 1.0,
+    /** 프리셋 목록 JSON(Phase 11c AD-05, 위젯당 최대 5개). 해석은 프리셋 모델이 한다. */
+    val presetsJson: String = "",
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -63,6 +67,8 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     showWeather = showWeather,
     viewId = viewId,
     viewPage = viewPage.coerceAtLeast(0),
+    numberStep = numberStep.takeIf { it.isFinite() && it > 0 } ?: 1.0,
+    presetsJson = presetsJson,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -81,6 +87,8 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     showWeather = showWeather,
     viewId = viewId,
     viewPage = viewPage,
+    numberStep = numberStep,
+    presetsJson = presetsJson,
 )
 
 @Singleton

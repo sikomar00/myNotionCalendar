@@ -144,9 +144,9 @@ class ViewWriteProcessorTest {
         coverDir.deleteRecursively()
     }
 
-    private fun processor(): ViewWriteProcessor {
-        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(coverDir), CoverDownload { null }))
-        return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
+    private fun processor(at: Clock = clock): ViewWriteProcessor {
+        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, at, CoverSync(CoverStore(coverDir), CoverDownload { null }))
+        return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, at, Dispatchers.Unconfined)
     }
 
     private fun writer() = ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock)
@@ -481,5 +481,33 @@ class ViewWriteProcessorTest {
         val outcome = processor().process()
         assertEquals(1, outcome.dropped)
         assertEquals(0, trashed.size)
+    }
+
+    // --- Phase 11c 전송 지연(sendAfter): 지연 중인 쓰기는 안 나가고, 시각이 되면 나간다. 안 나가는 쓰기가 나가는 쓰기를 막지 않는다.
+
+    @Test
+    fun aWriteStillInItsDelayIsNotSentAndStaysQueued() = runTest {
+        writer().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        val outcome = processor().process()
+        assertEquals(listOf(0, 0, 1), listOf(outcome.sent, outcome.dropped, outcome.remaining))
+        assertEquals(0, sent.size)
+        assertEquals(0, pageLookups) // 노션 값을 읽지도 않는다
+    }
+
+    @Test
+    fun theSameWriteIsSentOnceItsTimeHasCome() = runTest {
+        writer().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        val later = Clock.offset(clock, java.time.Duration.ofMillis(ViewWriter.UNDO_WINDOW_MS))
+        assertEquals(1, processor(later).process().sent)
+        assertEquals(listOf("p1" to """{"Done":{"checkbox":true}}"""), sent.map { it.first to it.second.toString() })
+    }
+
+    @Test
+    fun aDueWriteIsNotBlockedByAnOlderWriteThatIsStillDelayed() = runTest {
+        writer().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS) // 먼저 쌓았지만 아직 지연 중
+        writer().cycle("v1", "p1", "st") // 나중에 쌓았지만 바로 보낼 수 있다
+        val outcome = processor().process()
+        assertEquals(listOf(1, 1), listOf(outcome.sent, outcome.remaining))
+        assertEquals(listOf("p1" to """{"Status":{"status":{"id":"o2"}}}"""), sent.map { it.first to it.second.toString() })
     }
 }

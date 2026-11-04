@@ -38,32 +38,40 @@ class ViewWriter @Inject constructor(
     private val requester: OutboxRequester,
     private val clock: Clock,
 ) {
-    /** 체크박스를 뒤집는다. */
-    suspend fun toggle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "checkbox") { _, current, _ ->
-        JsonPrimitive((current as? JsonPrimitive)?.booleanOrNull != true)
-    }
+    /**
+     * 체크박스를 뒤집는다. [sendDelayMs]가 있으면(위젯의 즉시 동작은 [UNDO_WINDOW_MS]) 그만큼 전송을 미뤄 연타를 한 번의 전송으로 합치고
+     * 그 사이 되돌릴 수 있게 한다. 0이면 바로 보낸다(시트 저장 등).
+     */
+    suspend fun toggle(viewId: String, pageId: String, propId: String, sendDelayMs: Long = 0): Boolean =
+        change(viewId, pageId, propId, "checkbox", sendDelayMs = sendDelayMs) { _, current, _ ->
+            JsonPrimitive((current as? JsonPrimitive)?.booleanOrNull != true)
+        }
 
-    /** select·status를 다음 선택지로 바꾼다(끝이면 처음). */
-    suspend fun cycle(viewId: String, pageId: String, propId: String): Boolean = change(viewId, pageId, propId, "select", "status") { column, current, _ ->
-        column.nextOption((current as? JsonPrimitive)?.contentOrNull)?.let { JsonPrimitive(it.id) }
-    }
+    /** select·status를 다음 선택지로 바꾼다(끝이면 처음). [sendDelayMs]는 [toggle]과 같다. */
+    suspend fun cycle(viewId: String, pageId: String, propId: String, sendDelayMs: Long = 0): Boolean =
+        change(viewId, pageId, propId, "select", "status", sendDelayMs = sendDelayMs) { column, current, _ ->
+            column.nextOption((current as? JsonPrimitive)?.contentOrNull)?.let { JsonPrimitive(it.id) }
+        }
 
     /**
      * 속성 하나에 [value]를 쓴다(Phase 10-5, [ViewColumn.WRITABLE_TYPES] 전부). 값의 모양은 [ViewColumn.display]에 적혀 있고,
      * 열 종류에 맞지 않으면(또는 없는 열·행이면) 아무것도 하지 않고 false다. 바꾸기 전 값이 큐의 기준값이 된다(전송 전 충돌 확인).
      */
-    suspend fun set(viewId: String, pageId: String, propId: String, value: JsonElement): Boolean =
-        change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray()) { column, _, _ -> blankToNull(column, value).takeIf { column.accepts(it) } }
+    suspend fun set(viewId: String, pageId: String, propId: String, value: JsonElement, sendDelayMs: Long = 0): Boolean =
+        change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray(), sendDelayMs = sendDelayMs) { column, _, _ ->
+            blankToNull(column, value).takeIf { column.accepts(it) }
+        }
 
     /** URL·이메일·전화의 공백 글자는 비우기다(노션이 빈 글자를 거부하고, 로컬과 노션의 비어 있음이 어긋나지 않게). */
     private fun blankToNull(column: ViewColumn, value: JsonElement): JsonElement =
         if (column.type in BLANK_IS_EMPTY && value is JsonPrimitive && value.isString && value.content.isBlank()) JsonNull else value
 
     /** 숫자에 [delta]를 더한다(값이 없으면 0에서 시작). 0.1을 여러 번 더해도 0.30000000000000004가 되지 않게 10진수로 더한다. */
-    suspend fun add(viewId: String, pageId: String, propId: String, delta: Double): Boolean = change(viewId, pageId, propId, "number") { _, current, _ ->
-        val base = current.number() ?: 0.0
-        JsonPrimitive(BigDecimal.valueOf(base).add(BigDecimal.valueOf(delta)).toDouble())
-    }
+    suspend fun add(viewId: String, pageId: String, propId: String, delta: Double, sendDelayMs: Long = 0): Boolean =
+        change(viewId, pageId, propId, "number", sendDelayMs = sendDelayMs) { _, current, _ ->
+            val base = current.number() ?: 0.0
+            JsonPrimitive(BigDecimal.valueOf(base).add(BigDecimal.valueOf(delta)).toDouble())
+        }
 
     /**
      * 책 위젯 ±쪽: 읽은 쪽 속성(보기에서 숨겨져 있어도 된다)에 [delta]쪽을 더한다. 0 아래로, 전체 쪽(알면)을 넘어 가지 않는다.
@@ -100,7 +108,7 @@ class ViewWriter @Inject constructor(
      * shortcut: 노션이 만들었는데 응답이 끊기면(시간 초과·연결 끊김·5xx) 처리기가 다시 보내 같은 항목이 둘 생길 수 있다(일정 아웃박스의
      * '이미 만들었나' 확인이 없다), 문제가 되면 만든 시각과 제목으로 찾아본다.
      */
-    suspend fun create(viewId: String, title: String, date: LocalDate?): Boolean {
+    suspend fun create(viewId: String, title: String, date: LocalDate?, sendDelayMs: Long = 0): Boolean {
         val name = title.trim()
         if (name.isEmpty()) return false
         val snapshot = dao.snapshot(viewId) ?: return false
@@ -111,10 +119,10 @@ class ViewWriter @Inject constructor(
         val queued = dao.enqueueCreate(
             ViewWriteEntity(
                 viewId = viewId, pageId = "new-${UUID.randomUUID()}", dataSourceId = snapshot.dataSourceId, propId = titleColumn.id,
-                propType = VIEW_WRITE_CREATE, value = ViewJson.encodeCreate(spec), createdAt = clock.millis(),
+                propType = VIEW_WRITE_CREATE, value = ViewJson.encodeCreate(spec), createdAt = clock.millis(), sendAfter = sendAfterOf(sendDelayMs),
             ),
         )
-        if (queued) requester.request()
+        if (queued) wake(sendDelayMs)
         return queued
     }
 
@@ -146,6 +154,7 @@ class ViewWriter @Inject constructor(
         pageId: String,
         propId: String,
         vararg types: String,
+        sendDelayMs: Long = 0,
         after: (ViewRowEntity, Map<String, JsonElement>) -> ViewRowEntity = { row, _ -> row },
         next: (ViewColumn, JsonElement?, Map<String, JsonElement>) -> JsonElement?,
     ): Boolean {
@@ -158,16 +167,26 @@ class ViewWriter @Inject constructor(
             if (at in cells.indices) cells[at] = column.display(value)
             val write = ViewWriteEntity(
                 viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = propId, propType = column.type,
-                value = ViewJson.valueText(value), createdAt = clock.millis(), baseValue = typed[propId]?.toString(),
+                value = ViewJson.valueText(value), createdAt = clock.millis(), baseValue = typed[propId]?.toString(), sendAfter = sendAfterOf(sendDelayMs),
             )
             val changedTyped = typed + (propId to value)
             after(row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(changedTyped)), changedTyped) to write
         }
         if (changed) {
             widgets.requestUpdate()
-            requester.request()
+            wake(sendDelayMs)
         }
         return changed
+    }
+
+    private fun sendAfterOf(sendDelayMs: Long): Long = if (sendDelayMs > 0) clock.millis() + sendDelayMs else 0
+
+    /** 바로 보낼 수 있으면 처리기를 깨우고, 지연이 있으면 그 시각에 깨우도록 요청한다(그 전에는 처리기가 이 쓰기를 건너뛴다). */
+    private fun wake(sendDelayMs: Long) = if (sendDelayMs > 0) requester.requestAfter(sendDelayMs) else requester.request()
+
+    companion object {
+        /** 위젯 즉시 동작의 전송 지연(IX-05). 이 동안 연타는 한 번의 전송으로 합쳐지고(IX-03) 되돌릴 수 있다. */
+        const val UNDO_WINDOW_MS = 4_000L
     }
 }
 

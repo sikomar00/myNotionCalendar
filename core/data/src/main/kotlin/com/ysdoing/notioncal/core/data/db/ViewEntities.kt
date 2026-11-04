@@ -64,6 +64,8 @@ data class ViewSnapshotEntity(
     @ColumnInfo(defaultValue = "") val viewConfig: String = "",
     /** v17: 보기의 행을 상한(100) 안에서 다 받았는가. false면 노션에 행이 더 있다('N+ 더 보기'). */
     @ColumnInfo(defaultValue = "1") val rowsComplete: Boolean = true,
+    /** v18(Phase 11c): 노션 보기 필터(보기 필터와 빠른 필터를 합친 JSON). 폰에서 항목이 필터에서 빠지는지 판정하고(IX-06) 새 항목의 값을 채우는(AD-01) 데 쓴다. 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val filterJson: String = "",
 )
 
 /** 보기의 한 행(VW-02로 글자가 된 값). [cells]는 [VIEW_CELL_SEPARATOR]로 이은 열 순서의 값. */
@@ -101,6 +103,11 @@ data class ViewWriteEntity(
     val lastError: String? = null,
     /** v16(SY-05): 바꾸기 전 노션 값(JSON 원시값, 모르면 null). 보내기 직전에 노션 값과 비교해 충돌을 가린다. */
     val baseValue: String? = null,
+    /**
+     * v18(Phase 11c): 이 시각(epoch ms) 전에는 보내지 않는다. 위젯의 즉시 동작은 약 4초 뒤로 두어 연타를 한 번의 전송으로 합치고(IX-03)
+     * 그 사이 되돌릴 수 있게 한다(IX-05). 0이면 바로 보낼 수 있다.
+     */
+    @ColumnInfo(defaultValue = "0") val sendAfter: Long = 0,
 )
 
 /**
@@ -196,6 +203,14 @@ abstract class ViewDao {
 
     @Query("SELECT * FROM view_writes ORDER BY id LIMIT 1")
     abstract suspend fun firstWrite(): ViewWriteEntity?
+
+    /** 보낼 때가 된([ViewWriteEntity.sendAfter] <= [now]) 쓰기 중 가장 먼저 쌓은 것. 아직 지연 중인 앞선 쓰기가 뒤의 쓰기를 막지 않는다. */
+    @Query("SELECT * FROM view_writes WHERE sendAfter <= :now ORDER BY id LIMIT 1")
+    abstract suspend fun firstDueWrite(now: Long): ViewWriteEntity?
+
+    /** 아직 지연 중인 쓰기 중 가장 이른 전송 시각. 없으면 null(처리기를 다시 깨울 필요가 없다). */
+    @Query("SELECT MIN(sendAfter) FROM view_writes WHERE sendAfter > :now")
+    abstract suspend fun earliestSendAfter(now: Long): Long?
 
     @Query("DELETE FROM view_writes WHERE id = :id")
     abstract suspend fun deleteWriteById(id: Long)
