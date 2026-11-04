@@ -40,7 +40,19 @@ data class ViewBoard(
     val rowsComplete: Boolean = true,
     /** 지연이 걸린 쓰기들의 전송 시각(Phase 11c). 지금보다 뒤인 것이 '되돌릴 수 있는' 쓰기다([undoableAt]). */
     val pendingSendAfter: List<Long> = emptyList(),
+    /** 노션 보기 필터 JSON(Phase 11c). 없으면 빈 글자. */
+    val filterJson: String = "",
+    /** 바꾸고 아직 노션에 보내지 않은 행 ID. 이 행이 필터에서 벗어나면 '빠지는 중'이다([isLeaving]). */
+    val pendingPageIds: Set<String> = emptySet(),
 ) {
+    private val filter: ViewFilter by lazy { ViewFilter.parse(filterJson) }
+
+    /**
+     * IX-06 필터 이탈: 방금 바꿔 아직 보내지 않은 행이 보기 필터에서 빠졌으면 true(위젯이 흐림 + 취소선으로 그리고 전송 뒤 보기를 다시 받아 지운다).
+     * 바꾸지 않은 행과 폰에서 판정할 수 없는 필터는 false다(어긋난 판정으로 멀쩡한 행을 흐리게 하지 않으려고).
+     */
+    fun isLeaving(row: ViewRow): Boolean = row.pageId in pendingPageIds && filter.matches(columnInfo, row.typed) == FilterMatch.NO
+
     /** [now]에 되돌릴 수 있는 쓰기 수. 전송 시각이 되면(같거나 지나면) 보낼 쓰기라 되돌릴 수 없다. */
     fun undoableAt(now: Long): Int = pendingSendAfter.count { it > now }
 
@@ -74,7 +86,7 @@ class ViewRepository @Inject constructor(
 
     /** 등록하지 않았거나 지워졌으면 null. */
     fun observe(viewId: String): Flow<ViewBoard?> =
-        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId)) { view, rows, pending ->
+        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId), dao.observePendingPageIds(viewId)) { view, rows, pending, pendingPages ->
             view?.let {
                 ViewBoard(
                     viewId = it.viewId,
@@ -88,6 +100,8 @@ class ViewRepository @Inject constructor(
                     viewConfig = it.viewConfig,
                     rowsComplete = it.rowsComplete,
                     pendingSendAfter = pending,
+                    filterJson = it.filterJson,
+                    pendingPageIds = pendingPages.toSet(),
                 )
             }
         }

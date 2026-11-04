@@ -107,6 +107,9 @@ data class ViewColumn(
         const val ROLE_PAGES_READ = "pagesRead"
         const val ROLE_PAGES_TOTAL = "pagesTotal"
 
+        /** Phase 11c 보기 필터가 가리키는 속성. 보기에 보이지 않아도 행의 값을 남겨 폰에서 필터를 판정한다(IX-06). */
+        const val ROLE_FILTER = "filter"
+
         /** Phase 11a 보드의 `group_by` 속성. 카드에 보이지 않아도 열로 나누려고 쓰기 정보에 담는다. */
         const val ROLE_GROUP = "group"
 

@@ -67,6 +67,7 @@ class ViewRepositoryTest {
         ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock).toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
         val board = repo().observe("v1").first()!!
         assertEquals(listOf(clock.millis() + 4_000), board.pendingSendAfter)
+        assertEquals(setOf("p1"), board.pendingPageIds) // 바꾸고 아직 안 보낸 행(필터에서 빠지는 중인지 가린다)
         assertEquals(1, board.undoableAt(clock.millis() + 3_999))
         assertEquals(0, board.undoableAt(clock.millis() + 4_000)) // 시각이 되면 보낼 쓰기라 되돌릴 수 없다
     }
@@ -83,6 +84,7 @@ class ViewRepositoryTest {
         assertEquals(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)), board.rows[0].typed)
         assertEquals(emptyMap<String, kotlinx.serialization.json.JsonElement>(), board.rows[1].typed) // 값을 모르면 빈 맵
         assertEquals(listOf("""{"group_by":{"property_id":"st"}}""", false), listOf(board.viewConfig, board.rowsComplete))
+        assertEquals("", board.filterJson)
     }
 
     @Test

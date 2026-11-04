@@ -68,6 +68,7 @@ class ViewSyncTest {
     private var rowsMore = false
     private var viewRaw: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
     private var viewType = "table"
+    private var viewFilter: kotlinx.serialization.json.JsonObject? = null
     private var schemaError: NotionError? = null
     private var rowPages: List<PageDto>? = null
 
@@ -89,6 +90,7 @@ class ViewSyncTest {
                 id = viewId,
                 name = "할 일 $viewId",
                 type = viewType,
+                filter = viewFilter,
                 configuration = ViewConfigDto(viewProperties, viewRaw),
             )
         }
@@ -728,5 +730,55 @@ class ViewSyncTest {
         assertEquals(listOf("To-do", "In progress", "Complete", null), column.options.map { it.group })
         assertEquals("b", column.nextOption("a")!!.id) // 할 일 → 진행 중
         assertEquals("c", column.nextOption("b")!!.id) // 진행 중 → 완료
+    }
+
+    // --- Phase 11c IX-06·AD-01: 보기 필터 원본을 저장하고, 필터가 가리키는 숨은 속성도 값을 남긴다(폰에서 판정하려고).
+
+    private val statusSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"ds","properties":{
+            "Name":{"id":"title","name":"Name","type":"title"},
+            "Status":{"id":"st","name":"Status","type":"status","status":{"options":[{"id":"o1","name":"할 일"},{"id":"o2","name":"완료"}],"groups":[]}},
+            "Formula":{"id":"fm","name":"Formula","type":"formula"}}}""",
+    )
+
+    private fun statusPage() = PageDto(
+        id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+        properties = Json.parseToJsonElement("""{"Name":{"type":"title","title":[{"plain_text":"a"}]},"Status":{"type":"status","status":{"id":"o1","name":"할 일"}}}""").jsonObject,
+    )
+
+    @Test
+    fun theViewFilterIsStoredAndAHiddenFilterPropertyKeepsItsValues() = runTest {
+        schema = statusSchema
+        viewProperties = listOf(ViewPropertyDto("title", "Name")) // Status는 보기에 보이지 않지만 필터가 쓴다
+        viewFilter = Json.parseToJsonElement("""{"property":"st","status":{"equals":"할 일"}}""").jsonObject
+        rowPages = listOf(statusPage())
+        register("v1")
+        sync().syncAll()
+        val snapshot = db.viewDao().all().single()
+        assertEquals("""{"property":"st","status":{"equals":"할 일"}}""", snapshot.filterJson)
+        val columns = ViewJson.columns(snapshot.columnInfo)
+        assertEquals(listOf("Name" to "", "Status" to ViewColumn.ROLE_FILTER), columns.map { it.name to it.role })
+        assertEquals(JsonPrimitive("o1"), ViewJson.typed(db.viewDao().rows("v1").single().typed)["st"]) // 값이 남아야 판정한다
+        assertEquals(listOf("Name"), snapshot.columns.split(VIEW_CELL_SEPARATOR)) // 보이는 열 목록에는 들어가지 않는다
+    }
+
+    @Test
+    fun aFilterOnAVisibleOrUnjudgeablePropertyAddsNoExtraColumn() = runTest {
+        schema = statusSchema
+        viewProperties = listOf(ViewPropertyDto("title", "Name"), ViewPropertyDto("st", "Status"))
+        viewFilter = Json.parseToJsonElement("""{"and":[{"property":"st","status":{"equals":"할 일"}},{"property":"fm","formula":{"string":{"equals":"x"}}}]}""").jsonObject
+        rowPages = listOf(statusPage())
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to "", "Status" to ""), columns.map { it.name to it.role }) // 보이는 속성은 그대로, 수식은 쓰기 정보에 없다
+    }
+
+    @Test
+    fun aViewWithoutAFilterStoresNone() = runTest {
+        register("v1")
+        sync().syncAll()
+        assertEquals("", db.viewDao().all().single().filterJson)
     }
 }

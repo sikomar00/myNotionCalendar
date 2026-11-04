@@ -288,6 +288,34 @@ class ViewWidgetTest {
         assertFalse(one.filterEquals(viewChoiceIntent(context, "v1", "p2", "c")))
     }
 
+    // --- Phase 11c IX-06: 바꿔서 보기 필터에서 빠지는 행은 흐림 + 취소선으로 그린다. 바꾸지 않은 행·판정 불가는 그대로다.
+
+    private fun leavingBoard(filter: String, pending: Set<String>) = ViewBoard(
+        "v1", "할 일", "table", listOf("이름", "완료"),
+        listOf(
+            ViewRow("p1", "u1", listOf("장보기", "✓"), typed = mapOf("dn" to kotlinx.serialization.json.JsonPrimitive(true))),
+            ViewRow("p2", "u2", listOf("보고서", "✓"), typed = mapOf("dn" to kotlinx.serialization.json.JsonPrimitive(true))),
+        ),
+        now, null, listOf(ViewColumn("t", "이름", "title"), doneColumn), filterJson = filter, pendingPageIds = pending,
+    )
+
+    @Test
+    fun aRowThatLeftTheFilterAfterAChangeIsDrawnAsLeaving() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(leavingBoard("""{"property":"dn","checkbox":{"equals":false}}""", setOf("p1"))), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRowLeaving")).assertCountEquals(1) // 방금 바꾼 p1만. p2도 필터에 안 맞지만 바꾸지 않았다
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(1)
+    }
+
+    @Test
+    fun noRowIsLeavingWhenTheFilterIsMetOrCannotBeJudged() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(leavingBoard("""{"property":"dn","checkbox":{"equals":true}}""", setOf("p1", "p2"))), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRowLeaving")).assertCountEquals(0)
+    }
+
     // --- Phase 11c 되돌리기 줄(IX-05): 지연 중인 쓰기가 있을 때만, 눌러서 되돌린다.
 
     private fun withPending(vararg sendAfter: Long) = board().copy(pendingSendAfter = sendAfter.toList())

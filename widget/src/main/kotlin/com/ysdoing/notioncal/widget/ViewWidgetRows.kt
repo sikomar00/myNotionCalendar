@@ -32,6 +32,7 @@ import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.NotionColors
@@ -61,11 +62,23 @@ internal val CHECK_INSET = (TAP_TARGET - CHECK_SIZE) / 2
 private val TILE_PADDING_H = 6.dp
 
 /** 행·칸을 그릴 때 쓰는 글자 모양과 색. */
-internal class ViewLook(val m: ViewMetrics, val palette: WidgetPalette, val numberStep: Double = 1.0, val stepNumbers: Boolean = false) {
-    val title = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp, fontWeight = FontWeight.Medium)
-    val cell = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp)
-    val sub = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp)
+internal class ViewLook(
+    val m: ViewMetrics,
+    val palette: WidgetPalette,
+    val numberStep: Double = 1.0,
+    val stepNumbers: Boolean = false,
+    private val leaving: Boolean = false,
+) {
+    // IX-06 필터에서 빠지는 행은 연한 색 + 취소선이다(색만이 아니라 취소선으로도 구분, A11Y-03).
+    private val text = if (leaving) palette.subtle else palette.text
+    private val strike = if (leaving) TextDecoration.LineThrough else null
+    val title = TextStyle(color = text, fontSize = (m.titleSp * m.spFactor).sp, fontWeight = FontWeight.Medium, textDecoration = strike)
+    val cell = TextStyle(color = text, fontSize = (m.titleSp * m.spFactor).sp, textDecoration = strike)
+    val sub = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp, textDecoration = strike)
     val pillSp = m.subSp * m.spFactor
+
+    /** 같은 설정의 '빠지는 중' 모양. */
+    fun asLeaving() = ViewLook(m, palette, numberStep, stepNumbers, leaving = true)
 }
 
 internal enum class StatusTone { NEUTRAL, ACTIVE, DONE }
@@ -139,18 +152,21 @@ internal fun moreText(context: Context, more: More): String = when {
 @Composable
 private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look: ViewLook) {
     val base = if (tableColumns != null) look.m.tableRow else look.m.listRow
+    // 눌러 바꿀 칸은 보이는 열만 센다(보이지 않는 그룹·필터 열이 모든 행을 높이지 않게).
     val steppable = look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" }
-    val height = if (board.columnInfo.any { it.tappable } || steppable) maxOf(base, TAP_ROW_MIN) else base
-    val tile = rowModifier(board.viewId, row, height, look.palette)
+    val height = if (board.columns.indices.any { board.tappableAt(it) != null } || steppable) maxOf(base, TAP_ROW_MIN) else base
+    val leaving = board.isLeaving(row)
+    val rowLook = if (leaving) look.asLeaving() else look
+    val tile = rowModifier(board.viewId, row, height, look.palette, if (leaving) "viewRowLeaving" else "viewRow")
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
-        if (tableColumns != null) ViewTableRow(board, row, tableColumns, tile, height, look) else ViewListRow(board, row, tile, height, look)
+        if (tableColumns != null) ViewTableRow(board, row, tableColumns, tile, height, rowLook) else ViewListRow(board, row, tile, height, rowLook)
     }
 }
 
 @Composable
-private fun rowModifier(viewId: String, row: ViewRow, height: Dp, palette: WidgetPalette): GlanceModifier {
+private fun rowModifier(viewId: String, row: ViewRow, height: Dp, palette: WidgetPalette, tag: String): GlanceModifier {
     val base = GlanceModifier.fillMaxWidth().height(height).tile(palette)
-    return base.clickable(rowSheetAction(LocalContext.current, viewId, row)).padding(horizontal = TILE_PADDING_H).semantics { testTag = "viewRow" }
+    return base.clickable(rowSheetAction(LocalContext.current, viewId, row)).padding(horizontal = TILE_PADDING_H).semantics { testTag = tag }
 }
 
 @Composable

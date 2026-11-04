@@ -212,6 +212,10 @@ abstract class ViewDao {
     @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND sendAfter > :now ORDER BY id")
     protected abstract suspend fun delayedWrites(viewId: String, now: Long): List<ViewWriteEntity>
 
+    /** 한 보기에서 바꾸고 아직 노션에 보내지 않은 행(새 항목·휴지통 제외). 필터에서 빠지는 중인 행을 가리는 데 쓴다(IX-06). */
+    @Query("SELECT DISTINCT pageId FROM view_writes WHERE viewId = :viewId AND propType NOT IN ('$VIEW_WRITE_CREATE', '$VIEW_WRITE_TRASH')")
+    abstract fun observePendingPageIds(viewId: String): Flow<List<String>>
+
     /** 한 보기의 지연이 걸린 쓰기들의 전송 시각(위젯이 '되돌리기' 줄을 그릴지 정한다). 지난 시각도 담으니 세는 쪽이 지금과 견준다. */
     @Query("SELECT sendAfter FROM view_writes WHERE viewId = :viewId AND sendAfter > 0")
     abstract fun observePendingSendAfter(viewId: String): Flow<List<Long>>

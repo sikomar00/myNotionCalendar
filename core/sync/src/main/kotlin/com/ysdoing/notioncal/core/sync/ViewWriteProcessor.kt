@@ -8,7 +8,9 @@ import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_TRASH
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
+import com.ysdoing.notioncal.core.data.view.FilterMatch
 import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
@@ -87,6 +89,7 @@ class ViewWriteProcessor @Inject constructor(
                     dao.deleteWriteById(write.id)
                     sent++
                     if (write.propType == VIEW_WRITE_CREATE) refresh += write.viewId // 새 행이 위젯에 나타나게
+                    else if (write.propType != VIEW_WRITE_TRASH && leavesFilter(write)) refresh += write.viewId // 바뀐 행이 필터에서 빠져 위젯에서 사라지게(IX-06)
                 }
                 SendResult.SUPERSEDED -> {
                     dao.deleteWriteById(write.id) // 노션 값이 이겼고 충돌로 남겼다
@@ -146,6 +149,16 @@ class ViewWriteProcessor @Inject constructor(
         }
         writer.updatePage(write.pageId, properties)
         return SendResult.SENT
+    }
+
+    /**
+     * 보낸 바꿈 때문에 행이 보기 필터를 벗어났는지(또는 폰에서 판정할 수 없는지). 그러면 그 보기를 다시 받아 노션이 가리는 대로 맞춘다(IX-06 '반영 대기').
+     * 필터가 없거나 행이 필터에 맞으면 다시 받지 않는다(요청을 늘리지 않으려고).
+     */
+    private suspend fun leavesFilter(write: ViewWriteEntity): Boolean {
+        val snapshot = dao.snapshot(write.viewId)?.takeIf { it.filterJson.isNotBlank() } ?: return false
+        val row = dao.row(write.viewId, write.pageId) ?: return false
+        return ViewFilter.parse(snapshot.filterJson).matches(ViewJson.columns(snapshot.columnInfo), ViewJson.typed(row.typed)) != FilterMatch.YES
     }
 
     /** 충돌 기록: 배너에 옵션 ID·JSON이 아니라 사람이 읽는 글자(옵션 이름·날짜·숫자)로 남긴다. */

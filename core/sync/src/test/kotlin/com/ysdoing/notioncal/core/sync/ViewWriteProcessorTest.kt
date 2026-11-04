@@ -510,4 +510,34 @@ class ViewWriteProcessorTest {
         assertEquals(listOf(1, 1), listOf(outcome.sent, outcome.remaining))
         assertEquals(listOf("p1" to """{"Status":{"status":{"id":"o2"}}}"""), sent.map { it.first to it.second.toString() })
     }
+
+    // --- Phase 11c IX-06: 보낸 바꿈 때문에 행이 보기 필터에서 빠지거나(또는 폰에서 판정할 수 없으면) 전송 뒤 그 보기를 다시 받아 행이 사라지게 한다.
+
+    private suspend fun filterThe(view: String) {
+        db.viewDao().upsert(db.viewDao().snapshot("v1")!!.copy(filterJson = view))
+    }
+
+    @Test
+    fun aSentChangeThatMakesTheRowLeaveTheFilterRefreshesTheView() = runTest {
+        filterThe("""{"property":"dn","checkbox":{"equals":false}}""")
+        writer().toggle("v1", "p1", "dn") // 완료로 바꾸면 '완료 안 함' 필터에서 빠진다
+        processor().process()
+        assertEquals(listOf("v1"), viewRequests)
+    }
+
+    @Test
+    fun aSentChangeThatStaysInsideTheFilterDoesNotRefresh() = runTest {
+        filterThe("""{"property":"dn","checkbox":{"equals":true}}""")
+        writer().toggle("v1", "p1", "dn")
+        processor().process()
+        assertEquals(emptyList<String>(), viewRequests) // 요청 수를 늘리지 않는다
+    }
+
+    @Test
+    fun aFilterItCannotJudgeRefreshesAfterTheSend() = runTest {
+        filterThe("""{"property":"zz","formula":{"string":{"equals":"x"}}}""")
+        writer().toggle("v1", "p1", "dn")
+        processor().process()
+        assertEquals(listOf("v1"), viewRequests) // 판정 불가('반영 대기') → 전송 뒤 보기를 다시 받는다
+    }
 }

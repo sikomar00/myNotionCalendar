@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.core.sync
 
 import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -129,3 +130,15 @@ internal fun withGroupRole(columns: List<ViewColumn>, schema: DataSourceDto, con
 }
 
 private val GROUPABLE = setOf("select", "status")
+
+/**
+ * Phase 11c 보기 필터가 가리키는 속성 중 보이는 열에 없는 것(쓸 수 있는 유형만)에 [ViewColumn.ROLE_FILTER]를 달아 쓰기 정보에 넣는다.
+ * 그래야 그 속성의 값이 행(typed)에 남아 폰에서 필터를 판정한다(IX-06). 수식·롤업 같은 유형은 판정하지 않으니 넣지 않는다.
+ */
+internal fun withFilterRole(columns: List<ViewColumn>, schema: DataSourceDto, filter: ViewFilter): List<ViewColumn> {
+    val missing = filter.propertyIds().filter { id -> columns.none { it.id == id } }
+    val added = missing.mapNotNull { id ->
+        schema.properties.values.firstOrNull { it.id == id && it.type in ViewColumn.INFO_TYPES }?.let(::viewColumn)?.copy(role = ViewColumn.ROLE_FILTER)
+    }
+    return columns + added
+}
