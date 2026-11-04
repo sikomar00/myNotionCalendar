@@ -63,7 +63,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import com.ysdoing.notioncal.core.data.dday.Dday
+import com.ysdoing.notioncal.core.designsystem.RadioRow
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
+import com.ysdoing.notioncal.core.designsystem.selectableRow
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
@@ -216,7 +219,7 @@ class WidgetConfigActivity : ComponentActivity() {
         // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
         if (kind == Kind.LEDGER || tabbed) {
             SwitchRow(
-                stringResource(R.string.widget_config_hide_amounts), config.hideAmounts, stringResource(R.string.widget_config_hide_amounts_note),
+                stringResource(R.string.widget_config_hide_amounts), config.hideAmounts, note = stringResource(R.string.widget_config_hide_amounts_note),
             ) { onChange(config.copy(hideAmounts = it)) }
         }
     }
@@ -242,10 +245,7 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind == Kind.VIEW || kind == Kind.BOOK) {
             ConfigSection(stringResource(R.string.widget_config_view))
             data.views.forEach { view ->
-                Row(Modifier.selectableRow(config.viewId == view.viewId) { onChange(config.copy(viewId = view.viewId)) }, verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = config.viewId == view.viewId, onClick = null)
-                    Text(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, modifier = Modifier.padding(start = 8.dp))
-                }
+                RadioRow(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, config.viewId == view.viewId) { onChange(config.copy(viewId = view.viewId)) }
             }
             if (data.views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
         }
@@ -275,7 +275,7 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind == Kind.MONTH || kind == Kind.SPLIT) {
             SwitchRow(
                 stringResource(R.string.widget_config_weather), config.showWeather,
-                stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
+                note = stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
             ) { onChange(config.copy(showWeather = it)) }
             if (config.showWeather) WeatherAttribution()
         }

@@ -1,26 +1,18 @@
 package com.ysdoing.notioncal.widget
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -28,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTheme
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 import kotlin.math.roundToInt
 
 // 위젯 설정 화면의 공통 조각. WidgetConfigActivity.kt가 500줄을 넘지 않게 나눴다.
@@ -58,40 +51,11 @@ internal fun ConfigNote(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-/** 라벨까지 줄 전체가 눌리게 한다(최소 높이 48dp). 안쪽 컨트롤은 onChange를 null로 둔다. */
-internal fun Modifier.toggleRow(checked: Boolean, role: Role = Role.Switch, onChange: (Boolean) -> Unit) =
-    heightIn(min = 48.dp).toggleable(value = checked, role = role, onValueChange = onChange)
-
-internal fun Modifier.selectableRow(selected: Boolean, onClick: () -> Unit) =
-    heightIn(min = 48.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-
-/** 켜고 끄는 한 줄: 라벨(+ 짧은 설명)과 스위치. */
-@Composable
-internal fun SwitchRow(label: String, checked: Boolean, note: String? = null, onChange: (Boolean) -> Unit) {
-    Row(Modifier.toggleRow(checked, onChange = onChange), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(label)
-            if (note != null) ConfigNote(note)
-        }
-        Switch(checked = checked, onCheckedChange = null)
-    }
-}
-
 @Composable
 internal fun SourcePicker(sources: List<DataSourceEntity>, selected: Set<String>, onChange: (Set<String>) -> Unit) {
-    Row(Modifier.toggleRow(selected.isEmpty(), Role.Checkbox) { if (it) onChange(emptySet()) }, verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = selected.isEmpty(), onCheckedChange = null)
-        Text(stringResource(R.string.widget_config_sources_all))
-    }
+    CheckboxRow(stringResource(R.string.widget_config_sources_all), selected.isEmpty()) { if (it) onChange(emptySet()) }
     sources.forEach { source ->
-        val checked = source.dataSourceId in selected
-        Row(
-            Modifier.toggleRow(checked, Role.Checkbox) { on -> onChange(if (on) selected + source.dataSourceId else selected - source.dataSourceId) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = checked, onCheckedChange = null)
-            Text(source.name)
-        }
+        CheckboxRow(source.name, source.dataSourceId in selected) { on -> onChange(if (on) selected + source.dataSourceId else selected - source.dataSourceId) }
     }
 }
 
