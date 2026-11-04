@@ -34,6 +34,15 @@ const val VIEW_WRITE_SENDING = "Sending"
 const val VIEW_WRITE_CREATE = "create"
 
 /**
+ * [ViewWriteEntity.propType]이 이 값이면 행(노션 페이지)을 휴지통으로 보내기(`in_trash`, 영구 삭제 아님)다. [ViewWriteEntity.value]는 지운 행의 제목
+ * (로컬 행이 없어져도 실패 기록에 제목을 남기려고), propId는 [VIEW_TRASH_PROP]이라 같은 페이지의 속성 바꿈을 덮어쓰지 않는다.
+ */
+const val VIEW_WRITE_TRASH = "trash"
+
+/** 휴지통 쓰기의 propId. 노션 속성 ID는 URL 인코딩된 짧은 글자라 '!'로 시작하는 값은 없다. */
+const val VIEW_TRASH_PROP = "!trash"
+
+/**
  * VW-01 등록한 노션 보기와 마지막으로 받은 설정(v12). 행이 있으면 등록된 보기다.
  * [columns]는 보이는 속성 이름을 [VIEW_CELL_SEPARATOR]로 이은 것. [syncedAt]이 0이면 아직 못 받았다.
  * [lastError]는 마지막 동기화 실패(없으면 null). 실패해도 이전 행은 지우지 않는다.
@@ -140,6 +149,10 @@ abstract class ViewDao {
     @Query("SELECT * FROM view_rows WHERE viewId = :viewId AND pageId = :pageId")
     abstract suspend fun row(viewId: String, pageId: String): ViewRowEntity?
 
+    /** 한 페이지의 행을 모든 보기에서 지운다(같은 페이지가 여러 보기에 있을 수 있다). */
+    @Query("DELETE FROM view_rows WHERE pageId = :pageId")
+    protected abstract suspend fun deleteRowsOfPage(pageId: String)
+
     @Query("UPDATE view_rows SET cells = :cells, typed = :typed, progress = :progress WHERE viewId = :viewId AND pageId = :pageId")
     protected abstract suspend fun updateRow(viewId: String, pageId: String, cells: String, typed: String, progress: Float?)
 
@@ -200,6 +213,26 @@ abstract class ViewDao {
         if (snapshot(write.viewId) == null) return false
         insertWrite(write)
         markWritten(write.viewId, write.createdAt)
+        return true
+    }
+
+    /**
+     * 행을 휴지통으로 보내는 쓰기를 쌓고 그 페이지의 로컬 행을 모든 보기에서 지운다(한 트랜잭션). 보기나 행이 없으면 쌓지 않고 false다.
+     * 앞서 쌓인 같은 페이지의 속성 바꿈은 그대로 두어 먼저 나간다(큐는 만든 순서). 노션 값을 읽지 않으니 기준값은 없다.
+     */
+    @Transaction
+    open suspend fun enqueueTrash(viewId: String, pageId: String, createdAt: Long): Boolean {
+        val snapshot = snapshot(viewId) ?: return false
+        val row = row(viewId, pageId) ?: return false
+        deleteRowsOfPage(pageId)
+        deleteWrite(viewId, pageId, VIEW_TRASH_PROP)
+        insertWrite(
+            ViewWriteEntity(
+                viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = VIEW_TRASH_PROP, propType = VIEW_WRITE_TRASH,
+                value = row.cells.substringBefore(VIEW_CELL_SEPARATOR), createdAt = createdAt,
+            ),
+        )
+        markWritten(viewId, createdAt)
         return true
     }
 

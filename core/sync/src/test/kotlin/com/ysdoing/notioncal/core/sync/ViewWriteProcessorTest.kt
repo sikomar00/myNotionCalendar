@@ -44,6 +44,8 @@ class ViewWriteProcessorTest {
     private val clock = Clock.fixed(Instant.parse("2026-11-03T00:00:00Z"), ZoneOffset.UTC)
     private val sent = mutableListOf<Pair<String, JsonObject>>()
     private val created = mutableListOf<Pair<String, JsonObject>>()
+    private val trashed = mutableListOf<String>()
+    private var trashGone = false // 노션에 이미 없는 페이지(휴지통·삭제)
     private val failures = ArrayDeque<NotionError?>()
     private val viewRequests = mutableListOf<String>()
     private var widgetUpdates = 0
@@ -96,7 +98,12 @@ class ViewWriteProcessorTest {
             sent += pageId to properties
             return PageDto(id = pageId, lastEditedTime = "2026-11-03T00:00:00.000Z")
         }
-        override suspend fun trashPage(pageId: String): PageDto? = error("보기 쓰기는 지우지 않는다")
+        override suspend fun trashPage(pageId: String): PageDto? {
+            failures.removeFirstOrNull()?.let { throw NotionException(it) }
+            if (trashGone) return null
+            trashed += pageId
+            return PageDto(id = pageId, lastEditedTime = "2026-11-03T00:00:00.000Z", inTrash = true)
+        }
     }
 
     private val viewReader = object : ViewReader {
@@ -399,5 +406,69 @@ class ViewWriteProcessorTest {
         assertEquals(listOf(1, 0), listOf(outcome.sent, outcome.dropped)) // 사용자가 쓴 글이라 보낼 때까지 다시 시도한다
         assertEquals(1, created.size)
         assertEquals(0, db.conflictDao().all().size)
+    }
+
+    // --- Phase 11b ED-05 휴지통 쓰기(`in_trash`). 스키마·충돌 확인이 필요 없고, 앞서 쌓은 같은 페이지 바꿈이 먼저 나간다.
+
+    @Test
+    fun aTrashIsSentWithoutLookingTheSchemaOrThePageUp() = runTest {
+        writer().trash("v1", "p1")
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0, 0), listOf(outcome.sent, outcome.dropped, outcome.remaining))
+        assertEquals(listOf("p1"), trashed)
+        assertEquals(0, pageLookups) // 충돌을 가를 기준값이 없다: 마지막 쓰기가 이긴다
+        assertEquals(0, viewRequests.size)
+    }
+
+    @Test
+    fun aPageAlreadyGoneInNotionCountsAsTrashed() = runTest {
+        trashGone = true
+        writer().trash("v1", "p1")
+        val outcome = processor().process()
+        assertEquals(listOf(1, 0), listOf(outcome.sent, outcome.dropped))
+        assertEquals(0, db.conflictDao().all().size)
+    }
+
+    @Test
+    fun earlierEditsOfThePageGoBeforeTheTrash() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        writer().trash("v1", "p1")
+        val outcome = processor().process()
+        assertEquals(2, outcome.sent)
+        assertEquals(listOf("p1" to """{"Done":{"checkbox":true}}"""), sent.map { it.first to it.second.toString() })
+        assertEquals(listOf("p1"), trashed)
+    }
+
+    @Test
+    fun aTransientErrorKeepsTheTrashAndTheNextRunSendsIt() = runTest {
+        writer().trash("v1", "p1")
+        failures += NotionError.Network
+        val outcome = processor().process()
+        assertEquals(listOf(0, 1), listOf(outcome.sent, outcome.remaining))
+        assertEquals(NotionError.Network, outcome.retryError)
+        assertEquals(1, processor().process().sent)
+        assertEquals(listOf("p1"), trashed)
+    }
+
+    @Test
+    fun aRejectedTrashIsRecordedWithTheRowTitleAndTheViewIsReadAgain() = runTest {
+        writer().trash("v1", "p1")
+        failures += NotionError.Validation("validation_error")
+        val outcome = processor().process()
+        assertEquals(1, outcome.dropped)
+        val issue = db.conflictDao().all().single()
+        // 지운 행은 로컬에 없으니 제목은 큐에 남긴 글자로 적는다. 보기를 다시 받으면 행이 돌아온다(노션에 그대로 있으므로).
+        assertEquals(listOf("첫째", "PAGE", "TRASH", OutboxProcessor.KIND_REJECTED), listOf(issue.title, issue.field, issue.localValue, issue.kind))
+        assertEquals(listOf("v1"), viewRequests)
+    }
+
+    @Test
+    fun aTrashThatKeepsFailingIsEventuallyDropped() = runTest {
+        writer().trash("v1", "p1")
+        val id = db.viewDao().firstWrite()!!.id
+        repeat(10) { db.viewDao().markWriteFailed(id, "Server") }
+        val outcome = processor().process()
+        assertEquals(1, outcome.dropped)
+        assertEquals(0, trashed.size)
     }
 }

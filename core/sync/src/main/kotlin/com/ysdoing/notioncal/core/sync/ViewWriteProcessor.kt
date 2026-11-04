@@ -6,6 +6,7 @@ import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
+import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_TRASH
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewJson
@@ -110,8 +111,15 @@ class ViewWriteProcessor @Inject constructor(
     private suspend fun trySend(write: ViewWriteEntity, schemas: MutableMap<String, DataSourceDto>): SendResult {
         val creating = write.propType == VIEW_WRITE_CREATE
         if (!creating && write.attempts >= MAX_ATTEMPTS) return SendResult.REJECTED
+        if (write.propType == VIEW_WRITE_TRASH) return trash(write)
         val schema = schemas.getOrPut(write.dataSourceId) { reader.dataSource(write.dataSourceId) }
         return if (creating) create(write, schema) else update(write, schema)
+    }
+
+    /** 페이지를 휴지통으로 보낸다. 스키마도 노션 값도 읽지 않는다(마지막 쓰기가 이긴다). 이미 없으면(null) 목적은 이룬 것이라 보냄이다. */
+    private suspend fun trash(write: ViewWriteEntity): SendResult {
+        writer.trashPage(write.pageId)
+        return SendResult.SENT
     }
 
     /**
@@ -166,11 +174,14 @@ class ViewWriteProcessor @Inject constructor(
     /** 버린 항목을 앱 월 화면의 '노션 반영 실패'에 남긴다(조용히 사라지지 않게). */
     private suspend fun reject(write: ViewWriteEntity) {
         dao.deleteWriteById(write.id)
-        val creating = write.propType == VIEW_WRITE_CREATE
-        val title = if (creating) ViewJson.parseCreate(write.value)?.title.orEmpty() else rowTitle(write)
+        val (title, kind) = when (write.propType) {
+            VIEW_WRITE_CREATE -> ViewJson.parseCreate(write.value)?.title.orEmpty() to "CREATE"
+            VIEW_WRITE_TRASH -> write.value.orEmpty() to "TRASH" // 로컬 행은 이미 지웠으니 큐에 남긴 제목을 쓴다
+            else -> rowTitle(write) to "UPDATE"
+        }
         db.conflictDao().insert(
             ConflictEntity(
-                pageId = write.pageId, title = title, field = "PAGE", localValue = if (creating) "CREATE" else "UPDATE", remoteValue = null,
+                pageId = write.pageId, title = title, field = "PAGE", localValue = kind, remoteValue = null,
                 kind = OutboxProcessor.KIND_REJECTED, at = clock.millis(),
             ),
         )

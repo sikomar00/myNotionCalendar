@@ -115,6 +115,19 @@ class ViewWriter @Inject constructor(
         return queued
     }
 
+    /**
+     * 행(노션 페이지)을 휴지통으로 보낸다(ED-05, `in_trash`라 노션에서 복원할 수 있고 영구 삭제는 없다). 모든 보기에서 그 행을 바로 지우고 큐에 쌓는다.
+     * 보기나 행이 없으면 아무것도 하지 않고 false다.
+     */
+    suspend fun trash(viewId: String, pageId: String): Boolean {
+        val queued = dao.enqueueTrash(viewId, pageId, clock.millis())
+        if (queued) {
+            widgets.requestUpdate()
+            requester.request()
+        }
+        return queued
+    }
+
     private suspend fun change(
         viewId: String,
         pageId: String,

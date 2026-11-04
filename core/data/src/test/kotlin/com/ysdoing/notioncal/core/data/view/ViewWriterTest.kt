@@ -217,6 +217,48 @@ class ViewWriterTest {
         assertEquals(0, requests)
     }
 
+    // --- Phase 11b ED-05 휴지통: 모든 보기에서 행을 바로 지우고 큐에 한 건을 쌓는다(영구 삭제가 아니라 `in_trash`).
+
+    @Test
+    fun trashRemovesTheRowFromEveryViewAtOnceAndQueuesOneWrite() = runTest {
+        val other = snapshot.copy(viewId = "v2", name = "다른 보기")
+        db.viewDao().upsert(other)
+        db.viewDao().replace(other, listOf(row.copy(viewId = "v2")))
+        assertTrue(writer().trash("v1", "p1"))
+        assertNull(db.viewDao().row("v1", "p1"))
+        assertNull(db.viewDao().row("v2", "p1")) // 같은 페이지는 다른 보기에서도 사라진다
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("trash", "p1", "ds", "첫째", null), listOf(write.propType, write.pageId, write.dataSourceId, write.value, write.baseValue))
+        assertEquals(1, db.viewDao().pendingWriteCount())
+        assertEquals(clock.millis(), db.viewDao().snapshot("v1")!!.lastWriteAt)
+        assertEquals(1, widgetUpdates)
+        assertEquals(1, requests)
+        assertFalse(writer().trash("v1", "p1")) // 이미 지운 행은 다시 쌓지 않는다
+        assertEquals(1, db.viewDao().pendingWriteCount())
+    }
+
+    @Test
+    fun trashKeepsEarlierEditsOfThePageAheadInTheQueue() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        writer().trash("v1", "p1")
+        val order = buildList {
+            while (true) {
+                val next = db.viewDao().firstWrite() ?: break
+                add(next.propType)
+                db.viewDao().deleteWriteById(next.id)
+            }
+        }
+        assertEquals(listOf("checkbox", "trash"), order)
+    }
+
+    @Test
+    fun trashRefusesAViewOrARowThatIsGone() = runTest {
+        assertFalse(writer().trash("nope", "p1"))
+        assertFalse(writer().trash("v1", "zz"))
+        assertEquals(0, db.viewDao().pendingWriteCount())
+        assertEquals(0, requests)
+    }
+
     // --- M5b 책 위젯 ±쪽: 읽은 쪽 속성은 보기에서 숨겨져 있어도 된다(cells에는 없고 typed에만 있다).
 
     private suspend fun seedBook(read: Double?, total: Double?, progress: Float? = 0.1f, roles: Boolean = true) {
