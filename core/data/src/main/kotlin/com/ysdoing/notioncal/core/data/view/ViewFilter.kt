@@ -192,4 +192,4 @@ private fun judgeDate(value: JsonElement?, op: String, operand: JsonElement): Fi
     }
 }
 
-private fun String.dateOrNull(): LocalDate? = runCatching { LocalDate.parse(substringBefore('T')) }.getOrNull()
+internal fun String.dateOrNull(): LocalDate? = runCatching { LocalDate.parse(substringBefore('T')) }.getOrNull()

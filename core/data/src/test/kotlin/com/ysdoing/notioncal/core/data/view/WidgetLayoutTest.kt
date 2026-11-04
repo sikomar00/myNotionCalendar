@@ -112,4 +112,79 @@ class WidgetLayoutTest {
         assertEquals(2, old.tabIndexAfter(old, 9)) // 번호가 탭 수를 넘으면 마지막 탭을 보던 것으로 본다
         assertEquals(0, WidgetLayout(LayoutMode.TABS).tabIndexAfter(WidgetLayout(LayoutMode.TABS), 3))
     }
+
+    // --- Phase 11e 집계 타일 줄: 섹션에서만, 위젯당 한 줄(타일 최대 6개), 섹션 4개 상한에 참여한다.
+
+    private fun tile(view: String = "v1", fn: AggFn = AggFn.COUNT, prop: String = "") = AggTile("", view, fn, propId = prop)
+
+    @Test
+    fun tilesCanOnlyBeAddedInSectionsAndGetTheFirstFreeId() {
+        assertNull(layout(LayoutMode.TABS, "a").addTile(tile()))
+        assertNull(layout(LayoutMode.SINGLE, "a").addTile(tile()))
+        val l = layout(LayoutMode.SECTIONS, "a").addTile(tile())!!.addTile(tile(fn = AggFn.SUM, prop = "n"))!!
+        assertEquals(listOf("t1", "t2"), l.tiles.map { it.id })
+        assertEquals(listOf("t2"), l.removeTile("t1").tiles.map { it.id })
+        assertEquals(listOf("t2", "t1"), l.removeTile("t1").addTile(tile())!!.tiles.map { it.id }) // 빈 번호를 다시 쓴다
+    }
+
+    @Test
+    fun aTileRowHoldsSixTilesAtMost() {
+        var l = layout(LayoutMode.SECTIONS, "a")
+        repeat(6) { l = l.addTile(tile())!! }
+        assertNull(l.addTile(tile()))
+        assertEquals(6, l.tiles.size)
+    }
+
+    @Test
+    fun theTileRowTakesOneOfTheFourSectionSlots() {
+        assertNull(layout(LayoutMode.SECTIONS, "a", "b", "c", "d").addTile(tile())) // 섹션 넷이 이미 찼다
+        val three = layout(LayoutMode.SECTIONS, "a", "b", "c").addTile(tile())!!
+        assertNull(three.add("d")) // 타일 줄이 한 자리를 차지했다
+        assertEquals(2, three.addTile(tile())!!.tiles.size) // 타일을 더 넣는다고 자리가 더 들지는 않는다
+        assertEquals(4, three.removeTile("t1").add("d")!!.items.size) // 타일 줄을 비우면 보기 자리가 돌아온다
+    }
+
+    @Test
+    fun goingBackToSectionsKeepsRoomForTheTileRow() {
+        val tabs = layout(LayoutMode.SECTIONS, "a", "b", "c").addTile(tile())!!.withMode(LayoutMode.TABS).add("d")!!.add("e")!!
+        assertEquals(5, tabs.items.size)
+        assertEquals(1, tabs.tiles.size) // 타일은 탭에서도 JSON에 남는다
+        val back = tabs.withMode(LayoutMode.SECTIONS)
+        assertEquals(listOf("a", "b", "c"), back.items.map { it.viewId }) // 넷이 아니라 셋: 타일 줄 자리
+        assertEquals(1, back.tiles.size)
+    }
+
+    @Test
+    fun parseKeepsGoodTilesAndDropsBrokenOnesWithoutLosingTheViews() {
+        val text = """{"mode":"SECTIONS","items":[{"viewId":"a"}],"tiles":[
+            {"id":"t1","viewId":"v1","fn":"COUNT"},
+            {"id":"t2","viewId":"v1","fn":"BOGUS"},
+            {"id":"t3","viewId":"","fn":"COUNT"},
+            {"id":"t4","viewId":"v1","fn":"SUM"},
+            {"id":"t5","viewId":"v1","fn":"SUM","propId":"n","goal":-3},
+            {"id":"t1","viewId":"v2","fn":"COUNT"},
+            {"id":"t6","viewId":"v1","fn":"STREAK","propId":"c"},
+            {"id":"t7","viewId":"v1","fn":"COUNT","period":"THIS_WEEK"},
+            {"id":"","viewId":"v1","fn":"COUNT"}]}"""
+        val l = WidgetLayout.parse(text)
+        assertEquals(listOf("a"), l.items.map { it.viewId })
+        assertEquals(listOf("t1", "t5", "t7"), l.tiles.map { it.id })
+        assertNull(l.tiles[1].goal) // 목표 0 이하는 목표 없음
+        assertEquals(AggPeriod.ALL, l.tiles[2].period) // 날짜 속성이 없으면 기간은 전체
+        assertEquals("v1", l.tiles[0].viewId) // 같은 번호의 뒤쪽(v2)은 버린다
+    }
+
+    @Test
+    fun aBrokenTilesFieldDoesNotLoseTheLayout() {
+        assertEquals(listOf("a"), WidgetLayout.parse("""{"mode":"SECTIONS","items":[{"viewId":"a"}],"tiles":"oops"}""").items.map { it.viewId })
+        assertEquals(emptyList<AggTile>(), WidgetLayout.parse("""{"mode":"SECTIONS","items":[{"viewId":"a"}],"tiles":"oops"}""").tiles)
+    }
+
+    @Test
+    fun tilesRoundTripThroughEncodeAndParseAndAtMostSixAreRead() {
+        val l = layout(LayoutMode.SECTIONS, "a").addTile(AggTile("", "v1", AggFn.SUM, propId = "n", dateProp = "d", period = AggPeriod.THIS_MONTH, goal = 5000.0, label = "식비"))!!
+        assertEquals(l, WidgetLayout.parse(WidgetLayout.encode(l)))
+        val many = (1..8).joinToString(",") { """{"id":"t$it","viewId":"v1","fn":"COUNT"}""" }
+        assertEquals(6, WidgetLayout.parse("""{"mode":"SECTIONS","tiles":[$many]}""").tiles.size)
+    }
 }
