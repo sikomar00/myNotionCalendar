@@ -45,6 +45,10 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "1.0") val numberStep: Double = 1.0,
     /** v18(Phase 11c AD-05): 프리셋 목록(JSON, 위젯당 최대 5개). 없으면 빈 글자. */
     @ColumnInfo(defaultValue = "") val presetsJson: String = "",
+    /** v19(Phase 11d WL-01): 위젯 배치(`WidgetLayout` JSON: 단일·탭·섹션과 보기 목록). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val layoutJson: String = "",
+    /** v19(WL-02): 탭 배치에서 마지막으로 본 탭 번호(위젯마다 기억). */
+    @ColumnInfo(defaultValue = "0") val lastTab: Int = 0,
 )
 
 @Dao

@@ -69,6 +69,15 @@ class WidgetConfigRepositoryTest {
         }
     }
 
+    /** Phase 11d WL-02: 배치(보기 목록·탭 이름·비율)와 마지막으로 본 탭 번호는 위젯마다 저장된다. 탭 번호는 0 아래로 읽지 않는다. */
+    @Test
+    fun layoutAndLastTabRoundTripPerWidgetAndANegativeTabReadsAsZero() = runTest {
+        repo.save(WidgetConfig(6, layoutJson = "{\"mode\":\"TABS\"}", lastTab = 3))
+        repo.save(WidgetConfig(7, layoutJson = "{\"mode\":\"SECTIONS\"}", lastTab = -2))
+        assertEquals(listOf("{\"mode\":\"TABS\"}", 3), listOf(repo.get(6).layoutJson, repo.get(6).lastTab))
+        assertEquals(listOf("{\"mode\":\"SECTIONS\"}", 0), listOf(repo.get(7).layoutJson, repo.get(7).lastTab))
+    }
+
     /** WG-11: 고른 탭은 위젯마다 따로이고, 달 이동·설정 저장(행 전체 upsert) 뒤에도 남는다. */
     @Test
     fun selectedTabIsPerWidgetAndSurvivesOtherSaves() = runTest {

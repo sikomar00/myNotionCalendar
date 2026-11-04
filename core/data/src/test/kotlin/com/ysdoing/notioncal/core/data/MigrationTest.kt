@@ -522,4 +522,21 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v18 → v19(Phase 11d): 위젯 배치(layoutJson)와 마지막으로 본 탭(lastTab) 열은 기본값이고 기존 위젯 설정은 그대로다. */
+    @Test
+    fun v18ToV19AddsLayoutJsonAndLastTab() = runTest {
+        helper.createDatabase(18).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]')")
+        }
+        helper.runMigrationsAndValidate(19).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf("v1", 5.0, "[]"), listOf(widget.viewId, widget.numberStep, widget.presetsJson)) // 기존 설정 보존
+            assertEquals(listOf("", 0), listOf(widget.layoutJson, widget.lastTab))
+        } finally {
+            db.close()
+        }
+    }
 }

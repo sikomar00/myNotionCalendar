@@ -37,6 +37,7 @@ import java.time.LocalDate
  * - 17: Phase 11a. view_snapshots.viewConfig(보기 설정 원본)·rowsComplete, widget_configs.viewPage(보드 열 넘김) 추가, AutoMigration
  * - 18: Phase 11c. view_writes.sendAfter(전송 지연, 되돌리기 창), view_snapshots.filterJson(보기 필터 원본), widget_configs.numberStep(숫자 ± 단계값)·
  *      presetsJson(프리셋) 추가, AutoMigration
+ * - 19: Phase 11d. widget_configs.layoutJson(위젯 배치: 단일·탭·섹션)·lastTab(마지막으로 본 탭) 추가, AutoMigration
  */
 @Database(
     entities = [
@@ -59,9 +60,9 @@ import java.time.LocalDate
         ViewWriteEntity::class,
         SourceSchemaEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15), AutoMigration(from = 15, to = 16), AutoMigration(from = 16, to = 17), AutoMigration(from = 17, to = 18)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5), AutoMigration(from = 5, to = 6), AutoMigration(from = 6, to = 7), AutoMigration(from = 7, to = 8), AutoMigration(from = 8, to = 9), AutoMigration(from = 9, to = 10), AutoMigration(from = 10, to = 11), AutoMigration(from = 11, to = 12), AutoMigration(from = 12, to = 13), AutoMigration(from = 13, to = 14), AutoMigration(from = 14, to = 15), AutoMigration(from = 15, to = 16), AutoMigration(from = 16, to = 17), AutoMigration(from = 17, to = 18), AutoMigration(from = 18, to = 19)],
 )
 @TypeConverters(Converters::class)
 abstract class NotionCalDatabase : RoomDatabase() {

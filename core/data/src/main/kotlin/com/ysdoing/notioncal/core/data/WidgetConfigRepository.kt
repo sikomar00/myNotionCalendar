@@ -44,6 +44,10 @@ data class WidgetConfig(
     val numberStep: Double = 1.0,
     /** 프리셋 목록 JSON(Phase 11c AD-05, 위젯당 최대 5개). 해석은 프리셋 모델이 한다. */
     val presetsJson: String = "",
+    /** 위젯 배치 JSON(Phase 11d WL-01). 해석은 `WidgetLayout`이 한다. */
+    val layoutJson: String = "",
+    /** 탭 배치에서 마지막으로 본 탭 번호(WL-02). */
+    val lastTab: Int = 0,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -69,6 +73,8 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     viewPage = viewPage.coerceAtLeast(0),
     numberStep = numberStep.takeIf { it.isFinite() && it > 0 } ?: 1.0,
     presetsJson = presetsJson,
+    layoutJson = layoutJson,
+    lastTab = lastTab.coerceAtLeast(0),
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -89,6 +95,8 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     viewPage = viewPage,
     numberStep = numberStep.takeIf { it.isFinite() && it > 0 } ?: 1.0, // NaN은 SQLite가 NULL로 저장해 열 제약에 걸린다
     presetsJson = presetsJson,
+    layoutJson = layoutJson,
+    lastTab = lastTab.coerceAtLeast(0),
 )
 
 @Singleton
