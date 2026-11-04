@@ -170,7 +170,9 @@ class WidgetConfigActivity : ComponentActivity() {
             val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
             val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
             val views = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.BOOK) deps.views().observeRegistered().first() else emptyList()
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views)
+            // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번 읽는다).
+            val boards = if (kind == Kind.LAYOUT) views.associate { it.viewId to deps.views().observe(it.viewId).first() } else emptyMap()
+            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
         }
         val data = loaded ?: return
 
@@ -306,6 +308,7 @@ class WidgetConfigActivity : ComponentActivity() {
         val ledger: LedgerBoard? = null,
         val ddays: List<Dday> = emptyList(),
         val views: List<com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity> = emptyList(),
+        val boards: Map<String, com.ysdoing.notioncal.core.data.view.ViewBoard?> = emptyMap(),
     )
 
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
@@ -336,7 +339,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 Kind.LAYOUT -> {
-                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name })
+                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 Kind.BOOK -> {

@@ -29,7 +29,7 @@ import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 private const val TAB_NAME_MAX = 20
 
 /** 글자 수는 UTF-16이 아니라 코드 포인트로 센다(이모지 같은 두 칸짜리 글자를 반으로 자르지 않는다). */
-private fun String.takeCodePoints(max: Int): String = if (codePointCount(0, length) <= max) this else substring(0, offsetByCodePoints(0, max))
+internal fun String.takeCodePoints(max: Int): String = if (codePointCount(0, length) <= max) this else substring(0, offsetByCodePoints(0, max))
 
 /**
  * Phase 11d WL-01~03 노션 위젯의 배치 설정: 종류(단일·탭·섹션), 담을 보기(앱 설정의 '보기 추가'로 등록한 것), 순서, 탭 이름, 섹션 높이 비율.
@@ -65,6 +65,7 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
             LayoutItemEditor(name, index, layout, set)
         }
     }
+    if (layout.mode == LayoutMode.SECTIONS) TileSettings(views, layout, set)
 }
 
 /** 담은 보기 하나: 이름 + 위·아래·빼기, 그 아래에 탭 이름 입력(탭) 또는 높이 비율(섹션). */

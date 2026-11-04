@@ -24,6 +24,7 @@ import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
 import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -125,11 +126,22 @@ object WidgetPreviews {
         return layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("preview" to "할 일", "preview-2" to "독서"), now)
     }
 
-    /** 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기). */
-    internal fun layoutPreview(config: WidgetConfig, names: Map<String, String>, now: Long = System.currentTimeMillis()): LayoutWidgetState {
+    /**
+     * 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기).
+     * 집계 타일은 값이 있어야 뜻이 있어 [boards](등록한 보기의 실제 행, 사용자 본인의 설정 화면이라 보여도 된다)로 계산한다.
+     */
+    internal fun layoutPreview(
+        config: WidgetConfig,
+        names: Map<String, String>,
+        now: Long = System.currentTimeMillis(),
+        boards: Map<String, ViewBoard?> = emptyMap(),
+        weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+    ): LayoutWidgetState {
         val layout = WidgetLayout.parse(config.layoutJson)
         val sample = viewState(now).board!!
-        return LayoutWidgetState(config, layout, layout.items.associate { it.viewId to sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty()) }, now)
+        val panes = layout.items.associate { it.viewId to sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty()) }
+        val tiles = layout.tiles.mapNotNull { tile -> boards[tile.viewId]?.let { tile.viewId to it } }.toMap()
+        return LayoutWidgetState(config, layout, panes + tiles, now, weekStart)
     }
 
     /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */

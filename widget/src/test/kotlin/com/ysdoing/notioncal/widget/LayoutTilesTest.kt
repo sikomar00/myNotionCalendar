@@ -253,6 +253,18 @@ class LayoutTilesTest {
     }
 
     @Test
+    fun theSettingsPreviewComputesTilesFromTheRealBoardsAndLeavesUnloadedOnesEmpty() {
+        val layout = WidgetLayout(LayoutMode.SECTIONS).add("v1")!!.addTile(tile(label = "합"))!!.addTile(tile(label = "없음", view = "v9"))!!
+        val config = WidgetConfig(0, layoutJson = WidgetLayout.encode(layout))
+        val preview = WidgetPreviews.layoutPreview(config, mapOf("v1" to "가계"), now, boards = mapOf("v1" to board()), weekStart = DayOfWeek.MONDAY)
+        val cells = preview.tileCells()
+        assertEquals("1,500", cells[0].result.text)
+        assertEquals("—", cells[1].result.text) // 아직 읽지 못한 보기
+        assertEquals(DayOfWeek.MONDAY, preview.weekStart)
+        assertEquals("—", WidgetPreviews.layoutPreview(config, emptyMap(), now).tileCells()[0].result.text) // 실제 행이 없으면 예시 행에는 속성이 없어 값 없음
+    }
+
+    @Test
     fun theCellsOfAStateAreComputedFromTheirOwnViewsAndAnUnknownViewHasNoValue() {
         val s = state(listOf(tile(label = "합"), tile(label = "없는 보기", view = "v9")))
         val cells = s.tileCells()

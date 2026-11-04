@@ -32,6 +32,7 @@ import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.AggResult
 import com.ysdoing.notioncal.core.data.view.AggTile
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import kotlin.math.ceil
 
 internal val AGG_TILE_GAP = 4.dp
@@ -83,7 +84,7 @@ internal fun planTileStrip(cells: List<TileCell>, m: ViewMetrics, size: DpSize, 
     return TileStripPlan(cells.take(grid.visible), grid, height, extras)
 }
 
-private fun fnName(fn: AggFn): Int = when (fn) {
+internal fun fnName(fn: AggFn): Int = when (fn) {
     AggFn.COUNT -> R.string.layout_tile_fn_count
     AggFn.SUM -> R.string.layout_tile_fn_sum
     AggFn.AVG -> R.string.layout_tile_fn_avg
@@ -101,13 +102,16 @@ private fun periodName(period: AggPeriod): Int? = when (period) {
 }
 
 /** 타일 이름: 고른 이름, 없으면 '[기간] 속성 함수'(개수는 보기 이름, 연속 달성일은 기간 없이). 사라진 보기·속성은 기본 낱말로 쓴다. */
-internal fun tileLabel(context: Context, tile: AggTile, board: ViewBoard?): String {
+internal fun tileLabel(context: Context, tile: AggTile, board: ViewBoard?): String = tileLabel(context, tile, board?.name, board?.columnInfo.orEmpty())
+
+/** [tileLabel]을 보기 이름과 열 정보만으로(설정 화면은 보기 행 없이 등록 정보만 가진다). */
+internal fun tileLabel(context: Context, tile: AggTile, viewName: String?, columns: List<ViewColumn>): String {
     if (tile.label.isNotBlank()) return tile.label
     val fn = context.getString(fnName(tile.fn))
     val subject = if (tile.fn == AggFn.COUNT) {
-        board?.name?.ifBlank { null } ?: context.getString(R.string.layout_tile_view_default)
+        viewName?.ifBlank { null } ?: context.getString(R.string.layout_tile_view_default)
     } else {
-        board?.columnInfo?.firstOrNull { it.id == tile.propId }?.name?.ifBlank { null } ?: context.getString(R.string.layout_tile_prop_default)
+        columns.firstOrNull { it.id == tile.propId }?.name?.ifBlank { null } ?: context.getString(R.string.layout_tile_prop_default)
     }
     val period = if (tile.fn == AggFn.STREAK) null else periodName(tile.period)
     return listOfNotNull(period?.let(context::getString), subject, fn).joinToString(" ")
