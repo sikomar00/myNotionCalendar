@@ -35,11 +35,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
+import com.ysdoing.notioncal.core.designsystem.toggleRow
 
 /** 필터 아이콘(세 줄 깔때기). material-icons-core에 없어 같은 모양을 직접 그린다. */
 internal val FilterIcon: ImageVector = materialIcon(name = "Filled.FilterList") {
@@ -101,17 +101,16 @@ internal fun FilterContent(
         }
         sources.forEach { source ->
             val shown = source.id !in filter.hiddenSourceIds
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().toggleRow(shown) { on -> // 이름을 눌러도 켜지고 줄이 48dp 이상(A-5), 이름이 스위치의 이름이다
+                    onChange(filter.copy(hiddenSourceIds = if (on) filter.hiddenSourceIds - source.id else filter.hiddenSourceIds + source.id))
+                },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Dot(Color(NotionColors.argb(source.colorHex)))
                 Spacer(Modifier.width(10.dp))
                 Text(source.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Switch(
-                    checked = shown,
-                    onCheckedChange = { on ->
-                        onChange(filter.copy(hiddenSourceIds = if (on) filter.hiddenSourceIds - source.id else filter.hiddenSourceIds + source.id))
-                    },
-                    modifier = Modifier.semantics { contentDescription = source.name },
-                )
+                Switch(checked = shown, onCheckedChange = null)
             }
             if (shown && source.hasColorProp) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 20.dp)) {
@@ -135,10 +134,7 @@ internal fun FilterContent(
             }
             HorizontalDivider()
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.filter_hide_done), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Switch(checked = filter.hideDone, onCheckedChange = { onChange(filter.copy(hideDone = it)) })
-        }
+        SwitchRow(stringResource(R.string.filter_hide_done), filter.hideDone) { onChange(filter.copy(hideDone = it)) }
         Text(
             stringResource(R.string.filter_note),
             style = MaterialTheme.typography.bodySmall,

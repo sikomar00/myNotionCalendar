@@ -1,7 +1,5 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,10 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,7 +46,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -65,6 +63,7 @@ import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.SelectValue
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -326,14 +325,7 @@ fun EventEditorForm(
             DateChip(date) { date = it }
             TimeChip(time) { time = it }
         }
-        // 글자를 눌러도 체크되도록 줄 전체를 토글로 만든다(터치 영역 확대).
-        Row(
-            Modifier.toggleable(value = done, role = Role.Checkbox, onValueChange = { done = it }),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = done, onCheckedChange = null)
-            Text(stringResource(R.string.qs_done), Modifier.padding(start = 8.dp, end = 12.dp))
-        }
+        CheckboxRow(stringResource(R.string.qs_done), done) { done = it } // 글자도 눌리고 줄이 48dp 이상(A-4)
         if (item.colorOptions.isNotEmpty()) {
             // 추가 속성(예: Pri.)처럼 색 기준 속성(예: Ctgr)도 이름을 붙인다.
             item.colorPropName?.let { name ->

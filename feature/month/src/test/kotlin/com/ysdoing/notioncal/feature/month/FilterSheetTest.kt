@@ -57,9 +57,9 @@ class FilterSheetTest {
         compose.onNodeWithText("Habit").performClick() // 다시 누르면 보인다
         assertEquals(setOf("cal/"), filter.hiddenOptionKeys)
 
-        compose.onNodeWithContentDescription("업무").performClick()
+        compose.onNodeWithText("업무").performClick() // 이름을 눌러도 켜진다(A-5)
         assertEquals(setOf("work"), filter.hiddenSourceIds)
-        compose.onNodeWithContentDescription("📅 Calendar").performClick()
+        compose.onNodeWithText("📅 Calendar").performClick()
         compose.onNodeWithText("Event").assertDoesNotExist() // DB를 숨기면 값 칩도 감춘다
 
         compose.onNodeWithText("완료한 일정 숨기기").assertExists()
