@@ -138,6 +138,10 @@
     <string name="view_widget_progress">완료 %1$d/%2$d</string>
     <string name="view_widget_progress_named">%1$s %2$d/%3$d</string>
     <string name="view_widget_not_synced">아직 받지 못했습니다</string>
+    <string name="view_widget_preset_add">%1$s 프리셋으로 새 항목 추가</string>
+    <string name="widget_config_presets">프리셋</string>
+    <string name="widget_config_preset_delete">%1$s 프리셋 삭제</string>
+    <string name="widget_config_preset_delete_label">삭제</string>
     <string name="view_widget_undo">방금 바꾼 것 되돌리기</string>
     <string name="view_widget_more">+%1$d 더 보기</string>
     <string name="view_widget_more_plus">%1$d+ 더 보기</string>

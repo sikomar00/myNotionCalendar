@@ -540,4 +540,27 @@ class ViewWriteProcessorTest {
         processor().process()
         assertEquals(listOf("v1"), viewRequests) // 판정 불가('반영 대기') → 전송 뒤 보기를 다시 받는다
     }
+
+    // --- Phase 11c 새 항목에 값 묶음(AD-01·05): 보내는 순간의 속성 이름으로 합치고, 그 사이 지워진 속성은 건너뛴다.
+
+    @Test
+    fun createSendsTheExtraValuesUnderTheCurrentPropertyNames() = runTest {
+        writer().create("v1", "점심", null, mapOf("st" to JsonPrimitive("o2"), "dn" to JsonPrimitive(true)))
+        processor().process()
+        assertEquals(
+            listOf("ds" to """{"Name":{"title":[{"text":{"content":"점심"}}]},"Status":{"status":{"id":"o2"}},"Done":{"checkbox":true}}"""),
+            created.map { it.first to it.second.toString() },
+        )
+    }
+
+    @Test
+    fun aValueForAPropertyDeletedMeanwhileIsLeftOutButTheItemIsStillCreated() = runTest {
+        writer().create("v1", "점심", null, mapOf("st" to JsonPrimitive("o2"), "dn" to JsonPrimitive(true)))
+        schema = NotionJson.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{"Name":{"id":"title","name":"Name","type":"title"},"Done":{"id":"dn","name":"Done","type":"checkbox"}}}""",
+        )
+        processor().process()
+        assertEquals(listOf("""{"Name":{"title":[{"text":{"content":"점심"}}]},"Done":{"checkbox":true}}"""), created.map { it.second.toString() })
+    }
 }

@@ -48,13 +48,15 @@ private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive
 
 /**
  * 새 항목(`POST /pages`)의 properties. [titleKey]·[dateKey]는 보내는 순간 스키마의 속성 이름이다. [date]는 yyyy-MM-dd이고
- * [dateKey]가 없으면 넣지 않는다.
+ * [dateKey]가 없으면 넣지 않는다. [extra]는 값 묶음(프리셋·맥락 채움)을 [encodeViewValue]로 바꾼 속성들이고 제목·날짜 뒤에 그대로 합친다.
  */
-fun encodeViewCreate(titleKey: String, title: String, dateKey: String?, date: String?): JsonObject = buildJsonObject {
+fun encodeViewCreate(titleKey: String, title: String, dateKey: String?, date: String?, extra: JsonObject = JsonObject(emptyMap())): JsonObject = buildJsonObject {
     putJsonObject(titleKey) {
         put("title", buildJsonArray { add(buildJsonObject { putJsonObject("text") { put("content", title.take(PropertyEncoder.MAX_TITLE)) } }) })
     }
     if (dateKey != null && date != null) {
         putJsonObject(dateKey) { putJsonObject("date") { put("start", date) } }
     }
+    val used = setOfNotNull(titleKey, dateKey.takeIf { date != null })
+    extra.forEach { (name, property) -> if (name !in used) put(name, property) } // 제목·날짜가 이미 정한 속성은 덮지 않는다
 }

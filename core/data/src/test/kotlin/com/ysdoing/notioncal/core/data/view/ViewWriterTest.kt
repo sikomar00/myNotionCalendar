@@ -273,6 +273,30 @@ class ViewWriterTest {
         assertNull(db.viewDao().earliestSendAfter(clock.millis() + 10_000)) // 모두 지났으면 없다
     }
 
+    // --- Phase 11c 새 항목에 값 묶음(AD-01·05): 유효한 값만 싣는다.
+
+    @Test
+    fun createKeepsOnlyValidExtraValuesAndNeverTheTitleColumn() = runTest {
+        val props = mapOf<String, kotlinx.serialization.json.JsonElement>(
+            "st" to JsonPrimitive("o2"), // 맞다
+            "dn" to JsonPrimitive("예"), // 체크박스에 글자: 거른다
+            "zz" to JsonPrimitive(1), // 없는 속성: 거른다
+            "t" to JsonPrimitive("다른 제목"), // 제목은 title 인자가 정한다
+            "pg" to JsonPrimitive(3.0),
+        )
+        assertTrue(writer().create("v1", "점심", null, props))
+        val spec = ViewJson.parseCreate(db.viewDao().firstWrite()!!.value)!!
+        assertEquals(mapOf<String, kotlinx.serialization.json.JsonElement>("st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(3.0)), spec.props)
+    }
+
+    @Test
+    fun theDateArgumentWinsOverADateValueInTheProps() = runTest {
+        val props = mapOf<String, kotlinx.serialization.json.JsonElement>("wh" to kotlinx.serialization.json.JsonObject(mapOf("start" to JsonPrimitive("2026-01-01"))))
+        writer().create("v1", "점심", LocalDate.of(2026, 11, 4), props)
+        val spec = ViewJson.parseCreate(db.viewDao().firstWrite()!!.value)!!
+        assertEquals(listOf("2026-11-04", emptyMap<String, Any>()), listOf(spec.date, spec.props)) // 날짜는 한 군데로만 간다
+    }
+
     // --- Phase 11c 되돌리기(IX-05): 지연 중인 쓰기를 지우고 행을 처음 값으로 복원한다. 이미 보낼 때가 된 쓰기는 건드리지 않는다.
 
     @Test

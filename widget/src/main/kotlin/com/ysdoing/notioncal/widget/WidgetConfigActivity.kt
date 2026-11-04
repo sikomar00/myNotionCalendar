@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.graphics.graphicsLayer
@@ -45,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -58,6 +61,7 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.data.view.ViewPresets
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -255,6 +259,7 @@ class WidgetConfigActivity : ComponentActivity() {
             ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
                 onChange(config.copy(numberStep = it.toDouble()))
             }
+            PresetList(config, onChange)
         }
     }
 
@@ -372,3 +377,20 @@ class WidgetConfigActivity : ComponentActivity() {
 }
 
 private val NUMBER_STEPS = listOf(1, 5, 10, 50, 100)
+
+/** AD-05: 저장해 둔 프리셋 목록과 삭제(만들기는 새 항목 시트의 '프리셋으로 저장'이다). 프리셋이 없으면 아무것도 그리지 않는다. */
+@Composable
+private fun PresetList(config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+    val presets = ViewPresets.parse(config.presetsJson)
+    if (presets.isEmpty()) return
+    ConfigSection(stringResource(R.string.widget_config_presets))
+    presets.forEach { preset ->
+        val delete = stringResource(R.string.widget_config_preset_delete, preset.name)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(preset.name, Modifier.weight(1f))
+            TextButton(onClick = { onChange(config.copy(presetsJson = ViewPresets.remove(config.presetsJson, preset.name))) }, modifier = Modifier.semantics { contentDescription = delete }) {
+                Text(stringResource(R.string.widget_config_preset_delete_label), color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}

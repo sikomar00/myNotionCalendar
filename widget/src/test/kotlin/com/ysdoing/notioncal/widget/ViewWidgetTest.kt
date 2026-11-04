@@ -29,6 +29,8 @@ import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewPreset
+import com.ysdoing.notioncal.core.data.view.ViewPresets
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -316,6 +318,46 @@ class ViewWidgetTest {
         onAllNodes(hasTestTag("viewRowLeaving")).assertCountEquals(0)
     }
 
+    // --- Phase 11c 프리셋 줄(IX-04·AD-05): 눌러서 값 묶음으로 새 항목을 만든다(4초 지연, 되돌릴 수 있다).
+
+    private fun presetState(vararg presets: ViewPreset, board: ViewBoard = todoBoard()) =
+        ViewWidgetState(board, WidgetConfig(1, viewId = "v1", presetsJson = ViewPresets.encode(presets.toList())), now)
+
+    @Test
+    fun aPresetLineShowsEachPresetAndTappingAddsThatItem() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(presetState(ViewPreset("점심"), ViewPreset("커피")), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(2)
+        onNode(hasTextEqualTo("점심")).assertExists()
+        onAllNodes(hasTestTag("viewPreset"))[0].assert(hasRunCallbackClickAction<PresetAddAction>(actionParametersOf(ViewCellAction.ViewKey to "v1", PresetAddAction.PresetKey to "점심")))
+        onNode(hasContentDescriptionEqualTo("점심 프리셋으로 새 항목 추가")).assertExists()
+    }
+
+    @Test
+    fun noPresetLineWithoutPresets() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(presetState(), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(0)
+    }
+
+    @Test
+    fun noPresetLineOnTheSmallestWidget() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        provideComposable { ViewWidgetContent(presetState(ViewPreset("점심")), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(0) // 2×2는 자리가 없다. '+'로 연 시트에서 만든다
+    }
+
+    @Test
+    fun noPresetLineWhenTheViewCannotCreate() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(presetState(ViewPreset("점심"), board = board()), systemFontScale = 1f) } // 쓰기 정보(제목 열)가 없는 보기
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(0)
+    }
+
     // --- Phase 11c 되돌리기 줄(IX-05): 지연 중인 쓰기가 있을 때만, 눌러서 되돌린다.
 
     private fun withPending(vararg sendAfter: Long) = board().copy(pendingSendAfter = sendAfter.toList())
@@ -478,7 +520,7 @@ class ViewWidgetTest {
         setContext(context)
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(todoBoard()), systemFontScale = 1f) }
-        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1")))
+        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 1)))
         onNode(hasContentDescriptionEqualTo("투두, 새 항목 추가")).assertExists()
         onNode(hasTestTag("viewHeader")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf())) // 이름을 누르면 새로고침은 그대로
     }
@@ -493,7 +535,9 @@ class ViewWidgetTest {
 
     @Test
     fun addIntentOpensTheSheetForThatViewOnly() {
-        val intent = viewAddIntent(context, "v1")
+        val intent = viewAddIntent(context, "v1", 7)
+        assertEquals(7, intent.getIntExtra(AppIntents.EXTRA_APPWIDGET_ID, -1)) // 프리셋은 위젯마다라 어느 위젯의 '+'인지 싣는다
+        assertNotEquals(viewAddIntent(context, "v1", 8).data, intent.data) // 같은 보기의 두 위젯도 PendingIntent가 따로다
         assertEquals(com.ysdoing.notioncal.core.data.AppIntents.ACTION_VIEW_ADD, intent.action)
         assertEquals("v1", intent.getStringExtra(com.ysdoing.notioncal.core.data.AppIntents.EXTRA_VIEW_ID))
         assertEquals(context.packageName, intent.`package`) // 같은 앱의 시트만 연다
@@ -583,7 +627,7 @@ class ViewWidgetTest {
         setAppWidgetSize(DpSize(320.dp, 240.dp))
         provideComposable { ViewWidgetContent(state(todoBoard().copy(rows = emptyList())), systemFontScale = 1f) }
         onNode(hasTextEqualTo(context.getString(R.string.view_widget_empty))).assertExists()
-        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1")))
+        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 1)))
     }
 
     @Test
@@ -602,7 +646,7 @@ class ViewWidgetTest {
         provideComposable { ViewWidgetContent(state(todoBoard().copy(rows = emptyList())), systemFontScale = 1f) }
         val line = "${context.getString(R.string.view_widget_empty)}. ${context.getString(R.string.view_widget_empty_cta)}"
         onNode(hasTextEqualTo(line)).assertExists()
-        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1"))) // 줄을 누르면 새 항목 시트
+        onNode(hasTestTag("viewEmpty")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 1))) // 줄을 누르면 새 항목 시트
     }
 
     @Test

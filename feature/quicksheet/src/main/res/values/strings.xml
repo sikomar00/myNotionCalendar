@@ -2,6 +2,9 @@
 <resources>
     <string name="qs_day_title">%1$d월 %2$d일 (%3$s)</string>
     <string name="qs_add_title">일정 추가</string>
+    <string name="view_add_prefilled">필터에서 채운 값</string>
+    <string name="view_add_preset_save">프리셋으로 저장</string>
+    <string name="view_add_preset_saved">프리셋을 저장했어요</string>
     <string name="view_add_title">새 항목</string>
     <string name="view_add_no_date">날짜 없음</string>
     <string name="view_add_today">오늘</string>

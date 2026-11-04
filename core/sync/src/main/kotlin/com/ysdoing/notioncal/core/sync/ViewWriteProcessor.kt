@@ -181,7 +181,11 @@ class ViewWriteProcessor @Inject constructor(
         val titleKey = schema.properties.values.firstOrNull { it.id == write.propId }?.name ?: return SendResult.REJECTED
         // 날짜 속성이 지워졌다면 날짜만 빼고 항목은 만든다(제목이 더 중요하다).
         val dateKey = spec.dateProp?.let { id -> schema.properties.values.firstOrNull { it.id == id }?.name }
-        writer.createPage(write.dataSourceId, encodeViewCreate(titleKey, spec.title, dateKey, spec.date))
+        // 값 묶음은 보내는 순간의 속성 이름·유형으로 인코딩한다. 그 사이 지워진 속성은 건너뛴다(항목은 만든다).
+        val extra = spec.props.mapNotNull { (id, value) ->
+            schema.properties.values.firstOrNull { it.id == id }?.let { property -> encodeViewValue(property.name, property.type, value) }
+        }.fold(emptyMap<String, JsonElement>()) { all, one -> all + one }
+        writer.createPage(write.dataSourceId, encodeViewCreate(titleKey, spec.title, dateKey, spec.date, JsonObject(extra)))
         return SendResult.SENT
     }
 

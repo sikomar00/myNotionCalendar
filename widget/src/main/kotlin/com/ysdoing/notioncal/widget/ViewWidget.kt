@@ -43,6 +43,7 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewPresets
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
@@ -135,7 +136,7 @@ fun ViewWidgetContent(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background).padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V),
     ) {
-        ViewHeader(board, metrics, palette)
+        ViewHeader(board, state.config.appWidgetId, metrics, palette)
         if (board == null) {
             val message = if (state.config.viewId == null) R.string.view_widget_choose else R.string.view_widget_missing
             ViewNote(message, state.config.appWidgetId, metrics, palette)
@@ -145,12 +146,16 @@ fun ViewWidgetContent(
     }
 }
 
-/** VW-08 새 항목 입력 시트 열기. 보기마다 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다(:widget은 :feature에 의존하지 않아 action 문자열로 연다). */
-internal fun viewAddIntent(context: Context, viewId: String): Intent =
+/**
+ * VW-08 새 항목 입력 시트 열기. 보기마다(위젯이 있으면 위젯마다) 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다(:widget은 :feature에 의존하지 않아
+ * action 문자열로 연다). [appWidgetId]는 시트가 이 위젯의 프리셋으로 저장하도록 싣는다(0이면 프리셋 저장 버튼이 없다).
+ */
+internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 0): Intent =
     Intent(AppIntents.ACTION_VIEW_ADD)
         .setPackage(context.packageName)
-        .setData("notioncal://view/add/$viewId".toUri())
+        .setData((if (appWidgetId > 0) "notioncal://view/add/$viewId/$appWidgetId" else "notioncal://view/add/$viewId").toUri())
         .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
+        .apply { if (appWidgetId > 0) putExtra(AppIntents.EXTRA_APPWIDGET_ID, appWidgetId) }
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /**
@@ -180,7 +185,7 @@ internal fun viewChoiceIntent(context: Context, viewId: String, pageId: String, 
  * 오른쪽에 새로고침(넓을 때)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 '+'.
  */
 @Composable
-private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewHeader(board: ViewBoard?, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     // 이름 없는 보기도 노션에서 허용된다. 접근성 설명이 글자를 대신하므로 보기 이름을 함께 읽게 한다.
     val title = board?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.view_widget_label)
@@ -214,7 +219,7 @@ private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette
         if (board?.canCreate == true) {
             WidgetIconButton(
                 R.drawable.ic_widget_add, context.getString(R.string.view_widget_add_description, title), "viewAdd",
-                actionStartActivity(viewAddIntent(context, board.viewId)), palette, style = IconButtonStyle.FILLED, height = height,
+                actionStartActivity(viewAddIntent(context, board.viewId, appWidgetId)), palette, style = IconButtonStyle.FILLED, height = height,
             )
         }
     }
@@ -244,12 +249,15 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
     if (board.undoableAt(state.nowMillis) > 0) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
-    if (board.rows.isEmpty()) {
-        ViewEmpty(board, m, palette)
-        return
-    }
     val size = LocalSize.current
     val step = sizeStep(size)
+    // 프리셋 줄(IX-04): 새 항목을 만들 수 있는 보기에서, 2×2보다 넓을 때만 둔다.
+    val presets = ViewPresets.parse(state.config.presetsJson)
+    if (presets.isNotEmpty() && board.canCreate && step != SizeStep.COMPACT) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
+    if (board.rows.isEmpty()) {
+        ViewEmpty(board, state.config.appWidgetId, m, palette)
+        return
+    }
     // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
     val look = ViewLook(m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT)
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
@@ -267,13 +275,13 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
 
 /** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */
 @Composable
-private fun ViewEmpty(board: ViewBoard, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewEmpty(board: ViewBoard, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     val canAdd = board.canCreate
     WidgetEmpty(
         R.drawable.ic_widget_checklist, context.getString(R.string.view_widget_empty), palette, 12f * m.spFactor,
         ctaText = if (canAdd) context.getString(R.string.view_widget_empty_cta) else null,
-        ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId)) else null,
+        ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId, appWidgetId)) else null,
         ctaTag = "viewEmpty",
     )
 }

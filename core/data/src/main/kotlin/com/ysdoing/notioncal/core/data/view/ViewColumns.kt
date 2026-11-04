@@ -128,9 +128,12 @@ data class ViewColumn(
     }
 }
 
-/** 새 항목 만들기 값(제목, 선택 날짜 yyyy-MM-dd와 그 날짜를 넣을 속성 ID). view_writes.value에 JSON으로 담는다. */
+/**
+ * 새 항목 만들기 값(제목, 선택 날짜 yyyy-MM-dd와 그 날짜를 넣을 속성 ID, Phase 11c의 값 묶음 [props]: 속성 ID → [ViewColumn.display]가 적은 모양의 값).
+ * view_writes.value에 JSON으로 담는다. [props]는 기본이 빈 맵이라 이전 버전이 쌓은 쓰기도 읽힌다.
+ */
 @Serializable
-data class ViewCreate(val title: String, val date: String? = null, val dateProp: String? = null)
+data class ViewCreate(val title: String, val date: String? = null, val dateProp: String? = null, val props: Map<String, JsonElement> = emptyMap())
 
 /** view_snapshots.columnInfo·view_rows.typed의 JSON 읽기·쓰기. 깨진 글자는 빈 값으로 읽는다(캐시라 다시 받으면 된다). */
 object ViewJson {

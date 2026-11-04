@@ -87,6 +87,9 @@ object AppIntents {
     const val ACTION_VIEW_CHOICE = "com.ysdoing.notioncal.action.VIEW_CHOICE"
     const val EXTRA_PROP_ID = "com.ysdoing.notioncal.extra.PROP_ID"
 
+    /** 위젯 ID(Phase 11c: 새 항목 시트에서 이 위젯의 프리셋으로 저장하려고 위젯 '+'가 싣는다). 없으면 프리셋 저장 버튼을 숨긴다. */
+    const val EXTRA_APPWIDGET_ID = "com.ysdoing.notioncal.extra.APPWIDGET_ID"
+
     /** VW-08 노션 보기 위젯의 새 항목 입력 시트. EXTRA_VIEW_ID = 보기 ID */
     const val ACTION_VIEW_ADD = "com.ysdoing.notioncal.action.VIEW_ADD"
     const val EXTRA_VIEW_ID = "com.ysdoing.notioncal.extra.VIEW_ID"

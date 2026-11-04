@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.notion.mapping
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -51,6 +52,11 @@ class ViewValueEncoderTest {
         )
         assertEquals(json("""{"Name":{"title":[{"text":{"content":"메모"}}]}}"""), encodeViewCreate("Name", "메모", null, null))
         assertEquals(json("""{"Name":{"title":[{"text":{"content":"메모"}}]}}"""), encodeViewCreate("Name", "메모", "When", null)) // 날짜 값이 없으면 넣지 않는다
+        // Phase 11c: 값 묶음(프리셋·맥락 채움)은 제목 뒤에 그대로 합친다.
+        assertEquals(
+            json("""{"Name":{"title":[{"text":{"content":"점심"}}]},"Status":{"status":{"id":"o2"}}}"""),
+            encodeViewCreate("Name", "점심", null, null, json("""{"Status":{"status":{"id":"o2"}}}""").jsonObject),
+        )
     }
 
     @Test

@@ -29,7 +29,7 @@ class ViewAddContentTest {
     private fun show(hasDate: Boolean = true) {
         compose.setContent {
             MaterialTheme {
-                ViewAddContent(viewName = "할 일", hasDate = hasDate, today = today, onSave = { title, date -> saved += title to date }, onCancel = { cancelled++ })
+                ViewAddContent(viewName = "할 일", hasDate = hasDate, today = today, onSave = { title, date, _ -> saved += title to date }, onCancel = { cancelled++ })
             }
         }
     }
@@ -79,7 +79,7 @@ class ViewAddContentTest {
     private fun showWith(canAdd: Boolean = true, saving: Boolean = false, failed: Boolean = false) {
         compose.setContent {
             MaterialTheme {
-                ViewAddContent("할 일", true, today, { title, date -> saved += title to date }, { cancelled++ }, canAdd = canAdd, saving = saving, failed = failed)
+                ViewAddContent("할 일", true, today, { title, date, _ -> saved += title to date }, { cancelled++ }, canAdd = canAdd, saving = saving, failed = failed)
             }
         }
     }

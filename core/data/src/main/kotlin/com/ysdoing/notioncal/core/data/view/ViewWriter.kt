@@ -108,14 +108,19 @@ class ViewWriter @Inject constructor(
      * shortcut: 노션이 만들었는데 응답이 끊기면(시간 초과·연결 끊김·5xx) 처리기가 다시 보내 같은 항목이 둘 생길 수 있다(일정 아웃박스의
      * '이미 만들었나' 확인이 없다), 문제가 되면 만든 시각과 제목으로 찾아본다.
      */
-    suspend fun create(viewId: String, title: String, date: LocalDate?, sendDelayMs: Long = 0): Boolean {
+    suspend fun create(viewId: String, title: String, date: LocalDate?, props: Map<String, JsonElement> = emptyMap(), sendDelayMs: Long = 0): Boolean {
         val name = title.trim()
         if (name.isEmpty()) return false
         val snapshot = dao.snapshot(viewId) ?: return false
         val columns = ViewJson.columns(snapshot.columnInfo)
         val titleColumn = columns.firstOrNull { it.type == "title" } ?: return false
         val dateColumn = columns.firstOrNull { it.type == "date" }?.takeIf { date != null }
-        val spec = ViewCreate(name, date?.takeIf { dateColumn != null }?.toString(), dateColumn?.id)
+        // 값 묶음(프리셋·맥락 채움)은 쓸 수 있는 속성에 맞는 값만 싣는다. 제목과 날짜 인자가 정한 날짜 속성은 따로 정하니 뺀다(잘못된 값 하나로 항목을 잃지 않게 거른다).
+        val extra = props.filter { (id, value) ->
+            val column = columns.firstOrNull { it.id == id }
+            column != null && column.writable && column.id != titleColumn.id && column.id != dateColumn?.id && value !is JsonNull && column.accepts(value)
+        }
+        val spec = ViewCreate(name, date?.takeIf { dateColumn != null }?.toString(), dateColumn?.id, extra)
         val queued = dao.enqueueCreate(
             ViewWriteEntity(
                 viewId = viewId, pageId = "new-${UUID.randomUUID()}", dataSourceId = snapshot.dataSourceId, propId = titleColumn.id,
