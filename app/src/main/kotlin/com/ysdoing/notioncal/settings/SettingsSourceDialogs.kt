@@ -153,7 +153,7 @@ internal fun ColorDialog(
                             val selected = color.equals(hex, ignoreCase = true)
                             Box(
                                 Modifier
-                                    .size(44.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .selectable(selected = selected, role = Role.RadioButton) { hex = color }
                                     .semantics { contentDescription = color },

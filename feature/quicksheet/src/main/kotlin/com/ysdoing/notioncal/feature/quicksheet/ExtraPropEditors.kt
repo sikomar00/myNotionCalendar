@@ -50,7 +50,9 @@ internal val PropEditsSaver = Saver<Map<String, PropValue>, String>(
 @Composable
 internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropValue) -> Unit, key: String) {
     Column(Modifier.fillMaxWidth()) {
-        Text(prop.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (prop.type != "number" && prop.type != "url") {
+            Text(prop.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         when (prop.type) {
             "select", "status" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val selected = value.optionIds?.firstOrNull()
@@ -78,6 +80,7 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
                         text = input
                         onChange(PropValue(number = input.trim().toDoubleOrNull()))
                     },
+                    label = { Text(prop.name) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     isError = text.isNotBlank() && text.trim().toDoubleOrNull() == null,
@@ -94,6 +97,7 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
                             text = input
                             onChange(PropValue(text = input.trim().ifEmpty { null }))
                         },
+                        label = { Text(prop.name) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),

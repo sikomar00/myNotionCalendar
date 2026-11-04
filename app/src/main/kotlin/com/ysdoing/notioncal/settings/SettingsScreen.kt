@@ -285,7 +285,7 @@ fun SettingsRoute(
                 TextButton(onClick = {
                     viewModel.delete(id)
                     pendingDelete = null
-                }) { Text(stringResource(R.string.settings_delete)) }
+                }) { Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error) } // A-13
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(stringResource(R.string.settings_cancel)) } },
         )

@@ -6,13 +6,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -26,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -146,7 +143,7 @@ fun AddForm(
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.weight(1f).focusRequester(focus),
-                placeholder = { Text(stringResource(R.string.qs_title_hint)) },
+                label = { Text(stringResource(R.string.qs_title_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
@@ -217,8 +214,9 @@ fun DayList(
         )
         return
     }
-    LazyColumn(modifier.heightIn(max = 360.dp)) {
-        items(events, key = { it.pageId }) { event ->
+    // 시트 전체가 스크롤하므로 목록은 따로 스크롤하지 않는다(UX-09, A-10).
+    Column(modifier) {
+        events.forEach { event ->
             val toggleLabel = stringResource(R.string.qs_toggle_done, event.title)
             Row(
                 Modifier.fillMaxWidth().clickable { onOpen(event) }.padding(vertical = 2.dp),
@@ -360,8 +358,9 @@ fun EventEditorForm(
                 modifier = Modifier.testTag("ddayPin"),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
+        // ED-03·UX-08: 저장은 폭 전체 주 버튼, 열기·삭제는 아래 줄(줄바꿈)에 떨어뜨리고 삭제는 error 색이다(A-7).
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 val dateChanged = date != event.startDate || time != originalTime
                 onSave(
                     EventChange(
@@ -373,13 +372,15 @@ fun EventEditorForm(
                     ),
                 )
             }) { Text(stringResource(R.string.qs_save)) }
-            if (event.url.isNotBlank()) {
-                OutlinedButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, event.url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Text(stringResource(R.string.qs_open_in_notion)) }
-            }
-            TextButton(onClick = { confirmDelete = true }) {
-                Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (event.url.isNotBlank()) {
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, event.url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }) { Text(stringResource(R.string.qs_open_in_notion)) }
+                }
+                TextButton(onClick = { confirmDelete = true }) {
+                    Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
@@ -392,7 +393,7 @@ fun EventEditorForm(
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text(stringResource(R.string.qs_delete)) }
+                }) { Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error) } // A-13
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.qs_cancel)) } },
         )
