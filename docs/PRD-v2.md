@@ -658,6 +658,9 @@ Phase 10 구현 메모(2026-11-04): 10-0 마이그레이션 시험·문서 정�
 
 Phase 11a 구현 메모(2026-11-04, 보기 렌더러·데이터): Room v17(`view_snapshots.viewConfig`·`rowsComplete`, `widget_configs.viewPage`), 보기 행 상한 50→100(요청 수는 같음, 넘치면 `rowsComplete=false` → "N+ 더 보기"), 보이는 속성 전부·옵션 색을 `columnInfo`에, 보드 `group_by` 속성을 '그룹' 역할 열로(보드 보기만). 위젯은 크기 단계(2×2·4×2·4×4·전체)별 행 상한 3/3/8/14와 마지막 "+N 더 보기"(탭 → 뷰어), 보드 열 나누기(‹ ›)·다중 선택 칩·옵션 색 알약, 새 모듈 `:feature:viewer`(`notioncal://view/<id>` 딥링크, `view/{viewId}` 경로). 실측으로 알게 된 것: ① 노션 `configuration`은 갤러리가 `property_name`을 주지 않고(스키마 ID로 이름을 찾는다) 캘린더가 `date_property_id`를 준다. ② **삼성 런처는 위젯 크기를 약 1.4배로 보고한다**(S25: 2열×2행 234×213, 4열×5행 501×581, 행이 하나 늘 때 약 123dp) — 크기 단계 경계를 일반 런처와 삼성 둘 다 갈라지는 270·260·520dp로 잡았다. 미검증: 보드 보기(사용자 노션에 보드 보기가 없어 시험 데이터로만 확인), 4×2·4×4·전체 크기의 실기기 모양, 행 탭으로 노션 열기, 숫자 형식(`number.format`) 표시(하지 않음).
 
+Phase 11b 구현 메모(2026-11-04, 편집 시트): 휴지통 쓰기 큐(`view_writes.propType = "trash"`, 모든 보기에서 행을 바로 지우고 `trashPage`로 보냄, 앞선 속성 바꿈이 먼저, 충돌 확인 없음), 공용 `SwitchRow`·`CheckboxRow`·`RadioRow`, **보기 행 편집 시트**(`:feature:quicksheet`의 `ViewRowEditor`·`ViewRowSheet`, 뷰어의 행 탭으로 연다): 보기의 표시 순서대로 제목·텍스트·숫자·선택·다중 선택(새 옵션 이름)·상태·날짜(날짜만)·체크박스·URL·이메일·전화 편집기, 읽기 전용은 잠금 + 이유(ED-02), 바뀐 속성만 저장, 저장은 폭 전체 버튼·열기와 휴지통은 아래 줄(ED-03), 저장 안 한 변경이 있으면 닫기 전에 '변경을 버릴까요?'(ED-04). 알려진 절충: 속성마다 `set`을 따로 쌓아 일부만 쌓일 수 있고(저장은 화면 수명과 무관하게 `viewModelScope`에서 끝까지 하고, 실패하면 시트를 열어 둔 채 알림), 날짜의 시간 편집·본문(ED-06)은 하지 않으며, 서식·언급이 든 텍스트 속성은 저장하면 일반 글자로 풀린다(§5.8의 일정 편집과 같은 절충), 휴지통은 페이지 단위 쓰기라 `view_writes`에 표식 `propId`(`!trash`)로 얹었고(앞선 속성 바꿈은 지운다, 보기 새로 받기가 지운 행을 되살리지 않도록 `replace`가 휴지통 대기 페이지를 뺀다, 일정 DB와 겹치면 `events` 행도 지운다), 열 때 값과 견줘 바뀐 칸만 보내므로 시트가 열린 사이 노션 쪽 변경은 덮어쓰지 않는다. 코드 규칙 예외: `ViewRowEditor`·`ViewRowSheet`의 인자 수가 3개를 넘는다(콜백 묶음 분리는 11c에서 시트를 위젯과 이을 때 정한다). 위젯 행 탭은 아직 노션을 연다(시트와 잇는 것은 11c).
+**미검증(실기기 확인을 하지 않았다, 2026-11-04 사용자 결정)**: 편집 시트 전체(뷰어에서 행 탭 → 시트, 속성 저장이 노션에 반영됨, 아래로 밀어 닫기 확인, 글꼴 2.0 모양), 휴지통 전송(시험용 행 만들기 → 휴지통 → 노션 복원), 위젯 설정·필터 시트의 공용 행 모양, 일정 시트의 바뀐 버튼 배치. 단위·Compose·Roborazzi 시험으로만 확인했다.
+
 Phase별 지시문
 
 ```text
@@ -798,16 +801,16 @@ Phase 11을 진행해. §5의 P0와 PR 표의 MVP 열. 보기 렌더러마다 Gl
 | A-1 | 남음 | `AgendaView.kt:220`, `SearchScreen.kt:215`: `alpha(if (event.done) 0.55f else 1f)`. `DONE_TEXT_ALPHA`는 `Emphasis.kt`에만 있음 |
 | A-2 | 남음 | `MonthGrid.kt:394` `DraggedChip`: `color = Color.White` |
 | A-3 | 해결 | `SettingsSourceDialogs.kt:163`: `NotionColors.onColor(color)`(접근성 커밋 `3f47a71`) |
-| A-4 | 부분 | 남음: `Editors.kt:330`('완료' 줄), `EditorChips.kt:108`('종일' 줄), `SettingsSourceDialogs.kt:156`(44dp). 해결: `AddDatabaseScreen.kt:368`(48dp 영역 안에 36dp 원) |
-| A-5 | 남음 | `SwitchRow`·`CheckboxRow`·`RadioRow`는 전체 저장소에 0건(`:core:designsystem`에도 없음). 위젯 설정은 `WidgetConfigActivity.kt:376-380`의 private `toggleRow`·`selectableRow`(48dp)로 따로 해결 |
+| A-4 | 해결(2026-11-04, 11b) | 일정 시트 '완료'·'종일' 줄은 공용 `CheckboxRow`·`toggleRow`로 48dp 이상, `SettingsSourceDialogs.kt` 색 견본 누름 영역 48dp. `AddDatabaseScreen.kt:368`은 앞서 해결 |
+| A-5 | 부분(2026-11-04, 11b) | `:core:designsystem`에 `SwitchRow`·`CheckboxRow`·`RadioRow`(+`toggleRow`·`selectableRow`)를 만들어 위젯 설정·필터 시트·일정 시트가 쓴다(시험 4개). **남음(11f에서 설정 화면과 함께)**: `SettingsScreen`·`SettingsSourceDialogs`·`ReminderSettings`·`WeatherSettings`·`AddDatabaseScreen`의 이름 없는 스위치·체크박스·라디오 |
 | A-6 | 남음 | `SettingsSourceDialogs.kt:69` `SourceRow`: 한 `Row`에 요소 7개 |
-| A-7 | 남음 | `Editors.kt:371`: `Row` 안에 저장·열기·삭제 |
+| A-7 | 해결(2026-11-04, 11b) | 일정 편집 폼: 저장 폭 전체, 열기·삭제는 아래 줄 `FlowRow`(삭제 error 색). 글꼴 2.0 시험 포함 |
 | A-8 | 부분 | 해결: 구역 제목(`WidgetConfigActivity.kt:372`). 남음: 칩 줄이 아직 `Row`(`:402`), Slider 이름 없음(`:224`·`:232`), 로딩 중 빈 화면(`:158`) |
-| A-9 | 남음 | `Editors.kt:150`: `placeholder`만 있고 `label` 없음 |
-| A-10 | 남음 | `Editors.kt:221` `DayList`: `LazyColumn(heightIn(max = 360.dp))` |
-| A-11 | 남음 | `ExtraPropEditors.kt:76-101`: 숫자·URL 입력칸에 `label` 없음 |
+| A-9 | 해결(2026-11-04, 11b) | 빠른 추가 제목 칸이 `label` |
+| A-10 | 해결(2026-11-04, 11b) | `DayList`가 `Column` + `forEach`(자체 스크롤 없음, 시험 포함) |
+| A-11 | 해결(2026-11-04, 11b) | 추가 속성 숫자·URL 입력칸 `label = 속성 이름`(시험 포함) |
 | A-12 | 남음 | `MonthScreen.kt:176`(채운 톱니), `:257`('▾' 글자). 설정 카테고리 분리도 아직 없음(§5.12 노트) |
-| A-13 | 남음 | `Editors.kt:399-403`, `SettingsScreen.kt:273-277`: 확인 버튼에 error 색 없음 |
+| A-13 | 해결(2026-11-04, 11b) | 일정 시트·설정 DB 삭제 확인 버튼 error 색 |
 | A-14 | 남음 | `SettingsSourceDialogs.kt:159`(hex), `AddDatabaseScreen.kt:371`(영어 키) |
 | A-15 | 남음(3곳) | 요일색 복사본이 `CalendarColors.kt:20-23`, `WidgetContent.kt:349-352`, `HabitScreen.kt:252`에 있음. `DesignTokens`에 SUNDAY·SATURDAY 없음 |
 
