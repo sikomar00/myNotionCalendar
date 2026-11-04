@@ -333,6 +333,44 @@ class ViewSyncTest {
     }
 
     @Test
+    fun theBoardGroupPropertyIsKeptEvenWhenItIsHiddenInTheView() = runTest {
+        // Phase 11a: 보드의 group_by 속성은 카드에 안 보여도 행의 값(typed)과 옵션을 알아야 열로 나눌 수 있다. 보이지 않아도 'group' 역할로 담는다.
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Status":{"id":"st","name":"Status","type":"status","status":{"options":[{"id":"o1","name":"할 일","color":"gray"},{"id":"o2","name":"완료","color":"green"}],"groups":[]}}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name")) // Status는 카드에 보이지 않는다
+        viewRaw = Json.parseToJsonElement("""{"type":"board","group_by":{"property_id":"st","type":"status"}}""").jsonObject
+        rowPages = listOf(
+            PageDto(
+                id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+                properties = Json.parseToJsonElement("""{"Name":{"type":"title","title":[{"plain_text":"a"}]},"Status":{"type":"status","status":{"id":"o2","name":"완료"}}}""").jsonObject,
+            ),
+        )
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to "", "Status" to ViewColumn.ROLE_GROUP), columns.map { it.name to it.role })
+        assertEquals(JsonPrimitive("o2"), ViewJson.typed(db.viewDao().rows("v1").single().typed)["st"])
+        assertEquals(listOf("할 일" to "gray", "완료" to "green"), columns.single { it.role == ViewColumn.ROLE_GROUP }.options.map { it.name to it.color })
+    }
+
+    @Test
+    fun theGroupByShapeIsReadFromAnObjectOrAPlainPropertyId() {
+        val schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{"Status":{"id":"st","name":"Status","type":"status"},"Memo":{"id":"mm","name":"Memo","type":"rich_text"}}}""",
+        )
+        fun group(config: String) = withGroupRole(emptyList(), schema, Json.parseToJsonElement(config).jsonObject).map { it.id to it.role }
+        assertEquals(listOf("st" to ViewColumn.ROLE_GROUP), group("""{"group_by":{"property_id":"st"}}"""))
+        assertEquals(listOf("st" to ViewColumn.ROLE_GROUP), group("""{"group_by":"st"}"""))
+        assertEquals(emptyList<Pair<String, String>>(), group("""{"group_by":{"property_id":"mm"}}""")) // 선택·상태만 열로 나눈다
+        assertEquals(emptyList<Pair<String, String>>(), group("""{"type":"table"}"""))
+    }
+
+    @Test
     fun columnInfoCoversEveryVisiblePropertyWithOptionColors() = runTest {
         // Phase 11a: 읽기 전용 유형(수식·롤업)도 보이는 열이면 쓰기 정보에 담아 편집 시트가 잠금 줄로 보여 주고, 옵션은 색을 함께 담는다.
         schema = Json { ignoreUnknownKeys = true }.decodeFromString(

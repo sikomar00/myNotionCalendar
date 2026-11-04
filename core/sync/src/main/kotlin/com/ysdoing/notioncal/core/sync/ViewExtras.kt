@@ -113,3 +113,19 @@ internal fun withReadingRoles(columns: List<ViewColumn>, schema: DataSourceDto):
     val missing = roles.filter { (property, _) -> tagged.none { it.id == property.id } }
     return tagged + missing.map { (property, role) -> ViewColumn(property.id, property.name, "number", role = role) }
 }
+
+/**
+ * Phase 11a 보드의 `group_by` 속성(선택·상태만)에 [ViewColumn.ROLE_GROUP]을 달아 쓰기 정보에 넣는다. 카드에 보이지 않는 속성이어도 행의 값과 옵션을
+ * 알아야 열로 나눌 수 있어서다. `group_by`는 `{"property_id": …}` 객체이거나(추정, 보드 보기는 실측 전) 속성 id 글자 하나로 온다.
+ * 보드가 아니거나 못 알아보면 그대로 돌려준다.
+ */
+internal fun withGroupRole(columns: List<ViewColumn>, schema: DataSourceDto, config: JsonObject?): List<ViewColumn> {
+    val groupBy = config?.get("group_by")
+    val id = (groupBy as? JsonObject)?.get("property_id")?.let { (it as? JsonPrimitive)?.contentOrNull } ?: (groupBy as? JsonPrimitive)?.contentOrNull ?: return columns
+    val property = schema.properties.values.firstOrNull { it.id == id && it.type in GROUPABLE } ?: return columns
+    val tagged = columns.map { if (it.id == id) it.copy(role = ViewColumn.ROLE_GROUP) else it }
+    if (tagged.any { it.id == id }) return tagged
+    return tagged + (viewColumn(property)?.copy(role = ViewColumn.ROLE_GROUP) ?: return columns)
+}
+
+private val GROUPABLE = setOf("select", "status")

@@ -154,7 +154,7 @@ class ViewSync @Inject constructor(
         // 제목은 행이 없어도 알 수 있게 스키마에서 찾는다(빈 보기나 카드 제목을 열 목록에 넣지 않는 보드·갤러리도 새 항목을 만들 수 있다).
         val titleName = pages.firstOrNull()?.titlePropertyName() ?: schema?.properties?.values?.firstOrNull { it.type == "title" }?.name
         val columns = visibleColumns(configured, titleName)
-        val writable = schema?.let { withReadingRoles(writableColumns(columns, it), it) }
+        val writable = schema?.let { withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, view.configuration?.raw) }
             ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
         val meta = registered.copy(
             name = view.name,

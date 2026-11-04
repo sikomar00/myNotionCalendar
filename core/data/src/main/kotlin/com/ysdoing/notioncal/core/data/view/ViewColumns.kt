@@ -98,6 +98,9 @@ data class ViewColumn(
         const val ROLE_PAGES_READ = "pagesRead"
         const val ROLE_PAGES_TOTAL = "pagesTotal"
 
+        /** Phase 11a 보드의 `group_by` 속성. 카드에 보이지 않아도 열로 나누려고 쓰기 정보에 담는다. */
+        const val ROLE_GROUP = "group"
+
         /** 앱에서 쓸 수 있는 속성 유형(PRD §5.8 MVP 편집: 제목·텍스트·숫자·선택·다중 선택·상태·날짜·체크박스·URL·이메일·전화). */
         val WRITABLE_TYPES = setOf("title", "rich_text", "number", "select", "multi_select", "status", "date", "checkbox", "url", "email", "phone_number")
         private val OPTION_TYPES = setOf("select", "status")
