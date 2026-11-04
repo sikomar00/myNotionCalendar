@@ -59,6 +59,32 @@ class ViewReaderTest {
         assertEquals("c2", server.takeRequest().url.queryParameter("start_cursor"))
     }
 
+    // --- Phase 11a 보기 설정 원본과 '더 있음'
+
+    @Test
+    fun keepsTheWholeConfigurationObjectNotOnlyTheProperties() = runTest {
+        // 보드의 group_by 같은 유형별 키를 앱이 읽도록 configuration 원본을 보존한다(알려진 키만 쓰고 나머지는 그대로 둔다).
+        server.enqueue(
+            ok(
+                """{"object":"view","id":"v1","name":"보드","type":"board","configuration":{"type":"board",
+                    "group_by":{"property_id":"st","type":"status","sort":{"type":"manual"}},
+                    "properties":[{"property_id":"title","property_name":"Name","visible":true},{"property_id":"st","property_name":"Status","visible":false}]}}""",
+            ),
+        )
+        val config = reader.view("v1").configuration!!
+        assertEquals(listOf("Name" to true, "Status" to false), config.properties.map { it.propertyName to it.visible })
+        assertEquals("st", config.raw["group_by"]!!.jsonObject["property_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun rowsReportWhetherNotionHasMoreThanTheCap() = runTest {
+        server.enqueue(ok("""{"object":"list","results":[{"object":"page","id":"a","last_edited_time":"2026-11-01T00:00:00.000Z"}],"has_more":true,"next_cursor":"c2"}"""))
+        server.enqueue(ok("""{"object":"list","results":[{"object":"page","id":"a","last_edited_time":"2026-11-01T00:00:00.000Z"}],"has_more":false}"""))
+        val view = com.ysdoing.notioncal.core.notion.dto.ViewDto(id = "v1")
+        assertEquals(listOf(1, true), reader.viewRows("ds1", view).let { listOf(it.pages.size, it.hasMore) })
+        assertEquals(false, reader.viewRows("ds1", view).hasMore)
+    }
+
     // --- Phase 10-7 보기 쿼리(`POST /v1/views/{id}/queries`): 보기가 보여 주는 페이지 id를 순서대로. 값은 주지 않는다.
 
     private fun queryPage(id: String, vararg pages: String, more: Boolean = false, cursor: String? = null, status: String? = null) =

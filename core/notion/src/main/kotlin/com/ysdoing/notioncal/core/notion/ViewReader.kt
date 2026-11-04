@@ -8,8 +8,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** 보기 위젯이 한 보기에서 받는 행 수(VW-07). 더 있어도 이만큼만 받는다. */
-const val VIEW_ROW_LIMIT = 50
+/**
+ * 보기 위젯이 한 보기에서 받는 행 수(VW-07). 더 있어도 이만큼만 받는다. 노션이 한 번에 주는 최대(100)라 요청 수는 그대로다.
+ * 넘치면 [ViewRows.hasMore]로 알리고 위젯은 'N+ 더 보기'로 적는다.
+ */
+const val VIEW_ROW_LIMIT = 100
+
+/** 보기 행 받기 결과. [hasMore]는 상한을 넘는 행이 노션에 더 있다는 뜻이다. */
+data class ViewRows(val pages: List<PageDto>, val hasMore: Boolean)
 
 /** VW-01·04 노션 보기 읽기. 테스트에서는 메모리 구현으로 바꾼다. */
 interface ViewReader {
@@ -24,6 +30,10 @@ interface ViewReader {
      * 보기의 필터·빠른 필터·정렬을 데이터 소스 쿼리에 그대로 넣는다(9-A).
      */
     suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int = VIEW_ROW_LIMIT): List<PageDto>
+
+    /** [rows]에 '더 있음' 표시를 붙인 것. 구현하지 않은 읽기 구현은 더 없다고 본다. */
+    suspend fun viewRows(dataSourceId: String, view: ViewDto, limit: Int = VIEW_ROW_LIMIT): ViewRows =
+        ViewRows(rows(dataSourceId, view, limit), hasMore = false)
 
     /**
      * 노션이 이 보기에 넣은 페이지 id를 보기의 순서대로 앞에서 [limit]개까지 받는다(보기 쿼리, 값은 없다). 앱은 값을 데이터 소스 쿼리로 받으므로

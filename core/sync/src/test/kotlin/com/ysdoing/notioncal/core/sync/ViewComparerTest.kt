@@ -83,7 +83,7 @@ class ViewComparerTest {
         // 위젯은 앞 50행만 받는다. 보기에 더 있어도 그 뒤는 비교하지 않는다(요청도 그만큼만 한다).
         val rows = (0 until com.ysdoing.notioncal.core.notion.VIEW_ROW_LIMIT).map { "p$it" }
         view("v1", "table", *rows.toTypedArray())
-        queried = mapOf("v1" to ViewQueryIds(rows + (50 until 60).map { "p$it" }, complete = true))
+        queried = mapOf("v1" to ViewQueryIds(rows + (com.ysdoing.notioncal.core.notion.VIEW_ROW_LIMIT until com.ysdoing.notioncal.core.notion.VIEW_ROW_LIMIT + 10).map { "p$it" }, complete = true))
         assertTrue(compare().single().matches)
         assertEquals(listOf(com.ysdoing.notioncal.core.notion.VIEW_ROW_LIMIT), limits)
     }

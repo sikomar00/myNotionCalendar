@@ -65,6 +65,8 @@ class ViewSyncTest {
     /** M3: 쓰기 정보(종류·선택지)를 읽을 스키마와, 행을 바꿔 끼울 수 있는 페이지 목록. */
     private var schema = DataSourceDto(id = "ds")
     private var schemaCalls = 0
+    private var rowsMore = false
+    private var viewRaw: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
     private var schemaError: NotionError? = null
     private var rowPages: List<PageDto>? = null
 
@@ -86,9 +88,12 @@ class ViewSyncTest {
                 id = viewId,
                 name = "할 일 $viewId",
                 type = "table",
-                configuration = ViewConfigDto(viewProperties),
+                configuration = ViewConfigDto(viewProperties, viewRaw),
             )
         }
+
+        override suspend fun viewRows(dataSourceId: String, view: ViewDto, limit: Int) =
+            com.ysdoing.notioncal.core.notion.ViewRows(rows(dataSourceId, view, limit), hasMore = rowsMore)
 
         override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int) =
             rowPages ?: listOf(page("p1", "첫째", "집"), page("p2", "둘째", "일"))
@@ -545,6 +550,23 @@ class ViewSyncTest {
         sync().syncContaining(emptyList(), listOf("ds", "다른 소스"))
 
         assertEquals(setOf("v1", "v2"), requested.toSet())
+    }
+
+    @Test
+    fun savesTheViewConfigurationAndWhetherAllRowsWereReceived() = runTest {
+        // Phase 11a: 보드의 group_by 같은 설정 원본을 저장하고, 행이 상한을 넘으면 '다 받지 못함'으로 표시한다(+N 대신 N+).
+        viewRaw = Json.parseToJsonElement("""{"type":"board","group_by":{"property_id":"st"}}""").jsonObject
+        rowsMore = true
+        register("v1")
+        sync().syncAll()
+        val view = db.viewDao().snapshot("v1")!!
+        assertEquals("st", Json.parseToJsonElement(view.viewConfig).jsonObject["group_by"]!!.jsonObject["property_id"]!!.let { (it as JsonPrimitive).content })
+        assertFalse(view.rowsComplete)
+        rowsMore = false
+        viewRaw = kotlinx.serialization.json.JsonObject(emptyMap())
+        sync().syncAll()
+        assertTrue(db.viewDao().snapshot("v1")!!.rowsComplete)
+        assertEquals("", db.viewDao().snapshot("v1")!!.viewConfig) // 설정이 없으면 빈 글자
     }
 
     @Test

@@ -39,6 +39,8 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "0") val showWeather: Boolean = false,
     /** VW-04 보기 위젯이 보여 줄 등록한 보기(v13). */
     val viewId: String? = null,
+    /** v17(Phase 11a): 보드 위젯이 보여 주는 첫 열의 위치(‹ ›로 넘긴다). 다른 위젯은 쓰지 않는다. */
+    @ColumnInfo(defaultValue = "0") val viewPage: Int = 0,
 )
 
 @Dao

@@ -482,4 +482,23 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v16 → v17(Phase 11a): 보기 설정 원본·행 완전 여부·보드 열 넘김 위치 열은 기본값이고 기존 데이터는 그대로다. */
+    @Test
+    fun v16ToV17AddsViewConfigRowsCompleteAndViewPage() = runTest {
+        helper.createDatabase(16).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '보드', 'board', '이름', 5)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1')")
+        }
+        helper.runMigrationsAndValidate(17).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val view = db.viewDao().snapshot("v1")!!
+            assertEquals(listOf("보드", "", true), listOf(view.name, view.viewConfig, view.rowsComplete))
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf("v1", 0), listOf(widget.viewId, widget.viewPage))
+        } finally {
+            db.close()
+        }
+    }
 }

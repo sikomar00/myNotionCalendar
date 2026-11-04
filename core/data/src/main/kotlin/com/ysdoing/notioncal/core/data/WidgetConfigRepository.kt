@@ -38,6 +38,8 @@ data class WidgetConfig(
     val showWeather: Boolean = false,
     /** VW-04 보기 위젯이 보여 줄 보기. null이면 아직 고르지 않음. */
     val viewId: String? = null,
+    /** 보드 위젯의 열 넘김 위치(Phase 11a). */
+    val viewPage: Int = 0,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -60,6 +62,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     ddayPageId = ddayPageId,
     showWeather = showWeather,
     viewId = viewId,
+    viewPage = viewPage.coerceAtLeast(0),
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -77,6 +80,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     ddayPageId = ddayPageId,
     showWeather = showWeather,
     viewId = viewId,
+    viewPage = viewPage,
 )
 
 @Singleton

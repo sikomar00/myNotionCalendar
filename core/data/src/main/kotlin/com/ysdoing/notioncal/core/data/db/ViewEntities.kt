@@ -51,6 +51,10 @@ data class ViewSnapshotEntity(
     @ColumnInfo(defaultValue = "") val columnInfo: String = "",
     /** v14: 위젯에서 마지막으로 바꾼 시각(epoch ms). 이보다 일찍 시작한 읽기는 결과를 덮어쓰지 않는다(보내는 도중에 받은 이전 값 방지). */
     @ColumnInfo(defaultValue = "0") val lastWriteAt: Long = 0,
+    /** v17(Phase 11a): 노션 보기 `configuration` 원본 JSON(보드의 `group_by` 등). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val viewConfig: String = "",
+    /** v17: 보기의 행을 상한(100) 안에서 다 받았는가. false면 노션에 행이 더 있다('N+ 더 보기'). */
+    @ColumnInfo(defaultValue = "1") val rowsComplete: Boolean = true,
 )
 
 /** 보기의 한 행(VW-02로 글자가 된 값). [cells]는 [VIEW_CELL_SEPARATOR]로 이은 열 순서의 값. */

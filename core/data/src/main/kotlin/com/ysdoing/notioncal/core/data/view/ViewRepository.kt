@@ -25,6 +25,10 @@ data class ViewBoard(
     val lastError: String?,
     /** 쓰기 정보(종류·선택지, 제목·날짜 열 포함). 보이는 속성에 더해 책 위젯의 숨긴 읽은 쪽·전체 쪽이 `role`과 함께 들어 있을 수 있다(열 이름 목록 [columns]에는 없다). 비어 있으면 아직 받지 못해 바꾸거나 만들 수 없다. */
     val columnInfo: List<ViewColumn> = emptyList(),
+    /** 노션 보기 `configuration` 원본 JSON(보드의 `group_by` 등, Phase 11a). 없으면 빈 글자. */
+    val viewConfig: String = "",
+    /** 행을 상한 안에서 다 받았는가. false면 노션에 더 있다('N+ 더 보기'). */
+    val rowsComplete: Boolean = true,
 ) {
     /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
     val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
@@ -67,6 +71,8 @@ class ViewRepository @Inject constructor(
                     syncedAt = it.syncedAt,
                     lastError = it.lastError,
                     columnInfo = ViewJson.columns(it.columnInfo),
+                    viewConfig = it.viewConfig,
+                    rowsComplete = it.rowsComplete,
                 )
             }
         }

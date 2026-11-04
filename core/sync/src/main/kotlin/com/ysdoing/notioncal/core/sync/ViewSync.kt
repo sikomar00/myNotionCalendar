@@ -143,7 +143,8 @@ class ViewSync @Inject constructor(
         schemas: MutableMap<String, DataSourceDto?>,
     ): Pair<ViewSnapshotEntity, List<ViewRowEntity>> {
         val view = reader.view(registered.viewId)
-        val pages = reader.rows(registered.dataSourceId, view)
+        val fetched = reader.viewRows(registered.dataSourceId, view)
+        val pages = fetched.pages
         val schema = schemaOrNull(registered.dataSourceId, schemas)
         val configured = view.configuration?.properties.orEmpty()
         // 제목은 행이 없어도 알 수 있게 스키마에서 찾는다(빈 보기나 카드 제목을 열 목록에 넣지 않는 보드·갤러리도 새 항목을 만들 수 있다).
@@ -158,6 +159,8 @@ class ViewSync @Inject constructor(
             syncedAt = clock.millis(),
             lastError = null,
             columnInfo = ViewJson.encodeColumns(writable),
+            viewConfig = view.configuration?.raw?.takeIf { it.isNotEmpty() }?.toString().orEmpty(),
+            rowsComplete = !fetched.hasMore,
         )
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { displayValue(page.properties[it] as? JsonObject ?: JsonObject(emptyMap())) }

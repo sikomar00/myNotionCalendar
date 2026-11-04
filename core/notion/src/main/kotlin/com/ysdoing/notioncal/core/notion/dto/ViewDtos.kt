@@ -1,7 +1,15 @@
 package com.ysdoing.notioncal.core.notion.dto
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
@@ -30,8 +38,25 @@ data class ViewDto(
     val configuration: ViewConfigDto? = null,
 )
 
-@Serializable
-data class ViewConfigDto(val properties: List<ViewPropertyDto> = emptyList())
+/**
+ * 보기 설정(`configuration`). [properties]는 보이는 속성(VW), [raw]는 유형별 키(보드의 `group_by` 등)를 앱이 나중에 읽도록 받은 원본 그대로다.
+ */
+@Serializable(with = ViewConfigSerializer::class)
+data class ViewConfigDto(val properties: List<ViewPropertyDto> = emptyList(), val raw: JsonObject = JsonObject(emptyMap()))
+
+/** `configuration` 객체를 통째로 받아 [ViewConfigDto.raw]에 두고 `properties`만 풀어 낸다. 객체가 아니면 던진다(보기 전체가 읽기 실패로 처리됨). */
+object ViewConfigSerializer : KSerializer<ViewConfigDto> {
+    override val descriptor: SerialDescriptor = JsonObject.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): ViewConfigDto {
+        val input = decoder as JsonDecoder
+        val raw = input.decodeJsonElement().jsonObject
+        val properties = raw["properties"]?.let { input.json.decodeFromJsonElement(ListSerializer(ViewPropertyDto.serializer()), it) }.orEmpty()
+        return ViewConfigDto(properties, raw)
+    }
+
+    override fun serialize(encoder: Encoder, value: ViewConfigDto) = (encoder as JsonEncoder).encodeJsonElement(value.raw)
+}
 
 @Serializable
 data class ViewPropertyDto(
