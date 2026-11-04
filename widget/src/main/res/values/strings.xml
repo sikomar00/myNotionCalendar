@@ -123,6 +123,10 @@
     <string name="view_widget_header_description">%1$s, 새로고침</string>
     <string name="view_widget_cell_checked">%1$s, %2$s 체크됨, 눌러서 해제</string>
     <string name="view_widget_cell_unchecked">%1$s, %2$s 체크 안 됨, 눌러서 체크</string>
+    <string name="view_widget_cell_choose">%1$s, %2$s %3$s, 눌러서 고르기</string>
+    <string name="view_widget_number_plus">%1$s, %2$s %3$s, %4$s 늘리기</string>
+    <string name="view_widget_number_minus">%1$s, %2$s %3$s, %4$s 줄이기</string>
+    <string name="widget_config_number_step">숫자 한 번에 바뀌는 값</string>
     <string name="view_widget_cell_option">%1$s, %2$s %3$s, 눌러서 다음 값으로</string>
     <string name="view_widget_cell_none">없음</string>
     <string name="view_widget_add_description">%1$s, 새 항목 추가</string>

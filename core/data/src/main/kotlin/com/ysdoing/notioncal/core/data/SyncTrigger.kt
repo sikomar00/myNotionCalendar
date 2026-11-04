@@ -83,6 +83,10 @@ object AppIntents {
     /** Phase 11c 노션 보기 위젯의 행 편집 시트(행 탭). EXTRA_VIEW_ID = 보기 ID, EXTRA_PAGE_ID = 행(페이지) ID */
     const val ACTION_VIEW_ROW = "com.ysdoing.notioncal.action.VIEW_ROW"
 
+    /** Phase 11c 노션 보기 위젯의 선택 시트(선택지 4개 이상 select 탭). EXTRA_VIEW_ID·EXTRA_PAGE_ID·EXTRA_PROP_ID */
+    const val ACTION_VIEW_CHOICE = "com.ysdoing.notioncal.action.VIEW_CHOICE"
+    const val EXTRA_PROP_ID = "com.ysdoing.notioncal.extra.PROP_ID"
+
     /** VW-08 노션 보기 위젯의 새 항목 입력 시트. EXTRA_VIEW_ID = 보기 ID */
     const val ACTION_VIEW_ADD = "com.ysdoing.notioncal.action.VIEW_ADD"
     const val EXTRA_VIEW_ID = "com.ysdoing.notioncal.extra.VIEW_ID"

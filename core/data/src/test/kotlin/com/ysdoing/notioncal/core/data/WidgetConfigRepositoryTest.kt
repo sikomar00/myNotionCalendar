@@ -57,6 +57,18 @@ class WidgetConfigRepositoryTest {
         assertEquals(0, saved.opacity)
     }
 
+    /** Phase 11c IX-03·AD-05: 숫자 ± 단계값과 프리셋 목록은 위젯마다 저장되고, 잘못된 단계값(0·음수·NaN)은 1로 읽는다. */
+    @Test
+    fun numberStepAndPresetsRoundTripAndABadStepFallsBackToOne() = runTest {
+        repo.save(WidgetConfig(4, numberStep = 5.0, presetsJson = "[{\"name\":\"점심\"}]"))
+        assertEquals(5.0, repo.get(4).numberStep, 0.0)
+        assertEquals("[{\"name\":\"점심\"}]", repo.get(4).presetsJson)
+        listOf(0.0, -2.0, Double.NaN).forEach { bad ->
+            repo.save(WidgetConfig(5, numberStep = bad))
+            assertEquals(1.0, repo.get(5).numberStep, 0.0)
+        }
+    }
+
     /** WG-11: 고른 탭은 위젯마다 따로이고, 달 이동·설정 저장(행 전체 upsert) 뒤에도 남는다. */
     @Test
     fun selectedTabIsPerWidgetAndSurvivesOtherSaves() = runTest {

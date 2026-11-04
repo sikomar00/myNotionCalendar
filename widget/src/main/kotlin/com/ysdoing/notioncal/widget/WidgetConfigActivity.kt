@@ -249,6 +249,13 @@ class WidgetConfigActivity : ComponentActivity() {
             }
             if (data.views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
         }
+        if (kind == Kind.VIEW) {
+            // IX-03: 숫자 열의 − + 가 한 번에 바꾸는 값. 정수 단계만 고른다(소수 단계는 시트에서 직접 고친다).
+            ConfigSection(stringResource(R.string.widget_config_number_step))
+            ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
+                onChange(config.copy(numberStep = it.toDouble()))
+            }
+        }
     }
 
     /** 일정 위젯 전용: 칸당 줄 수·줄 간격(월간), 머리 날씨(월간·달력 + 일정, WX-04·05), 완료 숨김. */
@@ -363,3 +370,5 @@ class WidgetConfigActivity : ComponentActivity() {
         const val PREVIEW_MAX_SCREEN_FRACTION = 0.30f
     }
 }
+
+private val NUMBER_STEPS = listOf(1, 5, 10, 50, 100)

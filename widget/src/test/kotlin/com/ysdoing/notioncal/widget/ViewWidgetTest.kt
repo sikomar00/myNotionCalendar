@@ -216,6 +216,78 @@ class ViewWidgetTest {
         onNode(hasTextEqualTo("+42 더 보기")).assertExists()
     }
 
+    // --- Phase 11c IX-02·03: 선택지 4개 이상 select는 선택 시트, 상태는 순환, 숫자 열은 − + 단계 버튼.
+
+    private fun optionsBoard(type: String, count: Int) = ViewBoard(
+        "v1", "분류", "table", listOf("이름", "분류"),
+        listOf(ViewRow("p1", "https://notion.so/p1", listOf("장보기", "옵션1"), typed = mapOf("c" to kotlinx.serialization.json.JsonPrimitive("o1")))),
+        now, null, listOf(ViewColumn("t", "이름", "title"), ViewColumn("c", "분류", type, (1..count).map { ViewChoice("o$it", "옵션$it") })),
+    )
+
+    @Test
+    fun aSelectWithFourOrMoreOptionsOpensTheChooserInsteadOfCycling() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(optionsBoard("select", 4)), systemFontScale = 1f) }
+        onNode(hasTestTag("viewCellTap")).assert(hasStartActivityClickAction(viewChoiceIntent(context, "v1", "p1", "c")))
+        onNode(hasContentDescriptionEqualTo("장보기, 분류 옵션1, 눌러서 고르기")).assertExists()
+    }
+
+    @Test
+    fun aSelectWithThreeOptionsAndAStatusWithManyStillCycle() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(optionsBoard("select", 3)), systemFontScale = 1f) }
+        onNode(hasTestTag("viewCellTap")).assert(hasRunCallbackClickAction<ViewCellAction>(tap("c", "select", "p1")))
+    }
+
+    @Test
+    fun aStatusCyclesInGroupOrderNoMatterHowManyOptions() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(optionsBoard("status", 6)), systemFontScale = 1f) }
+        onNode(hasTestTag("viewCellTap")).assert(hasRunCallbackClickAction<ViewCellAction>(tap("c", "status", "p1"))) // 상태는 시트 없이 순환
+    }
+
+    private fun numberBoard() = ViewBoard(
+        "v1", "책", "table", listOf("이름", "쪽수"), listOf(ViewRow("p1", "u", listOf("데미안", "12"), typed = mapOf("pg" to kotlinx.serialization.json.JsonPrimitive(12.0)))),
+        now, null, listOf(ViewColumn("t", "이름", "title"), ViewColumn("pg", "쪽수", "number")),
+    )
+
+    private fun step(delta: Double) = actionParametersOf(
+        ViewCellAction.ViewKey to "v1", ViewCellAction.PageKey to "p1", ViewCellAction.PropKey to "pg", NumberStepAction.DeltaKey to delta,
+    )
+
+    @Test
+    fun aNumberCellGetsMinusAndPlusButtonsThatMoveByTheWidgetStep() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(ViewWidgetState(numberBoard(), WidgetConfig(1, viewId = "v1", numberStep = 5.0), now), systemFontScale = 1f) }
+        onNode(hasTestTag("numberPlus")).assert(hasRunCallbackClickAction<NumberStepAction>(step(5.0)))
+        onNode(hasTestTag("numberMinus")).assert(hasRunCallbackClickAction<NumberStepAction>(step(-5.0)))
+        onNode(hasTextEqualTo("12")).assertExists() // 값은 그대로 보인다
+        onNode(hasContentDescriptionEqualTo("데미안, 쪽수 12, 5 늘리기")).assertExists()
+        onNode(hasContentDescriptionEqualTo("데미안, 쪽수 12, 5 줄이기")).assertExists()
+    }
+
+    @Test
+    fun noStepButtonsOnTheSmallestWidget() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        provideComposable { ViewWidgetContent(state(numberBoard()), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("numberPlus")).assertCountEquals(0) // 2×2는 자리가 없다. 행을 눌러 시트에서 고친다
+        onAllNodes(hasTestTag("numberMinus")).assertCountEquals(0)
+    }
+
+    @Test
+    fun theChooserIntentNamesTheViewPageAndPropertyAndDiffersPerCell() {
+        val one = viewChoiceIntent(context, "v1", "p1", "c")
+        assertEquals(AppIntents.ACTION_VIEW_CHOICE, one.action)
+        assertEquals(listOf("v1", "p1", "c"), listOf(one.getStringExtra(AppIntents.EXTRA_VIEW_ID), one.getStringExtra(AppIntents.EXTRA_PAGE_ID), one.getStringExtra(AppIntents.EXTRA_PROP_ID)))
+        assertFalse(one.filterEquals(viewChoiceIntent(context, "v1", "p1", "d")))
+        assertFalse(one.filterEquals(viewChoiceIntent(context, "v1", "p2", "c")))
+    }
+
     // --- Phase 11c 되돌리기 줄(IX-05): 지연 중인 쓰기가 있을 때만, 눌러서 되돌린다.
 
     private fun withPending(vararg sendAfter: Long) = board().copy(pendingSendAfter = sendAfter.toList())

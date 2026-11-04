@@ -199,8 +199,12 @@ internal fun viewColumn(property: PropertySchemaDto): ViewColumn? {
         "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name, color = it.color) }
         "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name, color = it.color) }
         "status" -> {
+            // 그룹 순서(할 일 → 진행 중 → 완료)로 담는다: 눌러 순환할 때 노션이 옵션을 준 순서가 아니라 이 순서를 따른다(IX-02). 그룹이 없는 옵션은 뒤에 원래 순서로.
             val groups = property.status?.groups.orEmpty()
-            property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name, option.color) }
+            property.status?.options.orEmpty()
+                .map { option -> option to groups.indexOfFirst { option.id in it.optionIds } }
+                .sortedBy { (_, group) -> if (group < 0) Int.MAX_VALUE else group }
+                .map { (option, group) -> ViewChoice(option.id, option.name, groups.getOrNull(group)?.name, option.color) }
         }
         else -> emptyList()
     }

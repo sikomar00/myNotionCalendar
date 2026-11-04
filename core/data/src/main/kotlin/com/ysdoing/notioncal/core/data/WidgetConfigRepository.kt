@@ -87,7 +87,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     showWeather = showWeather,
     viewId = viewId,
     viewPage = viewPage,
-    numberStep = numberStep,
+    numberStep = numberStep.takeIf { it.isFinite() && it > 0 } ?: 1.0, // NaN은 SQLite가 NULL로 저장해 열 제약에 걸린다
     presetsJson = presetsJson,
 )
 

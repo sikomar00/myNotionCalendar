@@ -54,6 +54,22 @@
                 <data android:scheme="notioncal" />
             </intent-filter>
         </activity>
+
+        <!--
+          Phase 11c 노션 보기 위젯의 선택 시트(선택지 4개 이상 select 탭). 같은 반투명 모양이고 같은 앱의 PendingIntent로만 연다.
+        -->
+        <activity
+            android:name=".ViewChoiceActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotionCal.QuickSheet">
+            <intent-filter>
+                <action android:name="com.ysdoing.notioncal.action.VIEW_CHOICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

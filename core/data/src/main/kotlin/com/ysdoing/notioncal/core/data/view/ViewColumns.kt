@@ -35,6 +35,12 @@ data class ViewColumn(
     /** M5b 책 위젯용 표시([ROLE_PAGES_READ]·[ROLE_PAGES_TOTAL]). 보기에서 숨긴 속성도 이 표시로 쓰기 정보에 들어온다. 보통은 빈 글자. */
     val role: String = "",
 ) {
+    /**
+     * 위젯에서 눌렀을 때 순환하지 않고 작은 선택 시트를 여는 열(IX-02): 선택지가 [CHOOSER_MIN_OPTIONS]개 이상인 select.
+     * 상태는 옵션이 많아도 그룹 순서로 순환한다(할 일 → 진행 중 → 완료가 주된 쓰임이다).
+     */
+    val opensChooser: Boolean get() = type == "select" && options.size >= CHOOSER_MIN_OPTIONS
+
     /** 앱에서 바꿀 수 있는 종류([WRITABLE_TYPES]). 나머지는 읽기만 한다. */
     val writable: Boolean get() = type in WRITABLE_TYPES
 
@@ -95,6 +101,9 @@ data class ViewColumn(
     }
 
     companion object {
+        /** select가 이 개수 이상이면 위젯 탭이 선택 시트를 연다([opensChooser]). */
+        const val CHOOSER_MIN_OPTIONS = 4
+
         const val ROLE_PAGES_READ = "pagesRead"
         const val ROLE_PAGES_TOTAL = "pagesTotal"
 

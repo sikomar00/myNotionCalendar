@@ -165,6 +165,16 @@ internal fun viewRowIntent(context: Context, viewId: String, pageId: String): In
         .putExtra(AppIntents.EXTRA_PAGE_ID, pageId)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
+/** 선택 시트 열기(IX-02, 선택지 4개 이상 select 탭). 칸마다 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다. */
+internal fun viewChoiceIntent(context: Context, viewId: String, pageId: String, propId: String): Intent =
+    Intent(AppIntents.ACTION_VIEW_CHOICE)
+        .setPackage(context.packageName)
+        .setData(android.net.Uri.Builder().scheme("notioncal").authority("view").appendPath("choice").appendPath(viewId).appendPath(pageId).appendPath(propId).build())
+        .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
+        .putExtra(AppIntents.EXTRA_PAGE_ID, pageId)
+        .putExtra(AppIntents.EXTRA_PROP_ID, propId)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+
 /**
  * 머리(공통 [WidgetHeader]): 체크리스트 아이콘 + 보기 이름(누르면 새로고침) + 부제 '완료 n/m'(높이가 넉넉하고 진행을 셀 수 있을 때),
  * 오른쪽에 새로고침(넓을 때)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 '+'.
@@ -240,7 +250,8 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     }
     val size = LocalSize.current
     val step = sizeStep(size)
-    val look = ViewLook(m, palette)
+    // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
+    val look = ViewLook(m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT)
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }

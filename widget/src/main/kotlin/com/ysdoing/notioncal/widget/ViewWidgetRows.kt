@@ -61,7 +61,7 @@ internal val CHECK_INSET = (TAP_TARGET - CHECK_SIZE) / 2
 private val TILE_PADDING_H = 6.dp
 
 /** 행·칸을 그릴 때 쓰는 글자 모양과 색. */
-internal class ViewLook(val m: ViewMetrics, val palette: WidgetPalette) {
+internal class ViewLook(val m: ViewMetrics, val palette: WidgetPalette, val numberStep: Double = 1.0, val stepNumbers: Boolean = false) {
     val title = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp, fontWeight = FontWeight.Medium)
     val cell = TextStyle(color = palette.text, fontSize = (m.titleSp * m.spFactor).sp)
     val sub = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp)
@@ -139,7 +139,8 @@ internal fun moreText(context: Context, more: More): String = when {
 @Composable
 private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look: ViewLook) {
     val base = if (tableColumns != null) look.m.tableRow else look.m.listRow
-    val height = if (board.columnInfo.any { it.tappable }) maxOf(base, TAP_ROW_MIN) else base
+    val steppable = look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" }
+    val height = if (board.columnInfo.any { it.tappable } || steppable) maxOf(base, TAP_ROW_MIN) else base
     val tile = rowModifier(board.viewId, row, height, look.palette)
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
         if (tableColumns != null) ViewTableRow(board, row, tableColumns, tile, height, look) else ViewListRow(board, row, tile, height, look)
@@ -188,6 +189,7 @@ private fun ViewCell(board: ViewBoard, row: ViewRow, index: Int, look: ViewLook,
     when {
         tappable != null -> TapCell(board.viewId, row, tappable, raw, look, modifier, tapHeight)
         column?.type == "multi_select" && raw.isNotEmpty() -> MultiChips(column, row, raw, look, modifier)
+        column?.type == "number" && look.stepNumbers && !secondLine && column.writable -> NumberStepCell(board.viewId, row, column, raw, look, modifier, tapHeight)
         board.columnAt(index)?.type == "date" && raw.isNotEmpty() ->
             Box(modifier, contentAlignment = Alignment.CenterStart) { WidgetPill(raw, look.palette.tileHigh, look.palette.text, look.pillSp) }
         else -> Text(raw, modifier = modifier, style = if (secondLine) look.sub else if (index == 0) look.title else look.cell, maxLines = 1)
@@ -197,12 +199,17 @@ private fun ViewCell(board: ViewBoard, row: ViewRow, index: Int, look: ViewLook,
 @Composable
 private fun TapCell(viewId: String, row: ViewRow, column: ViewColumn, raw: String, look: ViewLook, modifier: GlanceModifier, tapHeight: Dp) {
     val description = tapDescription(LocalContext.current, row.cells.firstOrNull().orEmpty(), column, raw)
-    val tap = actionRunCallback<ViewCellAction>(
-        actionParametersOf(
-            ViewCellAction.ViewKey to viewId, ViewCellAction.PageKey to row.pageId,
-            ViewCellAction.PropKey to column.id, ViewCellAction.TypeKey to column.type,
-        ),
-    )
+    val context = LocalContext.current
+    val tap = if (column.opensChooser) {
+        actionStartActivity(viewChoiceIntent(context, viewId, row.pageId, column.id)) // 선택지가 많은 select는 순환하지 않고 선택 시트(IX-02)
+    } else {
+        actionRunCallback<ViewCellAction>(
+            actionParametersOf(
+                ViewCellAction.ViewKey to viewId, ViewCellAction.PageKey to row.pageId,
+                ViewCellAction.PropKey to column.id, ViewCellAction.TypeKey to column.type,
+            ),
+        )
+    }
     if (column.type == "checkbox") {
         Box(modifier, contentAlignment = Alignment.CenterStart) {
             WidgetCheck(raw.isNotEmpty(), description, "viewCellTap", tap, look.palette, CHECK_SIZE, tapHeight)
@@ -262,5 +269,6 @@ private const val MAX_CHIPS = 3
 internal fun tapDescription(context: Context, title: String, column: ViewColumn, value: String): String = when {
     column.type == "checkbox" && value.isNotEmpty() -> context.getString(R.string.view_widget_cell_checked, title, column.name)
     column.type == "checkbox" -> context.getString(R.string.view_widget_cell_unchecked, title, column.name)
+    column.opensChooser -> context.getString(R.string.view_widget_cell_choose, title, column.name, value.ifEmpty { context.getString(R.string.view_widget_cell_none) })
     else -> context.getString(R.string.view_widget_cell_option, title, column.name, value.ifEmpty { context.getString(R.string.view_widget_cell_none) })
 }

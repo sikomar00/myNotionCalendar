@@ -316,7 +316,7 @@ class ViewSyncTest {
             columns.map { it.name to it.type },
         )
         val status = columns.single { it.id == "st" }
-        assertEquals(listOf("o1" to "To-do", "o2" to null, "o3" to "Complete"), status.options.map { it.id to it.group })
+        assertEquals(listOf("o1" to "To-do", "o3" to "Complete", "o2" to null), status.options.map { it.id to it.group }) // 그룹 순서, 그룹 없는 옵션은 뒤
         val rows = db.viewDao().rows("v1")
         // 원래 값은 바꿀 수 있는 속성만 담는다(값이 없는 날짜는 JsonNull, 메모는 글자).
         assertEquals(
@@ -712,5 +712,21 @@ class ViewSyncTest {
         sync().syncAll()
         assertFalse(CoverStore(coverDir).has("https://img.example/1.jpg")) // 책이 빠지면 표지 파일도 정리
         assertTrue(CoverStore(coverDir).has("https://img.example/2.jpg"))
+    }
+
+    @Test
+    fun statusOptionsAreOrderedByGroupSoATapCyclesToDoThenInProgressThenComplete() {
+        // Phase 11c IX-02: 노션이 옵션을 어떤 순서로 주든 상태 순환은 그룹 순서(할 일 → 진행 중 → 완료)다. 그룹이 없는 옵션은 뒤에 원래 순서로.
+        val property = Json { ignoreUnknownKeys = true }.decodeFromString(
+            com.ysdoing.notioncal.core.notion.dto.PropertySchemaDto.serializer(),
+            """{"id":"st","name":"상태","type":"status","status":{"options":[
+                {"id":"c","name":"끝","color":"green"},{"id":"x","name":"기타"},{"id":"a","name":"시작 전","color":"gray"},{"id":"b","name":"진행","color":"blue"}],
+              "groups":[{"id":"g1","name":"To-do","option_ids":["a"]},{"id":"g2","name":"In progress","option_ids":["b"]},{"id":"g3","name":"Complete","option_ids":["c"]}]}}""",
+        )
+        val column = viewColumn(property)!!
+        assertEquals(listOf("a", "b", "c", "x"), column.options.map { it.id })
+        assertEquals(listOf("To-do", "In progress", "Complete", null), column.options.map { it.group })
+        assertEquals("b", column.nextOption("a")!!.id) // 할 일 → 진행 중
+        assertEquals("c", column.nextOption("b")!!.id) // 진행 중 → 완료
     }
 }
