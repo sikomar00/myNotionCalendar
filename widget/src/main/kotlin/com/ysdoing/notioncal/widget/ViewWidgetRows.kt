@@ -101,10 +101,13 @@ internal fun viewProgress(board: ViewBoard): ViewProgress? {
 
 private fun ViewColumn.hasCompleteGroup(): Boolean = options.any { toneOf(it.name) == StatusTone.DONE }
 
-/** 행을 누르면 그 노션 페이지를 연다. 주소가 없으면 누를 수 없다. */
+/** 행을 누르면 그 노션 페이지를 연다. 주소가 없으면 누를 수 없다. 책 위젯 표지가 쓴다(표지 탭은 노션 열기, 책은 ±가 주 동작). */
 internal fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank() }?.let {
     actionStartActivity(Intent(Intent.ACTION_VIEW, it.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
+
+/** 행을 누르면 그 행의 편집 시트를 연다(ED-01). 주소가 없는 행도 고칠 수 있다. */
+internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow): Action = actionStartActivity(viewRowIntent(context, viewId, row.pageId))
 
 /**
  * [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. 크기 단계의 밀도표대로 [cap]행까지만 그리고, 넘으면(또는 노션에 행이 더 있으면)
@@ -137,15 +140,16 @@ internal fun moreText(context: Context, more: More): String = when {
 private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look: ViewLook) {
     val base = if (tableColumns != null) look.m.tableRow else look.m.listRow
     val height = if (board.columnInfo.any { it.tappable }) maxOf(base, TAP_ROW_MIN) else base
-    val tile = rowModifier(row, height, look.palette)
+    val tile = rowModifier(board.viewId, row, height, look.palette)
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
         if (tableColumns != null) ViewTableRow(board, row, tableColumns, tile, height, look) else ViewListRow(board, row, tile, height, look)
     }
 }
 
-private fun rowModifier(row: ViewRow, height: Dp, palette: WidgetPalette): GlanceModifier {
+@Composable
+private fun rowModifier(viewId: String, row: ViewRow, height: Dp, palette: WidgetPalette): GlanceModifier {
     val base = GlanceModifier.fillMaxWidth().height(height).tile(palette)
-    return (rowAction(row)?.let { base.clickable(it) } ?: base).padding(horizontal = TILE_PADDING_H).semantics { testTag = "viewRow" }
+    return base.clickable(rowSheetAction(LocalContext.current, viewId, row)).padding(horizontal = TILE_PADDING_H).semantics { testTag = "viewRow" }
 }
 
 @Composable

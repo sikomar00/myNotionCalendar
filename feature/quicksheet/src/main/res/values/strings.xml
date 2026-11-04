@@ -70,6 +70,7 @@
     <string name="vre_number_invalid">숫자만 넣어 주세요</string>
     <string name="vre_new_option">새 옵션 이름</string>
     <string name="vre_option_comma">쉼표(,)는 쓸 수 없어요</string>
+    <string name="vre_open_failed">노션 페이지를 열 수 없어요</string>
     <string name="vre_date_pick">날짜 선택</string>
     <string name="vre_date_clear">날짜 지우기</string>
     <string name="vre_date_end_add">끝 날짜 추가</string>

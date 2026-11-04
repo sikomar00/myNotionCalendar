@@ -97,7 +97,7 @@ private fun BoardColumn(board: ViewBoard, group: BoardGroup, cap: Int, look: Vie
             Text(count, style = look.sub)
         }
         group.rows.take(cap).forEach { row ->
-            Box(GlanceModifier.fillMaxWidth().padding(bottom = 3.dp)) { BoardCard(row.cells.firstOrNull().orEmpty(), rowAction(row), look) }
+            Box(GlanceModifier.fillMaxWidth().padding(bottom = 3.dp)) { BoardCard(row.cells.firstOrNull().orEmpty(), rowSheetAction(context, board.viewId, row), look) }
         }
         val rest = group.rows.size - cap
         if (rest > 0) MoreLine(context.getString(R.string.view_widget_more, rest), board.viewId, look)

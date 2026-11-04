@@ -20,22 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
-import kotlinx.serialization.json.JsonElement
 
 /**
- * 보기 행 편집 시트(ED-01). [ViewRowEditor]를 아래에서 올라오는 시트에 담는다.
+ * 보기 행 편집 시트(ED-01). [ViewRowEditor]를 아래에서 올라오는 시트에 담는다. 닫기는 [ViewRowActions.onClose]다.
  * ED-04: 저장 안 한 변경이 있으면 아래로 밀기·바깥 누르기·뒤로 가기 어느 쪽으로 닫아도 '변경을 버릴까요?'를 먼저 묻는다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ViewRowSheet(
-    board: ViewBoard,
-    row: ViewRow,
-    onSave: suspend (Map<String, JsonElement>) -> Boolean,
-    onTrash: suspend () -> Unit,
-    onOpen: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
+fun ViewRowSheet(board: ViewBoard, row: ViewRow, actions: ViewRowActions) {
     val dirty = remember { mutableStateOf(false) }
     var askDiscard by rememberSaveable { mutableStateOf(false) }
     // 시트 창은 내비게이션 바 높이를 첫 프레임에 0으로 받는다. 메인 창에서 읽은 값을 스크롤 내용 맨 아래 여백으로 준다(DaySheet와 같은 이유).
@@ -50,29 +42,23 @@ fun ViewRowSheet(
         },
     )
     ModalBottomSheet(
-        onDismissRequest = { if (dirty.value) askDiscard = true else onDismiss() },
+        onDismissRequest = { if (dirty.value) askDiscard = true else actions.onClose() },
         sheetState = sheetState,
         contentWindowInsets = { WindowInsets(0) },
     ) {
-        ViewRowEditor(
-            board, row, onSave, onTrash, onOpen,
-            onClose = onDismiss,
-            onDirtyChange = { dirty.value = it },
-            bottomInset = navBottom,
-        )
+        ViewRowEditor(board, row, actions, onDirtyChange = { dirty.value = it }, bottomInset = navBottom)
     }
-    if (askDiscard) {
-        AlertDialog(
-            onDismissRequest = { askDiscard = false },
-            title = { Text(stringResource(R.string.vre_discard_title)) },
-            text = { Text(stringResource(R.string.vre_discard_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    askDiscard = false
-                    onDismiss()
-                }) { Text(stringResource(R.string.vre_discard), color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { askDiscard = false }) { Text(stringResource(R.string.vre_keep_editing)) } },
-        )
-    }
+    if (askDiscard) DiscardChangesDialog(onDiscard = { askDiscard = false; actions.onClose() }, onKeep = { askDiscard = false })
+}
+
+/** ED-04 '변경을 버릴까요?'. 버리기는 error 색이다(UX-08). */
+@Composable
+internal fun DiscardChangesDialog(onDiscard: () -> Unit, onKeep: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onKeep,
+        title = { Text(stringResource(R.string.vre_discard_title)) },
+        text = { Text(stringResource(R.string.vre_discard_body)) },
+        confirmButton = { TextButton(onClick = onDiscard) { Text(stringResource(R.string.vre_discard), color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onKeep) { Text(stringResource(R.string.vre_keep_editing)) } },
+    )
 }

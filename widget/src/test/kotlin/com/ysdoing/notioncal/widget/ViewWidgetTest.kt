@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.widget
 
+import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import android.app.Activity
@@ -31,6 +32,7 @@ import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -80,13 +82,39 @@ class ViewWidgetTest {
     }
 
     @Test
-    fun rowOpensNotionPageAndHeaderRefreshes() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun rowOpensTheEditSheetAndHeaderRefreshes() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(board()), systemFontScale = 1f) }
-        val open = Intent(Intent.ACTION_VIEW, "https://notion.so/p1".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        onNode(hasTestTag("viewRow")).assert(hasStartActivityClickAction(open))
+        onNode(hasTestTag("viewRow")).assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "p1"))) // ED-01: 행을 누르면 편집 시트
         onNode(hasTestTag("viewHeader")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun aRowWithoutAnAddressCanStillBeEdited() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board(listOf(ViewRow("p9", "", listOf("주소 없음", "집", "10/21"))))), systemFontScale = 1f) }
+        onNode(hasTestTag("viewRow")).assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "p9")))
+    }
+
+    @Test
+    fun theRowIntentNamesTheViewAndThePageAndDiffersPerRow() {
+        val one = viewRowIntent(context, "v1", "p1")
+        assertEquals(AppIntents.ACTION_VIEW_ROW, one.action)
+        assertEquals(context.packageName, one.`package`)
+        assertEquals(listOf("v1", "p1"), listOf(one.getStringExtra(AppIntents.EXTRA_VIEW_ID), one.getStringExtra(AppIntents.EXTRA_PAGE_ID)))
+        // PendingIntent는 extras를 보지 않는다. 행마다 data URI가 달라야 위젯의 행끼리 서로 덮지 않는다.
+        assertFalse(one.filterEquals(viewRowIntent(context, "v1", "p2")))
+        assertFalse(one.filterEquals(viewRowIntent(context, "v2", "p1")))
+    }
+
+    @Test
+    fun boardCardsOpenTheEditSheetToo() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(boardView(3, 0, "o1", "o2"), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardCard"))[0].assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "p0")))
     }
 
     @Test

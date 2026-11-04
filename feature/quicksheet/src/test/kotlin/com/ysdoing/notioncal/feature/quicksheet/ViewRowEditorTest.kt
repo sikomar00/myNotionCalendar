@@ -70,10 +70,7 @@ class ViewRowEditorTest {
             MaterialTheme {
                 ViewRowEditor(
                     board, row,
-                    onSave = { saved += it; saveResult },
-                    onTrash = { trashed++ },
-                    onOpen = { opened += it },
-                    onClose = { closed++ },
+                    ViewRowActions(onSave = { saved += it; saveResult }, onTrash = { trashed++ }, onOpen = { opened += it }, onClose = { closed++ }),
                     modifier = modifier,
                 )
             }
@@ -149,7 +146,7 @@ class ViewRowEditorTest {
         // 시트를 연 뒤 동기화로 행이 바뀌어도, 건드리지 않은 칸은 바뀐 것이 아니다(저장하면 노션 쪽 변경을 되돌려 쓰게 된다).
         var current by androidx.compose.runtime.mutableStateOf(row)
         compose.setContent {
-            MaterialTheme { ViewRowEditor(board, current, onSave = { saved += it; true }, onTrash = {}, onOpen = {}, onClose = {}) }
+            MaterialTheme { ViewRowEditor(board, current, ViewRowActions(onSave = { saved += it; true }, onTrash = {}, onOpen = {}, onClose = {})) }
         }
         current = row.copy(typed = row.typed + ("st" to JsonPrimitive("o2")))
         compose.waitForIdle()

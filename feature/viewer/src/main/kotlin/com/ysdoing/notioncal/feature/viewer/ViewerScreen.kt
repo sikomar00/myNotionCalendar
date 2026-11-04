@@ -42,6 +42,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import com.ysdoing.notioncal.feature.quicksheet.ViewRowActions
 import com.ysdoing.notioncal.feature.quicksheet.ViewRowSheet
 import kotlinx.serialization.json.JsonElement
 
@@ -104,10 +105,12 @@ fun ViewerContent(
     if (board != null && editing != null) {
         ViewRowSheet(
             board, editing,
-            onSave = { onSave(editing.pageId, it) },
-            onTrash = { onTrash(editing.pageId) },
-            onOpen = onOpen,
-            onDismiss = { selected = null },
+            ViewRowActions(
+                onSave = { onSave(editing.pageId, it) },
+                onTrash = { onTrash(editing.pageId) },
+                onOpen = onOpen,
+                onClose = { selected = null },
+            ),
         )
     }
 }

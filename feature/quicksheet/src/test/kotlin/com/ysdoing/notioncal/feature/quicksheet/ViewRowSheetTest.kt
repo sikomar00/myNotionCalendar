@@ -34,7 +34,7 @@ class ViewRowSheetTest {
     private fun show() {
         compose.setContent {
             MaterialTheme {
-                ViewRowSheet(board, row, onSave = { true }, onTrash = {}, onOpen = {}, onDismiss = { dismissed++ })
+                ViewRowSheet(board, row, ViewRowActions(onSave = { true }, onTrash = {}, onOpen = {}, onClose = { dismissed++ }))
             }
         }
         compose.waitForIdle()

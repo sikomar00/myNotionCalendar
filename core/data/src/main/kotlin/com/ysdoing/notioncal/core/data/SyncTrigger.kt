@@ -80,6 +80,9 @@ object AppIntents {
     /** LD-07 가계부 빠른 입력(위젯 '+'·날짜 탭, 💰 탭). EXTRA_DATE로 날짜를 넘긴다. */
     const val ACTION_LEDGER_INPUT = "com.ysdoing.notioncal.action.LEDGER_INPUT"
 
+    /** Phase 11c 노션 보기 위젯의 행 편집 시트(행 탭). EXTRA_VIEW_ID = 보기 ID, EXTRA_PAGE_ID = 행(페이지) ID */
+    const val ACTION_VIEW_ROW = "com.ysdoing.notioncal.action.VIEW_ROW"
+
     /** VW-08 노션 보기 위젯의 새 항목 입력 시트. EXTRA_VIEW_ID = 보기 ID */
     const val ACTION_VIEW_ADD = "com.ysdoing.notioncal.action.VIEW_ADD"
     const val EXTRA_VIEW_ID = "com.ysdoing.notioncal.extra.VIEW_ID"

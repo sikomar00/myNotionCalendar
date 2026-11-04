@@ -37,20 +37,26 @@ import kotlinx.serialization.json.JsonElement
 /** 편집 중인 값(속성 ID → 값)을 프로세스가 죽었다 살아나도 남게 JSON 글자로 저장한다(PF-06). 값이 작아 복원 때 풀어도 부담이 없다. */
 private val EditsSaver = Saver<Map<String, JsonElement>, String>(save = { ViewJson.encodeTyped(it) }, restore = { ViewJson.typed(it) })
 
+/** 편집 시트가 바깥에 맡기는 일 묶음: 저장(성공 여부)·휴지통·노션에서 열기·닫기. 노션 쓰기는 호출한 쪽이 쓰기 큐로 보낸다. */
+class ViewRowActions(
+    val onSave: suspend (Map<String, JsonElement>) -> Boolean,
+    val onTrash: suspend () -> Unit,
+    val onOpen: (String) -> Unit,
+    val onClose: () -> Unit,
+)
+
 /**
  * Phase 11b ED-01~05 보기 행 편집 시트의 내용. 보기의 표시 속성을 순서대로 유형별 편집기(읽기 전용은 잠금)로 보이고,
- * 저장은 바뀐 속성만 [onSave]로 넘긴다(성공이면 [onClose]). 휴지통은 확인한 뒤 [onTrash], 열기는 [onOpen]에 행 주소를 준다.
- * 노션 쓰기는 모르고 호출한 쪽이 쓰기 큐로 보낸다. 저장 안 한 변경이 생기고 사라지는 것은 [onDirtyChange]로 알린다(닫기 확인용, ED-04).
+ * 저장은 바뀐 속성만 [ViewRowActions.onSave]로 넘긴다(성공이면 [ViewRowActions.onClose]).
+ * 휴지통은 확인한 뒤 [ViewRowActions.onTrash], 열기는 [ViewRowActions.onOpen]에 행 주소를 준다.
+ * 저장 안 한 변경이 생기고 사라지는 것은 [onDirtyChange]로 알린다(닫기 확인용, ED-04).
  * 바뀐 것은 시트를 연 때의 값과 견준다: 연 뒤 동기화로 행이 바뀌어도 건드리지 않은 칸은 바뀐 것이 아니다.
  */
 @Composable
 fun ViewRowEditor(
     board: ViewBoard,
     row: ViewRow,
-    onSave: suspend (Map<String, JsonElement>) -> Boolean,
-    onTrash: suspend () -> Unit,
-    onOpen: (String) -> Unit,
-    onClose: () -> Unit,
+    actions: ViewRowActions,
     modifier: Modifier = Modifier,
     onDirtyChange: (Boolean) -> Unit = {},
     bottomInset: Dp = 0.dp,
@@ -81,7 +87,7 @@ fun ViewRowEditor(
                 is RowProp.Locked -> LockedProp(prop)
             }
         }
-        EditorActions(row.url, dirty && invalid.isEmpty(), { onSave(changedValues(columns, initial, edits)) }, onTrash, onOpen, onClose)
+        EditorActions(row.url, dirty && invalid.isEmpty(), { actions.onSave(changedValues(columns, initial, edits)) }, actions.onTrash, actions.onOpen, actions.onClose)
     }
 }
 

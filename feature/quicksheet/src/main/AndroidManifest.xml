@@ -36,6 +36,24 @@
                 <data android:scheme="notioncal" />
             </intent-filter>
         </activity>
+
+        <!--
+          Phase 11c 노션 보기 위젯의 행 편집 시트(행 탭). 퀵 시트와 같은 반투명 모양이고 같은 앱의 PendingIntent로만 연다.
+          입력칸이 있어 키보드는 사용자가 칸을 눌렀을 때만 띄운다.
+        -->
+        <activity
+            android:name=".ViewRowActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.NotionCal.QuickSheet"
+            android:windowSoftInputMode="stateHidden|adjustResize">
+            <intent-filter>
+                <action android:name="com.ysdoing.notioncal.action.VIEW_ROW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="notioncal" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>

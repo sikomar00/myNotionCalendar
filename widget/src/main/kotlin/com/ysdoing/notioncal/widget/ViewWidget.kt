@@ -154,6 +154,18 @@ internal fun viewAddIntent(context: Context, viewId: String): Intent =
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /**
+ * 행 편집 시트 열기(ED-01, 행 탭). 행마다 다른 data URI를 달아 PendingIntent가 위젯의 행끼리 서로 덮지 않게 한다
+ * (:widget은 :feature에 의존하지 않아 action 문자열로 연다).
+ */
+internal fun viewRowIntent(context: Context, viewId: String, pageId: String): Intent =
+    Intent(AppIntents.ACTION_VIEW_ROW)
+        .setPackage(context.packageName)
+        .setData("notioncal://view/row/$viewId/$pageId".toUri())
+        .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
+        .putExtra(AppIntents.EXTRA_PAGE_ID, pageId)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+
+/**
  * 머리(공통 [WidgetHeader]): 체크리스트 아이콘 + 보기 이름(누르면 새로고침) + 부제 '완료 n/m'(높이가 넉넉하고 진행을 셀 수 있을 때),
  * 오른쪽에 새로고침(넓을 때)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 '+'.
  */
