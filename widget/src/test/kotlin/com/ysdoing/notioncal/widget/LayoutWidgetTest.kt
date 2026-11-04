@@ -51,9 +51,12 @@ class LayoutWidgetTest {
 
     private fun board(i: Int) = ViewBoard("v${i + 1}", names[i], "table", listOf("이름"), listOf(ViewRow("p$i", "", listOf("행 ${names[i]}"))), now, null)
 
-    private fun state(count: Int, selected: Int, mode: LayoutMode = LayoutMode.TABS, fontScale: Int = 100): LayoutWidgetState {
+    private fun denseBoard(i: Int) = board(i).copy(rows = (1..50).map { ViewRow("p$i-$it", "", listOf("행 ${names[i]} $it")) })
+
+    private fun state(count: Int, selected: Int, mode: LayoutMode = LayoutMode.TABS, fontScale: Int = 100, weights: List<Int> = emptyList(), dense: Boolean = false): LayoutWidgetState {
         val layout = (0 until count).fold(WidgetLayout(mode)) { l, i -> l.add("v${i + 1}") ?: l }
-        val boards = (0 until count).associate { "v${it + 1}" to board(it) }
+            .let { l -> weights.withIndex().fold(l) { acc, (i, w) -> acc.withWeight("v${i + 1}", w) } }
+        val boards = (0 until count).associate { "v${it + 1}" to if (dense) denseBoard(it) else board(it) }
         return LayoutWidgetState(WidgetConfig(1, fontScale = fontScale, lastTab = selected), layout, boards, now)
     }
 
@@ -196,6 +199,72 @@ class LayoutWidgetTest {
         onNode(hasTestTag("layoutTab_1")).assert(hasContentDescriptionEqualTo("보기, 선택됨")) // 이름 없는 보기의 기본 이름
     }
 
+    // --- WL-03 섹션: 높이는 비율대로, 낮으면 앞쪽 섹션만
+
+    @Test
+    fun sectionHeightsSplitTheRoomLeftAfterTheGapsByWeight() {
+        assertEquals(listOf(150.dp, 150.dp), sectionHeights(304.dp, listOf(1, 1), 4.dp, 72.dp))
+        assertEquals(listOf(200.dp, 100.dp), sectionHeights(304.dp, listOf(2, 1), 4.dp, 72.dp))
+        val three = sectionHeights(500.dp, listOf(1, 2, 3), 4.dp, 72.dp)
+        assertEquals(500f, three.sumOf { it.value.toDouble() }.toFloat() + 8f, 0.01f) // 섹션 높이 + 틈 = 전체
+    }
+
+    @Test
+    fun sectionsTooLowToReadAreLeftOutFromTheEndButTheFirstAlwaysStays() {
+        assertEquals(2, sectionHeights(150.dp, listOf(1, 1, 1, 1), 4.dp, 72.dp).size) // 네 개는 34dp씩이라 둘만
+        assertEquals(listOf(40.dp), sectionHeights(40.dp, listOf(1, 1), 4.dp, 72.dp)) // 하나는 모자라도 남긴다
+        assertEquals(listOf(150.dp), sectionHeights(150.dp, listOf(3, 1), 4.dp, 72.dp)) // 앞쪽이 큰 비율이어도 뒤가 못 읽히면 뺀다
+        assertEquals(emptyList<androidx.compose.ui.unit.Dp>(), sectionHeights(300.dp, emptyList(), 4.dp, 72.dp))
+    }
+
+    @Test
+    fun sectionsStackEveryViewWithItsOwnHeader() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 600.dp))
+        provideComposable { LayoutWidgetContent(state(3, 0, LayoutMode.SECTIONS), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewHeader")).assertCountEquals(3)
+        onNode(hasTestTag("layoutTab_0")).assertDoesNotExist()
+        listOf("행 할 일", "행 독서", "행 운동").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+    }
+
+    @Test
+    fun aLowSectionDrawsItsHeaderAndAMoreLineInsteadOfClippedRows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 170.dp))
+        provideComposable { LayoutWidgetContent(state(2, 0, LayoutMode.SECTIONS), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(0)
+        onAllNodes(hasTestTag("viewMore")).assertCountEquals(2)
+    }
+
+    @Test
+    fun aSmallWidgetDrawsOnlyTheSectionsThatFit() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(234.dp, 160.dp)) // 안쪽 152dp: 둘이면 74dp씩(최소 72dp)
+        provideComposable { LayoutWidgetContent(state(4, 0, LayoutMode.SECTIONS), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewHeader")).assertCountEquals(2)
+    }
+
+    @Test
+    fun sectionsFollowTheirWeightsOnScreen() = runTest(timeout = 2.minutes) {
+        suspend fun secondHeaderTop(weights: List<Int>): Float {
+            val remoteViews = GlanceRemoteViews().compose(context, DpSize(360.dp, 420.dp)) { LayoutWidgetContent(state(2, 0, LayoutMode.SECTIONS, weights = weights), systemFontScale = 1f) }.remoteViews
+            val activity = Robolectric.buildActivity(Activity::class.java).create().get()
+            val frame = FrameLayout(activity)
+            frame.addView(remoteViews.apply(activity, frame))
+            val density = activity.resources.displayMetrics.density
+            frame.measure(View.MeasureSpec.makeMeasureSpec((360 * density).toInt(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec((420 * density).toInt(), View.MeasureSpec.EXACTLY))
+            frame.layout(0, 0, (360 * density).toInt(), (420 * density).toInt())
+            fun find(v: View): TextView? = if (v is TextView && v.text.toString() == "독서") v else (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it)) } }
+            var y = 0f
+            var v: View? = find(frame)
+            while (v != null && v !== frame) { y += v.top; v = v.parent as? View }
+            return y / density
+        }
+        val even = secondHeaderTop(listOf(1, 1))
+        val heavy = secondHeaderTop(listOf(2, 1))
+        assertEquals("2:1이면 둘째 섹션이 (408×2/3 − 408/2) = 68dp 아래에서 시작한다", 68f, heavy - even, 4f)
+    }
+
     // --- RemoteViews 변환(PRD §13): 자식 10개 제한 등은 실제 변환에서만 드러난다.
 
     private suspend fun render(size: DpSize, content: @Composable () -> Unit) {
@@ -218,6 +287,30 @@ class LayoutWidgetTest {
             render(size) { LayoutWidgetContent(s, systemFontScale = 1.3f) }
         }
         render(DpSize(234.dp, 213.dp)) { LayoutWidgetContent(LayoutWidgetState(WidgetConfig(1), WidgetLayout(LayoutMode.TABS), emptyMap(), now), 1f) }
+    }
+
+    @Test
+    fun sectionsTranslateToRemoteViewsInEverySizeAndFont() = runTest(timeout = 4.minutes) {
+        val sizes = listOf(DpSize(110.dp, 110.dp), DpSize(234.dp, 213.dp), DpSize(360.dp, 300.dp), DpSize(501.dp, 581.dp))
+        for (size in sizes) for (count in listOf(1, 2, 4)) for (font in listOf(70, 150)) for (dense in listOf(false, true)) {
+            val s = state(count, 0, LayoutMode.SECTIONS, fontScale = font, weights = listOf(3, 1, 2, 1).take(count), dense = dense)
+            render(size) { LayoutWidgetContent(s, systemFontScale = 1.3f) }
+        }
+    }
+
+    @Test
+    fun fourDenseSectionsStayFarBelowTheBinderLimit() = runTest(timeout = 3.minutes) {
+        // 목록(LazyColumn) 넷이 한 RemoteViews에 든다(이 저장소에서 처음). 가장 큰 경우도 Binder 한도(약 1MB, 프로세스 공용)에 여유를 둔다.
+        for (size in listOf(DpSize(501.dp, 581.dp), DpSize(411.dp, 800.dp))) {
+            val s = state(4, 0, LayoutMode.SECTIONS, dense = true)
+            val remoteViews = GlanceRemoteViews().compose(context, size) { LayoutWidgetContent(s, systemFontScale = 1f) }.remoteViews
+            val parcel = android.os.Parcel.obtain()
+            remoteViews.writeToParcel(parcel, 0)
+            val bytes = parcel.dataSize()
+            parcel.recycle()
+            println("LAYOUT_PARCEL ${size.width}x${size.height} = $bytes bytes")
+            assertTrue("$size RemoteViews $bytes bytes", bytes < 400_000)
+        }
     }
 
     @Test
