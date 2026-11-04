@@ -95,7 +95,8 @@ class ViewWriteProcessor @Inject constructor(
                 }
                 SendResult.REJECTED -> {
                     reject(write)
-                    refresh += write.viewId
+                    // 거부된 휴지통은 행이 돌아와야 하고, 같은 소스의 다른 보기에서도 이미 지웠으므로 모두 다시 받는다.
+                    if (write.propType == VIEW_WRITE_TRASH) refresh += dao.viewIdsOfSource(write.dataSourceId) else refresh += write.viewId
                     dropped++
                 }
             }

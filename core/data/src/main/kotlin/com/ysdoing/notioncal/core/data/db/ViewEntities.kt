@@ -153,6 +153,14 @@ abstract class ViewDao {
     @Query("DELETE FROM view_rows WHERE pageId = :pageId")
     protected abstract suspend fun deleteRowsOfPage(pageId: String)
 
+    /** 한 페이지의 보내지 않은 쓰기를 모두 지운다(휴지통으로 가는 페이지에 속성은 보낼 이유가 없다). */
+    @Query("DELETE FROM view_writes WHERE pageId = :pageId")
+    protected abstract suspend fun deleteWritesOfPage(pageId: String)
+
+    /** 휴지통 전송을 기다리는 페이지. 보기를 새로 받아도 이 페이지의 행은 다시 넣지 않는다(노션에는 아직 있다). */
+    @Query("SELECT pageId FROM view_writes WHERE propType = '$VIEW_WRITE_TRASH'")
+    protected abstract suspend fun trashingPages(): List<String>
+
     @Query("UPDATE view_rows SET cells = :cells, typed = :typed, progress = :progress WHERE viewId = :viewId AND pageId = :pageId")
     protected abstract suspend fun updateRow(viewId: String, pageId: String, cells: String, typed: String, progress: Float?)
 
@@ -218,21 +226,23 @@ abstract class ViewDao {
 
     /**
      * 행을 휴지통으로 보내는 쓰기를 쌓고 그 페이지의 로컬 행을 모든 보기에서 지운다(한 트랜잭션). 보기나 행이 없으면 쌓지 않고 false다.
-     * 앞서 쌓인 같은 페이지의 속성 바꿈은 그대로 두어 먼저 나간다(큐는 만든 순서). 노션 값을 읽지 않으니 기준값은 없다.
+     * 그 페이지의 앞선 속성 바꿈은 지운다(휴지통으로 갈 페이지에 보낼 이유가 없다). 같은 소스의 모든 보기에 쓴 시각을 남겨, 휴지통 전송 전에
+     * 시작된 새로 받기가 지운 행을 되살리지 못하게 한다(그 뒤 새로 받는 것은 [replace]가 이 페이지를 빼고 넣는다). 노션 값을 읽지 않으니 기준값은 없다.
+     * [title]은 지운 행의 제목이다(로컬 행이 없어진 뒤 실패 기록에 제목을 남기려고 value에 둔다).
      */
     @Transaction
-    open suspend fun enqueueTrash(viewId: String, pageId: String, createdAt: Long): Boolean {
+    open suspend fun enqueueTrash(viewId: String, pageId: String, title: String, createdAt: Long): Boolean {
         val snapshot = snapshot(viewId) ?: return false
-        val row = row(viewId, pageId) ?: return false
+        row(viewId, pageId) ?: return false
         deleteRowsOfPage(pageId)
-        deleteWrite(viewId, pageId, VIEW_TRASH_PROP)
+        deleteWritesOfPage(pageId)
         insertWrite(
             ViewWriteEntity(
                 viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = VIEW_TRASH_PROP, propType = VIEW_WRITE_TRASH,
-                value = row.cells.substringBefore(VIEW_CELL_SEPARATOR), createdAt = createdAt,
+                value = title, createdAt = createdAt,
             ),
         )
-        markWritten(viewId, createdAt)
+        viewIdsOfSource(snapshot.dataSourceId).forEach { markWritten(it, createdAt) }
         return true
     }
 
@@ -304,6 +314,7 @@ abstract class ViewDao {
         if (pendingWrites(view.viewId) > 0 || current.lastWriteAt >= fetchedAt) return
         upsert(view.copy(lastWriteAt = current.lastWriteAt))
         deleteRows(view.viewId)
-        insertRows(rows)
+        val trashing = trashingPages().toSet()
+        insertRows(if (trashing.isEmpty()) rows else rows.filter { it.pageId !in trashing })
     }
 }

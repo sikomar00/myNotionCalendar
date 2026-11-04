@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.data.view
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.ysdoing.notioncal.core.data.db.EventEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
@@ -64,7 +65,7 @@ class ViewWriterTest {
     @After
     fun tearDown() = db.close()
 
-    private fun writer() = ViewWriter(db.viewDao(), { widgetUpdates++ }, { requests++ }, clock)
+    private fun writer() = ViewWriter(db.viewDao(), db.eventDao(), { widgetUpdates++ }, { requests++ }, clock)
 
     private suspend fun cells() = db.viewDao().row("v1", "p1")!!.cells.split(sep)
 
@@ -238,17 +239,47 @@ class ViewWriterTest {
     }
 
     @Test
-    fun trashKeepsEarlierEditsOfThePageAheadInTheQueue() = runTest {
+    fun trashDropsEarlierEditsOfThePage() = runTest {
+        // 곧 휴지통으로 갈 페이지의 앞선 속성 바꿈은 노션에 보낼 이유가 없다(보내면 요청만 늘고, 거부돼도 제목이 비어 기록된다).
         writer().toggle("v1", "p1", "dn")
         writer().trash("v1", "p1")
-        val order = buildList {
-            while (true) {
-                val next = db.viewDao().firstWrite() ?: break
-                add(next.propType)
-                db.viewDao().deleteWriteById(next.id)
-            }
-        }
-        assertEquals(listOf("checkbox", "trash"), order)
+        assertEquals(1, db.viewDao().pendingWriteCount())
+        assertEquals("trash", db.viewDao().firstWrite()!!.propType)
+    }
+
+    @Test
+    fun trashAlsoRemovesTheCalendarEventOfTheSamePage() = runTest {
+        // 일정 DB를 보기로도 등록했으면 월 화면의 일정 행(events)도 바로 사라져야 한다(일정 시트의 삭제와 같다).
+        db.eventDao().upsert(
+            listOf(
+                EventEntity(
+                    pageId = "p1", dataSourceId = "ds", title = "첫째", startDate = LocalDate.of(2026, 11, 4), endDate = null, startTime = null, endTime = null,
+                    isAllDay = true, done = false, colorKey = null, sortKey = null, url = "", lastEditedTime = 1,
+                ),
+            ),
+        )
+        writer().trash("v1", "p1")
+        assertNull(db.eventDao().get("p1"))
+    }
+
+    @Test
+    fun aPendingTrashKeepsThePageOutOfAnyViewThatIsRefreshedMeanwhile() = runTest {
+        // 같은 페이지를 가진 다른 보기가 휴지통 전송 전에 새로 받아져도(노션에는 아직 있다) 그 행을 되살리지 않는다.
+        val other = snapshot.copy(viewId = "v2", name = "다른 보기")
+        db.viewDao().upsert(other)
+        db.viewDao().replace(other, listOf(row.copy(viewId = "v2")))
+        writer().trash("v1", "p1")
+        db.viewDao().replace(other, listOf(row.copy(viewId = "v2"), row.copy(viewId = "v2", position = 1, pageId = "p2")))
+        assertEquals(listOf("p2"), db.viewDao().rows("v2").map { it.pageId })
+    }
+
+    @Test
+    fun theTrashRecordsTheTitleFromTheTitleColumnEvenWhenItIsNotFirst() = runTest {
+        val reordered = snapshot.copy(columns = listOf("Done", "Name").joinToString(sep))
+        db.viewDao().upsert(reordered)
+        db.viewDao().replace(reordered, listOf(row.copy(cells = listOf("", "둘째").joinToString(sep))))
+        writer().trash("v1", "p1")
+        assertEquals("둘째", db.viewDao().firstWrite()!!.value)
     }
 
     @Test

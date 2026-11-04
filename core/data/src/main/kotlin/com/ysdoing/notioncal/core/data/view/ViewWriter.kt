@@ -2,10 +2,12 @@ package com.ysdoing.notioncal.core.data.view
 
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
+import com.ysdoing.notioncal.core.data.db.EventDao
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
+import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -31,6 +33,7 @@ import javax.inject.Singleton
 @Singleton
 class ViewWriter @Inject constructor(
     private val dao: ViewDao,
+    private val events: EventDao,
     private val widgets: WidgetRefresher,
     private val requester: OutboxRequester,
     private val clock: Clock,
@@ -120,12 +123,22 @@ class ViewWriter @Inject constructor(
      * 보기나 행이 없으면 아무것도 하지 않고 false다.
      */
     suspend fun trash(viewId: String, pageId: String): Boolean {
-        val queued = dao.enqueueTrash(viewId, pageId, clock.millis())
+        val snapshot = dao.snapshot(viewId) ?: return false
+        val row = dao.row(viewId, pageId) ?: return false
+        val queued = dao.enqueueTrash(viewId, pageId, titleOf(snapshot, row), clock.millis())
         if (queued) {
+            events.delete(listOf(pageId)) // 이 DB가 일정 DB로도 등록돼 있으면 월 화면의 일정도 바로 사라진다(일정 시트의 삭제와 같다)
             widgets.requestUpdate()
             requester.request()
         }
         return queued
+    }
+
+    /** 행의 제목: 제목 속성이 보기에 보이면 그 칸, 아니면 빈 글자(실패 기록의 제목이 된다). */
+    private fun titleOf(snapshot: ViewSnapshotEntity, row: ViewRowEntity): String {
+        val titleName = ViewJson.columns(snapshot.columnInfo).firstOrNull { it.type == "title" }?.name ?: return ""
+        val at = snapshot.columns.split(VIEW_CELL_SEPARATOR).indexOf(titleName)
+        return row.cells.split(VIEW_CELL_SEPARATOR).getOrNull(at).orEmpty()
     }
 
     private suspend fun change(

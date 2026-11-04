@@ -149,7 +149,7 @@ class ViewWriteProcessorTest {
         return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
     }
 
-    private fun writer() = ViewWriter(db.viewDao(), { }, { }, clock)
+    private fun writer() = ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock)
 
     @Test
     fun sendsInOrderUsingPropertyNamesFromTheCurrentSchema() = runTest {
@@ -430,13 +430,24 @@ class ViewWriteProcessorTest {
     }
 
     @Test
-    fun earlierEditsOfThePageGoBeforeTheTrash() = runTest {
+    fun aTrashReplacesTheEarlierEditsOfThePage() = runTest {
         writer().toggle("v1", "p1", "dn")
         writer().trash("v1", "p1")
         val outcome = processor().process()
-        assertEquals(2, outcome.sent)
-        assertEquals(listOf("p1" to """{"Done":{"checkbox":true}}"""), sent.map { it.first to it.second.toString() })
+        assertEquals(1, outcome.sent)
+        assertEquals(emptyList<Pair<String, String>>(), sent.map { it.first to it.second.toString() }) // 곧 휴지통으로 갈 페이지에 속성은 보내지 않는다
         assertEquals(listOf("p1"), trashed)
+    }
+
+    @Test
+    fun aRejectedTrashRefreshesEveryViewOfTheSource() = runTest {
+        // 휴지통이 거부되면 행이 돌아와야 한다. 같은 소스의 다른 보기에서도 이미 지웠으므로 모두 다시 받는다.
+        val other = ViewSnapshotEntity("v2", "ds", "다른 보기", "table", columns = "Name", columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("title", "Name", "title"))))
+        db.viewDao().upsert(other)
+        writer().trash("v1", "p1")
+        failures += NotionError.Validation("validation_error")
+        processor().process()
+        assertEquals(setOf("v1", "v2"), viewRequests.toSet())
     }
 
     @Test
