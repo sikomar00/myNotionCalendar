@@ -25,6 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +42,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import com.ysdoing.notioncal.feature.quicksheet.ViewRowSheet
+import kotlinx.serialization.json.JsonElement
 
 /** 뷰어 화면의 상태. 등록하지 않았거나 지워진 보기는 [Missing]이다. */
 sealed interface ViewerState {
@@ -56,12 +61,21 @@ fun ViewerRoute(onBack: () -> Unit, viewModel: ViewerViewModel = hiltViewModel()
     ViewerContent(
         state, onBack,
         onOpen = { url -> runCatching { uriHandler.openUri(url) }.onFailure { Toast.makeText(context, R.string.viewer_open_failed, Toast.LENGTH_SHORT).show() } },
+        onSave = viewModel::save,
+        onTrash = viewModel::trash,
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ViewerContent(state: ViewerState, onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun ViewerContent(
+    state: ViewerState,
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
+    onSave: suspend (pageId: String, changes: Map<String, JsonElement>) -> Boolean = { _, _ -> false },
+    onTrash: suspend (pageId: String) -> Unit = {},
+) {
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val title = (state as? ViewerState.Ready)?.board?.name?.takeIf { it.isNotBlank() } ?: stringResource(R.string.viewer_title_fallback)
     Scaffold(
         topBar = {
@@ -80,9 +94,21 @@ fun ViewerContent(state: ViewerState, onBack: () -> Unit, onOpen: (String) -> Un
                     CircularProgressIndicator(Modifier.align(Alignment.Center).semantics { contentDescription = loading })
                 }
                 ViewerState.Missing -> Message(stringResource(R.string.viewer_missing))
-                is ViewerState.Ready -> if (state.board.rows.isEmpty()) Message(stringResource(R.string.viewer_empty)) else Rows(state.board, onOpen)
+                is ViewerState.Ready -> if (state.board.rows.isEmpty()) Message(stringResource(R.string.viewer_empty)) else Rows(state.board) { selected = it }
             }
         }
+    }
+    // ED-01: 행을 누르면 편집 시트. 휴지통으로 보내 행이 사라지면(행이 없으면) 시트도 사라진다.
+    val board = (state as? ViewerState.Ready)?.board
+    val editing = board?.rows?.firstOrNull { it.pageId == selected }
+    if (board != null && editing != null) {
+        ViewRowSheet(
+            board, editing,
+            onSave = { onSave(editing.pageId, it) },
+            onTrash = { onTrash(editing.pageId) },
+            onOpen = onOpen,
+            onDismiss = { selected = null },
+        )
     }
 }
 
@@ -94,24 +120,23 @@ private fun Message(text: String) {
 }
 
 @Composable
-private fun Rows(board: ViewBoard, onOpen: (String) -> Unit) {
+private fun Rows(board: ViewBoard, onSelect: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             val count = if (board.rowsComplete) stringResource(R.string.viewer_count, board.rows.size) else stringResource(R.string.viewer_count_incomplete, board.rows.size)
             Text(count, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        items(board.rows, key = { it.pageId }) { row -> RowCard(board, row, onOpen) }
+        items(board.rows, key = { it.pageId }) { row -> RowCard(board, row) { onSelect(row.pageId) } }
     }
 }
 
-/** 행 하나: 첫 칸(제목)을 굵게, 값이 있는 나머지 열은 '열 이름 값'으로. 줄 전체가 눌림이다(48dp 이상). */
+/** 행 하나: 첫 칸(제목)을 굵게, 값이 있는 나머지 열은 '열 이름 값'으로. 줄 전체가 눌림(편집 시트)이다(48dp 이상). */
 @Composable
-private fun RowCard(board: ViewBoard, row: ViewRow, onOpen: (String) -> Unit) {
+private fun RowCard(board: ViewBoard, row: ViewRow, onClick: () -> Unit) {
     val title = row.cells.firstOrNull().orEmpty()
-    val openable = row.url.isNotBlank()
-    val description = if (openable) stringResource(R.string.viewer_row_description, title) else title // 열 곳이 없는 행에 '열기'라 알리지 않는다
+    val description = stringResource(R.string.viewer_row_description, title)
     Surface(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = openable) { onOpen(row.url) }.semantics { contentDescription = description },
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).semantics { contentDescription = description },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {

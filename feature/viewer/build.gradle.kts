@@ -9,9 +9,10 @@ android {
 }
 
 dependencies {
-    // 뷰어('더 보기' 전체 화면, VR-02)도 :core:data(Room)만 읽는다. 노션은 부르지 않는다(PRD §7). 행을 고치는 시트는 11b에서 :feature:quicksheet를 더한다.
+    // 뷰어('더 보기' 전체 화면, VR-02)도 :core:data(Room)만 읽는다. 노션은 부르지 않는다(PRD §7). 행을 고치는 시트(ED-01)는 :feature:quicksheet의 것이다.
     implementation(project(":core:data"))
     implementation(project(":core:designsystem"))
+    implementation(project(":feature:quicksheet"))
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)

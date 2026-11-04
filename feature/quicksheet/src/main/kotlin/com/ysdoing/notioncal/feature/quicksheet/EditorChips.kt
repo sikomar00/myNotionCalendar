@@ -62,10 +62,10 @@ internal fun ChipScrollRow(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DateChip(date: LocalDate, endDate: LocalDate? = null, onPick: (LocalDate) -> Unit) {
+internal fun DateChip(date: LocalDate, endDate: LocalDate? = null, label: String? = null, onPick: (LocalDate) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val label = endDate?.let { "${date.format(dateFormat)} – ${it.format(dateFormat)}" } ?: date.format(dateFormat)
-    AssistChip(onClick = { open = true }, label = { Text(label) })
+    val text = label ?: endDate?.let { "${date.format(dateFormat)} – ${it.format(dateFormat)}" } ?: date.format(dateFormat)
+    AssistChip(onClick = { open = true }, label = { Text(text) })
     if (open) {
         // DatePicker는 UTC 자정 기준 epoch ms를 쓴다(기기 시간대와 무관하게 날짜가 밀리지 않게, NS-07).
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())

@@ -61,4 +61,22 @@
     <string name="qs_dday_pinned">디데이 고정됨</string>
     <string name="qs_weather_hour">%1$d시</string>
     <string name="qs_weather_fetched">%1$s 받은 예보</string>
+    <string name="vre_untitled">제목 없음</string>
+    <string name="vre_locked_icon">읽기 전용</string>
+    <string name="vre_locked_computed">노션이 계산하는 값이에요</string>
+    <string name="vre_locked_elsewhere">이 형식은 노션에서 고쳐요</string>
+    <string name="vre_empty_value">비어 있음</string>
+    <string name="vre_save_failed">저장하지 못했어요. 다시 시도해 주세요</string>
+    <string name="vre_number_invalid">숫자만 넣어 주세요</string>
+    <string name="vre_new_option">새 옵션 이름</string>
+    <string name="vre_date_pick">날짜 선택</string>
+    <string name="vre_date_clear">날짜 지우기</string>
+    <string name="vre_date_end_add">끝 날짜 추가</string>
+    <string name="vre_date_end_clear">끝 날짜 지우기</string>
+    <string name="vre_trash">휴지통으로 보내기</string>
+    <string name="vre_trash_confirm">보내기</string>
+    <string name="vre_discard_title">변경을 버릴까요?</string>
+    <string name="vre_discard_body">저장하지 않은 변경은 사라져요.</string>
+    <string name="vre_discard">버리기</string>
+    <string name="vre_keep_editing">계속 편집</string>
 </resources>

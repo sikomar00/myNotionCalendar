@@ -32,7 +32,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
-import com.ysdoing.notioncal.core.data.ColorOption
 import com.ysdoing.notioncal.core.data.ExtraProp
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.OutboxJson
@@ -56,7 +55,7 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
             "select", "status" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val selected = value.optionIds?.firstOrNull()
                 prop.options.forEach { option ->
-                    OptionChip(option, selected = option.id == selected) {
+                    OptionChip(option.name, option.color, selected = option.id == selected) {
                         // status는 비울 수 없다(노션 규칙). select는 다시 누르면 비운다.
                         val next = if (option.id == selected && prop.type == "select") emptyList() else listOf(option.id)
                         onChange(PropValue(optionIds = next))
@@ -66,7 +65,7 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
             "multi_select" -> FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 val selected = value.optionIds.orEmpty()
                 prop.options.forEach { option ->
-                    OptionChip(option, selected = option.id in selected) {
+                    OptionChip(option.name, option.color, selected = option.id in selected) {
                         onChange(PropValue(optionIds = if (option.id in selected) selected - option.id else selected + option.id))
                     }
                 }
@@ -110,18 +109,15 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
     }
 }
 
+/** 노션 옵션 색 점이 붙은 선택 칩. [color]는 노션 색 이름이고 모르면 회색이다. 일정 시트와 보기 행 시트가 같이 쓴다. */
 @Composable
-private fun OptionChip(option: ColorOption, selected: Boolean, onClick: () -> Unit) {
+internal fun OptionChip(name: String, color: String?, selected: Boolean, onClick: () -> Unit) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(option.name) },
+        label = { Text(name) },
         leadingIcon = {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(NotionColors.argb(NotionColors.hexFor(option.color) ?: "#787774"))))
+            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(NotionColors.argb(NotionColors.hexFor(color) ?: "#787774"))))
         },
     )
 }
-
-/** 12.0 → "12", 12.5 → "12.5" */
-private fun formatNumber(value: Double): String =
-    if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) value.toLong().toString() else value.toString()

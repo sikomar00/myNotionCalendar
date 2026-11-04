@@ -5,8 +5,13 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewChoice
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -21,33 +26,68 @@ class ViewerScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private val info = listOf(ViewColumn("t", "이름", "title"), ViewColumn("c", "분류", "select", listOf(ViewChoice("h", "집"), ViewChoice("w", "일"))))
+
     private fun board(rows: List<ViewRow>, complete: Boolean = true) =
-        ViewBoard("v1", "할 일", "table", listOf("이름", "분류"), rows, 1, null, rowsComplete = complete)
+        ViewBoard("v1", "할 일", "table", listOf("이름", "분류"), rows, 1, null, info, rowsComplete = complete)
 
     private val rows = listOf(
-        ViewRow("p1", "https://notion.so/p1", listOf("장보기", "집")),
-        ViewRow("p2", "https://notion.so/p2", listOf("운동", "")),
+        ViewRow("p1", "https://notion.so/p1", listOf("장보기", "집"), typed = mapOf("t" to JsonPrimitive("장보기"), "c" to JsonPrimitive("h"))),
+        ViewRow("p2", "https://notion.so/p2", listOf("운동", ""), typed = mapOf("t" to JsonPrimitive("운동"))),
     )
 
     @Test
-    fun readyShowsTheNameTheRowsAndTheirColumnsAndOpensARow() {
-        val opened = mutableListOf<String>()
-        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = { opened += it }) } }
+    fun readyShowsTheNameTheRowsAndTheirColumns() {
+        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = {}) } }
         compose.onNodeWithText("할 일").assertExists() // 보기 이름
         compose.onNodeWithText("2행").assertExists()
         compose.onNodeWithText("장보기").assertExists()
         compose.onNodeWithText("분류 집").assertExists() // 값이 있는 열만 '열 이름 값'으로
-        compose.onNodeWithContentDescription("운동, 노션에서 열기").performClick()
+    }
+
+    @Test
+    fun tappingARowOpensTheEditSheetAndItsOpenButtonGivesTheNotionAddress() {
+        val opened = mutableListOf<String>()
+        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = { opened += it }) } }
+        compose.onNodeWithText("저장").assertDoesNotExist() // 시트는 행을 누르기 전에는 없다
+        compose.onNodeWithContentDescription("운동, 편집").performClick()
+        compose.onNodeWithText("저장").assertExists()
+        compose.onNodeWithText("노션에서 열기").performScrollTo().performClick()
         assertEquals(listOf("https://notion.so/p2"), opened)
     }
 
     @Test
-    fun aRowWithoutAnAddressIsNotAnnouncedAsOpenable() {
-        val opened = mutableListOf<String>()
-        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(listOf(ViewRow("p3", "", listOf("주소 없음", ""))))), onBack = {}, onOpen = { opened += it }) } }
-        compose.onNodeWithContentDescription("주소 없음").performClick() // 눌러도 열 곳이 없다
-        compose.onNodeWithContentDescription("주소 없음, 노션에서 열기").assertDoesNotExist()
-        assertEquals(emptyList<String>(), opened)
+    fun aRowWithoutAnAddressHasNoOpenButton() {
+        val noUrl = listOf(ViewRow("p3", "", listOf("주소 없음", ""), typed = mapOf("t" to JsonPrimitive("주소 없음"))))
+        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(noUrl)), onBack = {}, onOpen = {}) } }
+        compose.onNodeWithContentDescription("주소 없음, 편집").performClick()
+        compose.onNodeWithText("노션에서 열기").assertDoesNotExist()
+        compose.onNodeWithText("휴지통으로 보내기").assertExists()
+    }
+
+    @Test
+    fun savingFromTheSheetPassesThePageAndOnlyTheChanges() {
+        val saved = mutableListOf<Pair<String, Map<String, JsonElement>>>()
+        compose.setContent {
+            MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = {}, onSave = { page, changes -> saved += page to changes; true }) }
+        }
+        compose.onNodeWithContentDescription("장보기, 편집").performClick()
+        compose.onNodeWithText("일").performClick() // 분류를 '일'로
+        compose.onNodeWithText("저장").performScrollTo().performClick()
+        assertEquals(listOf<Pair<String, Map<String, JsonElement>>>("p1" to mapOf("c" to JsonPrimitive("w"))), saved)
+        compose.onNodeWithText("저장").assertDoesNotExist() // 저장하면 시트가 닫힌다
+    }
+
+    @Test
+    fun trashingFromTheSheetPassesThePage() {
+        val trashed = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = {}, onTrash = { trashed += it }) }
+        }
+        compose.onNodeWithContentDescription("운동, 편집").performClick()
+        compose.onNodeWithText("휴지통으로 보내기").performScrollTo().performClick()
+        compose.onNodeWithText("보내기").performClick()
+        assertEquals(listOf("p2"), trashed)
     }
 
     @Test
