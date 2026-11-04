@@ -267,6 +267,9 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, presetWidgetId: I
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
     val undoShown = board.undoableAt(state.nowMillis) > 0
     if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
+    // 머리 아래 상태·되돌리기 줄이 칸 높이를 차지하니 행·카드 수는 그만큼 뺀 높이로 정한다.
+    val lines = (if (viewStatusText(LocalContext.current, board, state.nowMillis) != null) m.tableHeader + 4.dp else 0.dp) + (if (undoShown) UNDO_HEIGHT else 0.dp)
+    val paneHeight = spec.height?.let { (it - lines).coerceAtLeast(0.dp) }
     val size = LocalSize.current
     val step = sizeStep(size)
     // 프리셋 줄(IX-04): 새 항목을 만들 수 있는 보기에서, 2×2보다 넓을 때만 둔다.
@@ -283,8 +286,8 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, presetWidgetId: I
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
-        // 탭·섹션의 낮은 칸이면 카드 수도 그 칸 높이에 맞춘다(보드는 스크롤이 없어 넘치면 잘린다).
-        ?.let { l -> spec.height?.let { h -> l.copy(cardsPerColumn = minOf(l.cardsPerColumn, paneRowLimit(h, m, false, false).coerceAtLeast(1))) } ?: l }
+        // 탭·섹션의 낮은 칸이면 카드 수도 그 칸 높이에 맞춘다(보드는 스크롤이 없어 넘치면 잘린다). 열 이동 줄과 열 머리는 카드 위에 늘 그려진다.
+        ?.let { l -> paneHeight?.let { h -> l.copy(cardsPerColumn = minOf(l.cardsPerColumn, paneRowLimit(h - NAV_HEIGHT - m.tableHeader, m, false, false).coerceAtLeast(1))) } ?: l }
     if (groups != null && layout != null) {
         BoardBody(board, groups, layout, state.config.viewPage, look)
         return
@@ -292,7 +295,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, presetWidgetId: I
     val columns = tableColumnCount(size.width, board.columns.size)
     val tableColumns = columns.takeIf { size.width >= TABLE_MIN_WIDTH && it > 1 }
     if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette)
-    ViewRows(board, tableColumns, rowCap(step), look, spec.staticRows, spec.height)
+    ViewRows(board, tableColumns, rowCap(step), look, spec.staticRows, paneHeight)
 }
 
 /** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */

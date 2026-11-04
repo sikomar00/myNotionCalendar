@@ -321,21 +321,21 @@ class ViewWidgetTest {
         onAllNodes(hasTestTag("viewRowLeaving")).assertCountEquals(0)
     }
 
-    // --- Phase 11d 배치: 보기 본문(ViewPane)은 틀 없이 영역 높이에 맞춰 그린다. 낮은 영역은 행 대신 '더 보기'.
+    // --- Phase 11d 배치: 보기 본문(ViewPane)은 틀 없이 영역 높이에 맞춰 그린다. 낮은 영역은 행을 줄이고 나머지는 '더 보기'(한 행은 둔다).
 
     private fun renderedPane(spec: PaneSpec, board: ViewBoard) = ViewWidgetState(board, WidgetConfig(1, viewId = "v1"), now) to spec
 
     @Test
-    fun aShortPaneDrawsOnlyTheHeaderAndAMoreLineInsteadOfClippedRows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun aShortPaneStillDrawsOneRowAndTheRestGoToTheMoreLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(large)
         val (state, spec) = renderedPane(PaneSpec(height = 60.dp), board(fiftyRows()))
         provideComposable {
             Column(GlanceModifier.fillMaxSize()) { ViewPane(state, WidgetPalette.of(state.config.theme, state.config.opacity, context), viewMetrics(1f, 1f), spec) }
         }
-        onAllNodes(hasTestTag("viewRow")).assertCountEquals(0)
-        onNode(hasTestTag("viewMore")).assertExists() // 행은 못 들어가니 전부 '+50 더 보기'
-        onNode(hasTextEqualTo("+50 더 보기")).assertExists()
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(1) // 칸 높이로는 0행이어도 목록이라 밀어 볼 수 있으니 한 행은 둔다
+        onNode(hasTestTag("viewMore")).assertExists()
+        onNode(hasTextEqualTo("+49 더 보기")).assertExists()
     }
 
     @Test

@@ -101,6 +101,10 @@ class TabbedWidget : GlanceAppWidget() {
         fun contentSize(size: DpSize, config: WidgetConfig, systemFontScale: Float): DpSize =
             DpSize(size.width, (size.height - tabRowHeight(config, systemFontScale)).coerceAtLeast(0.dp))
 
+        /** 탭 글자 크기(sp). 시스템 글꼴은 상한에서 자른 만큼 sp를 되돌린다(위젯 글자는 시스템 배율을 또 곱해 그려진다). */
+        fun tabFontSp(config: WidgetConfig, systemFontScale: Float): Float =
+            TAB_FONT * config.fontScale / 100f * minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE) / systemFontScale
+
         internal const val TAB_FONT = 12f
     }
 }
@@ -116,8 +120,7 @@ fun TabbedWidgetContent(
     val palette = WidgetPalette.of(config.theme, config.opacity, context)
     val size = LocalSize.current
     val tabHeight = TabbedWidget.tabRowHeight(config, systemFontScale)
-    val textScale = minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
-    val fontSp = TabbedWidget.TAB_FONT * config.fontScale / 100f * textScale / systemFontScale
+    val fontSp = TabbedWidget.tabFontSp(config, systemFontScale)
     Column(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background),

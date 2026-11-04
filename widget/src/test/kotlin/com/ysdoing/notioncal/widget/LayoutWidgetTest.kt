@@ -80,14 +80,22 @@ class LayoutWidgetTest {
         assertTrue(tabWindow(0, 3, 110.dp).arrows)
         assertFalse(tabWindow(0, 5, 501.dp).arrows)
         assertTrue(tabWindow(0, 5, 234.dp).arrows) // 삼성 2×2에서 5탭은 화살표 창
-        assertEquals(3, tabWindow(2, 5, 234.dp).visible)
+        assertEquals(2, tabWindow(2, 5, 234.dp).visible) // 화살표 48dp 둘을 빼고 탭 48dp 둘
+    }
+
+    @Test
+    fun arrowsPressAt48dpExceptOnTheNarrowestWidgets() {
+        assertEquals(TAP_TARGET, arrowWidth(234.dp)) // 삼성 2×2
+        assertEquals(TAP_TARGET, arrowWidth(200.dp))
+        assertEquals(28.dp, arrowWidth(150.dp)) // 일반 런처 2×2는 탭 자리를 위해 줄인다(A11Y-02의 2×2 예외)
+        assertEquals(arrowWidth(234.dp), tabWindow(0, 5, 234.dp).arrow)
     }
 
     @Test
     fun aTabPressesAtLeast48dpWideOnceTheWidgetIsWideEnoughForTheArrowsPlusOneTab() {
         for (width in listOf(150, 234, 360, 501)) for (count in 1..5) {
             val w = tabWindow(0, count, width.dp)
-            val room = width.dp - TAB_STRIP_PADDING * 2 - if (w.arrows) ARROW_WIDTH * 2 else 0.dp
+            val room = width.dp - TAB_STRIP_PADDING * 2 - if (w.arrows) w.arrow * 2 else 0.dp
             assertTrue("폭 $width 탭 $count: 탭 하나 ${room / w.visible}", room / w.visible >= TAB_MIN_WIDTH)
         }
     }
@@ -102,8 +110,9 @@ class LayoutWidgetTest {
     @Test
     fun windowFollowsTheSelectedTabAndStaysInsideTheList() {
         assertEquals(0, tabWindow(0, 5, 234.dp).first)
-        assertEquals(1, tabWindow(2, 5, 234.dp).first) // 가운데 정렬
-        assertEquals(2, tabWindow(4, 5, 234.dp).first) // 끝에서는 끝 칸에 붙는다
+        assertEquals(2, tabWindow(2, 5, 234.dp).first) // 창이 둘이면 고른 탭이 첫 칸
+        assertEquals(0, tabWindow(2, 5, 320.dp).first) // 다 들어가면 화살표 없이 처음부터
+        assertEquals(3, tabWindow(4, 5, 234.dp).first) // 끝에서는 끝 칸에 붙는다
     }
 
     @Test
@@ -142,12 +151,11 @@ class LayoutWidgetTest {
         setContext(context)
         setAppWidgetSize(DpSize(234.dp, 213.dp)) // 삼성 2×2
         provideComposable { LayoutWidgetContent(state(5, selected = 2), systemFontScale = 1f) }
-        listOf(1, 2, 3).forEach { onNode(hasTestTag("layoutTab_$it")).assertExists() }
-        listOf(0, 4).forEach { onNode(hasTestTag("layoutTab_$it")).assertDoesNotExist() }
-        onNode(hasTestTag("layoutTab_1")).assert(hasContentDescriptionEqualTo("독서")) // 첫 글자 칩도 이름을 읽어 준다
-        onNode(hasTextEqualTo("독")).assertExists()
+        listOf(2, 3).forEach { onNode(hasTestTag("layoutTab_$it")).assertExists() }
+        listOf(0, 1, 4).forEach { onNode(hasTestTag("layoutTab_$it")).assertDoesNotExist() }
+        onNode(hasTestTag("layoutTab_3")).assert(hasContentDescriptionEqualTo("청소")) // 첫 글자 칩도 이름을 읽어 준다
         onNode(hasTextEqualTo("청")).assertExists()
-        onNode(hasTextEqualTo("독서")).assertDoesNotExist()
+        onNode(hasTextEqualTo("청소")).assertDoesNotExist()
         onNode(hasTestTag("layoutTabPrev")).assert(hasRunCallbackClickAction<LayoutTabAction>(actionParametersOf(LayoutTabAction.IndexKey to 1)))
         onNode(hasTestTag("layoutTabNext")).assert(hasRunCallbackClickAction<LayoutTabAction>(actionParametersOf(LayoutTabAction.IndexKey to 3)))
     }
@@ -248,18 +256,27 @@ class LayoutWidgetTest {
     }
 
     @Test
-    fun aLowSectionDrawsItsHeaderAndAMoreLineInsteadOfClippedRows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun aLowWidgetDrawsOnlyTheFirstSectionAndItStillShowsARow() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
-        setAppWidgetSize(DpSize(358.dp, 170.dp))
-        provideComposable { LayoutWidgetContent(state(2, 0, LayoutMode.SECTIONS), systemFontScale = 1f) }
-        onAllNodes(hasTestTag("viewRow")).assertCountEquals(0)
-        onAllNodes(hasTestTag("viewMore")).assertCountEquals(2)
+        setAppWidgetSize(DpSize(358.dp, 170.dp)) // 안쪽 162dp: 둘이면 79dp씩이라 행 하나가 안 든다 → 첫 섹션만
+        provideComposable { LayoutWidgetContent(state(2, 0, LayoutMode.SECTIONS, dense = true), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewHeader")).assertCountEquals(1)
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(1) // 머리줄만 보이고 데이터가 없는 칸은 만들지 않는다
+        onAllNodes(hasTestTag("viewMore")).assertCountEquals(1)
+    }
+
+    @Test
+    fun aTabInAShortWidgetStillShowsOneRow() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 150.dp)) // 4×2 일반 런처: 칸 높이로는 행이 0이지만 목록이라 밀어 볼 수 있으니 한 행은 둔다
+        provideComposable { LayoutWidgetContent(state(2, 0, dense = true), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(1)
     }
 
     @Test
     fun aSmallWidgetDrawsOnlyTheSectionsThatFit() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
-        setAppWidgetSize(DpSize(234.dp, 160.dp)) // 안쪽 152dp: 둘이면 74dp씩(최소 72dp)
+        setAppWidgetSize(DpSize(234.dp, 270.dp)) // 안쪽 262dp: 둘이면 129dp씩(최소 약 122dp)
         provideComposable { LayoutWidgetContent(state(4, 0, LayoutMode.SECTIONS), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewHeader")).assertCountEquals(2)
     }
@@ -357,7 +374,7 @@ class LayoutWidgetTest {
     @Test
     fun settingsPreviewShowsTheChosenViewNamesAndSampleRowsInTabsAndSections() = runTest(timeout = 3.minutes) {
         for (mode in listOf(LayoutMode.TABS, LayoutMode.SECTIONS)) {
-            val layout = WidgetLayout(mode).add("a")!!.add("b", label = "내 독서")!!
+            val layout = WidgetLayout(mode).add("a")!!.add("b")!!.withLabel("b", "내 독서")
             val preview = WidgetPreviews.layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("a" to "할 일", "b" to "독서"))
             val texts = renderedTexts(DpSize(330.dp, 600.dp), preview, staticRows = true)
             assertTrue("$mode $texts", texts.containsAll(listOf("할 일", "장보기"))) // 첫 칸: 이름과 예시 행(목록이 아니라 고정 Column으로)

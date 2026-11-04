@@ -264,7 +264,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 onChange(config.copy(numberStep = it.toDouble()))
             }
             // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다.
-            if (kind == Kind.VIEW || WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE) PresetList(config, onChange)
+            if (kind == Kind.VIEW || remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE }) PresetList(config, onChange)
         }
     }
 

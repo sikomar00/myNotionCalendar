@@ -28,14 +28,18 @@ import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 
 private const val TAB_NAME_MAX = 20
 
+/** 글자 수는 UTF-16이 아니라 코드 포인트로 센다(이모지 같은 두 칸짜리 글자를 반으로 자르지 않는다). */
+private fun String.takeCodePoints(max: Int): String = if (codePointCount(0, length) <= max) this else substring(0, offsetByCodePoints(0, max))
+
 /**
  * Phase 11d WL-01~03 노션 위젯의 배치 설정: 종류(단일·탭·섹션), 담을 보기(앱 설정의 '보기 추가'로 등록한 것), 순서, 탭 이름, 섹션 높이 비율.
  * 편집 규칙(상한·중복 거부·순서)은 [WidgetLayout]이 맡고 여기는 값을 넘기기만 한다.
  */
 @Composable
 internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
-    val layout = WidgetLayout.parse(config.layoutJson)
-    val set = { new: WidgetLayout -> onChange(config.copy(layoutJson = WidgetLayout.encode(new))) }
+    val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
+    // 마지막으로 본 탭은 번호라서, 탭을 빼거나 옮기면 같은 보기를 가리키도록 번호를 다시 맞춘다.
+    val set = { new: WidgetLayout -> onChange(config.copy(layoutJson = WidgetLayout.encode(new), lastTab = new.tabIndexAfter(layout, config.lastTab))) }
     ConfigSection(stringResource(R.string.layout_config_mode))
     ChoiceChips(
         listOf(LayoutMode.SINGLE to R.string.layout_config_mode_single, LayoutMode.TABS to R.string.layout_config_mode_tabs, LayoutMode.SECTIONS to R.string.layout_config_mode_sections),
@@ -56,7 +60,8 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
     if (layout.mode != LayoutMode.SINGLE && layout.items.isNotEmpty()) {
         ConfigSection(stringResource(if (layout.mode == LayoutMode.TABS) R.string.layout_config_order_tabs else R.string.layout_config_order_sections))
         layout.items.forEachIndexed { index, item ->
-            val name = views.firstOrNull { it.viewId == item.viewId }?.name?.ifBlank { null } ?: stringResource(R.string.layout_config_gone)
+            // 이름 없는 보기도 노션에서 허용된다. 등록 목록에 없을 때만 '지워진 보기'다.
+            val name = views.firstOrNull { it.viewId == item.viewId }?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)
             LayoutItemEditor(name, index, layout, set)
         }
     }
@@ -84,7 +89,7 @@ private fun LayoutItemEditor(name: String, index: Int, layout: WidgetLayout, set
             var text by remember(viewId) { mutableStateOf(item.label) }
             OutlinedTextField(
                 value = text,
-                onValueChange = { text = it.take(TAB_NAME_MAX); set(layout.withLabel(viewId, text)) },
+                onValueChange = { text = it.takeCodePoints(TAB_NAME_MAX); set(layout.withLabel(viewId, text)) },
                 label = { Text(stringResource(R.string.layout_config_tab_name)) },
                 placeholder = { Text(name) },
                 supportingText = { Text(stringResource(R.string.layout_config_tab_name_hint)) },

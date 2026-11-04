@@ -101,4 +101,15 @@ class WidgetLayoutTest {
         assertNull(layout.toggle("a", on = true)) // 같은 보기를 또 담지 못한다
         assertEquals(listOf("a", "b", "c", "d"), layout.toggle("e", on = false)!!.items.map { it.viewId })
     }
+
+    @Test
+    fun theTabIndexFollowsTheViewThatWasShownWhenTheLayoutIsEdited() {
+        val old = layout(LayoutMode.TABS, "a", "b", "c")
+        assertEquals(1, old.remove("a").tabIndexAfter(old, 2)) // 보던 c: [b, c]에서 1번
+        assertEquals(0, old.move("c", -2).tabIndexAfter(old, 2)) // [c, a, b]
+        assertEquals(0, old.remove("c").tabIndexAfter(old, 2)) // 보던 보기를 뺐으면 첫 탭
+        assertEquals(1, old.tabIndexAfter(old, 1))
+        assertEquals(2, old.tabIndexAfter(old, 9)) // 번호가 탭 수를 넘으면 마지막 탭을 보던 것으로 본다
+        assertEquals(0, WidgetLayout(LayoutMode.TABS).tabIndexAfter(WidgetLayout(LayoutMode.TABS), 3))
+    }
 }

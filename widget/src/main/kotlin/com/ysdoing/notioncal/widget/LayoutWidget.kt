@@ -90,12 +90,10 @@ internal fun ColumnScope.LayoutPane(state: LayoutWidgetState, item: LayoutItem, 
 @Composable
 private fun ColumnScope.LayoutTabsBody(state: LayoutWidgetState, look: LayoutLook, size: DpSize) {
     val config = state.config
-    val tabHeight = TabbedWidget.tabRowHeight(config, look.fontScale)
-    val textScale = minOf(look.fontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
-    val fontSp = TabbedWidget.TAB_FONT * config.fontScale / 100f * textScale / look.fontScale
     val items = state.layout.items
-    LayoutTabStrip(items.map { it.title(state.boards[it.viewId]?.name.orEmpty()) }, state.activeIndex, size.width, tabHeight, fontSp, look.palette)
-    val area = DpSize(size.width, (size.height - tabHeight).coerceAtLeast(0.dp))
+    val tabs = TabLook(TabbedWidget.tabRowHeight(config, look.fontScale), TabbedWidget.tabFontSp(config, look.fontScale), look.palette)
+    LayoutTabStrip(items.map { it.title(state.boards[it.viewId]?.name.orEmpty()) }, state.activeIndex, size.width, tabs)
+    val area = TabbedWidget.contentSize(size, config, look.fontScale)
     val spec = PaneSpec(look.staticRows, height = area.height - VIEW_PADDING_V * 2, presets = false)
     LayoutPane(state, items[state.activeIndex], look, area, spec, weighted = true)
 }
@@ -116,7 +114,7 @@ class LayoutWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val viewIds = WidgetLayout.parse(initialConfig.layoutJson).items.map { it.viewId }
         // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령).
-        val initialBoards = viewIds.associateWith { deps.views().observe(it).first() }
+        val initialBoards = boardsOf(deps, viewIds).first()
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }

@@ -15,6 +15,10 @@ class ViewReadOnlyTest {
     private val viewSources = listOf(
         "src/main/kotlin/com/ysdoing/notioncal/widget/ViewWidget.kt",
         "src/main/kotlin/com/ysdoing/notioncal/widget/ViewCellAction.kt",
+        "src/main/kotlin/com/ysdoing/notioncal/widget/LayoutWidget.kt", // Phase 11d 노션 위젯도 같은 보기 행을 그린다
+        "src/main/kotlin/com/ysdoing/notioncal/widget/LayoutTabStrip.kt",
+        "src/main/kotlin/com/ysdoing/notioncal/widget/LayoutSections.kt",
+        "src/main/kotlin/com/ysdoing/notioncal/widget/WidgetLayoutSettings.kt",
         "../core/data/src/main/kotlin/com/ysdoing/notioncal/core/data/view/ViewRepository.kt",
         "../core/sync/src/main/kotlin/com/ysdoing/notioncal/core/sync/ViewSync.kt",
         "../core/sync/src/main/kotlin/com/ysdoing/notioncal/core/sync/ViewRegistration.kt",

@@ -17,7 +17,7 @@ import androidx.glance.layout.padding
 internal val SECTION_GAP = 4.dp
 
 /**
- * WL-03 섹션 높이. 쌓을 높이 [total]에서 섹션 사이 틈을 뺀 값을 [weights] 비율로 나눈다. 섹션 하나가 [min]보다 낮아지면 뒤 섹션부터 빼
+ * WL-03 섹션 높이. 쌓을 높이 [total]에서 섹션 사이 틈을 뺀 값을 [weights] 비율로 나눈다. 섹션 하나가 [min](머리줄 + 행 하나 + '더 보기')보다 낮아지면 뒤 섹션부터 빼
  * 앞쪽 섹션이 읽히는 높이를 지킨다(하나는 모자라도 남는다). 돌려주는 목록의 길이가 그릴 섹션 수다.
  */
 internal fun sectionHeights(total: Dp, weights: List<Int>, gap: Dp, min: Dp): List<Dp> {
@@ -38,7 +38,7 @@ internal fun sectionHeights(total: Dp, weights: List<Int>, gap: Dp, min: Dp): Li
 internal fun LayoutSectionsBody(state: LayoutWidgetState, look: LayoutLook, size: DpSize) {
     val items = state.layout.items
     val body = (size.height - VIEW_PADDING_V * 2).coerceAtLeast(0.dp)
-    val heights = sectionHeights(body, items.map { it.weight }, SECTION_GAP, look.metrics.header + MORE_HEIGHT)
+    val heights = sectionHeights(body, items.map { it.weight }, SECTION_GAP, paneMinHeight(look.metrics))
     Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
         heights.forEachIndexed { index, height ->
             if (index > 0) Spacer(GlanceModifier.height(SECTION_GAP))

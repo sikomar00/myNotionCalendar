@@ -41,7 +41,7 @@ import com.ysdoing.notioncal.core.data.view.ViewBoard
 // Phase 11a VR-BRD: 노션 보드 보기를 `group_by` 열로 나눠 그린다. 위젯은 가로 스크롤이 없어 열 2~3개만 보이고 ‹ ›로 넘긴다.
 
 private val COLUMN_GAP = 6.dp
-private val NAV_HEIGHT = 48.dp // 누름 영역 최소 48dp(보이는 동그라미는 28dp)
+internal val NAV_HEIGHT = 48.dp // 누름 영역 최소 48dp(보이는 동그라미는 28dp)
 
 /** 열 넘김 위치를 [BoardBody]가 걸러 쓴다(범위를 벗어나면 가장 가까운 끝). 한 번에 한 열씩 넘긴다. */
 @Composable

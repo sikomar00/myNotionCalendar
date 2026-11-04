@@ -131,8 +131,8 @@ internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: View
     // 눌러 바꿀 칸이 보이면(보이지 않는 그룹·필터 열은 세지 않는다) 행을 [TAP_ROW_MIN] 이상으로 높인다. 숫자 − + 는 표에서만 그려진다. 보드 단위로 한 번만 정한다.
     val tall = board.columns.indices.any { board.tappableAt(it) != null } ||
         (tableColumns != null && look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" })
-    // 탭·섹션의 한 칸이면 그 칸의 높이에 들어가는 행 수로도 줄인다(낮은 칸에서 행이 잘리지 않게, 나머지는 '더 보기').
-    val shown = board.rows.take(paneHeight?.let { minOf(cap, paneRowLimit(it, look.m, tableColumns != null, tall)) } ?: cap)
+    // 탭·섹션의 한 칸이면 그 칸의 높이에 들어가는 행 수로도 줄인다(나머지는 '더 보기'). 칸이 낮아 0행이어도 목록이라 밀어 볼 수 있으니 한 행은 둔다.
+    val shown = board.rows.take(paneHeight?.let { maxOf(1, minOf(cap, paneRowLimit(it, look.m, tableColumns != null, tall))) } ?: cap)
     if (staticRows) {
         Column(GlanceModifier.fillMaxSize()) { shown.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look, tall) } }
         return

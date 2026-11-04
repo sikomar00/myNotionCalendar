@@ -27,10 +27,10 @@ data class LayoutItem(val viewId: String, val label: String = "", val weight: In
  */
 @Serializable
 data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: List<LayoutItem> = emptyList()) {
-    fun add(viewId: String, label: String = ""): WidgetLayout? {
+    fun add(viewId: String): WidgetLayout? {
         val id = viewId.trim()
         if (id.isEmpty() || items.any { it.viewId == id } || items.size >= mode.limit) return null
-        return copy(items = items + LayoutItem(id, label.trim()))
+        return copy(items = items + LayoutItem(id))
     }
 
     /** 설정 화면의 체크: 해제하면 빼고, 체크하면 담는다. 단일은 고른 보기로 바꾸고, 탭·섹션은 상한을 넘거나 이미 담았으면 null이다. */
@@ -48,6 +48,15 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
         val to = from + delta
         if (from < 0 || to !in items.indices) return this
         return copy(items = items.toMutableList().also { it.add(to, it.removeAt(from)) })
+    }
+
+    /**
+     * 이 배치([this])에서, 이전 배치 [old]의 [oldIndex]번 탭이 보여 주던 보기가 있는 번호. 설정에서 탭을 빼거나 옮겨도 마지막으로 본 탭이
+     * 다른 보기로 바뀌지 않게 한다. 그 보기가 없어졌으면 첫 탭(0)이다.
+     */
+    fun tabIndexAfter(old: WidgetLayout, oldIndex: Int): Int {
+        val shown = old.items.getOrNull(oldIndex.coerceIn(0, old.items.lastIndex.coerceAtLeast(0)))?.viewId
+        return items.indexOfFirst { it.viewId == shown }.coerceAtLeast(0)
     }
 
     fun withLabel(viewId: String, label: String): WidgetLayout = update(viewId) { it.copy(label = label.trim()) }

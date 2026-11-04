@@ -109,4 +109,11 @@ class ViewDensityTest {
         assertEquals(true, heights.all { paneRowLimit(it, metrics, table = true, tall = false) <= paneRowLimit(it, noColumnHeader, table = true, tall = false) })
         assertEquals(true, heights.any { paneRowLimit(it, metrics, table = true, tall = false) < paneRowLimit(it, noColumnHeader, table = true, tall = false) })
     }
+
+    @Test
+    fun theMinimumPaneHeightIsExactlyWhereOneRowStartsToFit() {
+        val min = paneMinHeight(metrics)
+        assertEquals(1, paneRowLimit(min, metrics, table = false, tall = false))
+        assertEquals(0, paneRowLimit(min - 1.dp, metrics, table = false, tall = false))
+    }
 }

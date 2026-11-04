@@ -49,6 +49,9 @@ internal fun paneRowLimit(height: Dp, m: ViewMetrics, table: Boolean, tall: Bool
     return ((height - header - columnHeader - MORE_HEIGHT) / row).toInt().coerceAtLeast(0)
 }
 
+/** 한 칸에서 [paneRowLimit]이 1행을 돌려주기 시작하는 가장 낮은 높이: 머리줄 + 목록 행 하나 + '더 보기' 줄. 섹션은 이보다 낮아지면 뺀다. */
+internal fun paneMinHeight(m: ViewMetrics): Dp = m.header + m.listRow + ROW_GAP * 2 + MORE_HEIGHT
+
 /** 보드가 한 번에 보여 주는 열 수와 열마다 카드 수. */
 internal data class BoardLayout(val columns: Int, val cardsPerColumn: Int)
 

@@ -23,7 +23,7 @@ import androidx.glance.text.TextStyle
 
 // Phase 11c IX-05: 위젯의 즉시 동작 뒤 약 4초 동안 '되돌리기' 줄을 보인다. 그 동안은 쓰기를 노션에 보내지 않고, 눌러서 되돌리면 보내지 않는다.
 
-private val UNDO_HEIGHT = 36.dp
+internal val UNDO_HEIGHT = 36.dp
 
 /** '방금 바꾼 것 되돌리기' 줄. 지연 중인 쓰기가 있을 때만 그려지고(4초가 지나 보내면 다음 갱신에서 사라진다), 줄 전체가 눌림이다. */
 @androidx.compose.runtime.Composable
