@@ -563,4 +563,15 @@ class ViewWriteProcessorTest {
         processor().process()
         assertEquals(listOf("""{"Name":{"title":[{"text":{"content":"점심"}}]},"Done":{"checkbox":true}}"""), created.map { it.second.toString() })
     }
+
+    @Test
+    fun aViewSkippedWhileWritesWerePendingIsReadAfterTheQueueDrains() = runTest {
+        writer().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(coverDir), CoverDownload { null }))
+        views.syncAll() // 지연 중인 쓰기가 있어 건너뛴다(새로고침이 4초 안에 눌렸다)
+        assertEquals(0, viewRequests.size)
+        val later = Clock.offset(clock, java.time.Duration.ofMillis(ViewWriter.UNDO_WINDOW_MS))
+        ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, later, Dispatchers.Unconfined).process()
+        assertEquals(listOf("v1"), viewRequests) // 쓰기가 나간 뒤 건너뛴 보기를 받는다
+    }
 }

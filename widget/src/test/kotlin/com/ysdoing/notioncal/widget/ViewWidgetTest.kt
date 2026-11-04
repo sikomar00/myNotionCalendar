@@ -798,6 +798,17 @@ class ViewWidgetTest {
     }
 
     @Test
+    fun aBoardGivesUpACardPerColumnForTheUndoLineSoNothingIsClipped() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(fourByTwo) // 4×2: 2열 × 2장
+        val plain = boardView(3, 0, "o1", "o1", "o1", "o1", "o2")
+        val withUndo = plain.copy(board = plain.board!!.copy(pendingSendAfter = listOf(now + 3_000)))
+        provideComposable { ViewWidgetContent(withUndo, systemFontScale = 1f) }
+        // 되돌리기 줄이 높이를 차지하므로 열마다 카드를 한 장 줄인다(보드는 목록과 달리 스크롤이 없어 넘치면 잘린다): 첫 열 1장 + 둘째 열 1장.
+        onAllNodes(hasTestTag("boardCard")).assertCountEquals(2)
+    }
+
+    @Test
     fun multiSelectCellsShowAtMostThreeChipsAndACount() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(wide)

@@ -220,10 +220,6 @@ abstract class ViewDao {
     @Query("SELECT sendAfter FROM view_writes WHERE viewId = :viewId AND sendAfter > 0")
     abstract fun observePendingSendAfter(viewId: String): Flow<List<Long>>
 
-    /** 아직 지연 중인 쓰기 중 가장 이른 전송 시각. 없으면 null(처리기를 다시 깨울 필요가 없다). */
-    @Query("SELECT MIN(sendAfter) FROM view_writes WHERE sendAfter > :now")
-    abstract suspend fun earliestSendAfter(now: Long): Long?
-
     @Query("DELETE FROM view_writes WHERE id = :id")
     abstract suspend fun deleteWriteById(id: Long)
 
@@ -306,7 +302,10 @@ abstract class ViewDao {
         // 단 이미 보내는 중이면 그 값은 노션에 반영되는 중이라 이어받지 않는다(보낸 값을 노션의 다른 편집으로 보게 된다).
         val prior = writeFor(write.viewId, write.pageId, write.propId)
         deleteWrite(write.viewId, write.pageId, write.propId)
-        insertWrite(if (prior != null && prior.lastError != VIEW_WRITE_SENDING) write.copy(baseValue = prior.baseValue) else write)
+        val inherited = if (prior != null && prior.lastError != VIEW_WRITE_SENDING) write.copy(baseValue = prior.baseValue) else write
+        // 앞선 쓰기가 이미 보낼 때가 됐는데(보내지 못해 쌓여 있다) 그 위를 지연 쓰기가 덮으면, 되돌리기가 앞선 바꿈까지 지워 잃게 된다.
+        // 그럴 땐 되돌릴 창을 주지 않고 바로 보낸다.
+        insertWrite(if (prior != null && prior.sendAfter <= write.createdAt) inherited.copy(sendAfter = 0) else inherited)
         markWritten(write.viewId, write.createdAt)
     }
 

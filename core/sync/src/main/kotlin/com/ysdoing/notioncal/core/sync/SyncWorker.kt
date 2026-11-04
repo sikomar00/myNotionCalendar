@@ -153,7 +153,7 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
             .addTag(TAG)
         if (delayMs > 0) {
-            workManager.enqueueUniqueWork(OUTBOX_DELAYED_NAME, ExistingWorkPolicy.REPLACE, builder.setInitialDelay(delayMs, TimeUnit.MILLISECONDS).build())
+            workManager.enqueueUniqueWork(OUTBOX_DELAYED_NAME, ExistingWorkPolicy.REPLACE, builder.setInitialDelay(delayMs + DELAY_SLACK_MS, TimeUnit.MILLISECONDS).build())
         } else {
             workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
         }
@@ -174,6 +174,9 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
         const val UNIQUE_NAME = "notion-sync"
         const val OUTBOX_NAME = "notion-outbox"
         const val OUTBOX_DELAYED_NAME = "notion-outbox-delayed"
+
+        /** 지연 쓰기의 전송 시각에 딱 맞추면 시계 오차로 시각보다 조금 일찍 돌아 그 쓰기를 건너뛴다. 그만큼 늦춰 건다. */
+        const val DELAY_SLACK_MS = 500L
         const val PERIODIC_NAME = "notion-sync-periodic"
         const val TAG = "notion-sync"
     }

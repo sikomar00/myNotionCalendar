@@ -27,10 +27,12 @@ import kotlin.math.roundToInt
 
 /**
  * '초기화': 모양 설정(테마·투명도·글자 크기·줄 수·줄 간격·날씨·완료 숨김·금액 숨김·표시할 DB)만 기본값으로 되돌린다.
- * 위젯이 가리키는 대상(보기·디데이)과 보고 있는 달·탭은 모양이 아니라 고른 것이라 남긴다.
+ * 위젯이 가리키는 대상(보기·디데이)과 보고 있는 달·탭·보드 위치, 사용자가 만든 프리셋은 모양이 아니라 고른 것이라 남긴다.
  */
-internal fun WidgetConfig.resetLook(): WidgetConfig =
-    WidgetConfig(appWidgetId = appWidgetId, monthOffset = monthOffset, selectedTab = selectedTab, ddayPageId = ddayPageId, viewId = viewId)
+internal fun WidgetConfig.resetLook(): WidgetConfig = WidgetConfig(
+    appWidgetId = appWidgetId, monthOffset = monthOffset, selectedTab = selectedTab, ddayPageId = ddayPageId, viewId = viewId,
+    viewPage = viewPage, presetsJson = presetsJson, // 보드 위치와 사용자가 만든 프리셋은 모양이 아니다
+)
 
 /**
  * 미리보기를 화면 폭에 맞춘 배율. 높이는 줄이지 않고 [maxHeight]에서 자른다(위젯 위쪽만 보임):

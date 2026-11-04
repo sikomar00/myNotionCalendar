@@ -50,24 +50,13 @@ fun ViewRowHost(state: ViewRowState, actions: ViewRowActions) {
         is ViewRowState.Ready -> {
             BackHandler(onBack = requestClose)
             val maxHeight = (LocalConfiguration.current.screenHeightDp * SHEET_MAX_FRACTION).dp
-            Box(
-                Modifier.fillMaxSize().testTag("viewRowScrim")
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = requestClose),
-                contentAlignment = Alignment.BottomCenter,
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().imePadding()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                    shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                    tonalElevation = 6.dp,
-                ) {
-                    ViewRowEditor(
-                        state.board, state.row, actions,
-                        modifier = Modifier.heightIn(max = maxHeight),
-                        onDirtyChange = { dirty = it },
-                        bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-                    )
-                }
+            BottomSheetFrame(onClose = requestClose, modifier = Modifier.testTag("viewRowScrim")) {
+                ViewRowEditor(
+                    state.board, state.row, actions,
+                    modifier = Modifier.heightIn(max = maxHeight),
+                    onDirtyChange = { dirty = it },
+                    bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                )
             }
         }
     }

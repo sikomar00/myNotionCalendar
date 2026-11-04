@@ -57,6 +57,9 @@ class ViewSync @Inject constructor(
     private val clock: Clock,
     private val covers: CoverSync,
 ) {
+    /** 쓰기가 남아 받지 못하고 건너뛴 보기 ID. */
+    private val skipped: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
     suspend fun syncAll() {
         var changed = false
         val schemas = HashMap<String, DataSourceDto?>() // 같은 DB의 보기가 여럿이어도 스키마는 한 번만 읽는다
@@ -90,6 +93,18 @@ class ViewSync @Inject constructor(
         viewIds.toSet().forEach { syncView(it, schemas) }
     }
 
+    /**
+     * 보내지 않은 쓰기(위젯 즉시 동작의 4초 지연 포함) 때문에 받지 못하고 건너뛴 보기 중 이제 쓰기가 다 나간 보기를 받는다.
+     * 그 사이 눌린 새로고침·앱 열기 동기화가 아무 일도 하지 않고 끝나지 않게 처리기가 큐를 비운 뒤 부른다. 앱이 죽으면 기억이 사라지고 다음 주기 동기화가 한다.
+     */
+    suspend fun syncSkipped() {
+        val ready = skipped.filter { dao.pendingWrites(it) == 0 }
+        if (ready.isEmpty()) return
+        skipped.removeAll(ready.toSet())
+        val schemas = HashMap<String, DataSourceDto?>()
+        ready.forEach { syncView(it, schemas) }
+    }
+
     /** 방금 등록한 보기 하나만 받는다(등록 화면). 다른 보기를 기다리게 하지 않는다. */
     suspend fun sync(viewId: String) = syncView(viewId, HashMap())
 
@@ -103,7 +118,10 @@ class ViewSync @Inject constructor(
     /** 보기 하나를 받아 스냅샷을 바꾼다. 실패하면 이전 스냅샷을 두고 오류만 남기며, 노션 오류는 돌려준다(성공이거나 예상 밖 예외면 null). */
     private suspend fun syncOne(registered: ViewSnapshotEntity, schemas: MutableMap<String, DataSourceDto?>): NotionError? = try {
         // 보내지 않은 바꿈이 남은 보기는 받지 않는다. 방금 한 체크를 노션의 이전 값으로 덮어 되돌리지 않게, 보낸 뒤에 받는다.
-        if (dao.pendingWrites(registered.viewId) > 0) return null
+        if (dao.pendingWrites(registered.viewId) > 0) {
+            skipped += registered.viewId // 쓰기가 나간 뒤 받는다([syncSkipped])
+            return null
+        }
         val fetchedAt = clock.millis() // 받는 도중에 위젯에서 바꾼 보기는 replace가 덮어쓰지 않는다
         val (meta, rows) = snapshot(registered, schemas)
         dao.replace(meta, rows, fetchedAt)

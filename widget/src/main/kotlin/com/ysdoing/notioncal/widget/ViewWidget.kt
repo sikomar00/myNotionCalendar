@@ -248,12 +248,15 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 @Composable
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
-    if (board.undoableAt(state.nowMillis) > 0) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
+    val undoShown = board.undoableAt(state.nowMillis) > 0
+    if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
     val size = LocalSize.current
     val step = sizeStep(size)
     // 프리셋 줄(IX-04): 새 항목을 만들 수 있는 보기에서, 2×2보다 넓을 때만 둔다.
-    val presets = ViewPresets.parse(state.config.presetsJson)
-    if (presets.isNotEmpty() && board.canCreate && step != SizeStep.COMPACT) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
+    val presets = ViewPresets.parse(state.config.presetsJson).takeIf { board.canCreate && step != SizeStep.COMPACT }.orEmpty()
+    if (presets.isNotEmpty()) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
+    // 되돌리기·프리셋 줄이 높이를 차지하니 보드는 줄 수만큼 열마다 카드를 줄인다(보드는 목록과 달리 스크롤이 없어 넘치면 잘린다).
+    val extraLines = (if (undoShown) 1 else 0) + (presets.size + PRESETS_PER_ROW - 1) / PRESETS_PER_ROW
     if (board.rows.isEmpty()) {
         ViewEmpty(board, state.config.appWidgetId, m, palette)
         return
@@ -262,7 +265,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     val look = ViewLook(m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT)
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
-    val layout = groups?.let { boardLayout(step, size.width) }
+    val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
     if (groups != null && layout != null) {
         BoardBody(board, groups, layout, state.config.viewPage, look)
         return

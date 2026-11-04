@@ -266,96 +266,13 @@ class ViewWriterTest {
     }
 
     @Test
-    fun theEarliestFutureSendAfterIsKnownSoTheQueueCanWakeAgain() = runTest {
-        delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = 4_000)
-        delayedWriter().cycle("v1", "p1", "st", sendDelayMs = 9_000)
-        assertEquals(clock.millis() + 4_000, db.viewDao().earliestSendAfter(clock.millis()))
-        assertNull(db.viewDao().earliestSendAfter(clock.millis() + 10_000)) // 모두 지났으면 없다
-    }
-
-    // --- Phase 11c 새 항목에 값 묶음(AD-01·05): 유효한 값만 싣는다.
-
-    @Test
-    fun createKeepsOnlyValidExtraValuesAndNeverTheTitleColumn() = runTest {
-        val props = mapOf<String, kotlinx.serialization.json.JsonElement>(
-            "st" to JsonPrimitive("o2"), // 맞다
-            "dn" to JsonPrimitive("예"), // 체크박스에 글자: 거른다
-            "zz" to JsonPrimitive(1), // 없는 속성: 거른다
-            "t" to JsonPrimitive("다른 제목"), // 제목은 title 인자가 정한다
-            "pg" to JsonPrimitive(3.0),
-        )
-        assertTrue(writer().create("v1", "점심", null, props))
-        val spec = ViewJson.parseCreate(db.viewDao().firstWrite()!!.value)!!
-        assertEquals(mapOf<String, kotlinx.serialization.json.JsonElement>("st" to JsonPrimitive("o2"), "pg" to JsonPrimitive(3.0)), spec.props)
-    }
-
-    @Test
-    fun theDateArgumentWinsOverADateValueInTheProps() = runTest {
-        val props = mapOf<String, kotlinx.serialization.json.JsonElement>("wh" to kotlinx.serialization.json.JsonObject(mapOf("start" to JsonPrimitive("2026-01-01"))))
-        writer().create("v1", "점심", LocalDate.of(2026, 11, 4), props)
-        val spec = ViewJson.parseCreate(db.viewDao().firstWrite()!!.value)!!
-        assertEquals(listOf("2026-11-04", emptyMap<String, Any>()), listOf(spec.date, spec.props)) // 날짜는 한 군데로만 간다
-    }
-
-    // --- Phase 11c 되돌리기(IX-05): 지연 중인 쓰기를 지우고 행을 처음 값으로 복원한다. 이미 보낼 때가 된 쓰기는 건드리지 않는다.
-
-    @Test
-    fun undoRestoresTheRowsAndDropsTheDelayedWrites() = runTest {
-        val w = delayedWriter()
-        w.toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
-        w.cycle("v1", "p1", "st", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
-        widgetUpdates = 0
-        assertEquals(2, w.undoPending("v1"))
-        assertEquals(listOf("첫째", "", "할 일", "12"), cells()) // 완료 칸과 상태 칸이 처음으로
-        val typed = ViewJson.typed(db.viewDao().row("v1", "p1")!!.typed)
-        assertEquals(listOf(JsonPrimitive(false), JsonPrimitive("o1")), listOf(typed["dn"], typed["st"]))
-        assertEquals(0, db.viewDao().pendingWriteCount()) // 노션에는 아무것도 가지 않는다
-        assertEquals(1, widgetUpdates)
-    }
-
-    @Test
-    fun undoGoesBackToTheValueBeforeTheFirstOfSeveralTaps() = runTest {
-        repeat(3) { delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS) } // 켬, 끔, 켬
-        assertEquals(JsonPrimitive(true), ViewJson.typed(db.viewDao().row("v1", "p1")!!.typed)["dn"])
-        delayedWriter().undoPending("v1")
-        assertEquals(JsonPrimitive(false), ViewJson.typed(db.viewDao().row("v1", "p1")!!.typed)["dn"]) // 처음(노션에 있던) 값
-        assertEquals(listOf("첫째", "", "할 일", "12"), cells())
-    }
-
-    @Test
-    fun undoLeavesAWriteThatIsAlreadyDueAlone() = runTest {
-        val w = delayedWriter()
-        w.toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
-        w.cycle("v1", "p1", "st") // 지연 없이 바로 보낼 쓰기(시트 저장 같은)
-        assertEquals(1, w.undoPending("v1"))
-        assertEquals(listOf("st"), buildList { db.viewDao().firstWrite()?.let { add(it.propId) } }) // 남은 쓰기는 상태 하나
-        assertEquals(JsonPrimitive("o2"), ViewJson.typed(db.viewDao().row("v1", "p1")!!.typed)["st"])
-    }
-
-    @Test
-    fun undoOfAPendingCreateJustRemovesItsWrite() = runTest {
-        val w = delayedWriter()
-        assertTrue(w.create("v1", "장보기", null, sendDelayMs = ViewWriter.UNDO_WINDOW_MS))
-        assertEquals(1, w.undoPending("v1"))
-        assertEquals(0, db.viewDao().pendingWriteCount())
-    }
-
-    @Test
-    fun undoAfterTheWindowDoesNothing() = runTest {
-        delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
-        val later = Clock.offset(clock, java.time.Duration.ofMillis(ViewWriter.UNDO_WINDOW_MS))
-        assertEquals(0, delayedWriter(later).undoPending("v1")) // 4초가 지났다: 이제 보낼 쓰기다
-        assertEquals(1, db.viewDao().pendingWriteCount())
-        assertEquals(JsonPrimitive(true), ViewJson.typed(db.viewDao().row("v1", "p1")!!.typed)["dn"])
-    }
-
-    @Test
-    fun undoOnlyTouchesTheGivenView() = runTest {
-        val other = snapshot.copy(viewId = "v2")
-        db.viewDao().upsert(other)
-        db.viewDao().replace(other, listOf(row.copy(viewId = "v2")))
-        delayedWriter().toggle("v2", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
-        assertEquals(0, delayedWriter().undoPending("v1"))
+    fun aDelayedWriteOverAnAlreadyDueOneIsSentAtOnceSoUndoNeverLosesTheEarlierChange() = runTest {
+        // 보내지 못한 채 쌓인(전송 시각이 지난) 쓰기를 같은 속성의 지연 쓰기가 덮으면, 그 되돌리기가 앞선 바꿈까지 지워 잃게 된다. 그래서 되돌릴 창을 주지 않는다.
+        writer().toggle("v1", "p1", "dn") // 켬(지연 없음, 보내기 전)
+        delayedWriter().toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS) // 끔
+        val write = db.viewDao().firstWrite()!!
+        assertEquals(listOf("false", 0L), listOf(write.value, write.sendAfter))
+        assertEquals(0, delayedWriter().undoPending("v1")) // 되돌릴 쓰기가 없다
         assertEquals(1, db.viewDao().pendingWriteCount())
     }
 

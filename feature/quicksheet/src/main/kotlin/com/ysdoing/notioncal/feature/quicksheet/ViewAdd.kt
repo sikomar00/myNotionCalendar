@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -127,12 +128,12 @@ class ViewAddViewModel @Inject constructor(
     fun form(viewId: String): Flow<ViewAddForm> =
         views.observe(viewId).map { board -> ViewAddForm(board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill()) }.flowOn(io)
 
-    /** 시트의 제목과 값 묶음을 이 위젯의 프리셋으로 저장한다(이름이 같으면 바꾸고, 꽉 찼으면 저장하지 않는다). */
-    fun savePreset(appWidgetId: Int, name: String, props: Map<String, JsonElement>) {
-        viewModelScope.launch {
-            val config = widgetConfigs.get(appWidgetId)
-            ViewPresets.add(config.presetsJson, ViewPreset(name, props))?.let { widgetConfigs.save(config.copy(presetsJson = it)) }
-        }
+    /** 시트의 제목과 값 묶음을 이 위젯의 프리셋으로 저장한다(이름이 같으면 바꾼다). 이름이 비었거나 새 이름인데 꽉 찼으면 저장하지 않고 false다. */
+    suspend fun savePreset(appWidgetId: Int, name: String, props: Map<String, JsonElement>): Boolean {
+        val config = widgetConfigs.get(appWidgetId)
+        val updated = ViewPresets.add(config.presetsJson, ViewPreset(name, props)) ?: return false
+        widgetConfigs.save(config.copy(presetsJson = updated))
+        return true
     }
 
     fun save(viewId: String, title: String, date: LocalDate?, props: Map<String, JsonElement> = emptyMap()) {
@@ -164,15 +165,18 @@ fun ViewAddContent(
     saving: Boolean = false,
     failed: Boolean = false,
     prefill: ViewAddPrefill = ViewAddPrefill(),
-    onSavePreset: ((title: String, props: Map<String, JsonElement>) -> Unit)? = null,
+    onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var choice by rememberSaveable { mutableStateOf(DateChoice.NONE) }
     var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     // 필터에서 채운 값은 시트가 열린 뒤 보기를 읽어 오면 도착한다. 도착하면 그 값으로 시작한다.
-    var props by rememberSaveable(prefill, stateSaver = PropsSaver) { mutableStateOf(prefill.values) }
-    var presetSaved by rememberSaveable { mutableStateOf(false) }
+    var props by rememberSaveable(stateSaver = PropsSaver) { mutableStateOf(prefill.values) }
+    var edited by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(prefill) { if (!edited) props = prefill.values } // 사용자가 고친 뒤(화면이 다시 만들어진 뒤 값이 또 와도)에는 덮지 않는다
+    var presetSaved by rememberSaveable { mutableStateOf<Boolean?>(null) } // null: 아직, true: 저장함, false: 저장하지 못함
+    val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val date = when (choice) {
@@ -216,19 +220,27 @@ fun ViewAddContent(
             Text(stringResource(R.string.view_add_prefilled), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             prefill.columns.forEach { column ->
                 key(column.id) {
-                    PropField(column, props[column.id], onChange = { value -> props = if (value == null) props - column.id else props + (column.id to value) }, onInvalid = {})
+                    PropField(
+                        column, props[column.id],
+                        onChange = { value ->
+                            edited = true
+                            props = if (value == null) props - column.id else props + (column.id to value)
+                        },
+                        onInvalid = {},
+                    )
                 }
             }
         }
-        if (presetSaved) Text(stringResource(R.string.view_add_preset_saved), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        when (presetSaved) {
+            true -> Text(stringResource(R.string.view_add_preset_saved), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            false -> Text(stringResource(R.string.view_add_preset_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            null -> Unit
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             // AD-05: 위젯에서 연 시트면 지금 제목(= 프리셋 이름)과 값을 이 위젯의 프리셋으로 저장한다(만들지는 않는다).
             if (onSavePreset != null) {
                 TextButton(
-                    onClick = {
-                        onSavePreset(title.trim(), props)
-                        presetSaved = true
-                    },
+                    onClick = { scope.launch { presetSaved = onSavePreset(title.trim(), props) } },
                     enabled = title.isNotBlank(),
                 ) { Text(stringResource(R.string.view_add_preset_save)) }
             }
@@ -279,30 +291,20 @@ class ViewAddActivity : ComponentActivity() {
                 val saving by viewModel.saving.collectAsStateWithLifecycle()
                 val failed by viewModel.failed.collectAsStateWithLifecycle()
                 LaunchedEffect(saved) { if (saved) finish() }
-                Box(
-                    Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() },
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().imePadding()
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                        tonalElevation = 6.dp,
-                    ) {
-                        ViewAddContent(
-                            viewName = form.name,
-                            hasDate = form.hasDate,
-                            today = today,
-                            onSave = { title, date, props -> viewModel.save(viewId, title, date, props) },
-                            onCancel = ::finish,
-                            modifier = Modifier.navigationBarsPadding().padding(top = 8.dp),
-                            canAdd = form.canCreate,
-                            saving = saving,
-                            failed = failed,
-                            prefill = form.prefill,
-                            onSavePreset = if (appWidgetId > 0) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
-                        )
-                    }
+                BottomSheetFrame(onClose = ::finish) {
+                    ViewAddContent(
+                        viewName = form.name,
+                        hasDate = form.hasDate,
+                        today = today,
+                        onSave = { title, date, props -> viewModel.save(viewId, title, date, props) },
+                        onCancel = ::finish,
+                        modifier = Modifier.navigationBarsPadding().padding(top = 8.dp),
+                        canAdd = form.canCreate,
+                        saving = saving,
+                        failed = failed,
+                        prefill = form.prefill,
+                        onSavePreset = if (appWidgetId > 0) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
+                    )
                 }
             }
         }

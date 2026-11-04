@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -131,22 +132,19 @@ class ViewChoiceActivity : ComponentActivity() {
                 when (val current = state) {
                     ViewChoiceState.Loading -> Unit
                     ViewChoiceState.Missing -> LaunchedEffect(Unit) { finish() }
-                    is ViewChoiceState.Ready -> Box(
-                        Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = ::finish),
-                        contentAlignment = Alignment.BottomCenter,
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { },
-                            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                            tonalElevation = 6.dp,
-                        ) {
-                            ViewChoiceContent(
-                                current.rowTitle, current.column, current.currentId,
-                                onPick = { id -> scope.launch { viewModel.pick(viewId, pageId, propId, id); finish() } },
-                                onCancel = ::finish,
-                                modifier = Modifier.navigationBarsPadding().heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.6f).dp),
-                            )
-                        }
+                    is ViewChoiceState.Ready -> BottomSheetFrame(onClose = ::finish) {
+                        ViewChoiceContent(
+                            current.rowTitle, current.column, current.currentId,
+                            onPick = { id ->
+                                    scope.launch {
+                                        // 쓰기 큐에 못 쌓으면(그 사이 행·열이 사라짐) 조용히 닫지 않고 알린다.
+                                        if (!viewModel.pick(viewId, pageId, propId, id)) Toast.makeText(this@ViewChoiceActivity, R.string.vre_save_failed, Toast.LENGTH_SHORT).show()
+                                        finish()
+                                    }
+                                },
+                            onCancel = ::finish,
+                            modifier = Modifier.navigationBarsPadding().heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.6f).dp),
+                        )
                     }
                 }
             }

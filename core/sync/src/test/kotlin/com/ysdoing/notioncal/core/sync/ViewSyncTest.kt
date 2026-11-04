@@ -781,4 +781,24 @@ class ViewSyncTest {
         sync().syncAll()
         assertEquals("", db.viewDao().all().single().filterJson)
     }
+
+    // --- Phase 11c: 보내지 않은 쓰기(지연 중 포함) 때문에 건너뛴 보기는 쓰기가 다 나간 뒤 받는다(그 사이 새로고침이 사라지지 않게).
+
+    @Test
+    fun aViewSkippedBecauseOfPendingWritesIsSyncedOnceTheyAreGone() = runTest {
+        register("v1")
+        db.viewDao().enqueueCreate(
+            com.ysdoing.notioncal.core.data.db.ViewWriteEntity(viewId = "v1", pageId = "new-1", dataSourceId = "ds", propId = "title", propType = "create", value = "{}", createdAt = 1),
+        )
+        val views = sync()
+        views.syncAll()
+        assertEquals(emptyList<String>(), requested) // 쓰기가 남은 보기는 받지 않는다
+        views.syncSkipped()
+        assertEquals(emptyList<String>(), requested) // 쓰기가 아직 남았으니 계속 기다린다
+        db.viewDao().deleteWriteById(db.viewDao().firstWrite()!!.id)
+        views.syncSkipped()
+        assertEquals(listOf("v1"), requested) // 이제 받는다
+        views.syncSkipped()
+        assertEquals(listOf("v1"), requested) // 한 번만
+    }
 }

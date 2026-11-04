@@ -129,13 +129,16 @@ internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow): Act
 @Composable
 internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: ViewLook, staticRows: Boolean) {
     val shown = board.rows.take(cap)
+    // 눌러 바꿀 칸이 보이면(보이지 않는 그룹·필터 열은 세지 않는다) 행을 [TAP_ROW_MIN] 이상으로 높인다. 숫자 − + 는 표에서만 그려진다. 보드 단위로 한 번만 정한다.
+    val tall = board.columns.indices.any { board.tappableAt(it) != null } ||
+        (tableColumns != null && look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" })
     if (staticRows) {
-        Column(GlanceModifier.fillMaxSize()) { shown.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look) } }
+        Column(GlanceModifier.fillMaxSize()) { shown.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look, tall) } }
         return
     }
     val more = moreOf(board.rows.size, shown.size, board.rowsComplete)
     LazyColumn(GlanceModifier.fillMaxSize()) {
-        itemsIndexed(shown, itemId = { _, row -> row.pageId.hashCode().toLong() }) { _, row -> ViewRowItem(board, row, tableColumns, look) }
+        itemsIndexed(shown, itemId = { _, row -> row.pageId.hashCode().toLong() }) { _, row -> ViewRowItem(board, row, tableColumns, look, tall) }
         if (more != null) item(itemId = MORE_ITEM_ID) { MoreLine(moreText(LocalContext.current, more), board.viewId, look) }
     }
 }
@@ -150,11 +153,9 @@ internal fun moreText(context: Context, more: More): String = when {
 }
 
 @Composable
-private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look: ViewLook) {
+private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look: ViewLook, tall: Boolean) {
     val base = if (tableColumns != null) look.m.tableRow else look.m.listRow
-    // 눌러 바꿀 칸은 보이는 열만 센다(보이지 않는 그룹·필터 열이 모든 행을 높이지 않게).
-    val steppable = look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" }
-    val height = if (board.columns.indices.any { board.tappableAt(it) != null } || steppable) maxOf(base, TAP_ROW_MIN) else base
+    val height = if (tall) maxOf(base, TAP_ROW_MIN) else base
     val leaving = board.isLeaving(row)
     val rowLook = if (leaving) look.asLeaving() else look
     val tile = rowModifier(board.viewId, row, height, look.palette, if (leaving) "viewRowLeaving" else "viewRow")

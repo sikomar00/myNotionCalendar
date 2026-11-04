@@ -20,6 +20,7 @@ import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
 import com.ysdoing.notioncal.core.notion.mapping.encodeViewCreate
 import com.ysdoing.notioncal.core.notion.mapping.encodeViewValue
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -58,10 +59,16 @@ class ViewWriteProcessor @Inject constructor(
     private class Drain(val outcome: ViewWriteOutcome, val refreshViews: Set<String>)
 
     suspend fun process(): ViewWriteOutcome = withContext(io) {
-        val drain = mutex.withLock { drain() }
+        // 보내는 도중에 작업이 취소돼도(지연 요청이 새로 걸려 실행 중인 작업을 갈아 끼운다) 그 쓰기는 끝까지 보낸다: 보내는 중 상태로 남거나 중복으로 보내지 않게.
+        val drain = withContext(NonCancellable) { mutex.withLock { drain() } }
         // 버린 바꿈의 보기(노션 값으로 되돌림)와 새 항목을 만든 보기(새 행을 보임)는 큐를 다 비운 뒤, 잠금 밖에서 다시 받는다.
-        // 연결 문제로 멈췄다면 지금 받아도 실패하니 다음 동기화가 한다.
-        if (drain.outcome.retryError == null) drain.refreshViews.forEach { views.sync(it) }
+        // 연결 문제로 멈췄다면 지금 받아도 실패하니 다음 동기화가 한다. 쓰기 때문에 건너뛴 보기도 이제 받는다(그 사이 새로고침이 사라지지 않게).
+        if (drain.outcome.retryError == null) {
+            drain.refreshViews.forEach { views.sync(it) }
+            views.syncSkipped()
+        }
+        // 다시 받을 보기가 있으면 위젯은 그 뒤에 한 번만 그린다(보낸 직후 행이 정상 모양으로 깜빡였다 사라지지 않게).
+        if (drain.refreshViews.isNotEmpty()) widgets.requestUpdate()
         drain.outcome
     }
 
@@ -104,7 +111,7 @@ class ViewWriteProcessor @Inject constructor(
                 }
             }
         }
-        if (sent + dropped > 0) widgets.requestUpdate()
+        if (sent + dropped > 0 && refresh.isEmpty()) widgets.requestUpdate() // 다시 받을 보기가 있으면 process()가 받은 뒤 그린다
         return Drain(ViewWriteOutcome(sent, dropped, dao.pendingWriteCount(), retryError), refresh)
     }
 
@@ -153,7 +160,8 @@ class ViewWriteProcessor @Inject constructor(
 
     /**
      * 보낸 바꿈 때문에 행이 보기 필터를 벗어났는지(또는 폰에서 판정할 수 없는지). 그러면 그 보기를 다시 받아 노션이 가리는 대로 맞춘다(IX-06 '반영 대기').
-     * 필터가 없거나 행이 필터에 맞으면 다시 받지 않는다(요청을 늘리지 않으려고).
+     * 필터가 없거나 행이 필터에 맞으면 다시 받지 않는다(요청을 늘리지 않으려고). 폰에서 판정할 수 없는 필터(상대 날짜·수식 등)는 PRD IX-06대로
+     * 전송 뒤마다 한 번 다시 받는다(지연 4초 안의 바꿈은 한 번의 전송으로 합쳐져 탭마다가 아니다).
      */
     private suspend fun leavesFilter(write: ViewWriteEntity): Boolean {
         val snapshot = dao.snapshot(write.viewId)?.takeIf { it.filterJson.isNotBlank() } ?: return false

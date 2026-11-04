@@ -16,9 +16,13 @@ class WidgetConfigPartsTest {
         val configured = WidgetConfig(
             7, monthOffset = 2, dataSourceIds = setOf("a"), theme = WidgetTheme.DARK, opacity = 40, fontScale = 120, maxPerCell = 3,
             lineSpacing = LineSpacing.WIDE, hideDone = true, selectedTab = WidgetTab.HABIT, hideAmounts = true, ddayPageId = "d", showWeather = true, viewId = "v",
+            viewPage = 2, numberStep = 10.0, presetsJson = "[{\"name\":\"점심\"}]",
         )
-        // 모양은 기본값, 고른 대상(보기·디데이)과 보고 있는 달·탭은 그대로다.
-        assertEquals(WidgetConfig(7, monthOffset = 2, selectedTab = WidgetTab.HABIT, ddayPageId = "d", viewId = "v"), configured.resetLook())
+        // 모양은 기본값(숫자 ± 단계값 포함), 고른 대상(보기·디데이)·보고 있는 달·탭·보드 위치와 사용자가 만든 프리셋은 그대로다.
+        assertEquals(
+            WidgetConfig(7, monthOffset = 2, selectedTab = WidgetTab.HABIT, ddayPageId = "d", viewId = "v", viewPage = 2, presetsJson = "[{\"name\":\"점심\"}]"),
+            configured.resetLook(),
+        )
     }
 
     @Test

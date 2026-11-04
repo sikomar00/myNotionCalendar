@@ -33,7 +33,7 @@ import com.ysdoing.notioncal.core.data.view.ViewWriter
 // Phase 11c IX-04·AD-05: 위젯 프리셋 줄. 눌러서 프리셋 이름을 제목으로, 저장해 둔 값 묶음으로 새 항목을 만든다(4초 지연이라 되돌릴 수 있다).
 
 private val PRESET_HEIGHT = 36.dp
-private const val PRESETS_PER_ROW = 3
+internal const val PRESETS_PER_ROW = 3
 
 /** 프리셋 이름 칩들(한 줄에 3개, 최대 5개라 두 줄까지). 칩 너비는 줄마다 같고 남는 자리는 비운다. */
 @Composable

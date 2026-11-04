@@ -1,8 +1,11 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -30,6 +33,7 @@ class ViewAddPrefillTest {
     private val kind = ViewColumn("c", "분류", "select", listOf(ViewChoice("a", "집"), ViewChoice("b", "회사")))
     private val saved = mutableListOf<Triple<String, LocalDate?, Map<String, JsonElement>>>()
     private val presets = mutableListOf<Pair<String, Map<String, JsonElement>>>()
+    private var presetResult = true
 
     private fun show(prefill: ViewAddPrefill, canPreset: Boolean = true) {
         compose.setContent {
@@ -39,7 +43,7 @@ class ViewAddPrefillTest {
                     onSave = { title, date, props -> saved += Triple(title, date, props) },
                     onCancel = {},
                     prefill = prefill,
-                    onSavePreset = if (canPreset) { title, props -> presets += title to props } else null,
+                    onSavePreset = if (canPreset) { title, props -> presets += title to props; presetResult } else null,
                 )
             }
         }
@@ -53,6 +57,37 @@ class ViewAddPrefillTest {
         compose.onNodeWithText("제목").performTextInput("점심")
         compose.onNodeWithText("추가").performClick()
         assertEquals(listOf(Triple("점심", null as LocalDate?, mapOf<String, JsonElement>("c" to JsonPrimitive("b")))), saved)
+    }
+
+    @Test
+    fun aPrefillThatArrivesLateFillsTheFieldsButNeverOverwritesWhatTheUserChanged() {
+        // 필터에서 채운 값은 시트가 열린 뒤 보기를 읽어 오면 도착한다. 화면이 다시 만들어져 값이 한 번 더 와도 사용자가 고친 값을 덮지 않는다.
+        var prefill by androidx.compose.runtime.mutableStateOf(ViewAddPrefill())
+        compose.setContent {
+            MaterialTheme {
+                ViewAddContent("할 일", false, LocalDate.of(2026, 11, 4), { title, date, props -> saved += Triple(title, date, props) }, {}, prefill = prefill)
+            }
+        }
+        compose.onNodeWithText("필터에서 채운 값").assertDoesNotExist()
+        prefill = ViewAddPrefill(listOf(kind), mapOf("c" to JsonPrimitive("a")))
+        compose.onNodeWithText("필터에서 채운 값").assertExists()
+        compose.onNodeWithText("집").assertIsSelected() // 늦게 온 값으로 채워진다
+        compose.onNodeWithText("회사").performClick() // 사용자가 고친다
+        prefill = ViewAddPrefill(listOf(kind), mapOf("c" to JsonPrimitive("a"), "x" to JsonPrimitive(1.0))) // 다시 만들어진 뒤 값이 또 온다
+        compose.waitForIdle()
+        compose.onNodeWithText("제목").performTextInput("점심")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(JsonPrimitive("b"), saved.single().third["c"]) // 고친 값이 남는다
+    }
+
+    @Test
+    fun aPresetThatCouldNotBeSavedSaysSoInsteadOfClaimingSuccess() {
+        presetResult = false // 프리셋이 이미 5개이거나 이름이 비었다
+        show(ViewAddPrefill(listOf(kind), mapOf("c" to JsonPrimitive("a"))))
+        compose.onNodeWithText("제목").performTextInput("점심")
+        compose.onNodeWithText("프리셋으로 저장").performClick()
+        compose.onNodeWithText("프리셋을 저장하지 못했어요. 프리셋은 5개까지 만들 수 있어요").assertExists()
+        compose.onNodeWithText("프리셋을 저장했어요").assertDoesNotExist()
     }
 
     @Test
