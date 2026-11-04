@@ -131,6 +131,7 @@
     <string name="layout_config_views">담을 보기</string>
     <string name="layout_config_limit_tabs">탭은 최대 %1$d개까지 담을 수 있어요</string>
     <string name="layout_config_limit_sections">섹션은 최대 %1$d개까지 담을 수 있어요. 위젯이 작으면 앞쪽 섹션만 보여요</string>
+    <string name="layout_config_limit_tile_row">집계 타일 줄이 섹션 자리를 하나 써요</string>
     <string name="layout_config_order_tabs">탭 순서와 이름</string>
     <string name="layout_config_order_sections">섹션 순서와 높이</string>
     <string name="layout_config_up">위로</string>
@@ -172,6 +173,7 @@
     <string name="layout_tile_form_period">기간</string>
     <string name="layout_tile_form_goal">목표값(선택)</string>
     <string name="layout_tile_form_goal_hint">비율은 %, 연속 달성은 일 수예요. 있으면 진행 막대가 생겨요</string>
+    <string name="layout_tile_form_goal_invalid">0보다 큰 숫자로 적어 주세요(예: 80, 5,000)</string>
     <string name="layout_tile_form_label">이름(선택)</string>
     <string name="layout_tile_no_prop">이 보기에는 이 함수에 쓸 수 있는 속성이 없어요</string>
     <string name="layout_tile_no_date">이 보기에는 날짜 속성이 없어서 연속 달성을 만들 수 없어요</string>

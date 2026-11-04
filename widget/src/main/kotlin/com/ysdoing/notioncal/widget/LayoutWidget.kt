@@ -60,7 +60,9 @@ internal data class LayoutWidgetState(
         val today = Instant.ofEpochMilli(nowMillis).atZone(APP_ZONE).toLocalDate()
         return layout.tiles.map { tile ->
             val board = boards[tile.viewId]
-            TileCell(tile, board?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false), board)
+            // 노션에서 지워졌거나 지원하지 않는 보기의 남은 행은 현재 값이 아니라서 값 없음으로 둔다.
+            val result = board?.takeUnless { it.notFound || it.unsupported }?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false)
+            TileCell(tile, result, board, nowMillis)
         }
     }
 

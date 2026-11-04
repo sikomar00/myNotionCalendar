@@ -54,7 +54,11 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
     if (views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
     when (layout.mode) {
         LayoutMode.TABS -> ConfigNote(stringResource(R.string.layout_config_limit_tabs, LayoutMode.TABS.limit))
-        LayoutMode.SECTIONS -> ConfigNote(stringResource(R.string.layout_config_limit_sections, LayoutMode.SECTIONS.limit))
+        LayoutMode.SECTIONS -> {
+            val tileRow = layout.tiles.isNotEmpty() // 집계 타일 줄이 섹션 한 자리를 쓴다
+            ConfigNote(stringResource(R.string.layout_config_limit_sections, LayoutMode.SECTIONS.limit - if (tileRow) 1 else 0))
+            if (tileRow) ConfigNote(stringResource(R.string.layout_config_limit_tile_row))
+        }
         LayoutMode.SINGLE -> Unit
     }
     if (layout.mode != LayoutMode.SINGLE && layout.items.isNotEmpty()) {

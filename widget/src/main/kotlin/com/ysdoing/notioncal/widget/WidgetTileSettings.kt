@@ -51,13 +51,28 @@ internal data class TileDraft(
     val goalText: String = "",
     val label: String = "",
 ) {
-    /** 지금 값으로 만든 타일. 필요한 것(보기·속성·연속 달성일의 날짜 속성)이 없으면 null이라 '추가'를 막는다. 번호는 담을 때 붙는다. */
-    fun toTile(): AggTile? = AggTile("t", viewId, fn, propId, dateProp, period, goalText.replace(",", "").trim().toDoubleOrNull(), label).normalized()
+    /** 목표를 적었는데 읽을 수 없거나 0 이하다(비워 두면 목표 없음이라 문제 없다). */
+    val goalInvalid: Boolean get() = goalText.isNotBlank() && parseGoal(goalText)?.takeIf { it > 0 } == null
+
+    /** 지금 값으로 만든 타일. 필요한 것(보기·속성·연속 달성일의 날짜 속성)이 없거나 목표가 잘못이면 null이라 '추가'를 막는다. 번호는 담을 때 붙는다. */
+    fun toTile(): AggTile? = if (goalInvalid) null else AggTile("t", viewId, fn, propId, dateProp, period, parseGoal(goalText), label).normalized()
 }
 
-/** 함수를 바꾸면 맞는 첫 속성으로 바꾸고 날짜 속성은 비어 있을 때만 첫 날짜 속성으로 채운다. */
-internal fun TileDraft.withFn(fn: AggFn, columns: List<ViewColumn>): TileDraft =
-    copy(fn = fn, propId = propertyChoices(fn, columns).firstOrNull()?.id.orEmpty(), dateProp = dateProp.ifEmpty { dateChoices(columns).firstOrNull()?.id.orEmpty() })
+private val THOUSANDS = Regex("""\d{1,3}(,\d{3})+(\.\d+)?""")
+
+/** 목표 글자 → 숫자. 끝의 %는 떼고, '1,500'은 천 단위 쉼표로, 그 밖의 쉼표('1,5')는 소수점으로 읽는다. 읽을 수 없으면 null. */
+internal fun parseGoal(text: String): Double? {
+    val t = text.trim().removeSuffix("%").trim()
+    if (t.isEmpty()) return null
+    return (if (THOUSANDS.matches(t)) t.replace(",", "") else t.replace(',', '.')).toDoubleOrNull()?.takeIf { it.isFinite() }
+}
+
+/** 함수를 바꾸면 고른 속성이 맞지 않을 때만 맞는 첫 속성으로 바꾸고, 날짜 속성은 비어 있을 때만 첫 날짜 속성으로 채운다. */
+internal fun TileDraft.withFn(fn: AggFn, columns: List<ViewColumn>): TileDraft {
+    val props = propertyChoices(fn, columns)
+    // 고른 속성이 새 함수에도 맞으면 그대로 둔다(합계에서 평균으로 바꿔도 같은 열).
+    return copy(fn = fn, propId = props.firstOrNull { it.id == propId }?.id ?: props.firstOrNull()?.id.orEmpty(), dateProp = dateProp.ifEmpty { dateChoices(columns).firstOrNull()?.id.orEmpty() })
+}
 
 /** 보기를 고르면 그 보기의 열로 다시 시작한다(개수부터). */
 internal fun TileDraft.withView(viewId: String, columns: List<ViewColumn>): TileDraft = TileDraft(viewId = viewId).withFn(AggFn.COUNT, columns)
@@ -85,7 +100,7 @@ internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout,
         val name = tileLabel(context, tile, view?.name, columnsOf[tile.viewId].orEmpty())
         val remove = stringResource(R.string.layout_tile_delete_description, name)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.layout_tile_summary, name, view?.name?.ifBlank { null } ?: stringResource(R.string.layout_config_gone)), Modifier.weight(1f))
+            Text(stringResource(R.string.layout_tile_summary, name, view?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)), Modifier.weight(1f))
             TextButton(onClick = { set(layout.removeTile(tile.id)) }, modifier = Modifier.semantics { contentDescription = remove }) {
                 Text(stringResource(R.string.layout_config_remove), color = MaterialTheme.colorScheme.error)
             }
@@ -138,7 +153,8 @@ private fun TileForm(draft: TileDraft, views: List<ViewSnapshotEntity>, columnsO
             value = draft.goalText,
             onValueChange = { onChange(draft.copy(goalText = it.take(12))) },
             label = { Text(stringResource(R.string.layout_tile_form_goal)) },
-            supportingText = { Text(stringResource(R.string.layout_tile_form_goal_hint)) },
+            supportingText = { Text(stringResource(if (draft.goalInvalid) R.string.layout_tile_form_goal_invalid else R.string.layout_tile_form_goal_hint)) },
+            isError = draft.goalInvalid,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),

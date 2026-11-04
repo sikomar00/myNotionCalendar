@@ -38,11 +38,13 @@ import kotlin.math.ceil
 internal val AGG_TILE_GAP = 4.dp
 internal val AGG_TILE_PADDING = 8.dp
 private val BAR_HEIGHT = 6.dp
-private val TWO_COLUMNS_MIN_WIDTH = 270.dp
-private val THREE_COLUMNS_MIN_WIDTH = 420.dp
+private val TILE_THREE_COLUMNS_MIN_WIDTH = 420.dp
 
 /** 타일 하나가 그려질 값: 타일 설정, 계산 결과, 보기([board]가 null이면 등록이 지워진 보기). */
-internal data class TileCell(val tile: AggTile, val result: AggResult, val board: ViewBoard? = null)
+internal data class TileCell(val tile: AggTile, val result: AggResult, val board: ViewBoard? = null, val nowMillis: Long = 0L) {
+    /** 값 아래 줄(막대·글자)이 필요한가: 목표, 일부만 계산, 값 없음, 보기 상태 안내가 있을 때. */
+    val needsExtras: Boolean get() = result.progress != null || result.partial || result.number == null || (board != null && viewHasStatus(board, nowMillis))
+}
 
 /** 타일 줄의 격자: [visible]개를 [columns]열 × [rows]줄로 그린다. */
 internal data class TileGrid(val columns: Int, val rows: Int, val visible: Int)
@@ -52,7 +54,7 @@ internal data class TileStripPlan(val cells: List<TileCell>, val grid: TileGrid,
 
 /**
  * 타일 줄 격자(PRD 크기별 밀도: 2×2=1개·4×2=2개·4×4=4개·전체=6개). [rowsFit]은 줄 높이에 들어가는 타일 줄 수다.
- * 열은 위젯 폭으로(270dp 미만 1열, 420dp 미만 2열, 그 이상 3열) 정하고 네 개는 2×2로 모은다.
+ * 열은 좁은 위젯(2×2 단계)이면 1열, 아니면 위젯 폭으로(420dp 미만 2열, 그 이상 3열) 정하고 네 개는 2×2로 모은다.
  */
 internal fun tileGrid(width: Dp, step: SizeStep, count: Int, rowsFit: Int): TileGrid {
     val cap = when (step) {
@@ -62,8 +64,8 @@ internal fun tileGrid(width: Dp, step: SizeStep, count: Int, rowsFit: Int): Tile
         SizeStep.FULL -> 6
     }
     val byWidth = when {
-        width < TWO_COLUMNS_MIN_WIDTH -> 1
-        width < THREE_COLUMNS_MIN_WIDTH -> 2
+        step == SizeStep.COMPACT -> 1
+        width < TILE_THREE_COLUMNS_MIN_WIDTH -> 2
         else -> 3
     }
     val visible = minOf(count, cap, byWidth * rowsFit.coerceAtLeast(1))
@@ -74,13 +76,19 @@ internal fun tileGrid(width: Dp, step: SizeStep, count: Int, rowsFit: Int): Tile
 /** 타일 하나의 높이. [extras]면 막대 + 목표·상태 글자 줄이 더 든다. */
 internal fun tileHeight(m: ViewMetrics, extras: Boolean): Dp = m.tile + if (extras) m.tileExtras else 0.dp
 
-/** 타일 줄 계획. 줄에 줄 수 있는 높이 [room]에 맞춰 타일 줄 수를 정하고, 한 줄은 늘 둔다(높이가 모자라도 타일이 아예 없는 것보다 낫다). */
+/**
+ * 타일 줄 계획. 줄에 줄 수 있는 높이 [room]에 맞춰 타일 줄 수를 정하고, 한 줄은 늘 둔다(높이가 모자라도 타일이 아예 없는 것보다 낫다).
+ * 막대·글자 줄을 둘지는 실제로 그릴 타일만 보고 정한다(가려진 타일의 목표 때문에 보이는 타일이 커지지 않게, 두 번에 나눠 계산).
+ */
 internal fun planTileStrip(cells: List<TileCell>, m: ViewMetrics, size: DpSize, room: Dp): TileStripPlan {
-    val extras = cells.any { it.result.progress != null || it.result.partial || it.result.number == null }
-    val cardHeight = tileHeight(m, extras)
-    val rowsFit = ((room + AGG_TILE_GAP) / (cardHeight + AGG_TILE_GAP)).toInt().coerceAtLeast(1)
-    val grid = tileGrid(size.width, sizeStep(size), cells.size, rowsFit)
-    val height = if (grid.rows == 0) 0.dp else cardHeight * grid.rows + AGG_TILE_GAP * (grid.rows - 1)
+    fun gridFor(extras: Boolean): TileGrid {
+        val rowsFit = ((room + AGG_TILE_GAP) / (tileHeight(m, extras) + AGG_TILE_GAP)).toInt().coerceAtLeast(1)
+        return tileGrid(size.width, sizeStep(size), cells.size, rowsFit)
+    }
+    val plain = gridFor(extras = false)
+    val extras = cells.take(plain.visible).any { it.needsExtras }
+    val grid = if (extras) gridFor(extras = true) else plain
+    val height = if (grid.rows == 0) 0.dp else tileHeight(m, extras) * grid.rows + AGG_TILE_GAP * (grid.rows - 1)
     return TileStripPlan(cells.take(grid.visible), grid, height, extras)
 }
 
@@ -117,13 +125,17 @@ internal fun tileLabel(context: Context, tile: AggTile, viewName: String?, colum
     return listOfNotNull(period?.let(context::getString), subject, fn).joinToString(" ")
 }
 
-/** 값 아래 한 줄: 목표 글자, 일부만 계산, 보기·값 없음 안내를 ' · '로 잇는다. 없으면 빈 글자. */
-private fun tileNote(context: Context, cell: TileCell): String = listOfNotNull(
-    cell.result.goalText,
-    context.getString(R.string.layout_tile_partial).takeIf { cell.result.partial },
-    context.getString(R.string.layout_tile_missing).takeIf { cell.board == null },
-    context.getString(R.string.layout_tile_empty).takeIf { cell.board != null && cell.result.number == null },
-).joinToString(" · ")
+/** 값 아래 한 줄: 보기 상태(미동기화·실패·오래됨·찾을 수 없음), 목표 글자, 일부만 계산, 보기·값 없음 안내를 ' · '로 잇는다. 없으면 빈 글자. */
+private fun tileNote(context: Context, cell: TileCell): String {
+    val status = cell.board?.let { viewStatusText(context, it, cell.nowMillis) }
+    return listOfNotNull(
+        status,
+        cell.result.goalText,
+        context.getString(R.string.layout_tile_partial).takeIf { cell.result.partial },
+        context.getString(R.string.layout_tile_missing).takeIf { cell.board == null },
+        context.getString(R.string.layout_tile_empty).takeIf { cell.board != null && cell.result.number == null && status == null },
+    ).joinToString(" · ")
+}
 
 /**
  * 집계 타일 줄(AG-01·02). 타일은 라벨·큰 값·(목표가 있으면) 진행 막대·목표/상태 글자이고, 누르면 그 보기를 뷰어로 연다.

@@ -128,7 +128,7 @@ object WidgetPreviews {
 
     /**
      * 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기).
-     * 집계 타일은 값이 있어야 뜻이 있어 [boards](등록한 보기의 실제 행, 사용자 본인의 설정 화면이라 보여도 된다)로 계산한다.
+     * 집계 타일은 값이 있어야 뜻이 있어 [boards](등록한 보기의 실제 행, 사용자 본인의 설정 화면이라 보여도 된다)로 계산하고, 칸도 있으면 같은 행을 쓴다.
      */
     internal fun layoutPreview(
         config: WidgetConfig,
@@ -139,9 +139,10 @@ object WidgetPreviews {
     ): LayoutWidgetState {
         val layout = WidgetLayout.parse(config.layoutJson)
         val sample = viewState(now).board!!
-        val panes = layout.items.associate { it.viewId to sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty()) }
+        // 같은 보기는 칸이든 타일이든 같은 행을 쓴다(실제 행이 없으면 칸만 예시 행).
+        val panes = layout.items.associate { it.viewId to (boards[it.viewId] ?: sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty())) }
         val tiles = layout.tiles.mapNotNull { tile -> boards[tile.viewId]?.let { tile.viewId to it } }.toMap()
-        return LayoutWidgetState(config, layout, panes + tiles, now, weekStart)
+        return LayoutWidgetState(config, layout, tiles + panes, now, weekStart)
     }
 
     /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */

@@ -8,12 +8,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -133,20 +135,32 @@ object Aggregator {
 
     private fun result(value: Double?, tile: AggTile, partial: Boolean): AggResult {
         if (value == null) return AggResult.unavailable(partial)
+        // 목표 판정과 막대는 화면에 보이는(반올림한) 값으로 한다. 안 그러면 '80%' 옆에 '목표 99%'가 뜰 수 있다.
+        val shown = BigDecimal(value).setScale(decimals(tile.fn), RoundingMode.HALF_UP).toDouble()
         val text = when (tile.fn) {
-            AggFn.COUNT -> format(value, "#,##0")
-            AggFn.AVG -> format(value, "#,##0.#")
-            AggFn.RATIO -> "${value.roundToInt()}%"
-            AggFn.STREAK -> "${value.roundToInt()}일"
-            else -> format(value, "#,##0.##")
+            AggFn.COUNT -> format(shown, "#,##0")
+            AggFn.AVG -> format(shown, "#,##0.#")
+            AggFn.RATIO -> "${shown.roundToInt()}%"
+            AggFn.STREAK -> "${shown.roundToInt()}일"
+            else -> format(shown, "#,##0.##")
         }
         val goal = tile.goal?.takeIf { it > 0 }
-        return AggResult(value, text, partial, goal?.let { (value / it).toFloat().coerceIn(0f, 1f) }, goal?.let { goalText(value, it) })
+        return AggResult(value, text, partial, goal?.let { (shown / it).toFloat().coerceIn(0f, 1f) }, goal?.let { goalText(shown, it) })
     }
 
-    /** 모자라면 내림(99.6%를 100%로 읽히게 하지 않는다), 넘으면 올림(조금이라도 넘으면 0%가 아니라 1%). 부동소수 오차는 1e-9로 흡수한다. */
+    /** 함수별로 화면에 보여 주는 소수 자릿수. */
+    private fun decimals(fn: AggFn): Int = when (fn) {
+        AggFn.COUNT, AggFn.RATIO, AggFn.STREAK -> 0
+        AggFn.AVG -> 1
+        else -> 2
+    }
+
+    /**
+     * 모자라면 내림(99.6%를 100%로 읽히게 하지 않는다), 넘으면 올림(조금이라도 넘으면 0%가 아니라 1%).
+     * 목표와 같은 값(0.1 + 0.2 = 0.30000000000000004 같은 부동소수 잡음 포함)은 넘은 것으로 보지 않는다.
+     */
     private fun goalText(value: Double, goal: Double): String = when {
-        value > goal -> "목표 ${ceil((value / goal - 1) * 100 - EPSILON).toInt().coerceAtLeast(1)}% 초과"
+        value > goal + EPSILON * maxOf(1.0, abs(goal)) -> "목표 ${ceil((value / goal - 1) * 100 - EPSILON).toInt().coerceAtLeast(1)}% 초과"
         else -> "목표 ${floor(value / goal * 100 + EPSILON).toInt().coerceAtLeast(0)}%"
     }
 

@@ -64,6 +64,7 @@ import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewPresets
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -77,6 +78,7 @@ import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
 import com.ysdoing.notioncal.core.designsystem.notionColorScheme
+import kotlinx.coroutines.withContext
 
 /**
  * WG-04 위젯별 설정. 위젯을 처음 놓을 때와 길게 눌러 다시 설정할 때 열린다.
@@ -170,8 +172,8 @@ class WidgetConfigActivity : ComponentActivity() {
             val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
             val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
             val views = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.BOOK) deps.views().observeRegistered().first() else emptyList()
-            // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번 읽는다).
-            val boards = if (kind == Kind.LAYOUT) views.associate { it.viewId to deps.views().observe(it.viewId).first() } else emptyMap()
+            // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번, 행 JSON을 읽으니 메인 스레드 밖에서).
+            val boards = if (kind == Kind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
             loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
         }
         val data = loaded ?: return

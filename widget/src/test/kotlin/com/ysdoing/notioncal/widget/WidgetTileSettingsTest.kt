@@ -4,8 +4,10 @@ import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -53,6 +55,12 @@ class WidgetTileSettingsTest {
     }
 
     @Test
+    fun changingBetweenFunctionsThatTakeTheSamePropertyKeepsTheChosenOne() {
+        val picked = TileDraft().withView("v1", columns).withFn(AggFn.SUM, columns).copy(propId = "q")
+        listOf(AggFn.AVG, AggFn.MIN, AggFn.MAX, AggFn.SUM).forEach { assertEquals("q", picked.withFn(it, columns).propId) }
+    }
+
+    @Test
     fun aViewWithoutDatesLeavesTheDatePropertyEmptyAndStreakCannotBeBuilt() {
         val noDates = listOf(title, amount, done)
         val draft = TileDraft().withView("v1", noDates).withFn(AggFn.STREAK, noDates)
@@ -72,11 +80,23 @@ class WidgetTileSettingsTest {
     }
 
     @Test
-    fun aBadOrNonPositiveGoalMeansNoGoalInsteadOfBlockingTheTile() {
-        assertNull(TileDraft(viewId = "v1", goalText = "abc").toTile()!!.goal)
-        assertNull(TileDraft(viewId = "v1", goalText = "-5").toTile()!!.goal)
-        assertNull(TileDraft(viewId = "v1", goalText = "0").toTile()!!.goal)
-        assertNull(TileDraft(viewId = "v1", goalText = "").toTile()!!.goal)
+    fun theGoalAcceptsPercentSignsThousandsCommasAndDecimalCommas() {
+        assertEquals(80.0, TileDraft(viewId = "v1", goalText = "80%").toTile()!!.goal!!, 0.0)
+        assertEquals(1500.0, TileDraft(viewId = "v1", goalText = "1,500").toTile()!!.goal!!, 0.0)
+        assertEquals(1.5, TileDraft(viewId = "v1", goalText = "1,5").toTile()!!.goal!!, 0.0) // 쉼표 소수점을 열 배로 읽지 않는다
+        assertEquals(12345.5, TileDraft(viewId = "v1", goalText = "12,345.5").toTile()!!.goal!!, 0.0)
+        assertNull(TileDraft(viewId = "v1", goalText = "").toTile()!!.goal) // 비우면 목표 없음
+    }
+
+    @Test
+    fun aGoalThatCannotBeReadOrIsNotPositiveBlocksTheTileAndIsFlagged() {
+        listOf("abc", "-5", "0", "8 0").forEach {
+            val draft = TileDraft(viewId = "v1", goalText = it)
+            assertNull("목표 '$it'", draft.toTile())
+            assertTrue("목표 '$it'", draft.goalInvalid)
+        }
+        assertFalse(TileDraft(viewId = "v1", goalText = "").goalInvalid)
+        assertFalse(TileDraft(viewId = "v1", goalText = "80").goalInvalid)
     }
 
     @Test

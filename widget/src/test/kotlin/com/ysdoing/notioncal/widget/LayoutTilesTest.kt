@@ -14,6 +14,8 @@ import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.AggTile
@@ -262,6 +264,57 @@ class LayoutTilesTest {
         assertEquals("—", cells[1].result.text) // 아직 읽지 못한 보기
         assertEquals(DayOfWeek.MONDAY, preview.weekStart)
         assertEquals("—", WidgetPreviews.layoutPreview(config, emptyMap(), now).tileCells()[0].result.text) // 실제 행이 없으면 예시 행에는 속성이 없어 값 없음
+    }
+
+    @Test
+    fun aHiddenTilesGoalDoesNotMakeTheVisibleTilesTaller() {
+        val plain = TileCell(tile(), AggResultSample.plain)
+        val goal = TileCell(tile(goal = 100.0), com.ysdoing.notioncal.core.data.view.AggResult(50.0, "50", false, 0.5f, "목표 50%"))
+        val plan = planTileStrip(listOf(plain, goal), metrics, DpSize(234.dp, 213.dp), room = 200.dp) // 2×2는 한 개만 그린다
+        assertEquals(1, plan.grid.visible)
+        assertFalse(plan.extras)
+        assertEquals(tileHeight(metrics, extras = false), plan.height)
+        assertTrue(planTileStrip(listOf(goal, plain), metrics, DpSize(234.dp, 213.dp), room = 200.dp).extras) // 보이는 쪽에 목표가 있으면 늘어난다
+    }
+
+    @Test
+    fun viewHasStatusAgreesWithTheStatusTextForEveryBoardHealth() {
+        val boards = listOf(
+            board(), board().copy(syncedAt = 0L), board().copy(lastError = "boom"), board().copy(lastError = VIEW_ERROR_NOT_FOUND),
+            board().copy(lastError = VIEW_ERROR_UNSUPPORTED), board().copy(syncedAt = now - 13 * 60 * 60 * 1000L),
+        )
+        boards.forEach { assertEquals(viewStatusText(context, it, now) != null, viewHasStatus(it, now)) }
+        assertFalse(viewHasStatus(boards[0], now))
+    }
+
+    @Test
+    fun aTileOnAnUnsyncedViewSaysSoAndOnADeletedViewHasNoValue() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(501.dp, 581.dp))
+        val unsynced = board("v1").copy(syncedAt = 0L)
+        val deleted = board("v2").copy(lastError = VIEW_ERROR_NOT_FOUND)
+        provideComposable { LayoutWidgetContent(state(listOf(tile(AggFn.COUNT, label = "처음"), tile(AggFn.SUM, label = "삭제", view = "v2")), mapOf("v1" to unsynced, "v2" to deleted), items = emptyList()), systemFontScale = 1f) }  // 칸 없이 타일만(칸의 상태 줄과 겹치지 않게)
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_not_synced))).assertExists()
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_not_found))).assertExists()
+        onAllNodes(hasTextEqualTo("—")).assertCountEquals(1) // 삭제된 보기는 마지막 값이 아니라 값 없음
+    }
+
+    @Test
+    fun aSmallWidgetLetsTheTileRowTakeTheRoomInsteadOfSqueezingASectionToASliver() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(234.dp, 213.dp)) // 삼성 2×2: 타일 줄(막대 포함 약 88dp) + 섹션 최소 높이가 한꺼번에 안 든다
+        provideComposable { LayoutWidgetContent(state(listOf(tile(goal = 3000.0)), items = listOf("v1")), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("layoutTile")).assertCountEquals(1)
+        onAllNodes(hasTestTag("viewHeader")).assertCountEquals(0) // 읽을 수 없는 조각 대신 섹션은 뺀다
+    }
+
+    @Test
+    fun aTallEnoughWidgetShowsTheTileRowAndTheSection() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(501.dp, 458.dp))
+        provideComposable { LayoutWidgetContent(state(listOf(tile(goal = 3000.0)), items = listOf("v1")), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("layoutTile")).assertCountEquals(1)
+        onAllNodes(hasTestTag("viewHeader")).assertCountEquals(1)
     }
 
     @Test

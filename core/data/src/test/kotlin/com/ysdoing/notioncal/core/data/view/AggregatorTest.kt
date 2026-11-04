@@ -169,6 +169,24 @@ class AggregatorTest {
     }
 
     @Test
+    fun floatingPointNoiseAboveTheGoalIsNotOver() {
+        val r = compute(listOf(row("a", number = 0.1), row("b", number = 0.2)), tile(AggFn.SUM, "n", goal = 0.3)) // 0.30000000000000004
+        assertEquals("목표 100%", r.goalText)
+    }
+
+    @Test
+    fun theGoalTextAgreesWithTheRoundedValueThatIsShown() {
+        val rows = (0 until 64).map { row("r$it", checked = it < 51) } // 79.6875% → '80%'
+        val ratio = compute(rows, tile(AggFn.RATIO, "c", goal = 80.0))
+        assertEquals("80%", ratio.text)
+        assertEquals("목표 100%", ratio.goalText) // 80%를 보이면서 '목표 99%'라고 하지 않는다
+        val sum = withGoal(99.996, 100.0)
+        assertEquals("100", sum.text)
+        assertEquals("목표 100%", sum.goalText)
+        assertEquals(1f, sum.progress!!, 0.0001f)
+    }
+
+    @Test
     fun noGoalNoGoalTextAndAnEmptyValueHasNoProgress() {
         assertNull(compute(numbers, tile(AggFn.SUM, "n")).goalText)
         assertNull(compute(numbers, tile(AggFn.SUM, "n", goal = 0.0)).goalText)

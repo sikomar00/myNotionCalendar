@@ -40,14 +40,18 @@ internal fun sectionHeights(total: Dp, weights: List<Int>, gap: Dp, min: Dp): Li
 internal fun LayoutSectionsBody(state: LayoutWidgetState, look: LayoutLook, size: DpSize) {
     val items = state.layout.items
     val body = (size.height - VIEW_PADDING_V * 2).coerceAtLeast(0.dp)
-    val strip = state.layout.tiles.takeIf { it.isNotEmpty() }
-        ?.let { planTileStrip(state.tileCells(), look.metrics, size, room = if (items.isEmpty()) body else body * STRIP_MAX_SHARE) }
-    val used = strip?.let { it.height + if (items.isEmpty()) 0.dp else SECTION_GAP } ?: 0.dp
-    val heights = sectionHeights((body - used).coerceAtLeast(0.dp), items.map { it.weight }, SECTION_GAP, paneMinHeight(look.metrics))
+    val min = paneMinHeight(look.metrics)
+    val cells = state.layout.tiles.takeIf { it.isNotEmpty() }?.let { state.tileCells() }
+    var strip = cells?.let { planTileStrip(it, look.metrics, size, room = if (items.isEmpty()) body else body * STRIP_MAX_SHARE) }
+    val rest = (body - (strip?.let { it.height + if (items.isEmpty()) 0.dp else SECTION_GAP } ?: 0.dp)).coerceAtLeast(0.dp)
+    // 타일 줄을 그리고 남은 높이에 보기 섹션이 읽히게 못 들어가면 섹션을 빼고 타일 줄이 남는 높이를 쓴다(읽을 수 없는 조각을 그리지 않는다).
+    val sectionsFit = items.isNotEmpty() && rest >= min
+    if (cells != null && items.isNotEmpty() && !sectionsFit) strip = planTileStrip(cells, look.metrics, size, room = body)
+    val heights = if (strip != null && !sectionsFit) emptyList() else sectionHeights(rest, items.map { it.weight }, SECTION_GAP, min)
     Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
         if (strip != null) {
             TileStrip(strip, look, size.width - PADDING_H * 2)
-            if (items.isNotEmpty()) Spacer(GlanceModifier.height(SECTION_GAP))
+            if (heights.isNotEmpty()) Spacer(GlanceModifier.height(SECTION_GAP))
         }
         heights.forEachIndexed { index, height ->
             if (index > 0) Spacer(GlanceModifier.height(SECTION_GAP))

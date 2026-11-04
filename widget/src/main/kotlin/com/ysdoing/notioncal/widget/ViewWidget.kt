@@ -112,6 +112,10 @@ internal fun viewConfigIntent(context: Context, appWidgetId: Int): Intent =
         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+/** [viewStatusText]가 글자를 낼 조건과 같다(높이를 미리 알아야 하는 곳용). 둘이 어긋나지 않는지 시험으로 확인한다. */
+internal fun viewHasStatus(board: ViewBoard, nowMillis: Long): Boolean =
+    board.notFound || board.unsupported || board.syncedAt == 0L || board.lastError != null || nowMillis - board.syncedAt > STALE_MILLIS
+
 /** VW-06 머리 아래 상태 한 줄. 색이 아니라 글자로 구분한다(A11Y-03). */
 internal fun viewStatusText(context: Context, board: ViewBoard, nowMillis: Long): String? = when {
     board.notFound -> context.getString(R.string.view_widget_not_found)
