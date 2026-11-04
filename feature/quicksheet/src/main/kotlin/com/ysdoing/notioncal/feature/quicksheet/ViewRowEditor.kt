@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,15 +34,15 @@ import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 
-/** 편집 중인 값(속성 ID → 값)을 프로세스가 죽었다 살아나도 남게 JSON 글자로 저장한다(PF-06). */
+/** 편집 중인 값(속성 ID → 값)을 프로세스가 죽었다 살아나도 남게 JSON 글자로 저장한다(PF-06). 값이 작아 복원 때 풀어도 부담이 없다. */
 private val EditsSaver = Saver<Map<String, JsonElement>, String>(save = { ViewJson.encodeTyped(it) }, restore = { ViewJson.typed(it) })
 
 /**
  * Phase 11b ED-01~05 보기 행 편집 시트의 내용. 보기의 표시 속성을 순서대로 유형별 편집기(읽기 전용은 잠금)로 보이고,
  * 저장은 바뀐 속성만 [onSave]로 넘긴다(성공이면 [onClose]). 휴지통은 확인한 뒤 [onTrash], 열기는 [onOpen]에 행 주소를 준다.
  * 노션 쓰기는 모르고 호출한 쪽이 쓰기 큐로 보낸다. 저장 안 한 변경이 생기고 사라지는 것은 [onDirtyChange]로 알린다(닫기 확인용, ED-04).
+ * 바뀐 것은 시트를 연 때의 값과 견준다: 연 뒤 동기화로 행이 바뀌어도 건드리지 않은 칸은 바뀐 것이 아니다.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ViewRowEditor(
     board: ViewBoard,
@@ -56,13 +57,9 @@ fun ViewRowEditor(
 ) {
     val props = rowProps(board, row)
     val columns = props.filterIsInstance<RowProp.Editable>().map { it.column }
-    val initial = row.typed
+    val initial = remember(row.pageId) { row.typed }
     var edits by rememberSaveable(row.pageId, stateSaver = EditsSaver) { mutableStateOf(row.typed) }
     var invalid by rememberSaveable(row.pageId) { mutableStateOf(emptyList<String>()) }
-    var saving by rememberSaveable { mutableStateOf(false) }
-    var failed by rememberSaveable { mutableStateOf(false) }
-    var confirmTrash by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val dirty = changedValues(columns, initial, edits).isNotEmpty()
     LaunchedEffect(dirty) { onDirtyChange(dirty) }
 
@@ -84,25 +81,45 @@ fun ViewRowEditor(
                 is RowProp.Locked -> LockedProp(prop)
             }
         }
-        if (failed) Text(stringResource(R.string.vre_save_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        // ED-03·UX-08: 저장은 폭 전체 주 버튼, 열기·휴지통은 그 아래 줄(줄바꿈)에 떨어뜨리고 휴지통은 error 색이다.
-        Button(
-            onClick = {
-                scope.launch {
-                    saving = true
-                    failed = false
-                    val saved = onSave(changedValues(columns, initial, edits))
-                    saving = false
-                    if (saved) onClose() else failed = true
-                }
-            },
-            enabled = dirty && invalid.isEmpty() && !saving,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.qs_save)) }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (row.url.isNotBlank()) TextButton(onClick = { onOpen(row.url) }) { Text(stringResource(R.string.qs_open_in_notion)) }
-            TextButton(onClick = { confirmTrash = true }) { Text(stringResource(R.string.vre_trash), color = MaterialTheme.colorScheme.error) }
-        }
+        EditorActions(row.url, dirty && invalid.isEmpty(), { onSave(changedValues(columns, initial, edits)) }, onTrash, onOpen, onClose)
+    }
+}
+
+/**
+ * ED-03·UX-08: 저장은 폭 전체 주 버튼, 열기·휴지통은 그 아래 줄(줄바꿈)에 떨어뜨리고 휴지통은 error 색이다.
+ * 저장은 [save]가 true일 때만 닫고, 아니면 시트를 열어 둔 채 알린다. 휴지통은 확인 대화상자를 거친다.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EditorActions(
+    url: String,
+    canSave: Boolean,
+    save: suspend () -> Boolean,
+    onTrash: suspend () -> Unit,
+    onOpen: (String) -> Unit,
+    onClose: () -> Unit,
+) {
+    var saving by remember { mutableStateOf(false) } // 다시 만들어진 뒤 '저장 중'으로 남지 않게 저장하지 않는다
+    var failed by rememberSaveable { mutableStateOf(false) }
+    var confirmTrash by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    if (failed) Text(stringResource(R.string.vre_save_failed), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+    Button(
+        onClick = {
+            scope.launch {
+                saving = true
+                failed = false
+                val saved = save()
+                saving = false
+                if (saved) onClose() else failed = true
+            }
+        },
+        enabled = canSave && !saving,
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text(stringResource(R.string.qs_save)) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (url.isNotBlank()) TextButton(onClick = { onOpen(url) }) { Text(stringResource(R.string.qs_open_in_notion)) }
+        TextButton(onClick = { confirmTrash = true }) { Text(stringResource(R.string.vre_trash), color = MaterialTheme.colorScheme.error) }
     }
     if (confirmTrash) {
         AlertDialog(

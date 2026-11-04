@@ -19,8 +19,8 @@ import java.time.LocalDate
 internal sealed interface RowProp {
     val name: String
 
-    /** 앱에서 고칠 수 있는 속성(편집기가 붙는다). [index]는 보기 열 순서. */
-    data class Editable(val column: ViewColumn, val index: Int) : RowProp {
+    /** 앱에서 고칠 수 있는 속성(편집기가 붙는다). */
+    data class Editable(val column: ViewColumn) : RowProp {
         override val name: String get() = column.name
     }
 
@@ -37,7 +37,7 @@ private val COMPUTED_TYPES = setOf("formula", "rollup", "created_time", "created
 internal fun rowProps(board: ViewBoard, row: ViewRow): List<RowProp> = board.columns.mapIndexed { index, name ->
     val column = board.columnInfo.firstOrNull { it.name == name }
     if (column != null && column.writable) {
-        RowProp.Editable(column, index)
+        RowProp.Editable(column)
     } else {
         RowProp.Locked(name, row.cells.getOrNull(index).orEmpty(), if (column?.type in COMPUTED_TYPES) LockReason.COMPUTED else LockReason.ELSEWHERE)
     }
@@ -75,7 +75,8 @@ internal sealed interface NumberInput {
 internal fun parseNumber(text: String): NumberInput {
     val trimmed = text.trim()
     if (trimmed.isEmpty()) return NumberInput.Blank
-    return trimmed.toDoubleOrNull()?.let { NumberInput.Value(it) } ?: NumberInput.Invalid
+    // NaN·Infinity·넘치는 큰 수는 JSON으로 쓸 수 없어 저장하다 앱이 꺼진다: 숫자가 아닌 것으로 본다.
+    return trimmed.toDoubleOrNull()?.takeIf { it.isFinite() }?.let { NumberInput.Value(it) } ?: NumberInput.Invalid
 }
 
 /** 12.0 → "12", 12.5 → "12.5" */
@@ -94,11 +95,19 @@ internal data class DateDraft(val start: String, val end: String?, val timeZone:
     /** 시작 날짜를 바꾼다. 끝이 새 시작보다 앞서면 같은 날로 끌어 올린다. */
     fun withStart(day: LocalDate): DateDraft {
         val moved = copy(start = start.withDay(day))
-        return if (endDay()?.isBefore(day) == true) moved.copy(end = end?.withDay(day)) else moved
+        return (if (endDay()?.isBefore(day) == true) moved.copy(end = end?.withDay(day)) else moved).ordered()
     }
 
     /** 끝 날짜를 바꾼다. 시작보다 앞이면 시작과 같은 날이다. */
-    fun withEnd(day: LocalDate): DateDraft = copy(end = (end ?: start).withDay(maxOf(day, startDay())))
+    fun withEnd(day: LocalDate): DateDraft = copy(end = (end ?: start).withDay(maxOf(day, startDay()))).ordered()
+
+    /** 같은 날이고 둘 다 시간이 있으면 끝 시간이 시작보다 앞서지 않게 한다(앞서면 노션이 거부한다). 시간 오프셋이 같다고 보고 글자로 견준다. */
+    private fun ordered(): DateDraft {
+        val e = end ?: return this
+        val sameDay = e.substringBefore('T') == start.substringBefore('T')
+        val timed = 'T' in e && 'T' in start
+        return if (sameDay && timed && e.substringAfter('T') < start.substringAfter('T')) copy(end = start) else this
+    }
 
     fun withoutEnd(): DateDraft = copy(end = null)
 

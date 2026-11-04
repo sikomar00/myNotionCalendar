@@ -78,12 +78,12 @@ internal fun ExtraPropEditor(prop: ExtraProp, value: PropValue, onChange: (PropV
                     value = text,
                     onValueChange = { input ->
                         text = input
-                        onChange(PropValue(number = input.trim().toDoubleOrNull()))
+                        onChange(PropValue(number = (parseNumber(input) as? NumberInput.Value)?.number))
                     },
                     label = { Text(prop.name) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    isError = text.isNotBlank() && text.trim().toDoubleOrNull() == null,
+                    isError = parseNumber(text) is NumberInput.Invalid,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
             }

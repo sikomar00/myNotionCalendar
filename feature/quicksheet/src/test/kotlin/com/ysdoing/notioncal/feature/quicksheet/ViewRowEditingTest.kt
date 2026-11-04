@@ -83,6 +83,8 @@ class ViewRowEditingTest {
         assertEquals(NumberInput.Value(12.5), parseNumber(" 12.5 "))
         assertEquals(NumberInput.Blank, parseNumber("  "))
         assertEquals(NumberInput.Invalid, parseNumber("12a"))
+        // NaN·Infinity·넘치는 큰 수는 JSON으로 쓸 수 없다(저장하다 앱이 꺼진다). 숫자가 아닌 것으로 본다.
+        listOf("NaN", "Infinity", "-Infinity", "1e999", "9".repeat(400)).forEach { assertEquals(it, NumberInput.Invalid, parseNumber(it)) }
         assertEquals("12", formatNumber(12.0))
         assertEquals("12.5", formatNumber(12.5))
     }
@@ -95,6 +97,17 @@ class ViewRowEditingTest {
         assertEquals("2026-11-06T10:00:00.000+09:00", moved.end) // 끝이 시작보다 앞서면 끌어 올린다
         assertEquals("Asia/Seoul", moved.timeZone)
         assertEquals("2026-11-06", DateDraft("2026-11-04", null, null).withStart(LocalDate.of(2026, 11, 6)).start)
+    }
+
+    @Test
+    fun aTimedEndNeverFallsBeforeTheStartOnTheSameDay() {
+        val range = DateDraft("2026-11-04T15:00:00.000+09:00", "2026-11-05T10:00:00.000+09:00", null)
+        // 끝 날짜를 시작과 같은 날로 옮기면 끝 시간(10:00)이 시작(15:00)보다 앞선다 → 시작과 같게 한다.
+        assertEquals("2026-11-04T15:00:00.000+09:00", range.withEnd(LocalDate.of(2026, 11, 4)).end)
+        // 시작 날짜를 끝과 같은 날로 옮겨도 마찬가지다.
+        assertEquals("2026-11-05T15:00:00.000+09:00", range.withStart(LocalDate.of(2026, 11, 5)).end)
+        // 끝 시간이 시작보다 늦으면 그대로 둔다.
+        assertEquals("2026-11-04T18:00:00.000+09:00", DateDraft("2026-11-04T15:00:00.000+09:00", "2026-11-04T18:00:00.000+09:00", null).withEnd(LocalDate.of(2026, 11, 4)).end)
     }
 
     @Test

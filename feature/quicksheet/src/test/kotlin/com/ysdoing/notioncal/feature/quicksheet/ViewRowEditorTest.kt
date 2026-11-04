@@ -1,6 +1,8 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -140,6 +142,39 @@ class ViewRowEditorTest {
         val tg = saved.single().getValue("tg") as JsonArray
         assertEquals(JsonPrimitive("a"), tg[0]) // 이미 고른 옵션은 그대로
         assertEquals("새 태그", ((tg[1] as JsonObject)["name"] as JsonPrimitive).content)
+    }
+
+    @Test
+    fun aSyncWhileTheSheetIsOpenDoesNotTurnUntouchedFieldsIntoEdits() {
+        // 시트를 연 뒤 동기화로 행이 바뀌어도, 건드리지 않은 칸은 바뀐 것이 아니다(저장하면 노션 쪽 변경을 되돌려 쓰게 된다).
+        var current by androidx.compose.runtime.mutableStateOf(row)
+        compose.setContent {
+            MaterialTheme { ViewRowEditor(board, current, onSave = { saved += it; true }, onTrash = {}, onOpen = {}, onClose = {}) }
+        }
+        current = row.copy(typed = row.typed + ("st" to JsonPrimitive("o2")))
+        compose.waitForIdle()
+        compose.onNodeWithText("저장").performScrollTo().assertIsNotEnabled() // 아무것도 안 건드렸다
+        compose.onNodeWithText("메모").performTextInput("!")
+        compose.onNodeWithText("저장").performScrollTo().performClick()
+        assertEquals(listOf(setOf("tx")), saved.map { it.keys })
+    }
+
+    @Test
+    fun aMultiSelectOptionNameWithACommaCannotBeAdded() {
+        // 노션은 다중 선택 옵션 이름에 쉼표를 허용하지 않는다(보내면 400으로 거부되어 태그가 조용히 사라진다).
+        show()
+        compose.onNodeWithText("새 옵션 이름").performTextInput("a,b")
+        compose.onNodeWithText("쉼표(,)는 쓸 수 없어요").assertExists()
+        compose.onNodeWithText("추가").assertIsNotEnabled()
+    }
+
+    @Test
+    fun aNumberFieldRejectsNotANumberWords() {
+        show()
+        compose.onNodeWithText("쪽수").performTextClearance()
+        compose.onNodeWithText("쪽수").performTextInput("NaN")
+        compose.onNodeWithText("숫자만 넣어 주세요").assertExists()
+        compose.onNodeWithText("저장").performScrollTo().assertIsNotEnabled()
     }
 
     @Test

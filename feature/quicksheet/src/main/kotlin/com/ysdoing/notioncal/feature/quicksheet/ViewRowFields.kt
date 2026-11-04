@@ -134,6 +134,7 @@ private fun MultiChoiceProp(column: ViewColumn, value: JsonElement?, onChange: (
     fun emit(newIds: List<String>, newNames: List<String>) =
         onChange(JsonArray(newIds.map { JsonPrimitive(it) } + newNames.map { JsonObject(mapOf("name" to JsonPrimitive(it))) })) // 비워도 빈 목록이다(다중 선택은 null을 받지 않는다)
     var draft by rememberSaveable(column.id + NEW_SUFFIX) { mutableStateOf("") }
+    val hasComma = ',' in draft // 노션은 다중 선택 옵션 이름에 쉼표를 허용하지 않는다
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         PropLabel(column.name)
         ChipFlow {
@@ -149,6 +150,8 @@ private fun MultiChoiceProp(column: ViewColumn, value: JsonElement?, onChange: (
                 label = { Text(stringResource(R.string.vre_new_option)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
+                isError = hasComma,
+                supportingText = if (hasComma) ({ Text(stringResource(R.string.vre_option_comma)) }) else null,
             )
             TextButton(
                 onClick = {
@@ -160,7 +163,7 @@ private fun MultiChoiceProp(column: ViewColumn, value: JsonElement?, onChange: (
                     }
                     draft = ""
                 },
-                enabled = draft.isNotBlank(),
+                enabled = draft.isNotBlank() && !hasComma,
             ) { Text(stringResource(R.string.qs_add)) }
         }
     }
