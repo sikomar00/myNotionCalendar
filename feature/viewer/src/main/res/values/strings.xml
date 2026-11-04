@@ -7,5 +7,6 @@
     <string name="viewer_empty">표시할 행이 없어요</string>
     <string name="viewer_count">%1$d행</string>
     <string name="viewer_count_incomplete">처음 %1$d행만 받았어요. 노션에 행이 더 있어요</string>
+    <string name="viewer_open_failed">노션 페이지를 열 수 없어요</string>
     <string name="viewer_row_description">%1$s, 노션에서 열기</string>
 </resources>

@@ -42,6 +42,15 @@ class ViewerScreenTest {
     }
 
     @Test
+    fun aRowWithoutAnAddressIsNotAnnouncedAsOpenable() {
+        val opened = mutableListOf<String>()
+        compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(listOf(ViewRow("p3", "", listOf("주소 없음", ""))))), onBack = {}, onOpen = { opened += it }) } }
+        compose.onNodeWithContentDescription("주소 없음").performClick() // 눌러도 열 곳이 없다
+        compose.onNodeWithContentDescription("주소 없음, 노션에서 열기").assertDoesNotExist()
+        assertEquals(emptyList<String>(), opened)
+    }
+
+    @Test
     fun anIncompleteSetSaysThereAreMoreInNotion() {
         compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(rows, complete = false)), onBack = {}, onOpen = {}) } }
         compose.onNodeWithText("처음 2행만 받았어요. 노션에 행이 더 있어요").assertExists()

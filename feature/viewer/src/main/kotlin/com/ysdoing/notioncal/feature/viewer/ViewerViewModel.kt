@@ -5,10 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.view.ViewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -20,6 +22,7 @@ class ViewerViewModel @Inject constructor(savedState: SavedStateHandle, views: V
     val state: StateFlow<ViewerState> = savedState.getStateFlow(VIEW_ID, "")
         .flatMapLatest { views.observe(it) }
         .map { board -> if (board == null) ViewerState.Missing else ViewerState.Ready(board) }
+        .flowOn(Dispatchers.Default) // 행 값 JSON 풀이가 메인 스레드에서 돌지 않게
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ViewerState.Loading)
 
     companion object {

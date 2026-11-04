@@ -23,6 +23,9 @@ sealed interface DeepLink {
 object DeepLinks {
     const val SCHEME = "notioncal"
 
+    /** 노션 보기 ID(UUID 모양). 그 밖의 글자는 내비게이션 경로 `view/{viewId}`를 깨므로 받지 않는다. */
+    private val VIEW_ID = Regex("[0-9A-Za-z-]{1,64}")
+
     fun parse(uri: String?): DeepLink? {
         val parsed = uri?.let { runCatching { URI(it) }.getOrNull() } ?: return null
         if (!parsed.scheme.equals(SCHEME, ignoreCase = true)) return null
@@ -34,7 +37,7 @@ object DeepLinks {
             "ledger" -> DeepLink.Ledger.takeIf { segments.isEmpty() }
             "dday" -> DeepLink.Dday.takeIf { segments.isEmpty() }
             "date" -> segments.singleOrNull()?.let { runCatching { LocalDate.parse(it) }.getOrNull() }?.let(DeepLink::Date)
-            "view" -> segments.singleOrNull()?.let(DeepLink::View)
+            "view" -> segments.singleOrNull()?.takeIf(VIEW_ID::matches)?.let(DeepLink::View)
             else -> null
         }
     }

@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.feature.viewer
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -50,7 +52,11 @@ sealed interface ViewerState {
 fun ViewerRoute(onBack: () -> Unit, viewModel: ViewerViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
-    ViewerContent(state, onBack, onOpen = { runCatching { uriHandler.openUri(it) } })
+    val context = LocalContext.current
+    ViewerContent(
+        state, onBack,
+        onOpen = { url -> runCatching { uriHandler.openUri(url) }.onFailure { Toast.makeText(context, R.string.viewer_open_failed, Toast.LENGTH_SHORT).show() } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,9 +108,10 @@ private fun Rows(board: ViewBoard, onOpen: (String) -> Unit) {
 @Composable
 private fun RowCard(board: ViewBoard, row: ViewRow, onOpen: (String) -> Unit) {
     val title = row.cells.firstOrNull().orEmpty()
-    val description = stringResource(R.string.viewer_row_description, title)
+    val openable = row.url.isNotBlank()
+    val description = if (openable) stringResource(R.string.viewer_row_description, title) else title // 열 곳이 없는 행에 '열기'라 알리지 않는다
     Surface(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = row.url.isNotBlank()) { onOpen(row.url) }.semantics { contentDescription = description },
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = openable) { onOpen(row.url) }.semantics { contentDescription = description },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
