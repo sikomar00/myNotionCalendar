@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
+import com.ysdoing.notioncal.core.data.view.ViewWriter
 
 /**
  * VW-08 보기 위젯 칸 탭: 체크박스는 뒤집고 상태·선택은 다음 값으로 바꾼다. 로컬 행을 먼저 고치고 쓰기 큐에 쌓을 뿐
@@ -16,8 +17,9 @@ class ViewCellAction : ActionCallback {
         val propId = parameters[PropKey] ?: return
         val writer = WidgetDependencies.from(context).viewWriter()
         when (parameters[TypeKey]) {
-            "checkbox" -> writer.toggle(viewId, pageId, propId)
-            "select", "status" -> writer.cycle(viewId, pageId, propId)
+            // 위젯의 즉시 동작은 4초 지연으로 쌓는다: 연타는 한 번의 전송으로 합쳐지고 그 사이 '되돌리기'를 누를 수 있다(IX-03·05).
+            "checkbox" -> writer.toggle(viewId, pageId, propId, ViewWriter.UNDO_WINDOW_MS)
+            "select", "status" -> writer.cycle(viewId, pageId, propId, ViewWriter.UNDO_WINDOW_MS)
         }
         WidgetKinds.update(context, glanceId)
     }

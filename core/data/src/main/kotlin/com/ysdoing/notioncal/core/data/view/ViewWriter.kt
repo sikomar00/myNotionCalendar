@@ -179,6 +179,28 @@ class ViewWriter @Inject constructor(
         return changed
     }
 
+    /**
+     * 되돌리기(IX-05): 그 보기에서 아직 지연 중인 쓰기(위젯 즉시 동작 뒤 4초 안)를 모두 지우고 행을 처음(노션에 있던) 값으로 되돌린다.
+     * 연타로 합쳐진 쓰기도 처음 값으로 돌아간다. 새 항목은 쓰기만 지운다. 이미 보낼 때가 된 쓰기는 건드리지 않는다. 되돌린 쓰기 수를 돌려준다.
+     */
+    suspend fun undoPending(viewId: String): Int {
+        val undone = dao.undoDelayed(viewId, clock.millis(), ::restoredRow)
+        if (undone > 0) widgets.requestUpdate()
+        return undone
+    }
+
+    /** [write]를 쌓기 전 값([ViewWriteEntity.baseValue], 없으면 값 없음)으로 행의 칸과 원래 값을 되돌린다. 열을 모르면 null(그대로 둔다). */
+    private fun restoredRow(snapshot: ViewSnapshotEntity, row: ViewRowEntity, write: ViewWriteEntity): ViewRowEntity? {
+        val column = ViewJson.columns(snapshot.columnInfo).firstOrNull { it.id == write.propId } ?: return null
+        val original = ViewJson.parseValue(write.baseValue) ?: return null
+        val typed = ViewJson.typed(row.typed)
+        val restored = if (original is JsonNull) typed - write.propId else typed + (write.propId to original)
+        val cells = row.cells.split(VIEW_CELL_SEPARATOR).toMutableList()
+        val at = snapshot.columns.split(VIEW_CELL_SEPARATOR).indexOf(column.name)
+        if (at in cells.indices) cells[at] = column.display(original)
+        return row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(restored))
+    }
+
     private fun sendAfterOf(sendDelayMs: Long): Long = if (sendDelayMs > 0) clock.millis() + sendDelayMs else 0
 
     /** 바로 보낼 수 있으면 처리기를 깨우고, 지연이 있으면 그 시각에 깨우도록 요청한다(그 전에는 처리기가 이 쓰기를 건너뛴다). */

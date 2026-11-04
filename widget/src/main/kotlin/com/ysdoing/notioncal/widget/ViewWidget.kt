@@ -221,6 +221,7 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 @Composable
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
+    if (board.undoableAt(state.nowMillis) > 0) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
     if (board.rows.isEmpty()) {
         ViewEmpty(board, m, palette)
         return

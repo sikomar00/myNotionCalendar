@@ -38,7 +38,12 @@ data class ViewBoard(
     val viewConfig: String = "",
     /** 행을 상한 안에서 다 받았는가. false면 노션에 더 있다('N+ 더 보기'). */
     val rowsComplete: Boolean = true,
+    /** 지연이 걸린 쓰기들의 전송 시각(Phase 11c). 지금보다 뒤인 것이 '되돌릴 수 있는' 쓰기다([undoableAt]). */
+    val pendingSendAfter: List<Long> = emptyList(),
 ) {
+    /** [now]에 되돌릴 수 있는 쓰기 수. 전송 시각이 되면(같거나 지나면) 보낼 쓰기라 되돌릴 수 없다. */
+    fun undoableAt(now: Long): Int = pendingSendAfter.count { it > now }
+
     /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
     val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
 
@@ -69,7 +74,7 @@ class ViewRepository @Inject constructor(
 
     /** 등록하지 않았거나 지워졌으면 null. */
     fun observe(viewId: String): Flow<ViewBoard?> =
-        combine(dao.observe(viewId), dao.observeRows(viewId)) { view, rows ->
+        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId)) { view, rows, pending ->
             view?.let {
                 ViewBoard(
                     viewId = it.viewId,
@@ -82,6 +87,7 @@ class ViewRepository @Inject constructor(
                     columnInfo = ViewJson.columns(it.columnInfo),
                     viewConfig = it.viewConfig,
                     rowsComplete = it.rowsComplete,
+                    pendingSendAfter = pending,
                 )
             }
         }

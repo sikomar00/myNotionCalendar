@@ -208,6 +208,14 @@ abstract class ViewDao {
     @Query("SELECT * FROM view_writes WHERE sendAfter <= :now ORDER BY id LIMIT 1")
     abstract suspend fun firstDueWrite(now: Long): ViewWriteEntity?
 
+    /** 한 보기에서 아직 지연 중인([ViewWriteEntity.sendAfter] > [now]) 쓰기, 쌓은 순서대로. */
+    @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND sendAfter > :now ORDER BY id")
+    protected abstract suspend fun delayedWrites(viewId: String, now: Long): List<ViewWriteEntity>
+
+    /** 한 보기의 지연이 걸린 쓰기들의 전송 시각(위젯이 '되돌리기' 줄을 그릴지 정한다). 지난 시각도 담으니 세는 쪽이 지금과 견준다. */
+    @Query("SELECT sendAfter FROM view_writes WHERE viewId = :viewId AND sendAfter > 0")
+    abstract fun observePendingSendAfter(viewId: String): Flow<List<Long>>
+
     /** 아직 지연 중인 쓰기 중 가장 이른 전송 시각. 없으면 null(처리기를 다시 깨울 필요가 없다). */
     @Query("SELECT MIN(sendAfter) FROM view_writes WHERE sendAfter > :now")
     abstract suspend fun earliestSendAfter(now: Long): Long?
@@ -259,6 +267,29 @@ abstract class ViewDao {
         )
         viewIdsOfSource(snapshot.dataSourceId).forEach { markWritten(it, createdAt) }
         return true
+    }
+
+    /**
+     * 되돌리기(IX-05): 한 보기에서 지연 중인 쓰기를 모두 지운다. 속성 바꿈이면 그 행을 [restore]가 돌려주는 값으로 되돌린다(null이면 행은 그대로).
+     * 새 항목·휴지통 쓰기는 행이 없어 쓰기만 지운다. 한 트랜잭션이고, 지운 쓰기 수를 돌려준다.
+     */
+    @Transaction
+    open suspend fun undoDelayed(
+        viewId: String,
+        now: Long,
+        restore: (ViewSnapshotEntity, ViewRowEntity, ViewWriteEntity) -> ViewRowEntity?,
+    ): Int {
+        val snapshot = snapshot(viewId) ?: return 0
+        val writes = delayedWrites(viewId, now)
+        writes.forEach { write ->
+            if (write.propType != VIEW_WRITE_CREATE && write.propType != VIEW_WRITE_TRASH) {
+                row(viewId, write.pageId)?.let { current ->
+                    restore(snapshot, current, write)?.let { updateRow(it.viewId, it.pageId, it.cells, it.typed, it.progress) }
+                }
+            }
+            deleteWriteById(write.id)
+        }
+        return writes.size
     }
 
     /**

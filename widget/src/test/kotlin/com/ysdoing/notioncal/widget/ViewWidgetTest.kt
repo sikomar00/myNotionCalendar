@@ -188,6 +188,27 @@ class ViewWidgetTest {
         onNode(hasTextEqualTo("+42 더 보기")).assertExists()
     }
 
+    // --- Phase 11c 되돌리기 줄(IX-05): 지연 중인 쓰기가 있을 때만, 눌러서 되돌린다.
+
+    private fun withPending(vararg sendAfter: Long) = board().copy(pendingSendAfter = sendAfter.toList())
+
+    @Test
+    fun anUndoLineAppearsWhileAWriteIsInItsWindowAndRunsTheUndoAction() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(withPending(now + 3_000)), systemFontScale = 1f) }
+        onNode(hasTestTag("viewUndo")).assert(hasRunCallbackClickAction<UndoAction>(actionParametersOf(ViewCellAction.ViewKey to "v1")))
+        onNode(hasTextEqualTo("방금 바꾼 것 되돌리기")).assertExists()
+    }
+
+    @Test
+    fun noUndoLineWhenNothingIsPendingOrTheWindowHasPassed() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(withPending(now - 1, now)), systemFontScale = 1f) } // 이미 보낼 때가 된 쓰기
+        onAllNodes(hasTestTag("viewUndo")).assertCountEquals(0)
+    }
+
     @Test
     fun headerAndOneRowFitTheSmallestWidgetAtNormalFonts() {
         // 2×2(110dp)에서 머리와 목록 한 줄이 통째로 보인다. 글자 배율 100%에서 시스템 글꼴이 상한(1.3)을 넘어도 같다.

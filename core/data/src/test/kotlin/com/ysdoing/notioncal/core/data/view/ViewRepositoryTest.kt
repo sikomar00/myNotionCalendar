@@ -59,6 +59,19 @@ class ViewRepositoryTest {
     }
 
     @Test
+    fun theBoardKnowsWhichWritesAreStillInTheirUndoWindow() = runTest {
+        // Phase 11c: 지연 중인 쓰기의 전송 시각을 위젯이 알아 '되돌리기' 줄을 그린다. 지난 시각은 세지 않는다.
+        val sep = VIEW_CELL_SEPARATOR
+        seed(ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = "이름${sep}완료", syncedAt = 5, columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title"), ViewColumn("dn", "완료", "checkbox")))), listOf(ViewRowEntity("v1", 0, "p1", "u1", "첫째${sep}", ViewJson.encodeTyped(mapOf("dn" to kotlinx.serialization.json.JsonPrimitive(false))))))
+        val clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-04T00:00:00Z"), java.time.ZoneOffset.UTC)
+        ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock).toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        val board = repo().observe("v1").first()!!
+        assertEquals(listOf(clock.millis() + 4_000), board.pendingSendAfter)
+        assertEquals(1, board.undoableAt(clock.millis() + 3_999))
+        assertEquals(0, board.undoableAt(clock.millis() + 4_000)) // 시각이 되면 보낼 쓰기라 되돌릴 수 없다
+    }
+
+    @Test
     fun rowsExposeTheirTypedValuesAndTheViewItsConfigAndCompleteness() = runTest {
         // Phase 11a: 칩 색·보드 그룹은 글자가 아니라 원래 값(옵션 ID)과 보기 설정이 필요하다.
         val typed = ViewJson.encodeTyped(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)))
