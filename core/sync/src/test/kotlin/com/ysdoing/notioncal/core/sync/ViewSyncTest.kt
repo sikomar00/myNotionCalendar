@@ -333,6 +333,36 @@ class ViewSyncTest {
     }
 
     @Test
+    fun columnInfoCoversEveryVisiblePropertyWithOptionColors() = runTest {
+        // Phase 11a: 읽기 전용 유형(수식·롤업)도 보이는 열이면 쓰기 정보에 담아 편집 시트가 잠금 줄로 보여 주고, 옵션은 색을 함께 담는다.
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Calc":{"id":"fm","name":"Calc","type":"formula","formula":{"expression":"1"}},
+                "Sum":{"id":"ru","name":"Sum","type":"rollup","rollup":{"function":"sum"}},
+                "Ctgr":{"id":"ct","name":"Ctgr","type":"select","select":{"options":[{"id":"a","name":"집","color":"blue"},{"id":"b","name":"회사","color":"green"}]}}}}""",
+        )
+        viewProperties = listOf("Name", "Calc", "Sum", "Ctgr").mapIndexed { i, name -> ViewPropertyDto("p$i", name) }
+        rowPages = listOf(
+            PageDto(
+                id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+                properties = Json.parseToJsonElement(
+                    """{"Name":{"type":"title","title":[{"plain_text":"a"}]},"Calc":{"type":"formula","formula":{"type":"number","number":2}},
+                        "Sum":{"type":"rollup","rollup":{"type":"number","number":3,"function":"sum"}},"Ctgr":{"type":"select","select":{"id":"a","name":"집"}}}""",
+                ).jsonObject,
+            ),
+        )
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to true, "Calc" to false, "Sum" to false, "Ctgr" to true), columns.map { it.name to it.writable })
+        assertEquals(listOf("집" to "blue", "회사" to "green"), columns.single { it.name == "Ctgr" }.options.map { it.name to it.color })
+        // 원래 값은 쓸 수 있는 열만 담는다.
+        assertEquals(setOf("title", "ct"), ViewJson.typed(db.viewDao().rows("v1").single().typed).keys)
+    }
+
+    @Test
     fun readsTheTypedValuesOfMultiSelectDateAndUrl() = runTest {
         val tagsSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
             DataSourceDto.serializer(),

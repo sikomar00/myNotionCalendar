@@ -17,7 +17,13 @@ import kotlin.math.abs
 
 /** select·status의 선택지 하나. [group]은 status의 그룹 이름(할 일·진행 중·완료)이다. */
 @Serializable
-data class ViewChoice(val id: String, val name: String, val group: String? = null)
+data class ViewChoice(
+    val id: String,
+    val name: String,
+    val group: String? = null,
+    /** 노션 옵션 색 이름(`blue`·`default` 등). 칩 색에 쓴다. 모르면 null. */
+    val color: String? = null,
+)
 
 /** 보기에 보이는 속성 하나의 쓰기 정보. 위젯은 이것으로 어떤 탭을 어떤 값으로 바꿀 수 있는지 안다. */
 @Serializable
@@ -98,6 +104,9 @@ data class ViewColumn(
 
         /** columnInfo에 담는 종류. 제목·날짜는 새 항목을 만들 때도 쓴다. */
         val INFO_TYPES = WRITABLE_TYPES
+
+        /** 읽기 전용이라도 보이는 열이면 쓰기 정보에 담아 편집 시트가 잠금 줄로 보여 준다(ED-02). 이 종류는 [writable]이 false다. */
+        val DISPLAY_ONLY_TYPES = setOf("formula", "rollup", "created_time", "created_by", "last_edited_time", "last_edited_by", "unique_id", "relation", "people", "files")
 
         /** 이보다 큰 정수는 Long으로 바꾸면 값이 틀어지므로 그대로 글자로 쓴다. */
         private const val MAX_PLAIN = 1e15

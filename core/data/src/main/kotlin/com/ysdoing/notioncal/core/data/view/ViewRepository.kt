@@ -7,12 +7,21 @@ import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.JsonElement
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /** [coverUrl]·[progress]는 책 위젯(M5)용: 표지 주소(없으면 빈 글자)와 읽은 비율 0~1(없으면 null). */
-data class ViewRow(val pageId: String, val url: String, val cells: List<String>, val coverUrl: String = "", val progress: Float? = null)
+data class ViewRow(
+    val pageId: String,
+    val url: String,
+    val cells: List<String>,
+    val coverUrl: String = "",
+    val progress: Float? = null,
+    /** 쓸 수 있는 열의 원래 값(속성 ID → 체크 bool·옵션 ID·숫자·글자 등, [ViewColumn.display] 참고). 칩 색·보드 그룹·편집 시트가 쓴다. */
+    val typed: Map<String, JsonElement> = emptyMap(),
+)
 
 /** VW-03 위젯이 그리는 보기 한 장. [syncedAt]이 0이면 아직 못 받았고, [lastError]가 있으면 마지막 동기화가 실패했다. */
 data class ViewBoard(
@@ -67,7 +76,7 @@ class ViewRepository @Inject constructor(
                     name = it.name,
                     type = it.viewType,
                     columns = it.columns.split(VIEW_CELL_SEPARATOR).filter(String::isNotEmpty),
-                    rows = rows.map { r -> ViewRow(r.pageId, r.url, r.cells.split(VIEW_CELL_SEPARATOR), r.coverUrl, r.progress) },
+                    rows = rows.map { r -> ViewRow(r.pageId, r.url, r.cells.split(VIEW_CELL_SEPARATOR), r.coverUrl, r.progress, ViewJson.typed(r.typed)) },
                     syncedAt = it.syncedAt,
                     lastError = it.lastError,
                     columnInfo = ViewJson.columns(it.columnInfo),

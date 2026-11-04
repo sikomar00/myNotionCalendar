@@ -187,15 +187,18 @@ internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): 
     return columnNames.mapNotNull { name -> byName[name]?.let(::viewColumn) }
 }
 
-/** 스키마 속성 하나를 쓰기 정보로. 앱이 다루지 않는 종류(수식·롤업 등)는 null. 선택지는 옵션 목록(상태는 그룹 이름 포함)으로 담는다. */
+/**
+ * 스키마 속성 하나를 쓰기 정보로. 쓸 수 있는 종류([ViewColumn.INFO_TYPES])와 읽기 전용이라도 보이는 종류([ViewColumn.DISPLAY_ONLY_TYPES])만, 그 밖은 null.
+ * 선택지는 옵션 목록(색 포함, 상태는 그룹 이름도)으로 담는다.
+ */
 internal fun viewColumn(property: PropertySchemaDto): ViewColumn? {
-    if (property.type !in ViewColumn.INFO_TYPES) return null
+    if (property.type !in ViewColumn.INFO_TYPES && property.type !in ViewColumn.DISPLAY_ONLY_TYPES) return null
     val options = when (property.type) {
-        "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name) }
-        "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name) }
+        "select" -> property.select?.options.orEmpty().map { ViewChoice(it.id, it.name, color = it.color) }
+        "multi_select" -> property.multiSelect?.options.orEmpty().map { ViewChoice(it.id, it.name, color = it.color) }
         "status" -> {
             val groups = property.status?.groups.orEmpty()
-            property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name) }
+            property.status?.options.orEmpty().map { option -> ViewChoice(option.id, option.name, groups.firstOrNull { option.id in it.optionIds }?.name, option.color) }
         }
         else -> emptyList()
     }

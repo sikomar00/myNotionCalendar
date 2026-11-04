@@ -59,6 +59,20 @@ class ViewRepositoryTest {
     }
 
     @Test
+    fun rowsExposeTheirTypedValuesAndTheViewItsConfigAndCompleteness() = runTest {
+        // Phase 11a: 칩 색·보드 그룹은 글자가 아니라 원래 값(옵션 ID)과 보기 설정이 필요하다.
+        val typed = ViewJson.encodeTyped(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)))
+        seed(
+            ViewSnapshotEntity("v1", "ds", "보드", "board", columns = "이름", syncedAt = 5, viewConfig = """{"group_by":{"property_id":"st"}}""", rowsComplete = false),
+            listOf(ViewRowEntity("v1", 0, "p1", "u1", "첫째", typed), ViewRowEntity("v1", 1, "p2", "u2", "둘째")),
+        )
+        val board = repo().observe("v1").first()!!
+        assertEquals(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)), board.rows[0].typed)
+        assertEquals(emptyMap<String, kotlinx.serialization.json.JsonElement>(), board.rows[1].typed) // 값을 모르면 빈 맵
+        assertEquals(listOf("""{"group_by":{"property_id":"st"}}""", false), listOf(board.viewConfig, board.rowsComplete))
+    }
+
+    @Test
     fun unknownViewIsNull() = runTest { assertNull(repo().observe("nope").first()) }
 
     @Test
