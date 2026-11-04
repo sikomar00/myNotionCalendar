@@ -23,6 +23,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import kotlinx.coroutines.test.runTest
@@ -171,6 +172,25 @@ class LayoutWidgetTest {
     }
 
     @Test
+    fun onlyASingleViewSavesPresetsSoTabAndSectionAddButtonsCarryNoWidgetId() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // 프리셋 줄은 단일일 때만 그려지니, 탭·섹션의 '새 항목'이 프리셋을 저장하면 보이지 않는 곳에 쌓인다.
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 380.dp))
+        val creatable = { st: LayoutWidgetState -> st.copy(boards = st.boards.mapValues { (_, b) -> b?.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"))) }) }
+        provideComposable { LayoutWidgetContent(creatable(state(2, 0)), systemFontScale = 1f) }
+        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 0)))
+    }
+
+    @Test
+    fun aSingleViewKeepsTheWidgetIdSoTheSheetCanSaveAPreset() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 380.dp))
+        val creatable = state(1, 0, LayoutMode.SINGLE).let { st -> st.copy(boards = st.boards.mapValues { (_, b) -> b?.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"))) }) }
+        provideComposable { LayoutWidgetContent(creatable, systemFontScale = 1f) }
+        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 1)))
+    }
+
+    @Test
     fun singleModeHasNoTabStripAndKeepsThePresetLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(DpSize(358.dp, 380.dp))
@@ -313,13 +333,35 @@ class LayoutWidgetTest {
         }
     }
 
-    @Test
-    fun theTabStripShowsTheNamesOnScreen() = runTest(timeout = 2.minutes) {
-        val remoteViews = GlanceRemoteViews().compose(context, DpSize(360.dp, 300.dp)) { LayoutWidgetContent(state(3, 0), systemFontScale = 1f) }.remoteViews
+    /** 설정 화면 미리보기와 같은 방식(변환 → View에 적용 → 측정·배치)으로 그려, 화면에 나온 글자를 모은다. */
+    private suspend fun renderedTexts(size: DpSize, state: LayoutWidgetState, staticRows: Boolean): List<String> {
+        val remoteViews = GlanceRemoteViews().compose(context, size) { LayoutWidgetContent(state, systemFontScale = 1f, staticRows = staticRows) }.remoteViews
         val activity = Robolectric.buildActivity(Activity::class.java).create().get()
         val frame = FrameLayout(activity)
         frame.addView(remoteViews.apply(activity, frame))
+        val density = activity.resources.displayMetrics.density
+        val w = (size.width.value * density).toInt()
+        val h = (size.height.value * density).toInt()
+        frame.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        frame.layout(0, 0, w, h)
         fun texts(v: View): List<String> = if (v is TextView) listOf(v.text.toString()) else if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else emptyList()
-        assertTrue(texts(frame).containsAll(listOf("할 일", "독서", "운동")))
+        return texts(frame)
+    }
+
+    @Test
+    fun theTabStripShowsTheNamesOnScreen() = runTest(timeout = 2.minutes) {
+        val texts = renderedTexts(DpSize(360.dp, 300.dp), state(3, 0), staticRows = false)
+        assertTrue(texts.containsAll(listOf("할 일", "독서", "운동")))
+    }
+
+    @Test
+    fun settingsPreviewShowsTheChosenViewNamesAndSampleRowsInTabsAndSections() = runTest(timeout = 3.minutes) {
+        for (mode in listOf(LayoutMode.TABS, LayoutMode.SECTIONS)) {
+            val layout = WidgetLayout(mode).add("a")!!.add("b", label = "내 독서")!!
+            val preview = WidgetPreviews.layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("a" to "할 일", "b" to "독서"))
+            val texts = renderedTexts(DpSize(330.dp, 600.dp), preview, staticRows = true)
+            assertTrue("$mode $texts", texts.containsAll(listOf("할 일", "장보기"))) // 첫 칸: 이름과 예시 행(목록이 아니라 고정 Column으로)
+            assertTrue("$mode $texts", if (mode == LayoutMode.TABS) "내 독서" in texts else "독서" in texts) // 탭 이름은 label, 섹션 머리는 보기 이름
+        }
     }
 }

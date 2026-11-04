@@ -61,7 +61,9 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewPresets
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -90,7 +92,7 @@ class WidgetConfigActivity : ComponentActivity() {
      * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
      * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 모양 설정(테마·투명도·글자)만 있다.
      */
-    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW, HABIT, BOOK }
+    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW, LAYOUT, HABIT, BOOK }
 
     private val kind by lazy {
         when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
@@ -100,6 +102,7 @@ class WidgetConfigActivity : ComponentActivity() {
             DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> Kind.DDAY
             DdayListWidgetReceiver::class.java.name -> Kind.DDAY_LIST
             ViewWidgetReceiver::class.java.name -> Kind.VIEW
+            LayoutWidgetReceiver::class.java.name -> Kind.LAYOUT
             HabitWidgetReceiver::class.java.name -> Kind.HABIT
             BookWidgetReceiver::class.java.name -> Kind.BOOK
             else -> Kind.MONTH
@@ -156,7 +159,7 @@ class WidgetConfigActivity : ComponentActivity() {
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = if (kind == Kind.VIEW || kind == Kind.HABIT || kind == Kind.BOOK) {
+            val events = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.HABIT || kind == Kind.BOOK) {
                 emptyList()
             } else if (kind == Kind.MONTH) {
                 deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
@@ -166,7 +169,7 @@ class WidgetConfigActivity : ComponentActivity() {
             config = saved
             val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
             val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
-            val views = if (kind == Kind.VIEW || kind == Kind.BOOK) deps.views().observeRegistered().first() else emptyList()
+            val views = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.BOOK) deps.views().observeRegistered().first() else emptyList()
             loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views)
         }
         val data = loaded ?: return
@@ -253,13 +256,15 @@ class WidgetConfigActivity : ComponentActivity() {
             }
             if (data.views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
         }
-        if (kind == Kind.VIEW) {
+        if (kind == Kind.LAYOUT) LayoutSettings(data.views, config, onChange)
+        if (kind == Kind.VIEW || kind == Kind.LAYOUT) {
             // IX-03: 숫자 열의 − + 가 한 번에 바꾸는 값. 정수 단계만 고른다(소수 단계는 시트에서 직접 고친다).
             ConfigSection(stringResource(R.string.widget_config_number_step))
             ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
                 onChange(config.copy(numberStep = it.toDouble()))
             }
-            PresetList(config, onChange)
+            // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다.
+            if (kind == Kind.VIEW || WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE) PresetList(config, onChange)
         }
     }
 
@@ -329,6 +334,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 Kind.VIEW -> {
                     val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
+                }
+                Kind.LAYOUT -> {
+                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name })
+                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 Kind.BOOK -> {
                     val state = WidgetPreviews.bookState().copy(config = config.copy(viewId = "preview"))

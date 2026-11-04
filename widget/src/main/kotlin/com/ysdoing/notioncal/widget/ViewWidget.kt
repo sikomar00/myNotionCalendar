@@ -152,12 +152,14 @@ internal data class PaneSpec(val staticRows: Boolean = false, val height: Dp? = 
 @Composable
 internal fun ViewPane(state: ViewWidgetState, palette: WidgetPalette, metrics: ViewMetrics, spec: PaneSpec) {
     val board = state.board
-    ViewHeader(board, state.config.appWidgetId, metrics, palette)
+    // 새 항목 시트가 프리셋을 저장할 위젯 번호. 프리셋 줄이 없는 칸(탭·섹션)은 0이라 프리셋 저장 버튼을 뺀다.
+    val presetWidgetId = if (spec.presets) state.config.appWidgetId else 0
+    ViewHeader(board, presetWidgetId, metrics, palette)
     if (board == null) {
         val message = if (state.config.viewId == null) R.string.view_widget_choose else R.string.view_widget_missing
         ViewNote(message, state.config.appWidgetId, metrics, palette)
     } else {
-        ViewBody(board, state, metrics, palette, spec)
+        ViewBody(board, state, presetWidgetId, metrics, palette, spec)
     }
 }
 
@@ -200,7 +202,7 @@ internal fun viewChoiceIntent(context: Context, viewId: String, pageId: String, 
  * 오른쪽에 새로고침(넓을 때)과, 새 항목을 만들 수 있는 보기(제목 열 정보가 있음)면 '+'.
  */
 @Composable
-private fun ViewHeader(board: ViewBoard?, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewHeader(board: ViewBoard?, presetWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     // 이름 없는 보기도 노션에서 허용된다. 접근성 설명이 글자를 대신하므로 보기 이름을 함께 읽게 한다.
     val title = board?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.view_widget_label)
@@ -234,7 +236,7 @@ private fun ViewHeader(board: ViewBoard?, appWidgetId: Int, m: ViewMetrics, pale
         if (board?.canCreate == true) {
             WidgetIconButton(
                 R.drawable.ic_widget_add, context.getString(R.string.view_widget_add_description, title), "viewAdd",
-                actionStartActivity(viewAddIntent(context, board.viewId, appWidgetId)), palette, style = IconButtonStyle.FILLED, height = height,
+                actionStartActivity(viewAddIntent(context, board.viewId, presetWidgetId)), palette, style = IconButtonStyle.FILLED, height = height,
             )
         }
     }
@@ -261,7 +263,7 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 }
 
 @Composable
-private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, spec: PaneSpec) {
+private fun ViewBody(board: ViewBoard, state: ViewWidgetState, presetWidgetId: Int, m: ViewMetrics, palette: WidgetPalette, spec: PaneSpec) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
     val undoShown = board.undoableAt(state.nowMillis) > 0
     if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
@@ -273,7 +275,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 되돌리기·프리셋 줄이 높이를 차지하니 보드는 줄 수만큼 열마다 카드를 줄인다(보드는 목록과 달리 스크롤이 없어 넘치면 잘린다).
     val extraLines = (if (undoShown) 1 else 0) + (presets.size + PRESETS_PER_ROW - 1) / PRESETS_PER_ROW
     if (board.rows.isEmpty()) {
-        ViewEmpty(board, state.config.appWidgetId, m, palette)
+        ViewEmpty(board, presetWidgetId, m, palette)
         return
     }
     // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
@@ -295,13 +297,13 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
 
 /** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */
 @Composable
-private fun ViewEmpty(board: ViewBoard, appWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewEmpty(board: ViewBoard, presetWidgetId: Int, m: ViewMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     val canAdd = board.canCreate
     WidgetEmpty(
         R.drawable.ic_widget_checklist, context.getString(R.string.view_widget_empty), palette, 12f * m.spFactor,
         ctaText = if (canAdd) context.getString(R.string.view_widget_empty_cta) else null,
-        ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId, appWidgetId)) else null,
+        ctaAction = if (canAdd) actionStartActivity(viewAddIntent(context, board.viewId, presetWidgetId)) else null,
         ctaTag = "viewEmpty",
     )
 }

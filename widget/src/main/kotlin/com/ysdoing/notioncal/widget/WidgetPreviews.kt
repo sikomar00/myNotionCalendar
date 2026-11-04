@@ -121,10 +121,15 @@ object WidgetPreviews {
 
     /** 노션 위젯(WL-01) 미리보기: 예시 보기 둘을 탭으로(개인 데이터가 아니다). */
     internal fun layoutState(now: Long = System.currentTimeMillis()): LayoutWidgetState {
-        val first = viewState(now).board!!
-        val second = first.copy(viewId = "preview-2", name = "독서")
-        val layout = WidgetLayout(LayoutMode.TABS).add(first.viewId)!!.add(second.viewId)!!
-        return LayoutWidgetState(WidgetConfig(0), layout, mapOf(first.viewId to first, second.viewId to second), now)
+        val layout = WidgetLayout(LayoutMode.TABS).add("preview")!!.add("preview-2")!!
+        return layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("preview" to "할 일", "preview-2" to "독서"), now)
+    }
+
+    /** 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기). */
+    internal fun layoutPreview(config: WidgetConfig, names: Map<String, String>, now: Long = System.currentTimeMillis()): LayoutWidgetState {
+        val layout = WidgetLayout.parse(config.layoutJson)
+        val sample = viewState(now).board!!
+        return LayoutWidgetState(config, layout, layout.items.associate { it.viewId to sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty()) }, now)
     }
 
     /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */

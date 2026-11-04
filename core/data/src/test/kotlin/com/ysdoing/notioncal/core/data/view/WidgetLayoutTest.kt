@@ -84,4 +84,21 @@ class WidgetLayoutTest {
         assertEquals("할 일", item.copy(label = "할 일").title("투두"))
         assertEquals("보기", item.title("")) // 이름 없는 보기도 노션에서 허용된다
     }
+
+    @Test
+    fun checkingAViewInSingleModeReplacesTheChosenOne() {
+        val single = WidgetLayout().add("a")!!
+        assertEquals(listOf("b"), single.toggle("b", on = true)!!.items.map { it.viewId })
+        assertEquals(LayoutMode.SINGLE, single.toggle("b", on = true)!!.mode)
+        assertEquals(emptyList<LayoutItem>(), single.toggle("a", on = false)!!.items)
+    }
+
+    @Test
+    fun checkingAViewInTabsAddsItUntilTheLimitAndNeverTwice() {
+        var layout = WidgetLayout(LayoutMode.TABS)
+        "abcde".forEach { layout = layout.toggle(it.toString(), on = true)!! }
+        assertNull(layout.toggle("f", on = true)) // 6번째는 못 담는다
+        assertNull(layout.toggle("a", on = true)) // 같은 보기를 또 담지 못한다
+        assertEquals(listOf("a", "b", "c", "d"), layout.toggle("e", on = false)!!.items.map { it.viewId })
+    }
 }

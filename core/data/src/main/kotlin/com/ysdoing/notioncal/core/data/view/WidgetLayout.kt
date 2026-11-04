@@ -33,6 +33,13 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
         return copy(items = items + LayoutItem(id, label.trim()))
     }
 
+    /** 설정 화면의 체크: 해제하면 빼고, 체크하면 담는다. 단일은 고른 보기로 바꾸고, 탭·섹션은 상한을 넘거나 이미 담았으면 null이다. */
+    fun toggle(viewId: String, on: Boolean): WidgetLayout? = when {
+        !on -> remove(viewId)
+        mode == LayoutMode.SINGLE -> copy(items = emptyList()).add(viewId)
+        else -> add(viewId)
+    }
+
     fun remove(viewId: String): WidgetLayout = copy(items = items.filterNot { it.viewId == viewId })
 
     /** [viewId]를 [delta]칸(−1 앞, +1 뒤) 옮긴다. 끝이거나 없는 보기면 그대로다. */
