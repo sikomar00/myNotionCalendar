@@ -142,6 +142,7 @@
     <string name="view_widget_board_next">다음 열</string>
     <string name="view_widget_board_range">%1$d–%2$d / %3$d</string>
     <string name="view_widget_board_column">%1$s, %2$d개</string>
+    <string name="view_widget_board_column_plus">%1$s, %2$d개 이상</string>
     <string name="view_widget_unsupported">이 보기는 앱이 읽을 수 없음, 눌러서 다른 보기 고르기</string>
     <string name="view_widget_failed">동기화 실패, 마지막 성공 %1$s</string>
     <string name="view_widget_stale">오래됨, 마지막 성공 %1$s</string>

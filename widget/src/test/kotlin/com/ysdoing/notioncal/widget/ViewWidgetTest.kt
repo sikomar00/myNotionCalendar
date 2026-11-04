@@ -179,9 +179,9 @@ class ViewWidgetTest {
 
     @Test
     fun fiftyRowsAreCappedByTheDensityTableAndAllShownRowsAreTappable() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
-        // Phase 11a: 50행이어도 단계의 행 상한(여기 320×200은 4×4 단계의 8행)까지만 그리고 나머지는 '+42 더 보기'로 뷰어에서 본다.
+        // Phase 11a: 50행이어도 단계의 행 상한(4×4 단계는 8행)까지만 그리고 나머지는 '+42 더 보기'로 뷰어에서 본다.
         setContext(context)
-        setAppWidgetSize(wide)
+        setAppWidgetSize(large)
         provideComposable { ViewWidgetContent(state(board(fiftyRows())), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewRow")).assertCountEquals(8)
         onAllNodes(hasTestTag("viewRow")).assertAll(hasClickAction())
@@ -552,7 +552,7 @@ class ViewWidgetTest {
         setAppWidgetSize(large)
         provideComposable { ViewWidgetContent(boardView(4, 0, "o1", "o4"), systemFontScale = 1f) }
         onAllNodes(hasTestTag("boardColumn")).assertCountEquals(3)
-        onNode(hasTestTag("boardNext")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.DeltaKey to 1)))
+        onNode(hasTestTag("boardNext")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.PageKey to 1)))
         onAllNodes(hasTestTag("boardPrev")).assertCountEquals(0)
     }
 
@@ -562,8 +562,27 @@ class ViewWidgetTest {
         setAppWidgetSize(large)
         provideComposable { ViewWidgetContent(boardView(4, 1, "o1", "o4"), systemFontScale = 1f) }
         onNode(hasTextEqualTo("보류")).assertExists() // 4번째 열이 보인다
-        onNode(hasTestTag("boardPrev")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.DeltaKey to -1)))
+        onNode(hasTestTag("boardPrev")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.PageKey to 0)))
         onAllNodes(hasTestTag("boardNext")).assertCountEquals(0)
+    }
+
+    @Test
+    fun aStoredPageBeyondTheEndStillPagesBackByOne() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        // 열 수가 줄거나 위젯이 커져 저장된 위치(5)가 끝(1)을 넘어도, 화면에 보이는 위치에서 한 칸 뒤로 간다(눌러도 그대로인 버튼이 없도록).
+        provideComposable { ViewWidgetContent(boardView(4, 5, "o1", "o4"), systemFontScale = 1f) }
+        onNode(hasTestTag("boardPrev")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.PageKey to 0)))
+    }
+
+    @Test
+    fun anIncompleteBoardMarksTheColumnCountsWithAPlus() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        val state = boardView(3, 0, "o1", "o1", "o2")
+        provideComposable { ViewWidgetContent(state.copy(board = state.board!!.copy(rowsComplete = false)), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("2+")).assertExists() // 100행만 받았다면 열마다 '적어도 N'이다
+        onNode(hasTextEqualTo("1+")).assertExists()
     }
 
     @Test

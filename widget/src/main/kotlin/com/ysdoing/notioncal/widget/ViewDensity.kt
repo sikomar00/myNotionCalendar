@@ -22,9 +22,11 @@ internal fun sizeStep(size: DpSize): SizeStep = when {
     else -> SizeStep.FULL
 }
 
-private val NARROW_WIDTH = 200.dp
-private val WIDE_MAX_HEIGHT = 200.dp
-private val LARGE_MAX_HEIGHT = 400.dp
+// 경계는 보고되는 크기가 두 갈래라 둘 다 갈라지는 값이다: 일반 런처(2×2 ≈150×150, 4×2 ≈320×150, 4×4 ≈320×320)와
+// 삼성 런처(S25 실측 2×2 234×213, 4×2 501×213, 4×4 501×458, 4×5 501×581; 약 1.4배로 보고하고 0.714배로 그린다).
+private val NARROW_WIDTH = 270.dp
+private val WIDE_MAX_HEIGHT = 260.dp
+private val LARGE_MAX_HEIGHT = 520.dp
 private val THREE_COLUMNS_MIN_WIDTH = 300.dp
 
 /** 목록·표에서 보이는 최대 행 수(PRD 밀도표). 넘는 행은 '더 보기'로 뷰어에서 본다. */

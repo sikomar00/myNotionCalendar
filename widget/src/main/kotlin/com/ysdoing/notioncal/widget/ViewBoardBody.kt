@@ -41,7 +41,7 @@ import com.ysdoing.notioncal.core.data.view.ViewBoard
 // Phase 11a VR-BRD: 노션 보드 보기를 `group_by` 열로 나눠 그린다. 위젯은 가로 스크롤이 없어 열 2~3개만 보이고 ‹ ›로 넘긴다.
 
 private val COLUMN_GAP = 6.dp
-private val NAV_HEIGHT = 32.dp
+private val NAV_HEIGHT = 48.dp // 누름 영역 최소 48dp(보이는 동그라미는 28dp)
 
 /** 열 넘김 위치를 [BoardBody]가 걸러 쓴다(범위를 벗어나면 가장 가까운 끝). 한 번에 한 열씩 넘긴다. */
 @Composable
@@ -65,16 +65,16 @@ private fun BoardNav(start: Int, maxStart: Int, total: Int, columns: Int, look: 
     val context = LocalContext.current
     val range = context.getString(R.string.view_widget_board_range, start + 1, minOf(start + columns, total), total)
     Row(GlanceModifier.fillMaxWidth().height(NAV_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        if (start > 0) NavButton(R.drawable.ic_widget_prev, context.getString(R.string.view_widget_board_prev), "boardPrev", -1, look)
+        if (start > 0) NavButton(R.drawable.ic_widget_prev, context.getString(R.string.view_widget_board_prev), "boardPrev", start - 1, look)
         Text(range, modifier = GlanceModifier.defaultWeight(), style = look.sub.copy(fontSize = look.pillSp.sp), maxLines = 1)
-        if (start < maxStart) NavButton(R.drawable.ic_widget_next, context.getString(R.string.view_widget_board_next), "boardNext", 1, look)
+        if (start < maxStart) NavButton(R.drawable.ic_widget_next, context.getString(R.string.view_widget_board_next), "boardNext", start + 1, look)
     }
 }
 
 @Composable
-private fun NavButton(icon: Int, description: String, tag: String, delta: Int, look: ViewLook) {
+private fun NavButton(icon: Int, description: String, tag: String, targetPage: Int, look: ViewLook) {
     WidgetIconButton(
-        icon, description, tag, actionRunCallback<BoardPageAction>(actionParametersOf(BoardPageAction.DeltaKey to delta)), look.palette,
+        icon, description, tag, actionRunCallback<BoardPageAction>(actionParametersOf(BoardPageAction.PageKey to targetPage)), look.palette,
         visual = 28.dp, height = NAV_HEIGHT,
     )
 }
@@ -84,7 +84,8 @@ private fun NavButton(icon: Int, description: String, tag: String, delta: Int, l
 private fun BoardColumn(board: ViewBoard, group: BoardGroup, cap: Int, look: ViewLook, modifier: GlanceModifier) {
     val context = LocalContext.current
     val name = group.name.ifEmpty { context.getString(R.string.view_widget_board_none) }
-    val description = context.getString(R.string.view_widget_board_column, name, group.rows.size)
+    val count = if (board.rowsComplete) "${group.rows.size}" else "${group.rows.size}+" // 100행만 받았다면 '적어도 N'
+    val description = context.getString(if (board.rowsComplete) R.string.view_widget_board_column else R.string.view_widget_board_column_plus, name, group.rows.size)
     Column(modifier.semantics { testTag = "boardColumn"; contentDescription = description }) {
         Row(GlanceModifier.fillMaxWidth().padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             val dotColor = group.color?.let(::dot)
@@ -93,7 +94,7 @@ private fun BoardColumn(board: ViewBoard, group: BoardGroup, cap: Int, look: Vie
                 Spacer(GlanceModifier.width(4.dp))
             }
             Text(name, modifier = GlanceModifier.defaultWeight(), style = look.title.copy(fontWeight = FontWeight.Bold), maxLines = 1)
-            Text(group.rows.size.toString(), style = look.sub)
+            Text(count, style = look.sub)
         }
         group.rows.take(cap).forEach { row ->
             Box(GlanceModifier.fillMaxWidth().padding(bottom = 3.dp)) { BoardCard(row.cells.firstOrNull().orEmpty(), rowAction(row), look) }
@@ -113,19 +114,22 @@ private fun BoardCard(title: String, action: androidx.glance.action.Action?, loo
 private fun dot(color: String): ColorProvider? =
     NotionColors.hexFor(color)?.takeIf { color != "default" }?.let { ColorProvider(Color(NotionColors.argb(it))) }
 
-/** ‹ › 누르기: 보드의 첫 열 위치([com.ysdoing.notioncal.core.data.WidgetConfig.viewPage])를 한 칸 옮기고 다시 그린다. */
+/**
+ * ‹ › 누르기: 보드의 첫 열 위치([com.ysdoing.notioncal.core.data.WidgetConfig.viewPage])를 [PageKey]로 바꾸고 다시 그린다.
+ * 저장값이 아니라 화면에 보이는 위치에서 한 칸 옮긴 절대 위치를 받아, 저장값이 끝을 넘어 있어도 눌림이 헛돌지 않는다.
+ */
 class BoardPageAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        val delta = parameters[DeltaKey] ?: return
+        val page = parameters[PageKey] ?: return
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
         val configs = WidgetDependencies.from(context).widgetConfigs()
         val current = configs.get(appWidgetId)
-        configs.save(current.copy(viewPage = (current.viewPage + delta).coerceAtLeast(0)))
+        configs.save(current.copy(viewPage = page.coerceAtLeast(0)))
         WidgetKinds.update(context, glanceId)
     }
 
     companion object {
-        val DeltaKey = ActionParameters.Key<Int>("boardDelta")
+        val PageKey = ActionParameters.Key<Int>("boardPage")
     }
 }
 
@@ -133,10 +137,10 @@ class BoardPageAction : ActionCallback {
 @Composable
 internal fun MoreLine(text: String, viewId: String, look: ViewLook) {
     val context = LocalContext.current
-    Text(
-        text,
-        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp).clickable(actionStartActivity(viewerIntent(context, viewId))).semantics { testTag = "viewMore" },
-        style = look.sub,
-        maxLines = 1,
-    )
+    Box(
+        GlanceModifier.fillMaxWidth().height(MORE_HEIGHT).clickable(actionStartActivity(viewerIntent(context, viewId))).semantics { testTag = "viewMore" },
+        contentAlignment = Alignment.CenterStart,
+    ) { Text(text, style = look.sub, maxLines = 1) }
 }
+
+private val MORE_HEIGHT = 32.dp // 글자만 누르게 두면 누를 곳이 10dp라 키운다(밀집 행은 PRD UX-02 예외지만 이 줄은 하나뿐이다)

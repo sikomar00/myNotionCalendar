@@ -23,6 +23,16 @@ class ViewDensityTest {
     }
 
     @Test
+    fun theSamsungLauncherReportsAboutOnePointFourTimesTheDrawnSize() {
+        // S25 실측(2026-11-04): 삼성 런처는 크기를 약 1.4배로 보고한다. 2열×2행 234×213, 4열×5행 501×581, 행 하나 늘 때 약 123dp.
+        assertEquals(SizeStep.COMPACT, sizeStep(DpSize(234.dp, 213.dp))) // 2×2
+        assertEquals(SizeStep.COMPACT, sizeStep(DpSize(234.dp, 458.dp))) // 2×4: 폭이 좁으면 높아도 작은 단계
+        assertEquals(SizeStep.WIDE, sizeStep(DpSize(501.dp, 213.dp))) // 4×2
+        assertEquals(SizeStep.LARGE, sizeStep(DpSize(501.dp, 458.dp))) // 4×4
+        assertEquals(SizeStep.FULL, sizeStep(DpSize(501.dp, 581.dp))) // 4×5 이상
+    }
+
+    @Test
     fun rowCapsAndBoardLayoutsFollowTheDensityTable() {
         assertEquals(listOf(3, 3, 8, 14), SizeStep.entries.map { rowCap(it) })
         assertNull(boardLayout(SizeStep.COMPACT, 150.dp)) // 2×2는 목록으로 대체
