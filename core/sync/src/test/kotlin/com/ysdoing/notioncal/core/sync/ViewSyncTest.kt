@@ -67,6 +67,7 @@ class ViewSyncTest {
     private var schemaCalls = 0
     private var rowsMore = false
     private var viewRaw: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
+    private var viewType = "table"
     private var schemaError: NotionError? = null
     private var rowPages: List<PageDto>? = null
 
@@ -87,7 +88,7 @@ class ViewSyncTest {
             return ViewDto(
                 id = viewId,
                 name = "할 일 $viewId",
-                type = "table",
+                type = viewType,
                 configuration = ViewConfigDto(viewProperties, viewRaw),
             )
         }
@@ -342,6 +343,7 @@ class ViewSyncTest {
                 "Status":{"id":"st","name":"Status","type":"status","status":{"options":[{"id":"o1","name":"할 일","color":"gray"},{"id":"o2","name":"완료","color":"green"}],"groups":[]}}}}""",
         )
         viewProperties = listOf(ViewPropertyDto("title", "Name")) // Status는 카드에 보이지 않는다
+        viewType = "board"
         viewRaw = Json.parseToJsonElement("""{"type":"board","group_by":{"property_id":"st","type":"status"}}""").jsonObject
         rowPages = listOf(
             PageDto(
@@ -355,6 +357,23 @@ class ViewSyncTest {
         assertEquals(listOf("Name" to "", "Status" to ViewColumn.ROLE_GROUP), columns.map { it.name to it.role })
         assertEquals(JsonPrimitive("o2"), ViewJson.typed(db.viewDao().rows("v1").single().typed)["st"])
         assertEquals(listOf("할 일" to "gray", "완료" to "green"), columns.single { it.role == ViewColumn.ROLE_GROUP }.options.map { it.name to it.color })
+    }
+
+    @Test
+    fun aGroupedTableGetsNoHiddenGroupColumn() = runTest {
+        // 노션 표·목록도 group_by를 갖는다. 보드가 아니면 숨은 선택 열을 만들지 않는다(눌림 열로 세어져 모든 행이 높아지므로).
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Status":{"id":"st","name":"Status","type":"status","status":{"options":[{"id":"o1","name":"할 일","color":"gray"}],"groups":[]}}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name"))
+        viewRaw = Json.parseToJsonElement("""{"type":"table","group_by":{"property_id":"st","type":"status"}}""").jsonObject
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name"), columns.map { it.name })
     }
 
     @Test

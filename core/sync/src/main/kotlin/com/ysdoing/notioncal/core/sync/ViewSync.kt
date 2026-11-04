@@ -154,7 +154,9 @@ class ViewSync @Inject constructor(
         // 제목은 행이 없어도 알 수 있게 스키마에서 찾는다(빈 보기나 카드 제목을 열 목록에 넣지 않는 보드·갤러리도 새 항목을 만들 수 있다).
         val titleName = pages.firstOrNull()?.titlePropertyName() ?: schema?.properties?.values?.firstOrNull { it.type == "title" }?.name
         val columns = visibleColumns(configured, titleName)
-        val writable = schema?.let { withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, view.configuration?.raw) }
+        // group_by는 표·목록도 갖지만 열로 나눠 그리는 것은 보드뿐이다. 그 밖의 보기에 숨은 선택 열을 넣으면 눌림 열로 세어져 모든 행이 높아진다.
+        val groupConfig = view.configuration?.raw?.takeIf { view.type == "board" }
+        val writable = schema?.let { withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, groupConfig) }
             ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
         val meta = registered.copy(
             name = view.name,
@@ -179,8 +181,8 @@ class ViewSync @Inject constructor(
 }
 
 /**
- * 보이는 열 중 위젯에서 바꾸거나 새 항목을 만들 때 쓰는 속성(체크·선택·상태·숫자, 그리고 제목·날짜)의 정보.
- * 스키마에 없는 열(수식·롤업 등)은 빠진다. 상태 선택지에는 그룹 이름(할 일·진행 중·완료)을 붙인다.
+ * 보이는 열의 속성 정보. 쓸 수 있는 종류뿐 아니라 읽기 전용으로 보이는 종류(수식·롤업 등)도 담으니 [ViewColumn.writable]로 가른다.
+ * 스키마에 없는 열은 빠진다. 상태 선택지에는 그룹 이름(할 일·진행 중·완료)을 붙인다.
  */
 internal fun writableColumns(columnNames: List<String>, schema: DataSourceDto): List<ViewColumn> {
     val byName = schema.properties.values.associateBy { it.name }

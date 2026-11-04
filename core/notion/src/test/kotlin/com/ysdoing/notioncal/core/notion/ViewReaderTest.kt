@@ -11,6 +11,7 @@ import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlin.random.Random
@@ -74,6 +75,13 @@ class ViewReaderTest {
         val config = reader.view("v1").configuration!!
         assertEquals(listOf("Name" to true, "Status" to false), config.properties.map { it.propertyName to it.visible })
         assertEquals("st", config.raw["group_by"]!!.jsonObject["property_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aConfigurationThatIsNotAnObjectIsANotionError() = runTest {
+        server.enqueue(ok("""{"object":"view","id":"v1","name":"x","type":"table","configuration":[1,2]}"""))
+        val error = runCatching { reader.view("v1") }.exceptionOrNull()
+        assertTrue("NotionException이어야 한다: $error", error is NotionException) // 호출부(보기 등록 목록)는 NotionException만 잡는다
     }
 
     @Test

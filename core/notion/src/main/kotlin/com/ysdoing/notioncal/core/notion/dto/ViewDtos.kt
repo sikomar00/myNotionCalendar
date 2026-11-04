@@ -3,13 +3,13 @@ package com.ysdoing.notioncal.core.notion.dto
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonEncoder
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
@@ -50,7 +50,7 @@ object ViewConfigSerializer : KSerializer<ViewConfigDto> {
 
     override fun deserialize(decoder: Decoder): ViewConfigDto {
         val input = decoder as JsonDecoder
-        val raw = input.decodeJsonElement().jsonObject
+        val raw = input.decodeJsonElement() as? JsonObject ?: throw SerializationException("view configuration is not an object")
         val properties = raw["properties"]?.let { input.json.decodeFromJsonElement(ListSerializer(ViewPropertyDto.serializer()), it) }.orEmpty()
         return ViewConfigDto(properties, raw)
     }
