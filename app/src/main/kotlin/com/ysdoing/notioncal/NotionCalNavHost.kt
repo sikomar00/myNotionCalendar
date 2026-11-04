@@ -17,6 +17,7 @@ import com.ysdoing.notioncal.feature.habit.HabitRoute
 import com.ysdoing.notioncal.feature.ledger.LedgerRoute
 import com.ysdoing.notioncal.feature.month.MonthRoute
 import com.ysdoing.notioncal.feature.month.SearchRoute
+import com.ysdoing.notioncal.feature.viewer.ViewerRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
 import com.ysdoing.notioncal.settings.AddViewRoute
 import com.ysdoing.notioncal.settings.SettingsRoute
@@ -34,6 +35,10 @@ private object Routes {
     const val DIAGNOSTICS = "diagnostics"
     const val SEARCH = "search"
     const val DDAY = "settings/dday"
+
+    /** VR-02 뷰어('더 보기' 전체 화면). */
+    const val VIEWER = "view/{viewId}"
+    fun viewer(viewId: String) = "view/$viewId"
 }
 
 /**
@@ -52,6 +57,8 @@ fun NotionCalNavHost(
     onOpenTabHandled: () -> Unit = {},
     openDday: Boolean = false,
     onOpenDdayHandled: () -> Unit = {},
+    openView: String? = null,
+    onOpenViewHandled: () -> Unit = {},
 ) {
     val nav = rememberNavController()
     var tab by rememberSaveable { mutableStateOf(HomeTab.CALENDAR) }
@@ -75,6 +82,12 @@ fun NotionCalNavHost(
         if (openDday) {
             nav.navigate(Routes.DDAY) { launchSingleTop = true }
             onOpenDdayHandled()
+        }
+    }
+    LaunchedEffect(openView) {
+        if (openView != null) {
+            nav.navigate(Routes.viewer(openView)) { launchSingleTop = true }
+            onOpenViewHandled()
         }
     }
     LaunchedEffect(failure) {
@@ -121,6 +134,9 @@ fun NotionCalNavHost(
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) { launchSingleTop = true } },
                 onOpenDday = { nav.navigate(Routes.DDAY) { launchSingleTop = true } },
             )
+        }
+        composable(Routes.VIEWER) {
+            ViewerRoute(onBack = { nav.popBackStack() })
         }
         composable(Routes.DDAY) {
             DdayRoute(onBack = { nav.popBackStack() })

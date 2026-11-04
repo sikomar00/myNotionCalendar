@@ -51,6 +51,7 @@ dependencies {
     implementation(project(":feature:ledger"))
     implementation(project(":feature:month"))
     implementation(project(":feature:quicksheet"))
+    implementation(project(":feature:viewer"))
     implementation(project(":widget"))
 
     implementation(libs.androidx.core.ktx)
