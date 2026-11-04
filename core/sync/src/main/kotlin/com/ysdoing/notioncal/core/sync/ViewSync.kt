@@ -146,10 +146,14 @@ class ViewSync @Inject constructor(
         val fetched = reader.viewRows(registered.dataSourceId, view)
         val pages = fetched.pages
         val schema = schemaOrNull(registered.dataSourceId, schemas)
+        // 보기 설정에 속성 이름이 없으면(갤러리 등, 실측) 속성 id로 스키마에서 이름을 찾고, 찾지 못하는 속성(지워짐)은 뺀다.
+        val nameById = schema?.properties?.values?.associate { it.id to it.name }.orEmpty()
         val configured = view.configuration?.properties.orEmpty()
+            .map { (it.propertyName.ifEmpty { nameById[it.propertyId].orEmpty() }) to it.visible }
+            .filter { (name, _) -> name.isNotEmpty() }
         // 제목은 행이 없어도 알 수 있게 스키마에서 찾는다(빈 보기나 카드 제목을 열 목록에 넣지 않는 보드·갤러리도 새 항목을 만들 수 있다).
         val titleName = pages.firstOrNull()?.titlePropertyName() ?: schema?.properties?.values?.firstOrNull { it.type == "title" }?.name
-        val columns = visibleColumns(configured.map { it.propertyName to it.visible }, titleName)
+        val columns = visibleColumns(configured, titleName)
         val writable = schema?.let { withReadingRoles(writableColumns(columns, it), it) }
             ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
         val meta = registered.copy(

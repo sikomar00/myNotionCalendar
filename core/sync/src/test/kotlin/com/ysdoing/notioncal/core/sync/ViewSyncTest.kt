@@ -553,6 +553,17 @@ class ViewSyncTest {
     }
 
     @Test
+    fun namesAreResolvedFromTheSchemaWhenTheViewConfigurationOnlyHasPropertyIds() = runTest {
+        // 실기기 실측(Phase 11a 스파이크): 갤러리 보기 설정의 properties에는 property_name이 없다. 이름 없는 열이 쌓이지 않게 스키마로 찾는다.
+        schema = writableSchema
+        viewProperties = listOf(ViewPropertyDto("title", ""), ViewPropertyDto("dn", ""), ViewPropertyDto("지워진-속성", ""))
+        rowPages = listOf(richPage("a", true, "o1", "1"))
+        register("v1")
+        sync().syncAll()
+        assertEquals(listOf("Name", "Done"), db.viewDao().all().single().columns.split(VIEW_CELL_SEPARATOR)) // 모르는 id는 뺀다
+    }
+
+    @Test
     fun savesTheViewConfigurationAndWhetherAllRowsWereReceived() = runTest {
         // Phase 11a: 보드의 group_by 같은 설정 원본을 저장하고, 행이 상한을 넘으면 '다 받지 못함'으로 표시한다(+N 대신 N+).
         viewRaw = Json.parseToJsonElement("""{"type":"board","group_by":{"property_id":"st"}}""").jsonObject
