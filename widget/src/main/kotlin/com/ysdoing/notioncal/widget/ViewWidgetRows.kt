@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,9 +33,15 @@ import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 // 노션 보기 위젯의 행·칸(2026-11-03 시안: 톤 타일 행, 원형 체크, 상태·날짜 알약). ViewWidget.kt가 500줄을 넘지 않게 나눴다.
 
@@ -99,16 +106,31 @@ internal fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank()
     actionStartActivity(Intent(Intent.ACTION_VIEW, it.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
-/** [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. [staticRows]면 목록 대신 고정 Column이다. */
+/**
+ * [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. 크기 단계의 밀도표대로 [cap]행까지만 그리고, 넘으면(또는 노션에 행이 더 있으면)
+ * 마지막에 '+N 더 보기'를 둔다(VR-02). [staticRows]면 목록 대신 고정 Column이다.
+ */
 @Composable
-internal fun ViewRows(board: ViewBoard, tableColumns: Int?, look: ViewLook, staticRows: Boolean) {
+internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: ViewLook, staticRows: Boolean) {
+    val shown = board.rows.take(cap)
     if (staticRows) {
-        Column(GlanceModifier.fillMaxSize()) { board.rows.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look) } }
+        Column(GlanceModifier.fillMaxSize()) { shown.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look) } }
         return
     }
+    val more = moreOf(board.rows.size, shown.size, board.rowsComplete)
     LazyColumn(GlanceModifier.fillMaxSize()) {
-        itemsIndexed(board.rows, itemId = { _, row -> row.pageId.hashCode().toLong() }) { _, row -> ViewRowItem(board, row, tableColumns, look) }
+        itemsIndexed(shown, itemId = { _, row -> row.pageId.hashCode().toLong() }) { _, row -> ViewRowItem(board, row, tableColumns, look) }
+        if (more != null) item(itemId = MORE_ITEM_ID) { MoreLine(moreText(LocalContext.current, more), board.viewId, look) }
     }
+}
+
+private const val MORE_ITEM_ID = -1L
+
+/** '+7 더 보기'(정확) / '92+ 더 보기'(노션에 더 있을 수 있음) / '더 보기'(몇 개인지 모름). */
+internal fun moreText(context: Context, more: More): String = when {
+    more.exact -> context.getString(R.string.view_widget_more, more.remaining)
+    more.remaining > 0 -> context.getString(R.string.view_widget_more_plus, more.remaining)
+    else -> context.getString(R.string.view_widget_more_unknown)
 }
 
 @Composable
@@ -158,8 +180,10 @@ private fun ViewListRow(board: ViewBoard, row: ViewRow, modifier: GlanceModifier
 private fun ViewCell(board: ViewBoard, row: ViewRow, index: Int, look: ViewLook, modifier: GlanceModifier, tapHeight: Dp, secondLine: Boolean = false) {
     val raw = row.cells.getOrElse(index) { "" }
     val tappable = board.tappableAt(index)
+    val column = board.columnAt(index)
     when {
         tappable != null -> TapCell(board.viewId, row, tappable, raw, look, modifier, tapHeight)
+        column?.type == "multi_select" && raw.isNotEmpty() -> MultiChips(column, row, raw, look, modifier)
         board.columnAt(index)?.type == "date" && raw.isNotEmpty() ->
             Box(modifier, contentAlignment = Alignment.CenterStart) { WidgetPill(raw, look.palette.tileHigh, look.palette.text, look.pillSp) }
         else -> Text(raw, modifier = modifier, style = if (secondLine) look.sub else if (index == 0) look.title else look.cell, maxLines = 1)
@@ -190,17 +214,45 @@ private fun TapCell(viewId: String, row: ViewRow, column: ViewColumn, raw: Strin
     ) { OptionPill(column, raw, look) }
 }
 
-/** 상태·선택 알약. 색은 상태 그룹으로 꾸미기만 하고, 구분은 알약 안의 글자가 한다(A11Y-03). */
+/**
+ * 상태·선택 알약. select는 노션 옵션 색을 따르고(기본 색이면 중립), status는 그룹으로 꾸민다. 구분은 알약 안의 글자가 한다(A11Y-03).
+ */
 @Composable
 private fun OptionPill(column: ViewColumn, raw: String, look: ViewLook) {
     val p = look.palette
-    val (background, foreground) = when (column.toneOf(raw)) {
+    val colored = if (column.type == "select") column.options.firstOrNull { it.name == raw }?.color?.let(::notionPill) else null
+    val (background, foreground) = colored ?: when (column.toneOf(raw)) {
         StatusTone.NEUTRAL -> p.tileHigh to p.text
         StatusTone.ACTIVE -> p.accentContainer to p.onAccentContainer
         StatusTone.DONE -> p.greenContainer to p.onGreenContainer
     }
     WidgetPill(raw.ifEmpty { "–" }, background, foreground, look.pillSp)
 }
+
+/** 노션 옵션 색 이름 → 알약 면과 글자색(`NotionColors.onColor`로 대비를 보장). 기본 색·모르는 이름은 null. */
+private fun notionPill(color: String): Pair<ColorProvider, ColorProvider>? {
+    val hex = NotionColors.hexFor(color)?.takeIf { color != "default" } ?: return null
+    return ColorProvider(Color(NotionColors.argb(hex))) to ColorProvider(Color(NotionColors.onColor(hex)))
+}
+
+/** 다중 선택: 칩 최대 3개 + 남은 수('+2'). 칩 색은 옵션 색. 원래 값(옵션 ID)을 모르면 표시 글자를 ', '로 나눈다. */
+@Composable
+private fun MultiChips(column: ViewColumn, row: ViewRow, raw: String, look: ViewLook, modifier: GlanceModifier) {
+    val ids = (row.typed[column.id] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    val options = ids?.map { id -> column.options.firstOrNull { it.id == id } ?: ViewChoice(id, id) }
+        ?: raw.split(", ").map { name -> column.options.firstOrNull { it.name == name } ?: ViewChoice(name, name) }
+    val p = look.palette
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        options.take(MAX_CHIPS).forEach { option ->
+            val (background, foreground) = option.color?.let(::notionPill) ?: (p.tileHigh to p.text)
+            WidgetPill(option.name, background, foreground, look.pillSp)
+            Spacer(GlanceModifier.width(3.dp))
+        }
+        if (options.size > MAX_CHIPS) Text("+${options.size - MAX_CHIPS}", style = look.sub)
+    }
+}
+
+private const val MAX_CHIPS = 3
 
 /** 눌러 바꾸는 칸의 낭독: 행 제목, 열 이름, 지금 값, 누르면 어떻게 되는지. */
 internal fun tapDescription(context: Context, title: String, column: ViewColumn, value: String): String = when {

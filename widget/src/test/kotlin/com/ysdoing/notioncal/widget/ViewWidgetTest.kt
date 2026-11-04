@@ -178,12 +178,14 @@ class ViewWidgetTest {
     private fun fiftyRows() = (1..50).map { ViewRow("p$it", "https://notion.so/p$it", listOf("할 일 $it", "집", "10/21")) }
 
     @Test
-    fun fiftyRowsAreAllDrawnAndTappable() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun fiftyRowsAreCappedByTheDensityTableAndAllShownRowsAreTappable() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // Phase 11a: 50행이어도 단계의 행 상한(여기 320×200은 4×4 단계의 8행)까지만 그리고 나머지는 '+42 더 보기'로 뷰어에서 본다.
         setContext(context)
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(board(fiftyRows())), systemFontScale = 1f) }
-        onAllNodes(hasTestTag("viewRow")).assertCountEquals(50)
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(8)
         onAllNodes(hasTestTag("viewRow")).assertAll(hasClickAction())
+        onNode(hasTextEqualTo("+42 더 보기")).assertExists()
     }
 
     @Test
@@ -481,5 +483,130 @@ class ViewWidgetTest {
         )
         provideComposable { ViewWidgetContent(state(one), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewCellTap")).assertCountEquals(0)
+    }
+
+    // --- Phase 11a: 밀도 상한 + '더 보기', 보드, 칩
+
+    private val large = DpSize(358.dp, 330.dp)
+    private val fourByTwo = DpSize(358.dp, 152.dp)
+
+    private fun listBoard(count: Int, complete: Boolean = true) = board(
+        (1..count).map { ViewRow("p$it", "https://notion.so/p$it", listOf("행 $it", "집", "10/21")) },
+    ).copy(rowsComplete = complete)
+
+    private val viewerIntent get() = Intent(Intent.ACTION_VIEW, "notioncal://view/v1".toUri()).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    @Test
+    fun rowsAboveTheDensityCapEndWithAMoreRowThatOpensTheViewer() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(fourByTwo) // 4×2: 3행
+        provideComposable { ViewWidgetContent(state(listBoard(10)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(3)
+        onNode(hasTestTag("viewMore")).assert(hasStartActivityClickAction(viewerIntent))
+        onNode(hasTextEqualTo("+7 더 보기")).assertExists()
+    }
+
+    @Test
+    fun anIncompleteRowSetSaysNPlusAndAFullSetHasNoMoreRow() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large) // 4×4: 8행
+        provideComposable { ViewWidgetContent(state(listBoard(100, complete = false)), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("92+ 더 보기")).assertExists() // 100행을 받았지만 노션에 더 있을 수 있다
+    }
+
+    @Test
+    fun noMoreRowWhenEverythingFits() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(state(listBoard(5)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(5)
+        onAllNodes(hasTestTag("viewMore")).assertCountEquals(0)
+    }
+
+    private val groupColumn = ViewColumn(
+        "st", "Status", "status", listOf(ViewChoice("o1", "할 일", color = "gray"), ViewChoice("o2", "진행 중", color = "blue"), ViewChoice("o3", "완료", color = "green"), ViewChoice("o4", "보류")),
+        role = ViewColumn.ROLE_GROUP,
+    )
+
+    private fun boardView(groupOptions: Int = 4, page: Int = 0, vararg groups: String): ViewWidgetState {
+        val rows = groups.mapIndexed { i, g -> ViewRow("p$i", "https://notion.so/p$i", listOf("카드 $i"), typed = mapOf("st" to kotlinx.serialization.json.JsonPrimitive(g))) }
+        val column = groupColumn.copy(options = groupColumn.options.take(groupOptions))
+        val board = ViewBoard("v1", "보드", "board", listOf("Name"), rows, now, null, listOf(ViewColumn("t", "Name", "title"), column))
+        return ViewWidgetState(board, WidgetConfig(1, viewId = "v1", viewPage = page), now)
+    }
+
+    @Test
+    fun aBoardDrawsOneColumnPerGroupWithItsCards() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large) // 4×4, 폭 358: 3열
+        provideComposable { ViewWidgetContent(boardView(3, 0, "o1", "o1", "o2", "o3"), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardColumn")).assertCountEquals(3)
+        onAllNodes(hasTestTag("boardCard")).assertCountEquals(4)
+        onNode(hasTextEqualTo("할 일")).assertExists()
+        onAllNodes(hasTestTag("boardNext")).assertCountEquals(0) // 열이 3개라 넘길 것이 없다
+    }
+
+    @Test
+    fun moreGroupsThanColumnsAreReachedWithTheArrows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(boardView(4, 0, "o1", "o4"), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardColumn")).assertCountEquals(3)
+        onNode(hasTestTag("boardNext")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.DeltaKey to 1)))
+        onAllNodes(hasTestTag("boardPrev")).assertCountEquals(0)
+    }
+
+    @Test
+    fun theSecondPageShowsTheLastGroupAndALeftArrow() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(boardView(4, 1, "o1", "o4"), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("보류")).assertExists() // 4번째 열이 보인다
+        onNode(hasTestTag("boardPrev")).assert(hasRunCallbackClickAction<BoardPageAction>(actionParametersOf(BoardPageAction.DeltaKey to -1)))
+        onAllNodes(hasTestTag("boardNext")).assertCountEquals(0)
+    }
+
+    @Test
+    fun aBoardFallsBackToAListWhenTooSmallForColumns() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(narrow)
+        provideComposable { ViewWidgetContent(boardView(3, 0, "o1", "o2"), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardColumn")).assertCountEquals(0)
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(2) // 2×2는 목록으로 대체
+    }
+
+    @Test
+    fun cardsAboveTheColumnCapShowAMoreLineThatOpensTheViewer() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(fourByTwo) // 4×2: 2열 × 2장
+        provideComposable { ViewWidgetContent(boardView(3, 0, "o1", "o1", "o1", "o1", "o2"), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardColumn")).assertCountEquals(2)
+        onAllNodes(hasTestTag("boardCard")).assertCountEquals(3) // 첫 열 2장 + 둘째 열 1장
+        onNode(hasTestTag("viewMore")).assert(hasStartActivityClickAction(viewerIntent))
+    }
+
+    @Test
+    fun multiSelectCellsShowAtMostThreeChipsAndACount() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val tags = ViewColumn("tg", "Tags", "multi_select", listOf("a", "b", "c", "d", "e").map { ViewChoice(it, "태그$it", color = "blue") })
+        val board = ViewBoard(
+            "v1", "태그", "table", listOf("이름", "Tags"),
+            listOf(ViewRow("p1", "u1", listOf("행", "태그a, 태그b, 태그c, 태그d, 태그e"), typed = mapOf("tg" to kotlinx.serialization.json.JsonArray(listOf("a", "b", "c", "d", "e").map { kotlinx.serialization.json.JsonPrimitive(it) })))),
+            now, null, listOf(ViewColumn("t", "이름", "title"), tags),
+        )
+        provideComposable { ViewWidgetContent(state(board), systemFontScale = 1f) }
+        listOf("태그a", "태그b", "태그c", "+2").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTextEqualTo("태그d")).assertDoesNotExist()
+    }
+
+    @Test
+    fun boardsAndCapsTranslateToRemoteViewsInEverySizeAndFont() = runTest(timeout = 3.minutes) {
+        val sizes = listOf(DpSize(110.dp, 110.dp), DpSize(358.dp, 152.dp), large, DpSize(411.dp, 800.dp))
+        for (size in sizes) for (font in listOf(70, 150)) for (system in listOf(1f, 1.3f)) {
+            for (state in listOf(boardView(4, 0, "o1", "o1", "o1", "o1", "o1", "o1", "o1", "o1", "o2", "o3", "o4"), state(listBoard(100, complete = false)))) {
+                render(size) { ViewWidgetContent(state.copy(config = state.config.copy(fontScale = font)), systemFontScale = system) }
+            }
+        }
     }
 }

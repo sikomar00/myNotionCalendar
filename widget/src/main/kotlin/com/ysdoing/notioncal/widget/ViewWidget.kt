@@ -198,6 +198,10 @@ private fun ViewHeader(board: ViewBoard?, m: ViewMetrics, palette: WidgetPalette
     }
 }
 
+/** VR-02 '더 보기': 앱의 뷰어 화면에서 그 보기를 연다(:widget은 :feature에 의존하지 않아 딥링크로 연다). */
+internal fun viewerIntent(context: Context, viewId: String): Intent =
+    Intent(Intent.ACTION_VIEW, "notioncal://view/$viewId".toUri()).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
 /** 부제는 3줄 높이쯤부터, 새로고침 버튼은 4칸 폭쯤부터 둔다(2×2에서 머리와 한 줄이 함께 보여야 한다). */
 private val SUBTITLE_MIN_HEIGHT = 140.dp
 internal val REFRESH_MIN_WIDTH = 200.dp
@@ -221,11 +225,20 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
         ViewEmpty(board, m, palette)
         return
     }
-    val width = LocalSize.current.width
-    val columns = tableColumnCount(width, board.columns.size)
-    val tableColumns = columns.takeIf { width >= TABLE_MIN_WIDTH && it > 1 }
+    val size = LocalSize.current
+    val step = sizeStep(size)
+    val look = ViewLook(m, palette)
+    // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
+    val groups = if (board.type == "board") boardGroups(board) else null
+    val layout = groups?.let { boardLayout(step, size.width) }
+    if (groups != null && layout != null) {
+        BoardBody(board, groups, layout, state.config.viewPage, look)
+        return
+    }
+    val columns = tableColumnCount(size.width, board.columns.size)
+    val tableColumns = columns.takeIf { size.width >= TABLE_MIN_WIDTH && it > 1 }
     if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette)
-    ViewRows(board, tableColumns, ViewLook(m, palette), staticRows)
+    ViewRows(board, tableColumns, rowCap(step), look, staticRows)
 }
 
 /** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */
