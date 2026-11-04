@@ -81,4 +81,32 @@ class ViewDensityTest {
         assertNull(boardGroups(board(listOf(row("a", "o1")), columns = listOf(status.copy(options = emptyList())))))
         assertNull(boardGroups(board(listOf(row("a", "o1")), columns = listOf(status.copy(role = "")))))
     }
+
+    // --- Phase 11d WL-03: 탭·섹션 한 칸(영역)에 들어가는 행 수는 그 칸의 높이로 정한다.
+
+    private val metrics = viewMetrics(1f, 1f)
+
+    @Test
+    fun aPaneTooShortForAHeaderAndTheMoreLineHasNoRows() {
+        assertEquals(0, paneRowLimit(40.dp, metrics, table = false, tall = false))
+        assertEquals(0, paneRowLimit(metrics.header, metrics, table = false, tall = false)) // 머리줄만으로 찼다
+    }
+
+    @Test
+    fun eachExtraRowHeightAddsExactlyOneRowAndATallRowNeverFitsMore() {
+        val row = metrics.listRow + ROW_GAP * 2
+        val base = paneRowLimit(200.dp, metrics, table = false, tall = false)
+        assertEquals(base + 1, paneRowLimit(200.dp + row, metrics, table = false, tall = false))
+        assertEquals(base + 2, paneRowLimit(200.dp + row * 2, metrics, table = false, tall = false))
+        assertEquals(true, paneRowLimit(200.dp, metrics, table = false, tall = true) <= base) // 눌러 바꿀 칸이 있으면 행이 높다
+    }
+
+    @Test
+    fun aTableSpendsPartOfTheHeightOnItsColumnHeader() {
+        val noColumnHeader = metrics.copy(tableHeader = 0.dp)
+        val heights = (80..400).map { it.dp }
+        // 열 머리가 차지하는 만큼 같은 높이에서 행이 같거나 적게 들어가고, 어떤 높이에서는 실제로 한 줄이 줄어든다.
+        assertEquals(true, heights.all { paneRowLimit(it, metrics, table = true, tall = false) <= paneRowLimit(it, noColumnHeader, table = true, tall = false) })
+        assertEquals(true, heights.any { paneRowLimit(it, metrics, table = true, tall = false) < paneRowLimit(it, noColumnHeader, table = true, tall = false) })
+    }
 }

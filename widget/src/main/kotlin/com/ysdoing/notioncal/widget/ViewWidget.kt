@@ -131,18 +131,33 @@ fun ViewWidgetContent(
 ) {
     val palette = WidgetPalette.of(state.config.theme, state.config.opacity, LocalContext.current)
     val metrics = viewMetrics(state.config.fontScale / 100f, systemFontScale)
-    val board = state.board
     Column(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background).padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V),
     ) {
-        ViewHeader(board, state.config.appWidgetId, metrics, palette)
-        if (board == null) {
-            val message = if (state.config.viewId == null) R.string.view_widget_choose else R.string.view_widget_missing
-            ViewNote(message, state.config.appWidgetId, metrics, palette)
-        } else {
-            ViewBody(board, state, metrics, palette, staticRows)
-        }
+        ViewPane(state, palette, metrics, PaneSpec(staticRows = staticRows))
+    }
+}
+
+/**
+ * [ViewPane]을 그리는 방식. [staticRows]는 설정 화면 미리보기용, [height]는 탭·섹션 한 칸의 높이(단일 위젯은 null), [presets]는 프리셋 줄을 둘지
+ * (프리셋은 한 보기의 값이라 여러 보기가 든 배치에서는 끈다).
+ */
+internal data class PaneSpec(val staticRows: Boolean = false, val height: Dp? = null, val presets: Boolean = true)
+
+/**
+ * 보기 위젯의 본문(머리줄 + 상태·되돌리기·프리셋 줄 + 행)을 바깥 틀 없이 그린다. 틀(`appWidgetBackground`)은 위젯당 한 번만 둘 수 있어
+ * 단일 위젯([ViewWidgetContent])과 탭·섹션 배치가 각자 틀을 두고 이것을 한 칸마다 쓴다. 크기 단계·열 수는 [LocalSize]로 정하니 칸마다 덮어 쓴다.
+ */
+@Composable
+internal fun ViewPane(state: ViewWidgetState, palette: WidgetPalette, metrics: ViewMetrics, spec: PaneSpec) {
+    val board = state.board
+    ViewHeader(board, state.config.appWidgetId, metrics, palette)
+    if (board == null) {
+        val message = if (state.config.viewId == null) R.string.view_widget_choose else R.string.view_widget_missing
+        ViewNote(message, state.config.appWidgetId, metrics, palette)
+    } else {
+        ViewBody(board, state, metrics, palette, spec)
     }
 }
 
@@ -230,7 +245,7 @@ internal fun viewerIntent(context: Context, viewId: String): Intent =
     Intent(Intent.ACTION_VIEW, "notioncal://view/$viewId".toUri()).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
 /** 부제는 3줄 높이쯤부터, 새로고침 버튼은 4칸 폭쯤부터 둔다(2×2에서 머리와 한 줄이 함께 보여야 한다). */
-private val SUBTITLE_MIN_HEIGHT = 140.dp
+internal val SUBTITLE_MIN_HEIGHT = 140.dp
 internal val REFRESH_MIN_WIDTH = 200.dp
 
 /** 고르지 않았거나 등록이 지워진 보기: 글자로 알리고, 누르면 위젯 설정에서 다시 고른다. */
@@ -246,14 +261,14 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 }
 
 @Composable
-private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, staticRows: Boolean) {
+private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, spec: PaneSpec) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
     val undoShown = board.undoableAt(state.nowMillis) > 0
     if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
     val size = LocalSize.current
     val step = sizeStep(size)
     // 프리셋 줄(IX-04): 새 항목을 만들 수 있는 보기에서, 2×2보다 넓을 때만 둔다.
-    val presets = ViewPresets.parse(state.config.presetsJson).takeIf { board.canCreate && step != SizeStep.COMPACT }.orEmpty()
+    val presets = ViewPresets.parse(state.config.presetsJson).takeIf { spec.presets && board.canCreate && step != SizeStep.COMPACT }.orEmpty()
     if (presets.isNotEmpty()) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
     // 되돌리기·프리셋 줄이 높이를 차지하니 보드는 줄 수만큼 열마다 카드를 줄인다(보드는 목록과 달리 스크롤이 없어 넘치면 잘린다).
     val extraLines = (if (undoShown) 1 else 0) + (presets.size + PRESETS_PER_ROW - 1) / PRESETS_PER_ROW
@@ -266,6 +281,8 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
+        // 탭·섹션의 낮은 칸이면 카드 수도 그 칸 높이에 맞춘다(보드는 스크롤이 없어 넘치면 잘린다).
+        ?.let { l -> spec.height?.let { h -> l.copy(cardsPerColumn = minOf(l.cardsPerColumn, paneRowLimit(h, m, false, false).coerceAtLeast(1))) } ?: l }
     if (groups != null && layout != null) {
         BoardBody(board, groups, layout, state.config.viewPage, look)
         return
@@ -273,7 +290,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     val columns = tableColumnCount(size.width, board.columns.size)
     val tableColumns = columns.takeIf { size.width >= TABLE_MIN_WIDTH && it > 1 }
     if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette)
-    ViewRows(board, tableColumns, rowCap(step), look, staticRows)
+    ViewRows(board, tableColumns, rowCap(step), look, spec.staticRows, spec.height)
 }
 
 /** 빈 보기: 아이콘 + 안내 + '새 항목 만들기'(만들 수 있는 보기). 높이가 모자라면 [WidgetEmpty]가 한 줄로 줄인다. */

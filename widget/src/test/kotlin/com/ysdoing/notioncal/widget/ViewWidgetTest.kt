@@ -1,5 +1,8 @@
 package com.ysdoing.notioncal.widget
 
+import androidx.glance.GlanceModifier
+import androidx.glance.layout.Column
+import androidx.glance.layout.fillMaxSize
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewChoice
@@ -316,6 +319,45 @@ class ViewWidgetTest {
         setAppWidgetSize(wide)
         provideComposable { ViewWidgetContent(state(leavingBoard("""{"property":"dn","checkbox":{"equals":true}}""", setOf("p1", "p2"))), systemFontScale = 1f) }
         onAllNodes(hasTestTag("viewRowLeaving")).assertCountEquals(0)
+    }
+
+    // --- Phase 11d 배치: 보기 본문(ViewPane)은 틀 없이 영역 높이에 맞춰 그린다. 낮은 영역은 행 대신 '더 보기'.
+
+    private fun renderedPane(spec: PaneSpec, board: ViewBoard) = ViewWidgetState(board, WidgetConfig(1, viewId = "v1"), now) to spec
+
+    @Test
+    fun aShortPaneDrawsOnlyTheHeaderAndAMoreLineInsteadOfClippedRows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        val (state, spec) = renderedPane(PaneSpec(height = 60.dp), board(fiftyRows()))
+        provideComposable {
+            Column(GlanceModifier.fillMaxSize()) { ViewPane(state, WidgetPalette.of(state.config.theme, state.config.opacity, context), viewMetrics(1f, 1f), spec) }
+        }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(0)
+        onNode(hasTestTag("viewMore")).assertExists() // 행은 못 들어가니 전부 '+50 더 보기'
+        onNode(hasTextEqualTo("+50 더 보기")).assertExists()
+    }
+
+    @Test
+    fun aTallPaneShowsAsManyRowsAsTheSizeStepAllows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large) // 4×4 단계: 행 상한 8
+        val (state, spec) = renderedPane(PaneSpec(height = 400.dp), board(fiftyRows()))
+        provideComposable {
+            Column(GlanceModifier.fillMaxSize()) { ViewPane(state, WidgetPalette.of(state.config.theme, state.config.opacity, context), viewMetrics(1f, 1f), spec) }
+        }
+        onAllNodes(hasTestTag("viewRow")).assertCountEquals(8)
+    }
+
+    @Test
+    fun aPaneOfAPresetlessLayoutDrawsNoPresetLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val state = ViewWidgetState(todoBoard(), WidgetConfig(1, viewId = "v1", presetsJson = ViewPresets.encode(listOf(ViewPreset("점심")))), now)
+        provideComposable {
+            Column(GlanceModifier.fillMaxSize()) { ViewPane(state, WidgetPalette.of(state.config.theme, state.config.opacity, context), viewMetrics(1f, 1f), PaneSpec(presets = false)) }
+        }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(0) // 프리셋은 한 보기의 값이라 여러 보기가 든 배치에서는 뜻이 안 맞는다
     }
 
     // --- Phase 11c 프리셋 줄(IX-04·AD-05): 눌러서 값 묶음으로 새 항목을 만든다(4초 지연, 되돌릴 수 있다).

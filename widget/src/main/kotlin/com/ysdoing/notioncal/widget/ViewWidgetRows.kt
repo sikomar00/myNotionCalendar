@@ -53,7 +53,7 @@ internal const val PREVIEW_ROWS = 8
  * 행 타일 위아래 틈. 눌러 바꿀 칸이 있는 행은 타일을 [TAP_ROW_MIN] 이상으로 높인다. 밀도 우선(사용자 결정 2026-11-03)이라
  * 눌림 기준 48dp(WL-4.2)는 채우지 않고 이전(32dp)보다 조금만 높인다. 눌림 폭은 48dp다.
  */
-private val ROW_GAP = 2.dp
+internal val ROW_GAP = 2.dp
 internal val TAP_ROW_MIN = 34.dp
 private val CHECK_SIZE = 24.dp
 
@@ -124,14 +124,15 @@ internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow): Act
 
 /**
  * [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. 크기 단계의 밀도표대로 [cap]행까지만 그리고, 넘으면(또는 노션에 행이 더 있으면)
- * 마지막에 '+N 더 보기'를 둔다(VR-02). [staticRows]면 목록 대신 고정 Column이다.
+ * 마지막에 '+N 더 보기'를 둔다(VR-02). [staticRows]면 목록 대신 고정 Column이다. [paneHeight]는 탭·섹션 한 칸의 높이다(단일 위젯은 null).
  */
 @Composable
-internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: ViewLook, staticRows: Boolean) {
-    val shown = board.rows.take(cap)
+internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: ViewLook, staticRows: Boolean, paneHeight: Dp? = null) {
     // 눌러 바꿀 칸이 보이면(보이지 않는 그룹·필터 열은 세지 않는다) 행을 [TAP_ROW_MIN] 이상으로 높인다. 숫자 − + 는 표에서만 그려진다. 보드 단위로 한 번만 정한다.
     val tall = board.columns.indices.any { board.tappableAt(it) != null } ||
         (tableColumns != null && look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" })
+    // 탭·섹션의 한 칸이면 그 칸의 높이에 들어가는 행 수로도 줄인다(낮은 칸에서 행이 잘리지 않게, 나머지는 '더 보기').
+    val shown = board.rows.take(paneHeight?.let { minOf(cap, paneRowLimit(it, look.m, tableColumns != null, tall)) } ?: cap)
     if (staticRows) {
         Column(GlanceModifier.fillMaxSize()) { shown.take(PREVIEW_ROWS).forEach { ViewRowItem(board, it, tableColumns, look, tall) } }
         return

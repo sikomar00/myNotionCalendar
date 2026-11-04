@@ -37,6 +37,18 @@ internal fun rowCap(step: SizeStep): Int = when (step) {
     SizeStep.FULL -> 14
 }
 
+/**
+ * Phase 11d 탭·섹션 한 칸(영역)에 들어가는 행 수. 영역 높이 [height]에서 머리줄(부제가 보일 높이면 부제 포함)·표 열 머리·'더 보기' 줄을 빼고
+ * 행 높이(위아래 틈 포함, 눌러 바꿀 칸이 있으면 [TAP_ROW_MIN] 이상)로 나눈다. 모자라면 0이라 머리줄과 '더 보기'만 그린다.
+ */
+internal fun paneRowLimit(height: Dp, m: ViewMetrics, table: Boolean, tall: Boolean): Int {
+    val header = if (height >= SUBTITLE_MIN_HEIGHT) m.headerWithSub else m.header
+    val columnHeader = if (table) m.tableHeader else 0.dp
+    val base = if (table) m.tableRow else m.listRow
+    val row = (if (tall) maxOf(base, TAP_ROW_MIN) else base) + ROW_GAP * 2
+    return ((height - header - columnHeader - MORE_HEIGHT) / row).toInt().coerceAtLeast(0)
+}
+
 /** 보드가 한 번에 보여 주는 열 수와 열마다 카드 수. */
 internal data class BoardLayout(val columns: Int, val cardsPerColumn: Int)
 

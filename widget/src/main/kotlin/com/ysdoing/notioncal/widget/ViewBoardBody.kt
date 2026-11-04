@@ -143,4 +143,4 @@ internal fun MoreLine(text: String, viewId: String, look: ViewLook) {
     ) { Text(text, style = look.sub, maxLines = 1) }
 }
 
-private val MORE_HEIGHT = 32.dp // 글자만 누르게 두면 누를 곳이 10dp라 키운다(밀집 행은 PRD UX-02 예외지만 이 줄은 하나뿐이다)
+internal val MORE_HEIGHT = 32.dp // 글자만 누르게 두면 누를 곳이 10dp라 키운다(밀집 행은 PRD UX-02 예외지만 이 줄은 하나뿐이다)
