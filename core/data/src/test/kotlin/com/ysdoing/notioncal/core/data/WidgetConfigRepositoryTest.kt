@@ -78,6 +78,17 @@ class WidgetConfigRepositoryTest {
         assertEquals(listOf("{\"mode\":\"SECTIONS\"}", 0), listOf(repo.get(7).layoutJson, repo.get(7).lastTab))
     }
 
+    /** WL-02: 탭을 누르면 그 위젯의 탭 번호만 바뀌고 나머지 설정·다른 위젯은 그대로다. */
+    @Test
+    fun selectingALayoutTabKeepsTheRestAndOtherWidgets() = runTest {
+        repo.save(WidgetConfig(6, viewId = "v", lastTab = 1))
+        repo.save(WidgetConfig(7, lastTab = 2))
+        repo.selectLayoutTab(6, 4)
+        repo.selectLayoutTab(7, -3)
+        assertEquals(listOf("v", 4), listOf(repo.get(6).viewId, repo.get(6).lastTab))
+        assertEquals(0, repo.get(7).lastTab)
+    }
+
     /** WG-11: 고른 탭은 위젯마다 따로이고, 달 이동·설정 저장(행 전체 upsert) 뒤에도 남는다. */
     @Test
     fun selectedTabIsPerWidgetAndSurvivesOtherSaves() = runTest {

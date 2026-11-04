@@ -119,6 +119,11 @@
     <string name="book_widget_pages_less">%1$s, %2$d쪽 줄이기</string>
     <string name="book_widget_pages_more">%1$s, %2$d쪽 더 읽기</string>
     <string name="view_widget_label">노션 보기</string>
+    <string name="layout_widget_label">노션 위젯</string>
+    <string name="layout_widget_description">등록한 노션 보기를 하나로, 또는 탭으로 묶어 한 위젯에 보여줍니다. 탭을 바꾸면 마지막으로 본 탭을 기억합니다</string>
+    <string name="layout_widget_choose">설정에서 보기를 고르세요</string>
+    <string name="layout_widget_tab_prev">이전 탭</string>
+    <string name="layout_widget_tab_next">다음 탭</string>
     <string name="view_widget_description">노션에서 만든 보기(필터·정렬·보이는 속성)를 그대로 보여줍니다. 체크박스와 상태·선택은 눌러서 바꾸고 +로 새 항목을 만들 수 있습니다</string>
     <string name="view_widget_header_description">%1$s, 새로고침</string>
     <string name="view_widget_cell_checked">%1$s, %2$s 체크됨, 눌러서 해제</string>

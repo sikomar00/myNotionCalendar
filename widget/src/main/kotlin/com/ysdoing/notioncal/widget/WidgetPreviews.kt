@@ -23,6 +23,8 @@ import com.ysdoing.notioncal.core.data.ledger.LedgerTx
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
+import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -117,6 +119,14 @@ object WidgetPreviews {
         return ViewWidgetState(board, WidgetConfig(0, viewId = "preview"), now)
     }
 
+    /** 노션 위젯(WL-01) 미리보기: 예시 보기 둘을 탭으로(개인 데이터가 아니다). */
+    internal fun layoutState(now: Long = System.currentTimeMillis()): LayoutWidgetState {
+        val first = viewState(now).board!!
+        val second = first.copy(viewId = "preview-2", name = "독서")
+        val layout = WidgetLayout(LayoutMode.TABS).add(first.viewId)!!.add(second.viewId)!!
+        return LayoutWidgetState(WidgetConfig(0), layout, mapOf(first.viewId to first, second.viewId to second), now)
+    }
+
     /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */
     internal fun bookState(now: Long = System.currentTimeMillis()): BookWidgetState {
         val rows = listOf("예시 책 하나" to 0.35f, "예시 책 둘" to 0.8f).mapIndexed { i, (title, progress) ->
@@ -144,6 +154,7 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(LayoutWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(BookWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")

@@ -123,6 +123,19 @@
                 android:resource="@xml/view_widget_info" />
         </receiver>
 
+        <!-- Phase 11d 노션 위젯(보기 하나·탭·섹션). -->
+        <receiver
+            android:name=".LayoutWidgetReceiver"
+            android:exported="true"
+            android:label="@string/layout_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/layout_widget_info" />
+        </receiver>
+
         <!-- M5a 책 갤러리 위젯(표지 + 읽은 비율). -->
         <receiver
             android:name=".BookWidgetReceiver"

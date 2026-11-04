@@ -7,7 +7,7 @@ import androidx.glance.appwidget.updateAll
 
 /**
  * 월 위젯(WG-01), 보조 위젯(WG-06), 달력 + 일정 위젯(WG-09), 습관 위젯(HB-03), 통합 탭 위젯(WG-11), 가계부 위젯(LD-03),
- * 디데이 위젯(DD-03~05)을 함께 다룬다. 자정 갱신(WG-03)도 여기를 거쳐 디데이 숫자가 바뀐다.
+ * 디데이 위젯(DD-03~05), 노션 위젯(WL-01)을 함께 다룬다. 자정 갱신(WG-03)도 여기를 거쳐 디데이 숫자가 바뀐다.
  */
 object AllWidgets {
     suspend fun updateAll(context: Context) {
@@ -20,6 +20,7 @@ object AllWidgets {
         DdayWidget().updateAll(context)
         DdayListWidget().updateAll(context)
         ViewWidget().updateAll(context)
+        LayoutWidget().updateAll(context)
         BookWidget().updateAll(context)
     }
 
@@ -30,7 +31,7 @@ object AllWidgets {
         return listOf(
             NotionCalWidgetReceiver::class.java, AgendaWidgetReceiver::class.java, SplitWidgetReceiver::class.java,
             HabitWidgetReceiver::class.java, TabbedWidgetReceiver::class.java, LedgerWidgetReceiver::class.java,
-            DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java, ViewWidgetReceiver::class.java, BookWidgetReceiver::class.java,
+            DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java, ViewWidgetReceiver::class.java, LayoutWidgetReceiver::class.java, BookWidgetReceiver::class.java,
         ).any { receiver ->
             manager.getAppWidgetIds(ComponentName(context, receiver)).isNotEmpty()
         }

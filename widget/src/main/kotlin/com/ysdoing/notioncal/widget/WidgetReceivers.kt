@@ -69,6 +69,11 @@ class ViewWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = ViewWidget()
 }
 
+/** Phase 11d 노션 위젯(보기 하나·탭·섹션). */
+class LayoutWidgetReceiver : NotionCalWidgetReceiverBase() {
+    override val glanceAppWidget: GlanceAppWidget = LayoutWidget()
+}
+
 /** M5a 책 갤러리 위젯(표지 + 읽은 비율). */
 class BookWidgetReceiver : NotionCalWidgetReceiverBase() {
     override val glanceAppWidget: GlanceAppWidget = BookWidget()

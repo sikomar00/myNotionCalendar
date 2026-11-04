@@ -1,0 +1,119 @@
+package com.ysdoing.notioncal.widget
+
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.appWidgetBackground
+import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.provideContent
+import androidx.glance.background
+import androidx.glance.layout.Column
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.padding
+import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.LayoutItem
+import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+
+/** 새 위젯 한 번 그리기에 필요한 값. [boards]에 없는 보기는 등록이 지워진 보기다. */
+internal data class LayoutWidgetState(val config: WidgetConfig, val layout: WidgetLayout, val boards: Map<String, ViewBoard?>, val nowMillis: Long) {
+    /** 저장된 탭 번호가 탭 수를 넘으면(탭을 줄인 뒤) 마지막 탭으로 읽는다. */
+    val activeIndex: Int get() = config.lastTab.coerceIn(0, (layout.items.size - 1).coerceAtLeast(0))
+
+    /** 칸 하나를 [ViewPane]이 그릴 값으로. 칸의 보기가 곧 위젯의 보기다. */
+    fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis)
+}
+
+/**
+ * Phase 11d WL-01~02 '노션 위젯': 등록한 보기를 하나로, 또는 탭으로 담는다. 틀(`appWidgetBackground`)은 여기서 한 번만 두고
+ * 본문은 보기 위젯과 같은 [ViewPane]을 쓴다. 탭이면 탭 줄을 뺀 크기를 [LocalSize]로 알려 줘 크기 단계·행 수가 그 칸에 맞는다.
+ * 프리셋은 한 보기의 값이라 단일일 때만 둔다.
+ */
+@Composable
+internal fun LayoutWidgetContent(
+    state: LayoutWidgetState,
+    systemFontScale: Float = LocalContext.current.applicationContext.resources.configuration.fontScale,
+    staticRows: Boolean = false,
+) {
+    val config = state.config
+    val palette = WidgetPalette.of(config.theme, config.opacity, LocalContext.current)
+    val metrics = viewMetrics(config.fontScale / 100f, systemFontScale)
+    val size = LocalSize.current
+    Column(GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)) {
+        val items = state.layout.items
+        if (items.isEmpty()) {
+            Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
+                ViewNote(R.string.layout_widget_choose, config.appWidgetId, metrics, palette, tag = "layoutNote")
+            }
+            return@Column
+        }
+        val tabs = state.layout.mode == LayoutMode.TABS
+        var area = size
+        if (tabs) {
+            val tabHeight = TabbedWidget.tabRowHeight(config, systemFontScale)
+            val textScale = minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
+            val fontSp = TabbedWidget.TAB_FONT * config.fontScale / 100f * textScale / systemFontScale
+            val titles = items.map { it.title(state.boards[it.viewId]?.name.orEmpty()) }
+            LayoutTabStrip(titles, state.activeIndex, size.width, tabHeight, fontSp, palette)
+            area = DpSize(size.width, (size.height - tabHeight).coerceAtLeast(0.dp))
+        }
+        val item = if (tabs) items[state.activeIndex] else items.first()
+        val spec = PaneSpec(staticRows = staticRows, height = if (tabs) area.height - VIEW_PADDING_V * 2 else null, presets = !tabs)
+        Column(GlanceModifier.fillMaxWidth().defaultWeight().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
+            // 크기 단계·열 수는 LocalSize로 정하니 이 칸의 크기로 덮어 쓴다(통합 위젯과 같은 요령).
+            CompositionLocalProvider(LocalSize provides area) { ViewPane(state.paneState(item), palette, metrics, spec) }
+        }
+    }
+}
+
+/** WL-01 노션 위젯. Room 스냅샷만 읽는다(WG-02). */
+class LayoutWidget : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+    override val previewSizeMode = SizeMode.Responsive(setOf(DpSize(180.dp, 180.dp)))
+
+    override suspend fun providePreview(context: Context, widgetCategory: Int) {
+        val state = WidgetPreviews.layoutState()
+        provideContent { LayoutWidgetContent(state, systemFontScale = 1f) }
+    }
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        val deps = WidgetDependencies.from(context)
+        val initialConfig = deps.widgetConfigs().get(appWidgetId)
+        val viewIds = WidgetLayout.parse(initialConfig.layoutJson).items.map { it.viewId }
+        // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령).
+        val initialBoards = viewIds.associateWith { deps.views().observe(it).first() }
+        provideContent {
+            val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
+            val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
+            // 탭 이름이 보기 이름이라 숨은 탭의 보기도 함께 지켜본다(최대 5개, 바뀐 보기만 다시 읽는다).
+            val boards by remember(layout) { boardsOf(deps, layout.items.map { it.viewId }) }.collectAsState(initialBoards)
+            val fontScale by SystemFontScale.flow.collectAsState()
+            LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis()), fontScale ?: SystemFontScale.current(context))
+        }
+    }
+
+    private fun boardsOf(deps: WidgetDependencies, viewIds: List<String>): Flow<Map<String, ViewBoard?>> =
+        if (viewIds.isEmpty()) flowOf(emptyMap())
+        else combine(viewIds.map { id -> deps.views().observe(id).map { id to it } }) { it.toMap() }
+}

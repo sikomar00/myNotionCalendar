@@ -122,5 +122,8 @@ class WidgetConfigRepository @Inject constructor(private val dao: WidgetConfigDa
     /** WG-11: 통합 위젯의 탭. 위젯마다 따로 저장한다. */
     suspend fun selectTab(appWidgetId: Int, tab: WidgetTab) = save(get(appWidgetId).copy(selectedTab = tab))
 
+    /** Phase 11d WL-02: 노션 위젯의 마지막으로 본 탭 번호. 위젯마다 따로 저장한다. */
+    suspend fun selectLayoutTab(appWidgetId: Int, index: Int) = save(get(appWidgetId).copy(lastTab = index.coerceAtLeast(0)))
+
     suspend fun delete(appWidgetIds: List<Int>) = dao.delete(appWidgetIds)
 }
