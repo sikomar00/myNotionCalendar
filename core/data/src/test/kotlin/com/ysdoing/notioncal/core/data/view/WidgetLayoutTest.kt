@@ -187,4 +187,11 @@ class WidgetLayoutTest {
         val many = (1..8).joinToString(",") { """{"id":"t$it","viewId":"v1","fn":"COUNT"}""" }
         assertEquals(6, WidgetLayout.parse("""{"mode":"SECTIONS","tiles":[$many]}""").tiles.size)
     }
+
+    @Test
+    fun boardIdsAreTheViewsToReadWithoutRepeatsAndTilesOnlyCountInSections() {
+        val sections = layout(LayoutMode.SECTIONS, "a", "b").addTile(tile("v1"))!!.addTile(tile("a"))!!
+        assertEquals(listOf("a", "b", "v1"), sections.boardIds())
+        assertEquals(listOf("a", "b"), sections.withMode(LayoutMode.TABS).boardIds()) // 탭에서는 타일을 그리지 않으니 읽지도 않는다
+    }
 }

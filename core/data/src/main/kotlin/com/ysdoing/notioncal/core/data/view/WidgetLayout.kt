@@ -46,6 +46,9 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
         return copy(tiles = tiles + tile.copy(id = id))
     }
 
+    /** 이 배치를 그리려고 읽어야 할 보기 ID(겹침 없이): 보기 항목과, 섹션 배치일 때 타일의 보기. */
+    fun boardIds(): List<String> = (items.map { it.viewId } + if (mode == LayoutMode.SECTIONS) tiles.map { it.viewId } else emptyList()).distinct()
+
     fun removeTile(id: String): WidgetLayout = copy(tiles = tiles.filterNot { it.id == id })
 
     /** 설정 화면의 체크: 해제하면 빼고, 체크하면 담는다. 단일은 고른 보기로 바꾸고, 탭·섹션은 상한을 넘거나 이미 담았으면 null이다. */

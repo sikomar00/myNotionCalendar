@@ -77,6 +77,10 @@ internal data class ViewMetrics(
     val tableHeader: Dp,
     val listRow: Dp,
     val tableRow: Dp,
+    /** Phase 11e 집계 타일: 값 글자 크기와, 라벨 + 값 줄만 있는 타일 높이·막대와 목표 글자 줄이 더 들 때 늘어나는 높이. */
+    val valueSp: Float = 18f,
+    val tile: Dp = 64.dp,
+    val tileExtras: Dp = 28.dp,
 )
 
 internal fun viewMetrics(userScale: Float, systemFontScale: Float): ViewMetrics {
@@ -96,6 +100,9 @@ internal fun viewMetrics(userScale: Float, systemFontScale: Float): ViewMetrics 
         // 행은 타일이라 위아래 여백을 조금 더 둔다(틈 4dp는 행 밖).
         listRow = box(titleSp) + box(subSp) + 10.dp,
         tableRow = box(titleSp) + 10.dp,
+        valueSp = 18f * userScale,
+        tile = box(subSp) + box(18f * userScale) + AGG_TILE_PADDING * 2,
+        tileExtras = 6.dp + box(subSp) + 4.dp, // 막대 + 목표 글자 줄 + 위아래 틈
     )
 }
 

@@ -24,11 +24,16 @@ import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.AggResult
+import com.ysdoing.notioncal.core.data.view.Aggregator
 import com.ysdoing.notioncal.core.data.view.LayoutItem
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import java.time.DayOfWeek
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -36,9 +41,28 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** 새 위젯 한 번 그리기에 필요한 값. [boards]에 없는 보기는 등록이 지워진 보기다. */
-internal data class LayoutWidgetState(val config: WidgetConfig, val layout: WidgetLayout, val boards: Map<String, ViewBoard?>, val nowMillis: Long) {
+internal data class LayoutWidgetState(
+    val config: WidgetConfig,
+    val layout: WidgetLayout,
+    val boards: Map<String, ViewBoard?>,
+    val nowMillis: Long,
+    /** 집계 타일의 '이번 주' 시작 요일(앱 설정, 기본 일요일). */
+    val weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+) {
     /** 저장된 탭 번호가 탭 수를 넘으면(탭을 줄인 뒤) 마지막 탭으로 읽는다. */
     val activeIndex: Int get() = config.lastTab.coerceIn(0, (layout.items.size - 1).coerceAtLeast(0))
+
+    /** 그릴 것이 있는가: 보기가 있거나, 섹션 배치에 집계 타일 줄이 있다. */
+    val hasContent: Boolean get() = layout.items.isNotEmpty() || (layout.mode == LayoutMode.SECTIONS && layout.tiles.isNotEmpty())
+
+    /** 집계 타일마다 자기 보기의 행으로 계산한 값. 보기가 없으면(등록이 지워짐) 값 없음이다. 오늘은 [nowMillis]의 날짜다. */
+    fun tileCells(): List<TileCell> {
+        val today = Instant.ofEpochMilli(nowMillis).atZone(APP_ZONE).toLocalDate()
+        return layout.tiles.map { tile ->
+            val board = boards[tile.viewId]
+            TileCell(tile, board?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false), board)
+        }
+    }
 
     /** 칸 하나를 [ViewPane]이 그릴 값으로. 칸의 보기가 곧 위젯의 보기다. */
     fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis)
@@ -64,7 +88,7 @@ internal fun LayoutWidgetContent(
     val size = LocalSize.current
     Column(GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)) {
         when {
-            state.layout.items.isEmpty() -> Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
+            !state.hasContent -> Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
                 ViewNote(R.string.layout_widget_choose, config.appWidgetId, look.metrics, palette, tag = "layoutNote")
             }
             state.layout.mode == LayoutMode.TABS -> LayoutTabsBody(state, look, size)
@@ -112,16 +136,17 @@ class LayoutWidget : GlanceAppWidget() {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val deps = WidgetDependencies.from(context)
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
-        val viewIds = WidgetLayout.parse(initialConfig.layoutJson).items.map { it.viewId }
-        // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령).
-        val initialBoards = boardsOf(deps, viewIds).first()
+        val initialSettings = deps.settings().settings.first()
+        // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령). 타일의 보기도 함께.
+        val initialBoards = boardsOf(deps, WidgetLayout.parse(initialConfig.layoutJson).boardIds()).first()
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
-            // 탭 이름이 보기 이름이라 숨은 탭의 보기도 함께 지켜본다(최대 5개, 바뀐 보기만 다시 읽는다).
-            val boards by remember(layout) { boardsOf(deps, layout.items.map { it.viewId }) }.collectAsState(initialBoards)
+            // 탭 이름이 보기 이름이라 숨은 탭의 보기도 함께 지켜본다(최대 5개, 바뀐 보기만 다시 읽는다). 타일의 보기도 같다.
+            val boards by remember(layout) { boardsOf(deps, layout.boardIds()) }.collectAsState(initialBoards)
+            val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
-            LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis()), fontScale ?: SystemFontScale.current(context))
+            LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart), fontScale ?: SystemFontScale.current(context))
         }
     }
 

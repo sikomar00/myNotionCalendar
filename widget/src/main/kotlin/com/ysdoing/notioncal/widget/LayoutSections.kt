@@ -15,6 +15,7 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 
 internal val SECTION_GAP = 4.dp
+private const val STRIP_MAX_SHARE = 0.45f // 보기와 함께일 때 타일 줄이 몸통에서 쓸 수 있는 최대 비율
 
 /**
  * WL-03 섹션 높이. 쌓을 높이 [total]에서 섹션 사이 틈을 뺀 값을 [weights] 비율로 나눈다. 섹션 하나가 [min](머리줄 + 행 하나 + '더 보기')보다 낮아지면 뒤 섹션부터 빼
@@ -31,15 +32,23 @@ internal fun sectionHeights(total: Dp, weights: List<Int>, gap: Dp, min: Dp): Li
 }
 
 /**
- * WL-03 섹션: 보기마다 한 칸씩 위아래로 쌓는다(자식은 섹션 4개 + 틈 3개라 Column 자식 10개 제한 안이다). 칸 높이는 dp로 직접 준다
+ * WL-03 섹션: 보기마다 한 칸씩 위아래로 쌓는다(자식은 타일 줄 + 틈 + 섹션 4개 + 틈 3개라 Column 자식 10개 제한 안이다). 칸 높이는 dp로 직접 준다
  * (`defaultWeight`는 같은 비율만 된다). 칸이 낮으면 [paneRowLimit]이 행을 줄이고 나머지는 '+N 더 보기'로 보낸다.
+ * Phase 11e 집계 타일 줄은 맨 위에 두고 높이는 타일 줄 수로 정한다(보기가 있으면 몸통의 45%까지, 타일뿐이면 전부). 보기 섹션은 남은 높이를 나눈다.
  */
 @Composable
 internal fun LayoutSectionsBody(state: LayoutWidgetState, look: LayoutLook, size: DpSize) {
     val items = state.layout.items
     val body = (size.height - VIEW_PADDING_V * 2).coerceAtLeast(0.dp)
-    val heights = sectionHeights(body, items.map { it.weight }, SECTION_GAP, paneMinHeight(look.metrics))
+    val strip = state.layout.tiles.takeIf { it.isNotEmpty() }
+        ?.let { planTileStrip(state.tileCells(), look.metrics, size, room = if (items.isEmpty()) body else body * STRIP_MAX_SHARE) }
+    val used = strip?.let { it.height + if (items.isEmpty()) 0.dp else SECTION_GAP } ?: 0.dp
+    val heights = sectionHeights((body - used).coerceAtLeast(0.dp), items.map { it.weight }, SECTION_GAP, paneMinHeight(look.metrics))
     Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
+        if (strip != null) {
+            TileStrip(strip, look, size.width - PADDING_H * 2)
+            if (items.isNotEmpty()) Spacer(GlanceModifier.height(SECTION_GAP))
+        }
         heights.forEachIndexed { index, height ->
             if (index > 0) Spacer(GlanceModifier.height(SECTION_GAP))
             Column(GlanceModifier.fillMaxWidth().height(height)) {
