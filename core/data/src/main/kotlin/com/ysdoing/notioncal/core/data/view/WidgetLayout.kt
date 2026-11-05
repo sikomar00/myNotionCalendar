@@ -45,9 +45,13 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
         return copy(items = items + LayoutItem(id))
     }
 
-    /** 타일을 담는다(번호는 비어 있는 첫 t1·t2…). 섹션 배치에서만, 타일 줄을 처음 만들 때는 섹션 자리가 남아야 하고, 타일은 [TILE_LIMIT]개까지다. */
+    /**
+     * 타일을 담는다(번호는 비어 있는 첫 t1·t2…). 섹션 배치에서만, 타일 줄을 처음 만들 때는 섹션 자리가 남아야 하고, 타일은 [TILE_LIMIT]개까지다.
+     * 도넛 타일은 하나까지다(도넛은 그림이라 위젯 하나가 쓸 수 있는 그림 수에 든다).
+     */
     fun addTile(tile: AggTile): WidgetLayout? {
         if (mode != LayoutMode.SECTIONS || tiles.size >= TILE_LIMIT || (tiles.isEmpty() && items.size >= mode.limit)) return null
+        if (tile.kind == TileKind.DONUT && tiles.any { it.kind == TileKind.DONUT }) return null
         val id = generateSequence(1) { it + 1 }.map { "t$it" }.first { candidate -> tiles.none { it.id == candidate } }
         return copy(tiles = tiles + tile.copy(id = id))
     }
@@ -57,8 +61,11 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
 
     fun removeTile(id: String): WidgetLayout = copy(tiles = tiles.filterNot { it.id == id })
 
-    /** 타일 [id]를 [tile]로 바꾼다(번호·자리는 그대로). 없는 번호면 그대로다. */
-    fun replaceTile(id: String, tile: AggTile): WidgetLayout = copy(tiles = tiles.map { if (it.id == id) tile.copy(id = id) else it })
+    /** 타일 [id]를 [tile]로 바꾼다(번호·자리는 그대로). 없는 번호거나, 다른 도넛 타일이 이미 있는데 도넛으로 바꾸면 그대로다. */
+    fun replaceTile(id: String, tile: AggTile): WidgetLayout {
+        if (tile.kind == TileKind.DONUT && tiles.any { it.kind == TileKind.DONUT && it.id != id }) return this
+        return copy(tiles = tiles.map { if (it.id == id) tile.copy(id = id) else it })
+    }
 
     /** 설정 화면의 체크: 해제하면 빼고, 체크하면 담는다. 단일은 고른 보기로 바꾸고, 탭·섹션은 상한을 넘거나 이미 담았으면 null이다. */
     fun toggle(viewId: String, on: Boolean): WidgetLayout? = when {
@@ -114,6 +121,7 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
             val tiles = (root["tiles"] as? JsonArray).orEmpty()
                 .mapNotNull { runCatching { json.decodeFromJsonElement(AggTile.serializer(), it) }.getOrNull()?.normalized() }
                 .distinctBy { it.id }
+                .let { all -> all.firstOrNull { it.kind == TileKind.DONUT }.let { donut -> all.filter { it.kind != TileKind.DONUT || it.id == donut?.id } } }
                 .take(TILE_LIMIT)
             val layout = WidgetLayout(raw.mode, emptyList(), tiles)
             return layout.copy(items = items.take(raw.mode.limit - layout.stripSlots))

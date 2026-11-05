@@ -6,6 +6,7 @@ import com.ysdoing.notioncal.core.data.view.FormField
 import com.ysdoing.notioncal.core.data.view.InputForm
 import com.ysdoing.notioncal.core.data.view.InputForms
 import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.TileKind
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
@@ -170,10 +171,26 @@ class RecipesTest {
         val config = Recipes.build(Recipe.LEDGER, picks, listOf(ledger))!!
         val layout = layoutOf(config)
         assertEquals(LayoutMode.SECTIONS, layout.mode)
-        val tile = layout.tiles.single()
+        val tile = layout.tiles.first()
         assertEquals(listOf(AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH, 500000.0), listOf(tile.fn, tile.propId, tile.dateProp, tile.period, tile.goal))
         assertEquals(InputForm(listOf(FormField("n"), FormField("k")), dateToday = true), InputForms.get(config.formJson, "led"))
         assertTrue(layout.presetsApply) // 섹션에 보기 하나라 프리셋 줄이 보인다
+    }
+
+    @Test
+    fun ledgerWithACategoryAlsoBuildsAThisMonthDonutTileByThatCategory() {
+        val picks = RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k")
+        val tiles = layoutOf(Recipes.build(Recipe.LEDGER, picks, listOf(ledger))!!).tiles
+        assertEquals(2, tiles.size)
+        val donut = tiles.last()
+        assertEquals(listOf(TileKind.DONUT, "k", AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH), listOf(donut.kind, donut.groupProp, donut.fn, donut.propId, donut.dateProp, donut.period))
+        assertEquals(TileKind.AGG, tiles.first().kind)
+    }
+
+    @Test
+    fun ledgerWithoutACategoryHasNoDonutTile() {
+        val tiles = layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "n"), listOf(ledger))!!).tiles
+        assertEquals(listOf(TileKind.AGG), tiles.map { it.kind })
     }
 
     @Test

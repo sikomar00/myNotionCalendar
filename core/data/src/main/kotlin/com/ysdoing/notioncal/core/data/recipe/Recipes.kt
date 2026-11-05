@@ -8,6 +8,7 @@ import com.ysdoing.notioncal.core.data.view.InputForm
 import com.ysdoing.notioncal.core.data.view.InputForms
 import com.ysdoing.notioncal.core.data.view.LayoutItem
 import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.TileKind
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 
@@ -115,18 +116,24 @@ object Recipes {
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
     }
 
-    /** 이번 달 합계 타일(예산이 있으면 목표로 진행 막대)과 보기. 새 항목은 금액·분류 칸과 오늘 날짜로 시작하고 프리셋 줄이 보인다(섹션에 보기 하나). */
+    /**
+     * 이번 달 합계 타일(예산이 있으면 목표로 진행 막대)과 보기, 분류를 골랐으면 이번 달 **분류별 도넛 타일**(Phase 12c RC-04)도.
+     * 새 항목은 금액·분류 칸과 오늘 날짜로 시작하고 프리셋 줄이 보인다(섹션에 보기 하나).
+     */
     private fun ledger(picks: RecipePicks, view: RecipeView): RecipeConfig? {
         val date = view.firstDate() ?: return null
         val amount = view.column(picks.amountProp, "number") ?: return null
         val category = view.columns.firstOrNull { it.id == picks.categoryProp && it.type in OPTION_TYPES }
         val tile = AggTile("", view.viewId, AggFn.SUM, amount.id, date.id, AggPeriod.THIS_MONTH, picks.budget, label = MONTH_SUM)
-        val layout = WidgetLayout(LayoutMode.SECTIONS, listOf(LayoutItem(view.viewId))).addTile(tile) ?: return null
+        val withSum = WidgetLayout(LayoutMode.SECTIONS, listOf(LayoutItem(view.viewId))).addTile(tile) ?: return null
+        val donut = category?.let { AggTile("", view.viewId, AggFn.SUM, amount.id, date.id, AggPeriod.THIS_MONTH, label = MONTH_BY_CATEGORY, kind = TileKind.DONUT, groupProp = it.id) }
+        val layout = donut?.let { withSum.addTile(it) } ?: withSum
         val form = InputForm(listOfNotNull(amount, category).map { FormField(it.id) }, dateToday = true)
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
     }
 
     private const val MONTH_SUM = "이번 달 합계"
+    private const val MONTH_BY_CATEGORY = "이번 달 분류별"
 
     /** 탭 이름: 캘린더·보드 보기는 종류 이름, 그 밖은 보기 이름을 쓰게 비운다. */
     private fun tabName(type: String): String = when (type) {

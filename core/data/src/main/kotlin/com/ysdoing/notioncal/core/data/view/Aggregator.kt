@@ -38,6 +38,9 @@ enum class AggFn(val needsProperty: Boolean, val needsDate: Boolean = false, pri
 /** Phase 12c 타일 색으로 고를 수 있는 노션 색 이름(옵션 색과 같은 계열). 빈 글자는 위젯 기본색이다. */
 val TILE_COLORS = listOf("gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red")
 
+/** 타일 종류: 값 하나([AGG])와, 분류 속성으로 묶은 도넛([DONUT], Phase 12c RC-04 '분류별 도넛'). */
+enum class TileKind { AGG, DONUT }
+
 /** 타일이 세는 기간. 날짜 속성([AggTile.dateProp])의 시작 날짜가 기준이다. 연속 달성일은 기간을 무시한다. */
 enum class AggPeriod { ALL, TODAY, THIS_WEEK, THIS_MONTH }
 
@@ -57,19 +60,29 @@ data class AggTile(
     val label: String = "",
     /** 타일 색([TILE_COLORS], 빈 글자 = 기본): 라벨 앞 점과 진행 막대 채움에 쓴다. 글자 색은 바꾸지 않아 대비가 그대로다. */
     val color: String = "",
+    /** 타일 종류. 도넛은 [groupProp](선택·상태·다중 선택 속성)으로 묶어 [fn](개수·합계)으로 센 값의 몫을 보여 준다. 옛 JSON은 값 타일이다. */
+    val kind: TileKind = TileKind.AGG,
+    val groupProp: String = "",
 ) {
-    /** 읽을 때 앞뒤 공백·뜻 없는 값을 바로잡는다. 필요한 속성이 없거나 번호·보기가 빈 타일은 null(버린다). */
+    /**
+     * 읽을 때 앞뒤 공백·뜻 없는 값을 바로잡는다. 필요한 속성이 없거나 번호·보기가 빈 타일은 null(버린다).
+     * 도넛은 묶을 속성이 있어야 하고 함수는 개수·합계뿐이며 목표·색은 없다(조각 색은 옵션 색이다).
+     */
     fun normalized(): AggTile? {
         val tileId = id.trim()
         val view = viewId.trim()
         val prop = propId.trim()
         val date = dateProp.trim()
+        val group = groupProp.trim()
+        val donut = kind == TileKind.DONUT
         if (tileId.isEmpty() || view.isEmpty() || (fn.needsProperty && prop.isEmpty()) || (fn.needsDate && date.isEmpty())) return null
+        if (donut && (group.isEmpty() || (fn != AggFn.COUNT && fn != AggFn.SUM))) return null
         return copy(
             id = tileId, viewId = view, propId = prop, dateProp = date, label = label.trim(),
             period = if (date.isEmpty()) AggPeriod.ALL else period, // 날짜 속성이 없으면 기간은 전체
-            goal = goal?.takeIf { it.isFinite() && it > 0 },
-            color = color.trim().takeIf { it in TILE_COLORS }.orEmpty(),
+            goal = goal?.takeIf { it.isFinite() && it > 0 && !donut },
+            color = color.trim().takeIf { it in TILE_COLORS && !donut }.orEmpty(),
+            groupProp = if (donut) group else "",
         )
     }
 }
@@ -99,7 +112,8 @@ object Aggregator {
         return result(value, tile, partial, prop?.numberFormat.orEmpty())
     }
 
-    private fun inPeriod(rows: List<ViewRow>, tile: AggTile, today: LocalDate, weekStart: DayOfWeek): List<ViewRow> {
+    /** 타일의 기간에 드는 행(기간이 전체거나 날짜 속성이 없으면 모두). 도넛 타일도 같은 기간 규칙을 쓴다. */
+    internal fun inPeriod(rows: List<ViewRow>, tile: AggTile, today: LocalDate, weekStart: DayOfWeek): List<ViewRow> {
         val range = when (tile.period) {
             AggPeriod.ALL -> return rows
             AggPeriod.TODAY -> today..today
