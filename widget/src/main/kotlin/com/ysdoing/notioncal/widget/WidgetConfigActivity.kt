@@ -3,7 +3,6 @@ package com.ysdoing.notioncal.widget
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import android.widget.FrameLayout
 import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -14,14 +13,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,7 +45,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceRemoteViews
@@ -369,25 +359,7 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
             }
         }
-        // 폭이 화면보다 넓으면 폭에 맞춰 줄이고, 높이는 화면의 일부까지만 보여 준다(남는 아래쪽은 자른다).
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val scale = previewScale(size, maxWidth)
-            val maxHeight = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() } * PREVIEW_MAX_SCREEN_FRACTION
-            Box(Modifier.width(size.width * scale).height(previewHeight(size, scale, maxHeight)).clipToBounds()) {
-                AndroidView(
-                    factory = { FrameLayout(it) },
-                    update = { frame ->
-                        views?.let { remote ->
-                            frame.removeAllViews()
-                            frame.addView(remote.apply(frame.context, frame))
-                        }
-                    },
-                    // requiredSize만 쓰면 부모보다 큰 내용이 가운데 기준으로 놓여 위가 잘린다: 위쪽 기준으로 놓는다.
-                    modifier = Modifier.wrapContentSize(Alignment.TopStart, unbounded = true).requiredSize(size.width, size.height)
-                        .graphicsLayer { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f) },
-                )
-            }
-        }
+        RemoteViewsFrame(views, size, PREVIEW_MAX_SCREEN_FRACTION)
     }
 
     private companion object {

@@ -57,6 +57,7 @@ import java.time.DayOfWeek
 internal class SettingsActions(
     val onAddDatabase: () -> Unit,
     val onAddView: () -> Unit,
+    val onOpenRecipes: () -> Unit,
     val onOpenDiagnostics: () -> Unit,
     val onOpenDday: () -> Unit,
     val onChooseProps: (String) -> Unit,
@@ -108,7 +109,7 @@ private fun SettingItem(item: SettingsItem, viewModel: SettingsViewModel, action
         SettingsItem.SYNC_INTERVAL -> SyncIntervalItem(settings.syncIntervalMinutes, viewModel)
         SettingsItem.DIAGNOSTICS -> DiagnosticsItem(actions)
         SettingsItem.APP_VERSION -> Text(stringResource(R.string.settings_app_version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
-        SettingsItem.WIDGET_LIST -> WidgetListItem()
+        SettingsItem.WIDGET_LIST -> WidgetListItem(actions.onOpenRecipes)
     }
 }
 
@@ -228,7 +229,7 @@ private fun DefaultDatabaseItem(defaultId: String?, viewModel: SettingsViewModel
 
 /** 설정의 '위젯' 목록: 홈 화면에 놓인 위젯을 읽어(설정에 돌아올 때마다 다시) 보여 주고 누르면 그 위젯의 설정을 연다. */
 @Composable
-private fun WidgetListItem() {
+private fun WidgetListItem(onOpenRecipes: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var widgets by remember { mutableStateOf<List<PlacedWidget>?>(null) }
@@ -237,6 +238,8 @@ private fun WidgetListItem() {
         onPauseOrDispose { job.cancel() }
     }
     WidgetListContent(widgets) { context.startActivity(AllWidgets.configIntent(context, it)) }
+    // Phase 11h RC-01: 소스·속성만 고르면 위젯이 완성돼 홈 화면에 놓이는 흐름. 읽는 동안에도 누를 수 있다.
+    OutlinedButton(onClick = onOpenRecipes) { Text(stringResource(R.string.settings_widgets_recipes)) }
 }
 
 /** [WidgetListItem]의 그림. [widgets]가 null이면 읽는 중이라 아무것도 그리지 않는다. */

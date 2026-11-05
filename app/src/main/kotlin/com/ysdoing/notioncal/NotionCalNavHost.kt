@@ -23,6 +23,7 @@ import com.ysdoing.notioncal.feature.month.SearchRoute
 import com.ysdoing.notioncal.feature.viewer.ViewerRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
 import com.ysdoing.notioncal.settings.AddViewRoute
+import com.ysdoing.notioncal.settings.RecipeRoute
 import com.ysdoing.notioncal.settings.SettingsRoute
 import com.ysdoing.notioncal.settings.settingsRoute
 import java.time.LocalDate
@@ -33,6 +34,9 @@ private object Routes {
     const val SETTINGS = "settings?tab={tab}"
     const val ADD_DATABASE = "settings/add"
     const val ADD_VIEW = "settings/add-view"
+
+    /** Phase 11h RC-01 레시피로 새 위젯 만들기. */
+    const val RECIPES = "settings/recipes"
 
     /** NS-09 다시 연결: 그 DB의 링크(ID)와 data source를 미리 채운다. */
     const val RECONNECT = "settings/add/{db}/{ds}"
@@ -141,6 +145,7 @@ fun NotionCalNavHost(
                 onBack = { nav.popBackStack() },
                 onAddDatabase = { nav.navigate(Routes.ADD_DATABASE) },
                 onAddView = { nav.navigate(Routes.ADD_VIEW) },
+                onOpenRecipes = { nav.navigate(Routes.RECIPES) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) { launchSingleTop = true } },
                 onOpenDday = { nav.navigate(Routes.DDAY) { launchSingleTop = true } },
             )
@@ -153,6 +158,9 @@ fun NotionCalNavHost(
         }
         composable(Routes.ADD_VIEW) {
             AddViewRoute(onBack = { nav.popBackStack() })
+        }
+        composable(Routes.RECIPES) {
+            RecipeRoute(onBack = { nav.popBackStack() }, onAddView = { nav.navigate(Routes.ADD_VIEW) })
         }
         composable(Routes.ADD_DATABASE) {
             AddDatabaseRoute(onDone = { nav.popBackStack() })

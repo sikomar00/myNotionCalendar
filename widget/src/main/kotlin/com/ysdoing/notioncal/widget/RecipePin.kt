@@ -20,14 +20,12 @@ import kotlinx.coroutines.launch
 object RecipePin {
     enum class Result { REQUESTED, UNSUPPORTED }
 
-    /** 이 런처가 핀 요청을 지원하는가(지원하지 않으면 화면이 '홈 화면을 길게 눌러 놓으세요'로 안내한다). */
-    fun supported(context: Context): Boolean = AppWidgetManager.getInstance(context).isRequestPinAppWidgetSupported
-
-    /** 구성을 대기 레시피로 보관하고 핀을 요청한다. 런처가 지원하지 않거나 요청을 받지 않으면 UNSUPPORTED다(그때 보관한 대기는 5분 뒤 저절로 만료된다). */
+    /** 구성을 대기 레시피로 보관하고 핀을 요청한다. 런처가 지원하지 않거나 요청을 받지 않으면 UNSUPPORTED다(보관한 대기는 5분 뒤 저절로 만료된다). */
     suspend fun request(context: Context, claims: RecipeClaims, config: RecipeConfig, now: Long = System.currentTimeMillis()): Result {
         val manager = AppWidgetManager.getInstance(context)
-        if (!manager.isRequestPinAppWidgetSupported) return Result.UNSUPPORTED
+        // 지원하지 않는 런처에서도 구성은 보관한다: 사용자가 홈 화면을 길게 눌러 노션 위젯을 놓으면 5분 안에는 그 구성으로 시작한다.
         claims.request(config, now)
+        if (!manager.isRequestPinAppWidgetSupported) return Result.UNSUPPORTED
         val provider = ComponentName(context, LayoutWidgetReceiver::class.java)
         return if (manager.requestPinAppWidget(provider, null, callback(context))) Result.REQUESTED else Result.UNSUPPORTED
     }

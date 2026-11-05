@@ -60,6 +60,7 @@ fun SettingsRoute(
     onBack: () -> Unit,
     onAddDatabase: () -> Unit,
     onAddView: () -> Unit,
+    onOpenRecipes: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenDday: () -> Unit = {},
     startTab: SettingsTab? = null,
@@ -94,7 +95,7 @@ fun SettingsRoute(
         syncProblem = syncProblem,
     )
     val actions = SettingsActions(
-        onAddDatabase = onAddDatabase, onAddView = onAddView, onOpenDiagnostics = onOpenDiagnostics, onOpenDday = onOpenDday,
+        onAddDatabase = onAddDatabase, onAddView = onAddView, onOpenRecipes = onOpenRecipes, onOpenDiagnostics = onOpenDiagnostics, onOpenDday = onOpenDday,
         onChooseProps = { choosingProps = it }, onChooseColor = { choosingColor = it }, onDelete = { pendingDelete = it },
         tokenInput = remember { mutableStateOf("") },
     )
