@@ -10,10 +10,13 @@ import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +43,7 @@ class ViewChartTest {
         ViewColumn("cat", "분류", "select", listOf(ViewChoice("o1", "식비", color = "red"), ViewChoice("o2", "교통", color = "blue"), ViewChoice("o3", "취미", color = "gray"))),
         ViewColumn("amt", "금액", "number"),
         ViewColumn("f", "수식", "formula"),
+        ViewColumn("d", "날짜", "date"),
     )
 
     private fun row(id: String, option: String?, amount: Double) =
@@ -69,6 +73,68 @@ class ViewChartTest {
         onNode(hasTestTag("chart").and(hasContentDescriptionEqualTo("개수: 식비 3, 교통 2, 취미 0, 없음 1"))).assertExists()
         listOf("식비", "교통", "취미", "없음", "3", "2", "1").forEach { onNode(hasTextEqualTo(it)).assertExists() }
         onAllNodes(hasTestTag("viewRow")).assertCountEquals(0) // 표·목록이 아니다
+    }
+
+    @Test
+    fun aDonutAtTwoByTwoHasTheTotalInTheMiddleAndNoLegend() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(compact)
+        provideComposable { ViewWidgetContent(state(chart(config("donut", sum))), systemFontScale = 1f) }
+        onNode(hasTestTag("chartDonut")).assertExists()
+        onNode(hasTextEqualTo("30,700")).assertExists() // 고리 가운데 전체 값(글자는 그림에 그리지 않는다)
+        onAllNodes(hasTextEqualTo("식비")).assertCountEquals(0) // 범례 없음
+        onNode(hasTestTag("chart").and(hasContentDescriptionEqualTo("합계 금액 비율: 식비 81%, 교통 16%, 취미 0%, 없음 2%"))).assertExists()
+    }
+
+    @Test
+    fun aDonutAtLargeSizeHasALegendWithNamesValuesAndShares() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(state(chart(config("donut", sum))), systemFontScale = 1f) }
+        onNode(hasTestTag("chartDonut")).assertExists()
+        listOf("식비", "교통", "취미", "없음", "25,000", "5,000", "700", "81%", "16%", "2%").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTextEqualTo("30,700")).assertExists() // 가운데 전체 값
+    }
+
+    @Test
+    fun aDonutWhoseLegendNotionTurnedOffIsJustTheRingWithTheTotal() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { ViewWidgetContent(state(chart(config("donut", sum, extra = ""","legend_position":"off""""))), systemFontScale = 1f) }
+        onNode(hasTestTag("chartDonut")).assertExists()
+        onAllNodes(hasTextEqualTo("식비")).assertCountEquals(0)
+    }
+
+    private val dated = listOf(
+        ViewRow("1", "", listOf("1"), typed = mapOf("d" to JsonObject(mapOf("start" to JsonPrimitive("2027-01-04"))), "amt" to JsonPrimitive(10.0))),
+        ViewRow("2", "", listOf("2"), typed = mapOf("d" to JsonObject(mapOf("start" to JsonPrimitive("2027-01-06"))), "amt" to JsonPrimitive(20.0))),
+        ViewRow("3", "", listOf("3"), typed = mapOf("d" to JsonObject(mapOf("start" to JsonPrimitive("2027-01-13"))), "amt" to JsonPrimitive(50.0))),
+        ViewRow("4", "", listOf("4"), typed = mapOf("d" to JsonObject(mapOf("start" to JsonPrimitive("2027-01-20"))), "amt" to JsonPrimitive(30.0))),
+    )
+
+    private val lineConfig = """{"type":"chart","chart_type":"line","x_axis":{"type":"date","property_id":"d","group_by":"week","sort":{"type":"ascending"},"start_day_of_week":1},"y_axis":$sum}"""
+
+    @Test
+    fun aLineChartHasTheLinePictureThePeakValueAndTheFirstMiddleAndLastNames() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(chart(lineConfig, rows = dated)), systemFontScale = 1f) }
+        onNode(hasTestTag("chartLine")).assertExists()
+        onNode(hasTestTag("chartPeak")).assertExists()
+        onNode(hasTextEqualTo("50")).assertExists() // 가장 큰 값: 1/11~ 주의 50
+        listOf("1/4~", "1/11~", "1/18~").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTestTag("chart").and(hasContentDescriptionEqualTo("합계 금액: 1/4~ 30, 1/11~ 50, 1/18~ 30"))).assertExists()
+    }
+
+    @Test
+    fun aLineChartAtTwoByTwoShrinksToTheOverallValue() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(compact)
+        provideComposable { ViewWidgetContent(state(chart(lineConfig, rows = dated)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("chartLine")).assertCountEquals(0)
+        onNode(hasTextEqualTo("110")).assertExists()
+        // 보이는 값(전체 110)과 읽는 문장이 같다: 첫 점(1/4~ 30)만 읽지 않는다
+        onNode(hasTestTag("chart").and(hasContentDescriptionEqualTo("합계 금액 110"))).assertExists()
     }
 
     @Test
@@ -168,6 +234,30 @@ class ViewChartTest {
         onAllNodes(hasTestTag("chart")).assertCountEquals(0)
         onAllNodes(hasTestTag("chartNote")).assertCountEquals(0) // 설정이 아니라 높이가 모자란 것이라 안내는 없다
         onAllNodes(hasTestTag("viewRow")).assertCountEquals(3)
+    }
+
+    private fun layoutState(mode: LayoutMode, vararg boards: ViewBoard): LayoutWidgetState {
+        val layout = boards.fold(WidgetLayout(mode)) { l, b -> l.add(b.viewId) ?: l }
+        return LayoutWidgetState(WidgetConfig(1), layout, boards.associateBy { it.viewId }, now)
+    }
+
+    @Test
+    fun aChartViewWorksInATabAndInSections() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { LayoutWidgetContent(layoutState(LayoutMode.TABS, chart(config("column"))), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("chartBar")).assertCountEquals(4)
+    }
+
+    @Test
+    fun twoChartViewsStackAsSectionsAndEachDrawsItsChart() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        val first = chart(config("column"))
+        val second = chart(config("bar", sum)).copy(viewId = "v2", name = "합계")
+        provideComposable { LayoutWidgetContent(layoutState(LayoutMode.SECTIONS, first, second), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("chart")).assertCountEquals(2)
+        onAllNodes(hasTestTag("chartBar")).assertCountEquals(8)
     }
 
     @Test

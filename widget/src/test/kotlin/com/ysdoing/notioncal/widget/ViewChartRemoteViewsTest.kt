@@ -66,6 +66,11 @@ class ViewChartRemoteViewsTest {
     // 분류 12개 × 행 100개: 점이 가장 많은 경우('기타'로 합친다).
     private val denseRows = (0 until 100).map { i -> row("d$i", i % names.size, 1000.0 * (1 + i % 17), 1 + i % 28) }
 
+    // 예시 일별 지출: 한 달 14일치
+    private val dailyRows = (0 until 14).map { i -> row("l$i", i % 6, 8000.0 + (i * 7919) % 41000, 1 + i * 2) }
+
+    private val lineConfig = """{"type":"chart","chart_type":"line","x_axis":{"type":"date","property_id":"d","group_by":"day","sort":{"type":"ascending"}},"y_axis":{"aggregator":"sum","property_id":"amt"}}"""
+
     private fun chartConfig(type: String, y: String = """{"aggregator":"sum","property_id":"amt"}""") =
         if (type == "number") """{"type":"chart","chart_type":"number","value":$y}"""
         else """{"type":"chart","chart_type":"$type","x_axis":{"type":"select","property_id":"cat","sort":{"type":"manual"}},"y_axis":$y}"""
@@ -104,14 +109,16 @@ class ViewChartRemoteViewsTest {
 
     @Test
     fun denseChartsStayFarBelowTheBinderLimit() = runTest(timeout = 5.minutes) {
-        for (size in listOf(large, full)) for (type in listOf("column", "donut")) {
+        for (size in listOf(large, full)) for (type in listOf("column", "donut", "line")) {
             val dense = state(board(denseRows, chartConfig(type)))
             val parcel = android.os.Parcel.obtain()
             GlanceRemoteViews().compose(context, size) { ViewWidgetContent(dense) }.remoteViews.writeToParcel(parcel, 0)
             val bytes = parcel.dataSize()
             parcel.recycle()
             println("VIEWCHART_PARCEL $type ${size.width}x${size.height} = $bytes bytes")
-            assertTrue("$type $size RemoteViews $bytes bytes", bytes < 400_000)
+            // 막대는 비트맵이 없어 작다. 도넛·꺾은선은 그림 한 장(예산 한도 이하)이 더 든다.
+            val limit = if (type == "column") 400_000L else 400_000L + ChartBudget.MAX_PICTURE_BYTES
+            assertTrue("$type $size RemoteViews $bytes bytes", bytes < limit)
         }
     }
 
@@ -128,6 +135,27 @@ class ViewChartRemoteViewsTest {
     @Test
     fun screenshot4x4Rows() = runTest {
         render(large, state(board(sampleRows, chartConfig("bar")))).captureRoboImage("src/test/screenshots/viewchart_4x4_rows.png")
+    }
+
+    @Test
+    fun screenshot2x2Donut() = runTest {
+        render(compact, state(board(sampleRows, chartConfig("donut")))).captureRoboImage("src/test/screenshots/viewchart_2x2_donut.png")
+    }
+
+    @Test
+    fun screenshot4x4DonutWithLegend() = runTest {
+        render(large, state(board(sampleRows, chartConfig("donut")))).captureRoboImage("src/test/screenshots/viewchart_4x4_donut.png")
+    }
+
+    @Test
+    fun screenshot4x2Line() = runTest {
+        render(wide, state(board(dailyRows, lineConfig))).captureRoboImage("src/test/screenshots/viewchart_4x2_line.png")
+    }
+
+    @Test
+    fun screenshot4x4LineDark() = runTest {
+        render(large, state(board(dailyRows, lineConfig), WidgetConfig(1, theme = WidgetTheme.DARK, opacity = 100, viewId = "v1")))
+            .captureRoboImage("src/test/screenshots/viewchart_4x4_line_dark.png")
     }
 
     @Test

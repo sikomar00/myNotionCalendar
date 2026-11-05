@@ -65,8 +65,7 @@ class ChartComputeTest {
             listOf(Triple("식비", 3.0, "3"), Triple("교통", 2.0, "2"), Triple("취미", 0.0, "0"), Triple("의료", 0.0, "0"), Triple("교육", 0.0, "0"), Triple("없음", 1.0, "1")),
             result.table(),
         )
-        assertEquals(listOf("개수", 6.0, "6"), listOf(result.valueLabel, result.total, result.totalText))
-        assertEquals(listOf(3, 2, 0, 0, 0, 1), result.points.map { it.rows })
+        assertEquals(listOf("개수", "6"), listOf(result.valueLabel, result.totalText))
     }
 
     @Test
@@ -81,7 +80,7 @@ class ChartComputeTest {
     fun sumsAreFormattedLikeAggregationTiles() {
         val result = ChartCompute.compute(board(expenses), spec(ChartType.BAR, byCategory, ChartValue(AggFn.SUM, "amt"), hideEmpty = true))
         assertEquals(listOf(Triple("식비", 25000.0, "25,000"), Triple("교통", 5000.0, "5,000"), Triple("없음", 700.0, "700")), result.table())
-        assertEquals(listOf("합계 금액", 30700.0, "30,700"), listOf(result.valueLabel, result.total, result.totalText))
+        assertEquals(listOf("합계 금액", "30,700"), listOf(result.valueLabel, result.totalText))
     }
 
     @Test
@@ -134,7 +133,7 @@ class ChartComputeTest {
         )
         val result = ChartCompute.compute(board(rows), spec(ChartType.BAR, ChartGroup("tg", GroupKind.MULTI_OPTION), hideEmpty = true))
         assertEquals(listOf(Triple("식비", 2.0, "2"), Triple("교통", 1.0, "1"), Triple("없음", 2.0, "2")), result.table()) // 비었거나 지워진 옵션은 없음
-        assertEquals(4.0, result.total) // 전체는 행 수(겹치지 않는다)
+        assertEquals("4", result.totalText) // 전체는 행 수(겹치지 않는다)
     }
 
     @Test
@@ -175,7 +174,7 @@ class ChartComputeTest {
     )
 
     private fun dates(bucket: DateBucket, monday: Boolean = false, sort: ChartSort = ChartSort.MANUAL, fn: AggFn = AggFn.AVG) =
-        ChartCompute.compute(board(dated), spec(ChartType.LINE, ChartGroup("d", GroupKind.DATE, bucket, weekStartsMonday = monday), ChartValue(fn, "amt"), sort))
+        ChartCompute.compute(board(dated), spec(ChartType.COLUMN, ChartGroup("d", GroupKind.DATE, bucket, weekStartsMonday = monday), ChartValue(fn, "amt"), sort)) // 막대는 빈 날짜를 채우지 않는다
 
     @Test
     fun weeklyBucketsStartOnTheConfiguredWeekdayAndAreInDateOrderWithNoneLast() {
@@ -203,10 +202,63 @@ class ChartComputeTest {
     // --- 숫자 차트·한도·부분 값
 
     @Test
+    fun aLineChartFillsTheDatesBetweenBucketsSoTheSpacingFollowsTime() {
+        // 월요일 시작 주: 1/4에 10, 1/25에 40이 있고 사이의 1/11·1/18 주는 행이 없다
+        val rows = listOf(
+            row("1", "d" to day("2027-01-04"), "amt" to JsonPrimitive(10.0)), row("2", "d" to day("2027-01-25"), "amt" to JsonPrimitive(40.0)),
+        )
+        val group = ChartGroup("d", GroupKind.DATE, DateBucket.WEEK, weekStartsMonday = true)
+        val line = ChartCompute.compute(board(rows), spec(ChartType.LINE, group, ChartValue(AggFn.SUM, "amt")))
+        assertEquals(listOf("1/4~" to 10.0, "1/11~" to 0.0, "1/18~" to 0.0, "1/25~" to 40.0), line.points.map { it.label to it.value })
+        // 막대는 채우지 않는다(노션이 빈 날짜를 보여 주는지 실측 전이고, 점이 많아진다)
+        val bars = ChartCompute.compute(board(rows), spec(ChartType.COLUMN, group, ChartValue(AggFn.SUM, "amt")))
+        assertEquals(listOf("1/4~", "1/25~"), bars.points.map { it.label })
+        // 빈 그룹 숨기기를 켜면 선도 채우지 않는다
+        assertEquals(listOf("1/4~", "1/25~"), ChartCompute.compute(board(rows), spec(ChartType.LINE, group, ChartValue(AggFn.SUM, "amt"), hideEmpty = true)).points.map { it.label })
+    }
+
+    @Test
+    fun monthsAndYearsAreFilledToo() {
+        val rows = listOf(row("1", "d" to day("2026-11-05")), row("2", "d" to day("2027-02-01")))
+        fun labels(bucket: DateBucket) = ChartCompute.compute(board(rows), spec(ChartType.LINE, ChartGroup("d", GroupKind.DATE, bucket))).points.map { it.label }
+        assertEquals(listOf("2026.11", "2026.12", "2027.01", "2027.02"), labels(DateBucket.MONTH))
+        assertEquals(listOf("2026", "2027"), labels(DateBucket.YEAR))
+        assertEquals(listOf("11/5", "11/6"), ChartCompute.compute(board(listOf(row("1", "d" to day("2026-11-05")), row("2", "d" to day("2026-11-06")))), spec(ChartType.LINE, ChartGroup("d", GroupKind.DATE, DateBucket.DAY))).points.map { it.label })
+    }
+
+    @Test
+    fun aRangeTooWideToFillKeepsOnlyTheBucketsWithRows() {
+        val rows = listOf(row("1", "d" to day("2020-01-01")), row("2", "d" to day("2027-01-01")))
+        val points = ChartCompute.compute(board(rows), spec(ChartType.LINE, ChartGroup("d", GroupKind.DATE, DateBucket.DAY))).points
+        assertEquals(listOf("1/1", "1/1"), points.map { it.label }) // 일 단위로 2,500일은 채우지 않는다
+    }
+
+    @Test
+    fun aGroupWithNothingToAggregateIsFlaggedMissingNotJustZero() {
+        val average = ChartCompute.compute(board(expenses), spec(ChartType.LINE, byCategory, ChartValue(AggFn.AVG, "amt")))
+        assertEquals(listOf(false, false, true, true, true, false), average.points.map { it.missing }) // 취미·의료·교육은 값이 없다
+        // 합계·개수는 비어 있어도 0이라는 값이다
+        assertTrue(ChartCompute.compute(board(expenses), spec(ChartType.LINE, byCategory)).points.none { it.missing })
+    }
+
+    @Test
+    fun sharesAreOnlyForCountAndSumAndIgnoreNegativeValues() {
+        val count = ChartCompute.compute(board(expenses), spec(ChartType.DONUT, byCategory, hideEmpty = true))
+        assertEquals(listOf(50, 33, 17), count.points.map { count.sharePercent(it) })
+        val avg = ChartCompute.compute(board(expenses), spec(ChartType.DONUT, byCategory, ChartValue(AggFn.AVG, "amt"), hideEmpty = true))
+        assertEquals(listOf<Int?>(null, null, null), avg.points.map { avg.sharePercent(it) }) // 평균의 합은 몫이 아니다
+        val negatives = ChartCompute.compute(
+            board(listOf(row("1", "cat" to JsonPrimitive("o1"), "amt" to JsonPrimitive(-5.0)), row("2", "cat" to JsonPrimitive("o2"), "amt" to JsonPrimitive(10.0)))),
+            spec(ChartType.DONUT, byCategory, ChartValue(AggFn.SUM, "amt"), hideEmpty = true),
+        )
+        assertEquals(listOf(0, 100), negatives.points.map { negatives.sharePercent(it) }) // 음수는 0으로: 도는 고리와 같다
+    }
+
+    @Test
     fun aNumberChartIsOneValueOverAllRows() {
         val result = ChartCompute.compute(board(expenses), spec(ChartType.NUMBER, null, ChartValue(AggFn.SUM, "amt")))
         assertEquals(listOf(Triple("합계 금액", 30700.0, "30,700")), result.table())
-        assertEquals(listOf(30700.0, "30,700", 6), listOf(result.total, result.totalText, result.rowCount))
+        assertEquals("30,700", result.totalText)
     }
 
     @Test
@@ -218,13 +270,13 @@ class ChartComputeTest {
         )
         val sum = ChartCompute.compute(board(rows), spec(ChartType.DONUT, byCategory, ChartValue(AggFn.SUM, "amt"), ChartSort.Y_DESC), maxPoints = 3)
         assertEquals(listOf(Triple("식비", 100.0, "100"), Triple("교통", 50.0, "50"), Triple("기타", 60.0, "60")), sum.table())
-        assertTrue(sum.hasOther)
+        assertEquals(ChartCompute.OTHER_LABEL, sum.points.last().label)
         assertEquals(ChartPalette.GRAY, sum.points.last().colorHex)
         // 평균은 점들의 평균이 아니라 합친 행들의 평균이다: 의료 30·교육 20·취미 10 → 20
         val avg = ChartCompute.compute(board(rows), spec(ChartType.DONUT, byCategory, ChartValue(AggFn.AVG, "amt"), ChartSort.Y_DESC), maxPoints = 3)
         assertEquals(20.0, avg.points.last().value, 0.0001)
         // 한도 안이면 그대로
-        assertFalse(ChartCompute.compute(board(rows), spec(ChartType.DONUT, byCategory), maxPoints = 5).hasOther)
+        assertFalse(ChartCompute.compute(board(rows), spec(ChartType.DONUT, byCategory), maxPoints = 5).points.any { it.label == ChartCompute.OTHER_LABEL })
     }
 
     @Test

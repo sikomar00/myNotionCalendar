@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.core.data.view.chart
 
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggResult
 import com.ysdoing.notioncal.core.data.view.AggTile
@@ -16,26 +17,39 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAdjusters
-
-/** 막대·조각·선의 점 하나. [value]는 그리는 크기, [text]는 값을 읽는 글자(집계 타일과 같은 서식), [rows]는 이 점에 든 행 수다. */
-data class ChartPoint(val key: String, val label: String, val value: Double, val text: String, val colorHex: String, val rows: Int)
+import kotlin.math.roundToInt
 
 /**
- * 차트 하나의 계산 결과. [valueLabel]은 무엇을 센 값인지('개수', '합계 금액'), [total]은 모든 행을 한 번에 집계한 값(number 차트의 값이자
- * 막대 합계 대신 쓰는 전체 값)이다. [partial]은 보기 행을 다 받지 못한(100행 상한) 부분 값이라는 뜻이다. [hasOther]면 마지막 점이 남은 것을 합친 '기타'다.
+ * 막대·조각·선의 점 하나. [value]는 그리는 크기, [text]는 값을 읽는 글자(집계 타일과 같은 서식)다.
+ * [missing]은 그 묶음에 집계할 값이 없다는 뜻이다(평균·최소·최대인데 숫자가 하나도 없음): 값은 0으로 두되 꺾은선은 그 점을 건너뛴다.
+ */
+data class ChartPoint(val label: String, val value: Double, val text: String, val colorHex: String, val missing: Boolean = false)
+
+/**
+ * 차트 하나의 계산 결과. [valueLabel]은 무엇을 센 값인지('개수', '합계 금액'), [totalText]는 모든 행을 한 번에 집계한 값(number 차트의 값)이다.
+ * [partial]은 보기 행을 다 받지 못한(100행 상한) 부분 값이라는 뜻이다. 점이 한도를 넘으면 마지막 점이 남은 것을 합친 '기타'([ChartCompute.OTHER_LABEL])다.
  */
 data class ChartResult(
     val spec: ChartSpec,
     val points: List<ChartPoint>,
     val valueLabel: String,
-    val total: Double?,
     val totalText: String,
     val partial: Boolean,
-    val rowCount: Int,
-    val hasOther: Boolean = false,
 )
+
+/**
+ * [point]의 비율(%): 점들의 값 합에 대한 몫이다. 개수·합계일 때만 뜻이 있고(평균·최소·최대의 합은 몫이 아니다) 음수는 0으로 보며,
+ * 합이 0이면 null이다. 도넛 낭독과 범례가 같은 값을 쓰도록 한 곳에 둔다.
+ */
+fun ChartResult.sharePercent(point: ChartPoint): Int? {
+    if (spec.value.fn != AggFn.COUNT && spec.value.fn != AggFn.SUM) return null
+    val sum = points.sumOf { it.value.coerceAtLeast(0.0) }
+    return if (sum > 0) (point.value.coerceAtLeast(0.0) / sum * PERCENT).roundToInt() else null
+}
+
+private const val PERCENT = 100
 
 /** 차트 색 순환. 노션 색 이름을 앱의 노션 팔레트 값으로 바꿔 쓴다(옵션 색과 같은 계열). */
 object ChartPalette {
@@ -56,6 +70,9 @@ object ChartCompute {
     private const val UNCHECKED_LABEL = "체크 안 함"
     private val EPOCH = LocalDate.of(2000, 1, 1)
 
+    /** 꺾은선에서 빈 날짜 묶음을 채울 때의 점 수 상한. 그보다 넓은 범위는 채우지 않는다(점이 너무 많아진다). */
+    private const val MAX_FILL = 120
+
     /** 묶음 하나. [colorHex]가 있으면 옵션·체크 상태처럼 뜻이 있는 색이다. */
     private class Bucket(val key: String, val label: String, val colorHex: String?, val rows: List<ViewRow>, val none: Boolean = false)
 
@@ -68,12 +85,13 @@ object ChartCompute {
         val partial = !board.rowsComplete
         val group = spec.group
         if (group == null) {
-            val point = ChartPoint("value", label, total.number ?: 0.0, total.text, theme(spec) ?: ChartPalette.at(0), board.rows.size)
-            return ChartResult(spec, listOf(point), label, total.number, total.text, partial, board.rows.size)
+            val point = ChartPoint(label, total.number ?: 0.0, total.text, theme(spec) ?: ChartPalette.at(0), missing = total.number == null)
+            return ChartResult(spec, listOf(point), label, total.text, partial)
         }
-        val column = board.columnInfo.firstOrNull { it.id == group.propId }
-            ?: return ChartResult(spec, emptyList(), label, total.number, total.text, partial, board.rows.size)
-        val scored = sorted(buckets(board.rows, column, group).filter { it.rows.isNotEmpty() || !spec.hideEmpty }.map { Scored(it, aggregate(board, it.rows, spec.value)) }, spec.sort, group.kind)
+        val column = board.columnInfo.firstOrNull { it.id == group.propId } ?: return ChartResult(spec, emptyList(), label, total.text, partial)
+        val fill = spec.type == ChartType.LINE && !spec.hideEmpty
+        val buckets = buckets(board.rows, column, group, fill).filter { it.rows.isNotEmpty() || !spec.hideEmpty }
+        val scored = sorted(buckets.map { Scored(it, aggregate(board, it.rows, spec.value)) }, spec.sort, group.kind)
         val limit = maxPoints.coerceAtLeast(1)
         val merge = scored.size > limit && limit >= 2
         val shown = if (merge) scored.take(limit - 1) else scored.take(limit)
@@ -81,13 +99,16 @@ object ChartCompute {
         if (merge) {
             val rest = scored.drop(limit - 1).flatMap { it.bucket.rows }.distinctBy { it.pageId }
             val result = aggregate(board, rest, spec.value)
-            points += ChartPoint("", OTHER_LABEL, result.number ?: 0.0, result.text, ChartPalette.GRAY, rest.size)
+            points += ChartPoint(OTHER_LABEL, result.number ?: 0.0, result.text, ChartPalette.GRAY, missing = result.number == null)
         }
-        return ChartResult(spec, points, label, total.number, total.text, partial, board.rows.size, hasOther = merge)
+        return ChartResult(spec, points, label, total.text, partial)
     }
 
+    /** 한 가지 색으로 그리는 차트(꺾은선)의 색: `color_theme`의 색, 없거나 auto·colorful이면 팔레트 첫 색. */
+    fun accent(spec: ChartSpec): String = theme(spec) ?: ChartPalette.at(0)
+
     private fun point(scored: Scored, color: String) =
-        ChartPoint(scored.bucket.key, scored.bucket.label, scored.result.number ?: 0.0, scored.result.text, color, scored.bucket.rows.size)
+        ChartPoint(scored.bucket.label, scored.result.number ?: 0.0, scored.result.text, color, missing = scored.result.number == null)
 
     private fun aggregate(board: ViewBoard, rows: List<ViewRow>, value: ChartValue): AggResult =
         Aggregator.compute(board.copy(rows = rows), AggTile("chart", board.viewId, value.fn, value.propId), EPOCH, DayOfWeek.SUNDAY)
@@ -105,10 +126,10 @@ object ChartCompute {
 
     // --- 묶음
 
-    private fun buckets(rows: List<ViewRow>, column: ViewColumn, group: ChartGroup): List<Bucket> = when (group.kind) {
+    private fun buckets(rows: List<ViewRow>, column: ViewColumn, group: ChartGroup, fillDates: Boolean): List<Bucket> = when (group.kind) {
         GroupKind.OPTION, GroupKind.MULTI_OPTION -> if (group.byStatusGroup) statusGroupBuckets(rows, column) else optionBuckets(rows, column)
         GroupKind.CHECKBOX -> checkboxBuckets(rows, column)
-        GroupKind.DATE -> dateBuckets(rows, column, group)
+        GroupKind.DATE -> dateBuckets(rows, column, group, fillDates)
         GroupKind.TEXT -> textBuckets(rows, column)
     }
 
@@ -153,18 +174,40 @@ object ChartCompute {
         )
     }
 
-    private fun dateBuckets(rows: List<ViewRow>, column: ViewColumn, group: ChartGroup): List<Bucket> {
+    /** [fill]이면(꺾은선) 행이 없는 중간 날짜 묶음도 빈 묶음으로 채워 x 간격이 날짜 간격을 따른다. */
+    private fun dateBuckets(rows: List<ViewRow>, column: ViewColumn, group: ChartGroup, fill: Boolean): List<Bucket> {
         val byKey = sortedMapOf<String, MutableList<ViewRow>>()
         val none = mutableListOf<ViewRow>()
         rows.forEach { row ->
             val date = row.typed[column.id].startDate()
             if (date == null) none += row else byKey.getOrPut(dateKey(date, group)) { mutableListOf() } += row
         }
-        return byKey.map { (key, rs) -> Bucket(key, dateLabel(key, group), null, rs) } + noneBucket(none)
+        val keys = if (fill) withGaps(byKey.keys.toList(), group) else byKey.keys.toList()
+        return keys.map { key -> Bucket(key, dateLabel(key, group), null, byKey[key].orEmpty()) } + noneBucket(none)
+    }
+
+    private fun withGaps(keys: List<String>, group: ChartGroup): List<String> {
+        val bucket = group.dateBucket
+        if (keys.size < 2 || bucket == null) return keys
+        val filled = ArrayList<String>()
+        var key = keys.first()
+        while (key <= keys.last()) { // 같은 단위의 키는 글자 순서가 날짜 순서다
+            filled += key
+            if (filled.size > MAX_FILL) return keys
+            key = nextKey(key, bucket)
+        }
+        return filled
+    }
+
+    private fun nextKey(key: String, bucket: DateBucket): String = when (bucket) {
+        DateBucket.DAY -> LocalDate.parse(key).plusDays(1).toString()
+        DateBucket.WEEK -> LocalDate.parse(key).plusWeeks(1).toString()
+        DateBucket.MONTH -> YearMonth.parse(key).plusMonths(1).toString()
+        DateBucket.YEAR -> (key.toInt() + 1).toString()
     }
 
     private fun dateKey(date: LocalDate, group: ChartGroup): String = when (group.dateBucket) {
-        DateBucket.WEEK -> date.with(TemporalAdjusters.previousOrSame(if (group.weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY)).toString()
+        DateBucket.WEEK -> HabitStats.weekStartOf(date, if (group.weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY).toString()
         DateBucket.MONTH -> date.toString().take(MONTH_KEY)
         DateBucket.YEAR -> date.toString().take(YEAR_KEY)
         else -> date.toString()
