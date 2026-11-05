@@ -41,7 +41,7 @@ internal fun propertyChoices(fn: AggFn, columns: List<ViewColumn>): List<ViewCol
 /** 기간·연속 달성일의 기준이 될 수 있는 날짜 속성. */
 internal fun dateChoices(columns: List<ViewColumn>): List<ViewColumn> = columns.filter { it.type == "date" }
 
-/** 타일 추가 양식에 입력 중인 값. [goalText]는 글자 그대로(쉼표 허용), 잘못된 목표는 '목표 없음'으로 본다. */
+/** 타일 양식에 입력 중인 값. [goalText]는 글자 그대로(쉼표 허용), 잘못된 목표는 '목표 없음'으로 본다. [editingId]가 있으면 그 타일을 고치는 중이다(없으면 새 타일). */
 internal data class TileDraft(
     val viewId: String = "",
     val fn: AggFn = AggFn.COUNT,
@@ -50,12 +50,22 @@ internal data class TileDraft(
     val period: AggPeriod = AggPeriod.ALL,
     val goalText: String = "",
     val label: String = "",
+    val color: String = "",
+    val editingId: String = "",
 ) {
     /** 목표를 적었는데 읽을 수 없거나 0 이하다(비워 두면 목표 없음이라 문제 없다). */
     val goalInvalid: Boolean get() = goalText.isNotBlank() && parseGoal(goalText)?.takeIf { it > 0 } == null
 
     /** 지금 값으로 만든 타일. 필요한 것(보기·속성·연속 달성일의 날짜 속성)이 없거나 목표가 잘못이면 null이라 '추가'를 막는다. 번호는 담을 때 붙는다. */
-    fun toTile(): AggTile? = if (goalInvalid) null else AggTile("t", viewId, fn, propId, dateProp, period, parseGoal(goalText), label).normalized()
+    fun toTile(): AggTile? = if (goalInvalid) null else AggTile(editingId.ifEmpty { "t" }, viewId, fn, propId, dateProp, period, parseGoal(goalText), label, color).normalized()
+
+    companion object {
+        /** 만들어 둔 [tile]을 고치는 양식으로. 목표는 글자로 되돌린다(정수면 소수점 없이). */
+        fun from(tile: AggTile): TileDraft = TileDraft(
+            tile.viewId, tile.fn, tile.propId, tile.dateProp, tile.period,
+            goalText = tile.goal?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty(), label = tile.label, color = tile.color, editingId = tile.id,
+        )
+    }
 }
 
 private val THOUSANDS = Regex("""\d{1,3}(,\d{3})+(\.\d+)?""")
@@ -77,6 +87,12 @@ internal fun TileDraft.withFn(fn: AggFn, columns: List<ViewColumn>): TileDraft {
 /** 보기를 고르면 그 보기의 열로 다시 시작한다(개수부터). */
 internal fun TileDraft.withView(viewId: String, columns: List<ViewColumn>): TileDraft = TileDraft(viewId = viewId).withFn(AggFn.COUNT, columns)
 
+private val COLOR_CHOICES = listOf(
+    "" to R.string.layout_tile_color_default, "gray" to R.string.layout_tile_color_gray, "brown" to R.string.layout_tile_color_brown, "orange" to R.string.layout_tile_color_orange,
+    "yellow" to R.string.layout_tile_color_yellow, "green" to R.string.layout_tile_color_green, "blue" to R.string.layout_tile_color_blue, "purple" to R.string.layout_tile_color_purple,
+    "pink" to R.string.layout_tile_color_pink, "red" to R.string.layout_tile_color_red,
+)
+
 private val PERIOD_CHOICES = listOf(
     AggPeriod.ALL to R.string.layout_tile_period_all,
     AggPeriod.TODAY to R.string.layout_tile_period_today,
@@ -85,7 +101,7 @@ private val PERIOD_CHOICES = listOf(
 )
 
 /**
- * Phase 11e AG-01·02 집계 타일 구역(섹션 배치에서만): 만든 타일 목록과 삭제, 타일 추가 양식. 수정은 지우고 다시 추가한다.
+ * Phase 11e AG-01·02 집계 타일 구역(섹션 배치에서만): 만든 타일 목록과 수정·삭제, 타일 추가 양식(수정도 같은 양식, Phase 12c).
  * 속성 목록은 등록한 보기의 열 정보에서 오고, 규칙(함수에 맞는 속성·상한)은 [AggFn.accepts]·[WidgetLayout.addTile]이 맡는다.
  */
 @Composable
@@ -99,8 +115,10 @@ internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout,
         val view = views.firstOrNull { it.viewId == tile.viewId }
         val name = tileLabel(context, tile, view?.name, columnsOf[tile.viewId].orEmpty())
         val remove = stringResource(R.string.layout_tile_delete_description, name)
+        val edit = stringResource(R.string.layout_tile_edit_description, name)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.layout_tile_summary, name, view?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)), Modifier.weight(1f))
+            TextButton(onClick = { draft = TileDraft.from(tile) }, modifier = Modifier.semantics { contentDescription = edit }) { Text(stringResource(R.string.layout_tile_edit)) }
             TextButton(onClick = { set(layout.removeTile(tile.id)) }, modifier = Modifier.semantics { contentDescription = remove }) {
                 Text(stringResource(R.string.layout_config_remove), color = MaterialTheme.colorScheme.error)
             }
@@ -109,7 +127,7 @@ internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout,
     val editing = draft
     if (editing != null) {
         TileForm(editing, views, columnsOf, onChange = { draft = it }) { tile ->
-            if (tile != null) layout.addTile(tile)?.let(set)
+            if (tile != null) (if (editing.editingId.isEmpty()) layout.addTile(tile) else layout.replaceTile(editing.editingId, tile)).let { it?.let(set) }
             draft = null
         }
         return
@@ -121,7 +139,7 @@ internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout,
     if (!canAdd) ConfigNote(stringResource(R.string.layout_tile_limit, WidgetLayout.TILE_LIMIT))
 }
 
-/** 추가 양식: 보기 → 함수 → 속성 → 날짜 속성·기간 → 목표값 → 이름. [onDone]은 만든 타일(취소면 null)을 받는다. */
+/** 추가·수정 양식: 보기 → 함수 → 속성 → 날짜 속성·기간 → 목표값 → 이름 → 색. [onDone]은 만든 타일(취소면 null)을 받는다. */
 @Composable
 private fun TileForm(draft: TileDraft, views: List<ViewSnapshotEntity>, columnsOf: Map<String, List<ViewColumn>>, onChange: (TileDraft) -> Unit, onDone: (AggTile?) -> Unit) {
     val columns = columnsOf[draft.viewId].orEmpty()
@@ -166,9 +184,13 @@ private fun TileForm(draft: TileDraft, views: List<ViewSnapshotEntity>, columnsO
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        ConfigSection(stringResource(R.string.layout_tile_form_color))
+        ChoiceChips(COLOR_CHOICES, draft.color) { onChange(draft.copy(color = it)) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onDone(null) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.layout_tile_cancel)) }
-            Button(onClick = { onDone(draft.toTile()) }, enabled = draft.toTile() != null, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.layout_tile_confirm)) }
+            Button(onClick = { onDone(draft.toTile()) }, enabled = draft.toTile() != null, modifier = Modifier.weight(1f)) {
+                Text(stringResource(if (draft.editingId.isEmpty()) R.string.layout_tile_confirm else R.string.layout_tile_save))
+            }
         }
     }
 }

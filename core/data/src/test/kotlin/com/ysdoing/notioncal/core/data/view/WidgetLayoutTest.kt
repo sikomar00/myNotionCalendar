@@ -18,6 +18,26 @@ class WidgetLayoutTest {
     }
 
     @Test
+    fun replacingATileKeepsItsIdAndPositionAndIgnoresAnUnknownId() {
+        val base = layout(LayoutMode.SECTIONS, "v1").addTile(AggTile("", "v1", AggFn.COUNT))!!.addTile(AggTile("", "v1", AggFn.SUM, "n"))!!
+        val replaced = base.replaceTile("t1", AggTile("zzz", "v1", AggFn.AVG, "n", color = "blue"))
+        assertEquals(listOf("t1", "t2"), replaced.tiles.map { it.id }) // 번호는 그대로
+        assertEquals(listOf(AggFn.AVG, AggFn.SUM), replaced.tiles.map { it.fn })
+        assertEquals("blue", replaced.tiles.first().color)
+        assertEquals(base, base.replaceTile("nope", AggTile("x", "v1")))
+    }
+
+    @Test
+    fun theTileColorSurvivesTheLayoutTextAndOldTextWithoutItStillReads() {
+        val withColor = layout(LayoutMode.SECTIONS, "v1").addTile(AggTile("", "v1", AggFn.COUNT, color = "red"))!!
+        assertEquals(listOf("red"), WidgetLayout.parse(WidgetLayout.encode(withColor)).tiles.map { it.color })
+        val old = """{"mode":"SECTIONS","items":[{"viewId":"v1"}],"tiles":[{"id":"t1","viewId":"v1","fn":"COUNT"}]}"""
+        assertEquals(listOf(""), WidgetLayout.parse(old).tiles.map { it.color })
+        // 팔레트 밖의 색은 읽을 때 버린다
+        assertEquals(listOf(""), WidgetLayout.parse(WidgetLayout.encode(withColor.copy(tiles = withColor.tiles.map { it.copy(color = "neon") }))).tiles.map { it.color })
+    }
+
+    @Test
     fun tabsTakeFiveSectionsFourAndASingleOne() {
         assertEquals(listOf(1, 5, 4), listOf(LayoutMode.SINGLE, LayoutMode.TABS, LayoutMode.SECTIONS).map { it.limit })
         val tabs = layout(LayoutMode.TABS, "a", "b", "c", "d", "e")

@@ -35,6 +35,9 @@ enum class AggFn(val needsProperty: Boolean, val needsDate: Boolean = false, pri
     fun accepts(column: ViewColumn): Boolean = type == null || column.type == type
 }
 
+/** Phase 12c 타일 색으로 고를 수 있는 노션 색 이름(옵션 색과 같은 계열). 빈 글자는 위젯 기본색이다. */
+val TILE_COLORS = listOf("gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red")
+
 /** 타일이 세는 기간. 날짜 속성([AggTile.dateProp])의 시작 날짜가 기준이다. 연속 달성일은 기간을 무시한다. */
 enum class AggPeriod { ALL, TODAY, THIS_WEEK, THIS_MONTH }
 
@@ -52,6 +55,8 @@ data class AggTile(
     val period: AggPeriod = AggPeriod.ALL,
     val goal: Double? = null,
     val label: String = "",
+    /** 타일 색([TILE_COLORS], 빈 글자 = 기본): 라벨 앞 점과 진행 막대 채움에 쓴다. 글자 색은 바꾸지 않아 대비가 그대로다. */
+    val color: String = "",
 ) {
     /** 읽을 때 앞뒤 공백·뜻 없는 값을 바로잡는다. 필요한 속성이 없거나 번호·보기가 빈 타일은 null(버린다). */
     fun normalized(): AggTile? {
@@ -64,6 +69,7 @@ data class AggTile(
             id = tileId, viewId = view, propId = prop, dateProp = date, label = label.trim(),
             period = if (date.isEmpty()) AggPeriod.ALL else period, // 날짜 속성이 없으면 기간은 전체
             goal = goal?.takeIf { it.isFinite() && it > 0 },
+            color = color.trim().takeIf { it in TILE_COLORS }.orEmpty(),
         )
     }
 }

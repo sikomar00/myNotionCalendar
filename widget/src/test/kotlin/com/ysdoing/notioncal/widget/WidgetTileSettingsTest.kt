@@ -39,6 +39,26 @@ class WidgetTileSettingsTest {
     }
 
     @Test
+    fun editingATileFillsTheFormFromItAndSavesItUnderTheSameId() {
+        val tile = com.ysdoing.notioncal.core.data.view.AggTile("t3", "v1", AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH, 5000.0, "식비 합계", "blue")
+        val draft = TileDraft.from(tile)
+        assertEquals(TileDraft("v1", AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH, "5000", "식비 합계", "blue", "t3"), draft)
+        assertEquals(tile, draft.toTile()) // 왕복: 번호·색·목표가 그대로
+        assertEquals("5.5", TileDraft.from(tile.copy(goal = 5.5)).goalText)
+        // 고친 값으로 저장하면 같은 번호의 새 타일이다. 새 타일 양식은 번호가 비어 '추가' 때 붙는다.
+        assertEquals("t3", draft.copy(color = "red", goalText = "").toTile()!!.id)
+        assertEquals("red", draft.copy(color = "red").toTile()!!.color)
+        assertEquals("t", TileDraft().withView("v1", columns).toTile()!!.id)
+    }
+
+    @Test
+    fun anUnknownColorIsDroppedSoOnlyTheNotionPaletteIsStored() {
+        assertEquals("", TileDraft().withView("v1", columns).copy(color = "neon").toTile()!!.color)
+        assertEquals("green", TileDraft().withView("v1", columns).copy(color = " green ").toTile()!!.color)
+        assertEquals("", TileDraft().withView("v1", columns).toTile()!!.color)
+    }
+
+    @Test
     fun pickingAViewStartsFromCountWithTheFirstDateProperty() {
         val draft = TileDraft().withView("v1", columns)
         assertEquals(TileDraft(viewId = "v1", fn = AggFn.COUNT, propId = "", dateProp = "d"), draft)

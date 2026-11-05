@@ -74,6 +74,17 @@ class LayoutTilesTest {
         return LayoutWidgetState(WidgetConfig(1, fontScale = fontScale), layout, boards, now, weekStart = DayOfWeek.MONDAY)
     }
 
+    @Test
+    fun aColoredTileGetsADotBeforeItsLabelAndAPlainOneDoesNot() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(501.dp, 581.dp))
+        provideComposable { LayoutWidgetContent(state(listOf(tile(label = "식비").copy(color = "blue"), tile(label = "교통"))), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("layoutTile")).assertCountEquals(2)
+        onAllNodes(hasTestTag("tileColor")).assertCountEquals(1)
+        onNode(hasTextEqualTo("식비")).assertExists() // 라벨 글자는 그대로 있다(색만으로 알리지 않는다)
+        onNode(hasTextEqualTo("교통")).assertExists()
+    }
+
     // --- 순수: 타일 격자
 
     @Test

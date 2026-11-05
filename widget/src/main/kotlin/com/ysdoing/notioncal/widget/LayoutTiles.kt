@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -12,6 +13,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
+import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
@@ -27,6 +29,8 @@ import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.AggResult
@@ -38,6 +42,7 @@ import kotlin.math.ceil
 internal val AGG_TILE_GAP = 4.dp
 internal val AGG_TILE_PADDING = 8.dp
 private val BAR_HEIGHT = 6.dp
+private val COLOR_DOT = 8.dp
 private val TILE_THREE_COLUMNS_MIN_WIDTH = 420.dp
 
 /** 타일 하나가 그려질 값: 타일 설정, 계산 결과, 보기([board]가 null이면 등록이 지워진 보기). */
@@ -168,6 +173,8 @@ private fun TileCard(cell: TileCell, extras: Boolean, look: LayoutLook, width: D
     val value = cell.result.text
     val note = tileNote(context, cell)
     val description = if (note.isEmpty()) context.getString(R.string.layout_tile_description, label, value) else context.getString(R.string.layout_tile_description_note, label, value, note)
+    // 타일 색(Phase 12c)은 라벨 앞 점과 진행 막대 채움에만 쓴다: 글자 색은 그대로라 대비가 바뀌지 않고, 색만으로 알리는 것도 없다(A11Y-03).
+    val accent = NotionColors.hexFor(cell.tile.color)?.let { ColorProvider(Color(NotionColors.argb(it))) }
     Column(
         GlanceModifier.width(width).height(height).tile(palette).padding(AGG_TILE_PADDING)
             .clickable(actionStartActivity(viewerIntent(context, cell.tile.viewId)))
@@ -176,11 +183,19 @@ private fun TileCard(cell: TileCell, extras: Boolean, look: LayoutLook, width: D
                 testTag = "layoutTile"
             },
     ) {
-        Text(label, style = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp), maxLines = 1)
+        val labelStyle = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp)
+        if (accent == null) {
+            Text(label, style = labelStyle, maxLines = 1)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(GlanceModifier.size(COLOR_DOT).background(accent).cornerRadius(COLOR_DOT / 2).semantics { testTag = "tileColor" }) {}
+                Text(label, modifier = GlanceModifier.padding(start = 4.dp), style = labelStyle, maxLines = 1)
+            }
+        }
         Text(value, style = TextStyle(color = palette.text, fontSize = (m.valueSp * m.spFactor).sp, fontWeight = FontWeight.Bold), maxLines = 1)
         if (extras) {
             Spacer(GlanceModifier.height(2.dp))
-            TileBar(cell.result.progress, width - AGG_TILE_PADDING * 2, palette)
+            TileBar(cell.result.progress, width - AGG_TILE_PADDING * 2, palette, accent ?: palette.accent)
             Spacer(GlanceModifier.height(2.dp))
             Text(note, style = TextStyle(color = palette.subtle, fontSize = (m.subSp * m.spFactor).sp), maxLines = 1)
         }
@@ -189,12 +204,12 @@ private fun TileCard(cell: TileCell, extras: Boolean, look: LayoutLook, width: D
 
 /** 목표 진행 막대: 칸 폭의 트랙 위에 채움. 목표가 없으면([progress]가 null) 자리만 비운다(타일 높이를 맞춘다). */
 @Composable
-private fun TileBar(progress: Float?, width: Dp, palette: WidgetPalette) {
+private fun TileBar(progress: Float?, width: Dp, palette: WidgetPalette, fill: ColorProvider) {
     if (progress == null) {
         Spacer(GlanceModifier.size(width, BAR_HEIGHT))
         return
     }
     Box(GlanceModifier.size(width, BAR_HEIGHT).background(palette.track).cornerRadius(BAR_HEIGHT / 2).semantics { testTag = "tileProgress" }) {
-        if (progress > 0f) Box(GlanceModifier.size(maxOf(width * progress, BAR_HEIGHT), BAR_HEIGHT).background(palette.accent).cornerRadius(BAR_HEIGHT / 2)) {}
+        if (progress > 0f) Box(GlanceModifier.size(maxOf(width * progress, BAR_HEIGHT), BAR_HEIGHT).background(fill).cornerRadius(BAR_HEIGHT / 2)) {}
     }
 }
