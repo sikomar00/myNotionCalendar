@@ -35,15 +35,17 @@ object AllWidgets {
 
     /** 홈 화면에 놓인 위젯 전부(위젯 ID 순). 설정 화면의 '위젯' 목록이 쓴다. Room만 읽지만 보기 이름을 읽으니 메인 스레드 밖에서 부른다. */
     suspend fun placed(context: Context): List<PlacedWidget> {
+        val manager = AppWidgetManager.getInstance(context)
+        val placedIds = RECEIVERS.associateWith { manager.getAppWidgetIds(ComponentName(context, it)) }.filterValues { it.isNotEmpty() }
+        if (placedIds.isEmpty()) return emptyList() // 놓인 위젯이 없으면 이름·DB를 읽지 않는다
         val deps = WidgetDependencies.from(context)
         val viewNames = deps.views().observeRegistered().first().associate { it.viewId to it.name }
-        val manager = AppWidgetManager.getInstance(context)
         val packages = context.packageManager
-        return RECEIVERS.flatMap { receiver ->
-            val component = ComponentName(context, receiver)
-            val label = packages.getReceiverInfo(component, 0).loadLabel(packages).toString()
-            manager.getAppWidgetIds(component).map { id -> PlacedWidget(id, label, widgetSummary(context, receiver.name, deps.widgetConfigs().get(id), viewNames)) }
-        }.sortedBy { it.appWidgetId }
+        val widgets = placedIds.flatMap { (receiver, ids) ->
+            val label = packages.getReceiverInfo(ComponentName(context, receiver), 0).loadLabel(packages).toString()
+            ids.map { id -> PlacedWidget(id, label, widgetSummary(context, receiver.name, deps.widgetConfigs().get(id), viewNames)) }
+        }
+        return numberDuplicates(widgets.sortedBy { it.appWidgetId })
     }
 
     /** 그 위젯의 설정 화면을 여는 인텐트(길게 눌러 다시 설정할 때와 같은 화면). */

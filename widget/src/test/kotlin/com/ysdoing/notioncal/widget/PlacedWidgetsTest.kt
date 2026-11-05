@@ -66,4 +66,12 @@ class PlacedWidgetsTest {
         assertEquals(WidgetConfigActivity::class.java.name, intent.component?.className)
         assertEquals(42, intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1))
     }
+
+    @Test
+    fun widgetsOfTheSameKindGetANumberSoTheRowsCanBeTold() {
+        val widgets = listOf(PlacedWidget(3, "디데이 목록", ""), PlacedWidget(5, "월간 달력", ""), PlacedWidget(8, "디데이 목록", ""))
+        assertEquals(listOf("디데이 목록 1", "월간 달력", "디데이 목록 2"), numberDuplicates(widgets).map { it.kindLabel })
+        assertEquals(listOf(3, 5, 8), numberDuplicates(widgets).map { it.appWidgetId })
+        assertEquals(widgets.take(2).drop(1), numberDuplicates(widgets.take(2).drop(1))) // 하나뿐이면 그대로
+    }
 }

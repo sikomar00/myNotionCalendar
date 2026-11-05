@@ -63,8 +63,6 @@ import com.ysdoing.notioncal.core.sync.CompanionResult
 import com.ysdoing.notioncal.core.sync.DatabaseInspection
 import com.ysdoing.notioncal.core.sync.LedgerProblem
 import com.ysdoing.notioncal.core.sync.LedgerSuggester
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Switch
 import androidx.compose.ui.Alignment
 import com.ysdoing.notioncal.core.sync.MappingChoice
 import com.ysdoing.notioncal.core.sync.PropertyOption
@@ -351,7 +349,7 @@ private fun CompanionRow(label: String, found: CompanionInspection?, error: Comp
 @Composable
 private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        NotionColors.palette.forEach { (name, hex) ->
+        NotionColors.palette.forEach { (_, hex) ->
             val selected = colorHex == hex
             // 눈에 보이는 원은 36dp, 누르는 영역은 48dp.
             Box(

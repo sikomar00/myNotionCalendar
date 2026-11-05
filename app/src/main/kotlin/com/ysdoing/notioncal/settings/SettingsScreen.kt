@@ -1,37 +1,26 @@
 package com.ysdoing.notioncal.settings
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -39,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,15 +38,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
-import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.SettingsTab
-import com.ysdoing.notioncal.core.data.SourceKind
-import com.ysdoing.notioncal.core.data.sourceKind
-import com.ysdoing.notioncal.core.designsystem.RadioRow
 import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.sync.ConnectionResult
 import com.ysdoing.notioncal.reminders.notificationPermissionGranted
-import java.time.DayOfWeek
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -87,6 +70,8 @@ fun SettingsRoute(
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val exactAlarm by viewModel.exactAlarm.collectAsStateWithLifecycle()
+    val schemaProblem by viewModel.schemaProblem.collectAsStateWithLifecycle()
+    val syncProblem by viewModel.syncProblem.collectAsStateWithLifecycle()
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingProps by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingColor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -94,15 +79,24 @@ fun SettingsRoute(
     var tabId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { if (tabId == null) tabId = viewModel.startTab(startTab).id }
     val context = LocalContext.current
+    // 알림 권한·시스템 알림·정확한 알람은 시스템 설정에서 바꾸고 돌아올 때 달라지니 화면이 다시 보일 때마다 새로 본다.
+    var notificationsOk by remember { mutableStateOf(true) }
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshExactAlarm()
+        notificationsOk = notificationPermissionGranted(context) && NotificationManagerCompat.from(context).areNotificationsEnabled()
+        onPauseOrDispose { }
+    }
     val facts = SettingsFacts(
         tokenSaved = tokenSaved,
         connectionFailed = (connection as? ConnectionUi.Done)?.result is ConnectionResult.Failed,
-        schemaProblem = sources.any(::hasSchemaProblem),
-        remindersBlocked = settings.remindersEnabled && (!exactAlarm || !notificationPermissionGranted(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()),
+        schemaProblem = schemaProblem,
+        remindersBlocked = settings.remindersEnabled && (!exactAlarm || !notificationsOk),
+        syncProblem = syncProblem,
     )
     val actions = SettingsActions(
         onAddDatabase = onAddDatabase, onAddView = onAddView, onOpenDiagnostics = onOpenDiagnostics, onOpenDday = onOpenDday,
         onChooseProps = { choosingProps = it }, onChooseColor = { choosingColor = it }, onDelete = { pendingDelete = it },
+        tokenInput = remember { mutableStateOf("") },
     )
 
     Scaffold(
@@ -175,9 +169,9 @@ internal fun Section(title: String) {
 }
 
 @Composable
-internal fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave: (String) -> Unit, onTest: () -> Unit) {
-    // 토큰은 저장 상태(Bundle)에 남기지 않도록 remember만 쓰고, 저장 후 바로 지운다. 표시는 항상 가린다.
-    var input by remember { mutableStateOf("") }
+internal fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, inputState: MutableState<String>, onSave: (String) -> Unit, onTest: () -> Unit) {
+    // 토큰은 저장 상태(Bundle)에 남기지 않도록 remember만 쓰고(상태는 화면이 들고 있어 탭을 바꿔도 안 사라진다), 저장 후 바로 지운다. 표시는 항상 가린다.
+    var input by inputState
     Text(
         stringResource(if (tokenSaved == true) R.string.settings_token_saved else R.string.settings_token_none),
         style = MaterialTheme.typography.bodyMedium,

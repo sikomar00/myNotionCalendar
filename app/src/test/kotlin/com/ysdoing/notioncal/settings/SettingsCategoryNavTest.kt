@@ -5,11 +5,13 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.ysdoing.notioncal.core.data.SettingsTab
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -72,5 +74,13 @@ class SettingsCategoryNavTest {
     fun theRailSpeaksProblemsToo() {
         show(badges = setOf(SettingsTab.DATABASE))
         compose.onNodeWithTag("settingsTab_database").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "문제 있음"))
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h360dp-xxhdpi")
+    fun aShortWideWindowKeepsEveryCategoryReachableByScrollingTheRail() {
+        show()
+        compose.onNodeWithTag("settingsRail").assertExists()
+        compose.onNodeWithTag("settingsTab_widgets").performScrollTo().assertIsDisplayed() // 가로 모드 폰: 높이가 모자라도 끝 카테고리를 누를 수 있다
     }
 }

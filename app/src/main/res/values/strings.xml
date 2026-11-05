@@ -54,7 +54,6 @@
     <string name="settings_widget_open">%1$s, 설정 열기</string>
     <string name="settings_widget_open_label">설정</string>
     <string name="settings_cancel">취소</string>
-    <string name="settings_section_general">일반</string>
     <string name="settings_week_start">주 시작 요일</string>
     <string name="settings_sunday">일요일</string>
     <string name="settings_monday">월요일</string>

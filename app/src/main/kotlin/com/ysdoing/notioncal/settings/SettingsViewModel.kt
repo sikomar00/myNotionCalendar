@@ -6,14 +6,18 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SettingsTab
+import com.ysdoing.notioncal.core.data.SyncStatusRepository
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.sync.ConnectionResult
 import com.ysdoing.notioncal.core.sync.ConnectionService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
@@ -48,6 +52,7 @@ class SettingsViewModel @Inject constructor(
     private val weather: WeatherRepository,
     private val regions: RegionCatalog,
     private val weatherScheduler: WeatherScheduler,
+    private val syncStatus: SyncStatusRepository,
 ) : ViewModel() {
     /** S25-11 정확한 알람을 쓸 수 있는지. 설정 화면이 다시 보일 때 [refreshExactAlarm]로 갱신한다. */
     private val _exactAlarm = MutableStateFlow(reminderScheduler.exactAllowed())
@@ -125,9 +130,21 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setWeatherMonthCellIcons(show) }
     }
 
-    /** ST-05 설정 화면이 처음 보일 카테고리. 토큰 여부를 읽은 뒤 정한다. */
-    suspend fun startTab(shortcut: SettingsTab?): SettingsTab =
-        settingsStartTab(shortcut, tokenSaved.first { it != null }, settingsRepository.settings.first().lastSettingsTab)
+    /** ST-05 설정 화면이 처음 보일 카테고리. 토큰 여부와 DB 유무를 읽은 뒤 정한다. */
+    suspend fun startTab(shortcut: SettingsTab?): SettingsTab = settingsStartTab(
+        shortcut, tokenSaved.first { it != null }, dataSources.observeAll().first().isNotEmpty(), settingsRepository.settings.first().lastSettingsTab,
+    )
+
+    /** ST-03 어느 DB든 스키마 경고가 있다(경고 JSON을 읽는 일이라 메인 스레드 밖에서 한 번만 계산한다). */
+    val schemaProblem: StateFlow<Boolean> = dataSources.observeAll()
+        .map { sources -> sources.any(::hasSchemaProblem) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** ST-03 가장 최근 동기화가 실패한 이유(월 화면 배너와 같은 기록). */
+    val syncProblem: StateFlow<SyncProblem?> = syncStatus.latest
+        .map { entry -> syncProblemOf(entry?.let { it.result to it.error }) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** ST-05 고른 카테고리를 기억한다(다음에 열 때 그 카테고리부터). */
     fun rememberTab(tab: SettingsTab) {

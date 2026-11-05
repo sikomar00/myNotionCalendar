@@ -104,6 +104,7 @@ fun NotionCalNavHost(
         composable(Routes.MONTH) {
             val openSettings = { nav.navigate(settingsRoute()) { launchSingleTop = true } }
             val openConnection = { nav.navigate(settingsRoute(SettingsTab.CONNECTION)) { launchSingleTop = true } }
+            val openDatabase = { nav.navigate(settingsRoute(SettingsTab.DATABASE)) { launchSingleTop = true } }
             HomeTabs(
                 tab = tab,
                 onTabChange = { tab = it },
@@ -111,6 +112,7 @@ fun NotionCalNavHost(
                     MonthRoute(
                         onOpenSettings = openSettings,
                         onOpenConnectionSettings = openConnection,
+                        onOpenDatabaseSettings = openDatabase,
                         openDate = openDate ?: searchDate,
                         onOpenDateHandled = {
                             if (openDate != null) onOpenDateHandled() else searchDate = null
@@ -120,8 +122,8 @@ fun NotionCalNavHost(
                         topBanner = { BatteryGuideCard() },
                     )
                 },
-                habit = { HabitRoute(onOpenSettings = openSettings) },
-                ledger = { LedgerRoute(onOpenSettings = openSettings) },
+                habit = { HabitRoute(onOpenSettings = openSettings, onOpenDatabaseSettings = openDatabase) },
+                ledger = { LedgerRoute(onOpenSettings = openSettings, onOpenDatabaseSettings = openDatabase) },
             )
         }
         composable(Routes.SEARCH) {

@@ -8,6 +8,15 @@ import com.ysdoing.notioncal.core.data.view.WidgetLayout
 /** 홈 화면에 놓인 위젯 하나(설정의 '위젯' 목록). [kindLabel]은 위젯 종류 이름, [summary]는 고른 보기·배치 요약(없으면 빈 글자)이다. */
 data class PlacedWidget(val appWidgetId: Int, val kindLabel: String, val summary: String)
 
+/** 같은 종류의 위젯이 둘 이상이면 종류 이름 뒤에 놓은 순서대로 번호를 붙여('디데이 목록 1') 목록의 줄을 구분한다. */
+internal fun numberDuplicates(widgets: List<PlacedWidget>): List<PlacedWidget> {
+    val counts = widgets.groupingBy { it.kindLabel }.eachCount()
+    val seen = mutableMapOf<String, Int>()
+    return widgets.map { w ->
+        if (counts.getValue(w.kindLabel) == 1) w else w.copy(kindLabel = "${w.kindLabel} ${seen.merge(w.kindLabel, 1, Int::plus)}")
+    }
+}
+
 /** 위젯 종류[receiver]와 설정으로 요약 한 줄을 만든다. [viewNames]는 등록한 보기 ID → 이름. */
 internal fun widgetSummary(context: Context, receiver: String, config: WidgetConfig, viewNames: Map<String, String>): String = when (receiver) {
     LayoutWidgetReceiver::class.java.name -> layoutSummary(context, config, viewNames)

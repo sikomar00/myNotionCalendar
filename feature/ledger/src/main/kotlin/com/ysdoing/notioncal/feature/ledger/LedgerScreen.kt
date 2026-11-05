@@ -70,7 +70,12 @@ import kotlin.math.abs
  * 날짜를 누르면 그리드 아래에 그 날 거래 목록을 보이고, '거래 추가'·'이 날 추가'는 LD-07 입력 시트를 연다.
  */
 @Composable
-fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltViewModel()) {
+fun LedgerRoute(
+    onOpenSettings: () -> Unit,
+    /** 가계부를 아직 등록하지 않았을 때 '설정에서 등록' 버튼이 여는 설정(데이터베이스 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenDatabaseSettings: () -> Unit = onOpenSettings,
+    viewModel: LedgerViewModel = hiltViewModel(),
+) {
     val board by viewModel.board.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val openInput: (LocalDate) -> Unit = { date -> context.startActivity(ledgerInputIntent(context, date)) }
@@ -82,6 +87,7 @@ fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltVie
         board = board,
         actions = LedgerActions(
             onOpenSettings = onOpenSettings,
+            onOpenDatabaseSettings = onOpenDatabaseSettings,
             onShiftMonth = viewModel::shiftMonth,
             onResolve = viewModel::resolveDuplicates,
             onKeepBoth = viewModel::keepBoth,
@@ -95,6 +101,7 @@ fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltVie
 /** 화면 동작 묶음(테스트에서 바꿔 끼운다). */
 data class LedgerActions(
     val onOpenSettings: () -> Unit = {},
+    val onOpenDatabaseSettings: () -> Unit = onOpenSettings,
     val onShiftMonth: (Long) -> Unit = {},
     val onResolve: (DuplicateGroup) -> Unit = {},
     val onKeepBoth: (DuplicateGroup) -> Unit = {},
@@ -127,7 +134,7 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
     ) { padding ->
         when {
             board == null -> Unit
-            !board.registered -> EmptyLedger(actions.onOpenSettings, Modifier.padding(padding))
+            !board.registered -> EmptyLedger(actions.onOpenDatabaseSettings, Modifier.padding(padding))
             else -> {
                 // 고른 날(처음은 오늘). 달을 바꾸면 그 달 안에 오늘이 있을 때만 오늘을 고른다.
                 var selected by rememberSaveable(board.month) { mutableStateOf(board.today.takeIf { YearMonth.from(it) == board.month }) }

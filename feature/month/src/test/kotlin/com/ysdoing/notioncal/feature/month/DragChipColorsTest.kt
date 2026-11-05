@@ -38,7 +38,7 @@ class DragChipColorsTest {
             val source = File("src/main/kotlin/com/ysdoing/notioncal/feature/month/$name")
             assertTrue("소스를 찾지 못했습니다: $source", source.isFile)
             val text = source.readText()
-            assertTrue("$name: 완료 글자 0.55f가 남았다", "0.55f" !in text)
+            assertTrue("$name: 완료 글자를 55%로 직접 줄이는 코드가 남았다", !Regex("alpha\\(if \\(event\\.done\\)").containsMatchIn(text))
             assertTrue("$name: barTextAlpha를 쓴다", "barTextAlpha(event)" in text)
         }
     }

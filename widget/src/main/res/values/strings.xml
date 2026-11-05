@@ -119,6 +119,8 @@
     <string name="book_widget_pages_less">%1$s, %2$d쪽 줄이기</string>
     <string name="book_widget_pages_more">%1$s, %2$d쪽 더 읽기</string>
     <string name="view_widget_label">노션 보기</string>
+    <string name="widget_config_opacity_name">배경 불투명도</string>
+    <string name="widget_config_font_name">글자 크기</string>
     <string name="placed_view_none">보기를 고르지 않음</string>
     <string name="placed_view_untitled">이름 없는 보기</string>
     <string name="placed_layout_tabs">탭 %1$d개: %2$s</string>

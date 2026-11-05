@@ -94,20 +94,20 @@ internal fun AppearanceSettings(config: WidgetConfig, onChange: (WidgetConfig) -
         config.theme,
     ) { onChange(config.copy(theme = it)) }
 
-    val opacityLabel = stringResource(R.string.widget_config_opacity, config.opacity)
-    ConfigSection(opacityLabel)
+    val opacityName = stringResource(R.string.widget_config_opacity_name)
+    ConfigSection(stringResource(R.string.widget_config_opacity, config.opacity))
     Slider(
-        modifier = Modifier.semantics { contentDescription = opacityLabel }, // 이름 없는 슬라이더는 낭독이 '슬라이더'뿐이다(부록 A-8)
+        modifier = Modifier.semantics { contentDescription = opacityName }, // 이름 없는 슬라이더는 낭독이 '슬라이더'뿐이다(부록 A-8). 값은 슬라이더가 따로 읽는다
         value = config.opacity.toFloat(),
         onValueChange = { onChange(config.copy(opacity = (it / 10).roundToInt() * 10)) },
         valueRange = 0f..100f,
         steps = 9,
     )
 
-    val fontLabel = stringResource(R.string.widget_config_font, config.fontScale)
-    ConfigSection(fontLabel)
+    val fontName = stringResource(R.string.widget_config_font_name)
+    ConfigSection(stringResource(R.string.widget_config_font, config.fontScale))
     Slider(
-        modifier = Modifier.semantics { contentDescription = fontLabel },
+        modifier = Modifier.semantics { contentDescription = fontName },
         value = config.fontScale.toFloat(),
         onValueChange = { onChange(config.copy(fontScale = (it / 10).roundToInt() * 10)) },
         valueRange = WidgetConfig.FONT_SCALE_RANGE.first.toFloat()..WidgetConfig.FONT_SCALE_RANGE.last.toFloat(),
