@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalDensity
@@ -176,7 +177,10 @@ class WidgetConfigActivity : ComponentActivity() {
             val boards = if (kind == Kind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
             loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
         }
-        val data = loaded ?: return
+        val data = loaded ?: run {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } // 로딩 중 빈 화면 방지(부록 A-8)
+            return
+        }
 
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.widget_config_title), style = MaterialTheme.typography.titleLarge)

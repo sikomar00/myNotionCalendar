@@ -13,6 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -92,16 +94,20 @@ internal fun AppearanceSettings(config: WidgetConfig, onChange: (WidgetConfig) -
         config.theme,
     ) { onChange(config.copy(theme = it)) }
 
-    ConfigSection(stringResource(R.string.widget_config_opacity, config.opacity))
+    val opacityLabel = stringResource(R.string.widget_config_opacity, config.opacity)
+    ConfigSection(opacityLabel)
     Slider(
+        modifier = Modifier.semantics { contentDescription = opacityLabel }, // 이름 없는 슬라이더는 낭독이 '슬라이더'뿐이다(부록 A-8)
         value = config.opacity.toFloat(),
         onValueChange = { onChange(config.copy(opacity = (it / 10).roundToInt() * 10)) },
         valueRange = 0f..100f,
         steps = 9,
     )
 
-    ConfigSection(stringResource(R.string.widget_config_font, config.fontScale))
+    val fontLabel = stringResource(R.string.widget_config_font, config.fontScale)
+    ConfigSection(fontLabel)
     Slider(
+        modifier = Modifier.semantics { contentDescription = fontLabel },
         value = config.fontScale.toFloat(),
         onValueChange = { onChange(config.copy(fontScale = (it / 10).roundToInt() * 10)) },
         valueRange = WidgetConfig.FONT_SCALE_RANGE.first.toFloat()..WidgetConfig.FONT_SCALE_RANGE.last.toFloat(),
