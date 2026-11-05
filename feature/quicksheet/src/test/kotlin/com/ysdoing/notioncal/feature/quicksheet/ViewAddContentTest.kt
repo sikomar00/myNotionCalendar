@@ -68,6 +68,38 @@ class ViewAddContentTest {
         compose.onNodeWithText("날짜 없음").assertDoesNotExist()
     }
 
+    private fun showFromDay(day: LocalDate) {
+        compose.setContent {
+            MaterialTheme { ViewAddContent("일정", true, today, { title, date, _ -> saved += title to date }, { cancelled++ }, initialDate = day) }
+        }
+    }
+
+    @Test
+    fun aDayTappedOnTheCalendarStartsTheSheetOnThatDate() {
+        showFromDay(LocalDate.of(2026, 11, 20)) // Phase 12a VR-CAL: 캘린더 날짜 칸 → 새 항목 시트
+        compose.onNodeWithText("제목").performTextInput("회의")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(listOf<Pair<String, LocalDate?>>("회의" to LocalDate.of(2026, 11, 20)), saved)
+    }
+
+    @Test
+    fun theTappedDayBeatsADateReadFromTheTitleAndTheChipsCanStillChangeIt() {
+        showFromDay(LocalDate.of(2026, 11, 20))
+        compose.onNodeWithText("제목").performTextInput("내일 회의")
+        compose.onNodeWithText("추가").performClick()
+        compose.onNodeWithText("오늘").performClick()
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(listOf<Pair<String, LocalDate?>>("내일 회의" to LocalDate.of(2026, 11, 20), "내일 회의" to today), saved) // 직접 고른 날짜가 글의 '내일'을 이긴다
+    }
+
+    @Test
+    fun theDatePickerOpensWithTheTappedDaySelected() {
+        // 날짜 선택창은 UTC 자정 밀리초를 쓴다. 칩에 보이는 날짜를 다시 열었을 때 이미 골라져 있어야 한다.
+        val millis = pickerMillis("2026-11-20")!!
+        assertEquals(LocalDate.of(2026, 11, 20), java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneOffset.UTC).toLocalDate())
+        assertEquals(null, pickerMillis(null))
+    }
+
     @Test
     fun cancelClosesWithoutSaving() {
         show()

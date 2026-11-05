@@ -196,10 +196,12 @@ fun ViewAddContent(
     /** '이 값을 기본값으로': 보이는 양식 속성의 지금 값(비웠으면 null)을 넘긴다. 없으면 버튼이 없다. */
     onSaveDefaults: (suspend (Map<String, JsonElement?>) -> Boolean)? = null,
     onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
+    /** Phase 12a 캘린더 날짜 칸에서 열었을 때 그 날짜: 날짜 칩이 '직접 고른' 그날로 시작한다(제목에서 읽은 날짜보다 우선). */
+    initialDate: LocalDate? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
-    var choice by rememberSaveable { mutableStateOf(DateChoice.AUTO) }
-    var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
+    var choice by rememberSaveable { mutableStateOf(if (initialDate != null) DateChoice.PICK else DateChoice.AUTO) }
+    var pickedIso by rememberSaveable { mutableStateOf(initialDate?.toString()) }
     var picking by remember { mutableStateOf(false) }
     // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 사용자가 고치기 전에는 도착한 시작 값이 그대로 보이고,
     // 고친 뒤에는 고친 값을 쓴다(그 뒤 값이 또 와도 덮지 않는다). 편집기는 시작 값이 바뀌면 새로 만들어 글자 칸도 새 값으로 시작한다.
@@ -282,7 +284,7 @@ fun ViewAddContent(
         }
     }
     if (picking) {
-        PickDateDialog(onPicked = { iso -> pickedIso = iso; choice = DateChoice.PICK }, onDismiss = { picking = false })
+        PickDateDialog(initialIso = pickedIso, onPicked = { iso -> pickedIso = iso; choice = DateChoice.PICK }, onDismiss = { picking = false })
     }
 }
 
@@ -313,6 +315,7 @@ class ViewAddActivity : ComponentActivity() {
         val today = LocalDate.now(APP_ZONE)
         val appWidgetId = intent.getIntExtra(AppIntents.EXTRA_APPWIDGET_ID, 0)
         val presetOnly = intent.getBooleanExtra(AppIntents.EXTRA_PRESET_ONLY, false) && appWidgetId > 0
+        val initialDate = intent.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         setContent {
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
@@ -338,6 +341,7 @@ class ViewAddActivity : ComponentActivity() {
                         input = form.input,
                         takenDates = form.takenDates,
                         presetOnly = presetOnly,
+                        initialDate = initialDate,
                         onSaveDefaults = if (appWidgetId > 0 && !presetOnly) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
                         onSavePreset = when {
                             presetOnly -> { title, props -> finishWithPreset(title, props) }

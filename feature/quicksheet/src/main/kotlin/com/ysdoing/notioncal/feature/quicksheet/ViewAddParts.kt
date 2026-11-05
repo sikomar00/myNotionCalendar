@@ -40,11 +40,14 @@ internal fun DateChips(choice: DateChoice, noDate: Boolean, todayAuto: Boolean, 
     }
 }
 
-/** 날짜를 직접 고르는 대화상자. 확인하면 고른 날짜(ISO)를 [onPicked]로 알리고 닫는다. */
+/** 날짜 선택창이 쓰는 UTC 자정 밀리초(그 창이 돌려주는 값과 같은 기준). 고른 날짜가 없으면 null. */
+internal fun pickerMillis(iso: String?): Long? = iso?.let { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
+
+/** 날짜를 직접 고르는 대화상자. [initialIso]가 있으면 그 날짜가 이미 골라진 채 열린다. 확인하면 고른 날짜(ISO)를 [onPicked]로 알리고 닫는다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PickDateDialog(onPicked: (String) -> Unit, onDismiss: () -> Unit) {
-    val state = rememberDatePickerState()
+internal fun PickDateDialog(initialIso: String?, onPicked: (String) -> Unit, onDismiss: () -> Unit) {
+    val state = rememberDatePickerState(initialSelectedDateMillis = pickerMillis(initialIso))
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
