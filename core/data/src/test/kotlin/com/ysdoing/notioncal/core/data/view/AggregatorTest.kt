@@ -73,6 +73,35 @@ class AggregatorTest {
 
     private val numbers = listOf(row("a", number = 100.0), row("b", number = 250.5), row("c"), row("d", number = 49.5))
 
+    private fun formatted(format: String, fn: AggFn, goal: Double? = null): AggResult =
+        Aggregator.compute(board(numbers).copy(columnInfo = listOf(amount.copy(numberFormat = format), done, date, memo)), tile(fn, "n", goal = goal), today, DayOfWeek.MONDAY)
+
+    @Test
+    fun sumAverageMinMaxFollowThePropertysPercentOrCurrencyFormat() {
+        // Phase 12c AG-03: 합계 400 / 평균 133.33… / 최소 49.5 / 최대 250.5를 속성의 노션 형식대로
+        assertEquals("₩400", formatted("won", AggFn.SUM).text)
+        assertEquals("₩133", formatted("won", AggFn.AVG).text) // 원은 소수 없이: 형식이 정밀도를 정한다(평균 한 자리로 먼저 깎지 않는다)
+        assertEquals("$49.50", formatted("dollar", AggFn.MIN).text)
+        assertEquals("$250.50", formatted("dollar", AggFn.MAX).text)
+        assertEquals("40,000%", formatted("percent", AggFn.SUM).text) // 저장값은 분수라 400 → 40,000%
+    }
+
+    @Test
+    fun countRatioAndPlainOrCommaFormatsKeepTheFixedTileTexts() {
+        assertEquals("400", formatted("number", AggFn.SUM).text)
+        assertEquals("400", formatted("number_with_commas", AggFn.SUM).text)
+        assertEquals("133.3", formatted("number_with_commas", AggFn.AVG).text)
+        assertEquals("4", formatted("won", AggFn.COUNT).text) // 개수는 돈이 아니다
+        assertEquals("400", formatted("bitcoin", AggFn.SUM).text) // 모르는 형식은 기본
+    }
+
+    @Test
+    fun theGoalBarStillUsesTheRoundedValueAndAFormattedColumnKeepsItsGoalText() {
+        val r = formatted("won", AggFn.SUM, goal = 800.0)
+        assertEquals("목표 50%", r.goalText)
+        assertEquals(0.5f, r.progress)
+    }
+
     @Test
     fun sumAverageMinMaxSkipRowsWithoutANumber() {
         assertEquals("400", compute(numbers, tile(AggFn.SUM, "n")).text)

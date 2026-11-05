@@ -199,7 +199,7 @@ class ViewSync @Inject constructor(
             rowsComplete = !fetched.hasMore,
         )
         val rows = pages.mapIndexed { i, page ->
-            val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { displayValue(page.properties[it] as? JsonObject ?: JsonObject(emptyMap())) }
+            val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { name -> cellText(writable.firstOrNull { it.name == name }, page.properties[name] as? JsonObject) }
             val typed = writable.filter { it.writable }.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
             ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed), coverUrlOf(page.properties), progressOf(page.properties))
         }
@@ -209,6 +209,13 @@ class ViewSync @Inject constructor(
     private fun PageDto.titlePropertyName(): String? =
         properties.entries.firstOrNull { ((it.value as? JsonObject)?.get("type") as? JsonPrimitive)?.contentOrNull == "title" }?.key
 }
+
+/**
+ * 행의 칸 글자. 노션 형식이 있는 숫자 열은 그 형식대로(`₩12,000`, `25%`), 나머지는 노션 읽기 표기(displayValue)다. 칸 글자가 로컬 쓰기 뒤
+ * `ViewColumn.display`로 다시 만들어지는 것과 같은 모양이라 편집 전후 글자가 바뀌지 않는다.
+ */
+internal fun cellText(column: ViewColumn?, property: JsonObject?): String =
+    if (column?.type == "number" && column.numberFormat.isNotEmpty()) column.display(typedValue(column, property)) else displayValue(property ?: JsonObject(emptyMap()))
 
 /**
  * 보이는 열의 속성 정보. 쓸 수 있는 종류뿐 아니라 읽기 전용으로 보이는 종류(수식·롤업 등)도 담으니 [ViewColumn.writable]로 가른다.
@@ -238,7 +245,7 @@ internal fun viewColumn(property: PropertySchemaDto): ViewColumn? {
         }
         else -> emptyList()
     }
-    return ViewColumn(property.id, property.name, property.type, options)
+    return ViewColumn(property.id, property.name, property.type, options, numberFormat = property.number?.format.orEmpty().takeIf { property.type == "number" }.orEmpty())
 }
 
 /**

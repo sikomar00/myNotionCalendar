@@ -489,6 +489,30 @@ class ViewSyncTest {
     }
 
     @Test
+    fun aNumberColumnWithANotionFormatShowsItsCellByThatFormatAndKeepsTheFormat() = runTest {
+        // Phase 12c AG-03: 노션 number.format(won)은 열 정보에 담기고 칸 글자도 그 형식이다. 형식이 없는 숫자 열은 그대로.
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Price":{"id":"pr","name":"Price","type":"number","number":{"format":"won"}},
+                "Plain":{"id":"pl","name":"Plain","type":"number","number":{"format":"number"}}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name"), ViewPropertyDto("pr", "Price"), ViewPropertyDto("pl", "Plain"))
+        rowPages = listOf(
+            PageDto(
+                id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+                properties = Json.parseToJsonElement("""{"Name":{"type":"title","title":[{"plain_text":"a"}]},"Price":{"type":"number","number":12000},"Plain":{"type":"number","number":12000}}""").jsonObject,
+            ),
+        )
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("", "won", "number"), columns.map { it.numberFormat })
+        assertEquals(listOf("a", "₩12,000", "12000"), db.viewDao().rows("v1").single().cells.split(com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR))
+    }
+
+    @Test
     fun aTableViewGetsNoChartRoleEvenIfItsConfigNamesAxes() = runTest {
         schema = chartSchema
         viewProperties = listOf(ViewPropertyDto("title", "Name"))

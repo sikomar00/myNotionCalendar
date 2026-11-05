@@ -90,7 +90,7 @@ object Aggregator {
             ((tile.fn.needsDate || tile.period != AggPeriod.ALL) && date?.type != "date")
         if (broken) return AggResult.unavailable(partial)
         val value = if (tile.fn == AggFn.STREAK) streak(board.rows, tile, today) else value(inPeriod(board.rows, tile, today, weekStart), tile)
-        return result(value, tile, partial)
+        return result(value, tile, partial, prop?.numberFormat.orEmpty())
     }
 
     private fun inPeriod(rows: List<ViewRow>, tile: AggTile, today: LocalDate, weekStart: DayOfWeek): List<ViewRow> {
@@ -130,19 +130,33 @@ object Aggregator {
         return count.toDouble()
     }
 
-    private fun result(value: Double?, tile: AggTile, partial: Boolean): AggResult {
+    /**
+     * [format]은 값을 읽은 숫자 속성의 노션 형식이다. 합계·평균·최소·최대는 퍼센트·통화 형식이면 그 모양(`₩12,000`, `25%`)으로 쓰고(정밀도는 형식이 정한다),
+     * 개수·비율·연속 일수와 쉼표·기본 형식은 아래 고정 서식이다.
+     */
+    private fun result(value: Double?, tile: AggTile, partial: Boolean, format: String): AggResult {
         if (value == null) return AggResult.unavailable(partial)
         // 목표 판정과 막대는 화면에 보이는(반올림한) 값으로 한다. 안 그러면 '80%' 옆에 '목표 99%'가 뜰 수 있다.
         val shown = BigDecimal(value).setScale(decimals(tile.fn), RoundingMode.HALF_UP).toDouble()
-        val text = when (tile.fn) {
+        val styled = tile.fn in NUMBER_VALUED && NumberFormats.isStyled(format)
+        val text = when {
+            styled -> NumberFormats.format(value, format)
+            else -> plainText(shown, tile.fn)
+        }
+        val goal = tile.goal?.takeIf { it > 0 }
+        return AggResult(value, text, partial, goal?.let { (shown / it).toFloat().coerceIn(0f, 1f) }, goal?.let { goalText(shown, it) })
+    }
+
+    private val NUMBER_VALUED = setOf(AggFn.SUM, AggFn.AVG, AggFn.MIN, AggFn.MAX)
+
+    private fun plainText(shown: Double, fn: AggFn): String {
+        return when (fn) {
             AggFn.COUNT -> format(shown, "#,##0")
             AggFn.AVG -> format(shown, "#,##0.#")
             AggFn.RATIO -> "${shown.roundToInt()}%"
             AggFn.STREAK -> "${shown.roundToInt()}일"
             else -> format(shown, "#,##0.##")
         }
-        val goal = tile.goal?.takeIf { it > 0 }
-        return AggResult(value, text, partial, goal?.let { (shown / it).toFloat().coerceIn(0f, 1f) }, goal?.let { goalText(shown, it) })
     }
 
     /** 함수별로 화면에 보여 주는 소수 자릿수. */

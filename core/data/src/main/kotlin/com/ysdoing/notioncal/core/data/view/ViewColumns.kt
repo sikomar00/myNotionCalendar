@@ -13,7 +13,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
-import kotlin.math.abs
 
 /** select·status의 선택지 하나. [group]은 status의 그룹 이름(할 일·진행 중·완료)이다. */
 @Serializable
@@ -34,6 +33,8 @@ data class ViewColumn(
     val options: List<ViewChoice> = emptyList(),
     /** M5b 책 위젯용 표시([ROLE_PAGES_READ]·[ROLE_PAGES_TOTAL]). 보기에서 숨긴 속성도 이 표시로 쓰기 정보에 들어온다. 보통은 빈 글자. */
     val role: String = "",
+    /** 숫자 속성의 노션 `number.format`(`won`·`percent`·`number_with_commas` 등, [NumberFormats]). 숫자가 아니거나 모르면 빈 글자(옛 스냅샷도 빈 글자로 읽힌다). */
+    val numberFormat: String = "",
 ) {
     /**
      * 위젯에서 눌렀을 때 순환하지 않고 작은 선택 시트를 여는 열(IX-02): 선택지가 [CHOOSER_MIN_OPTIONS]개 이상인 select.
@@ -57,7 +58,7 @@ data class ViewColumn(
     fun display(value: JsonElement?): String = when (type) {
         "checkbox" -> if ((value as? JsonPrimitive)?.booleanOrNull == true) "✓" else ""
         "select", "status" -> options.firstOrNull { it.id == (value as? JsonPrimitive)?.contentOrNull }?.name.orEmpty()
-        "number" -> (value as? JsonPrimitive)?.doubleOrNull?.let { n -> if (n % 1.0 == 0.0 && abs(n) < MAX_PLAIN) n.toLong().toString() else n.toString() }.orEmpty()
+        "number" -> (value as? JsonPrimitive)?.doubleOrNull?.let { n -> NumberFormats.format(n, numberFormat) }.orEmpty()
         "title", "rich_text", "url", "email", "phone_number" -> (value as? JsonPrimitive)?.contentOrNull.orEmpty()
         "multi_select" -> (value as? JsonArray).orEmpty().joinToString(", ") { optionName(it) }
         "date" -> (value as? JsonObject)?.let { dateText(it) }.orEmpty()
@@ -135,9 +136,6 @@ data class ViewColumn(
 
         /** 읽기 전용이라도 보이는 열이면 쓰기 정보에 담아 편집 시트가 잠금 줄로 보여 준다(ED-02). 이 종류는 [writable]이 false다. */
         val DISPLAY_ONLY_TYPES = setOf("formula", "rollup", "created_time", "created_by", "last_edited_time", "last_edited_by", "unique_id", "relation", "people", "files")
-
-        /** 이보다 큰 정수는 Long으로 바꾸면 값이 틀어지므로 그대로 글자로 쓴다. */
-        private const val MAX_PLAIN = 1e15
     }
 }
 

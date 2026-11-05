@@ -84,6 +84,16 @@ class ChartComputeTest {
     }
 
     @Test
+    fun chartValuesAndTheTotalFollowTheNumberPropertysFormat() {
+        val won = board(expenses).copy(columnInfo = columns.map { if (it.id == "amt") it.copy(numberFormat = "won") else it })
+        val result = ChartCompute.compute(won, spec(ChartType.BAR, byCategory, ChartValue(AggFn.SUM, "amt"), hideEmpty = true))
+        assertEquals(listOf("₩25,000", "₩5,000", "₩700"), result.points.map { it.text })
+        assertEquals("₩30,700", result.totalText)
+        assertEquals(25000.0, result.points.first().value, 0.0) // 그리는 크기는 값 그대로
+        assertEquals("합계 금액: 식비 ₩25,000, 교통 ₩5,000, 없음 ₩700", ChartSummary.sentence(result))
+    }
+
+    @Test
     fun averageMinAndMaxAggregateEachGroupsRows() {
         fun table(fn: AggFn) = ChartCompute.compute(board(expenses), spec(ChartType.BAR, byCategory, ChartValue(fn, "amt"), hideEmpty = true)).table().map { it.second }
         assertEquals(listOf(25000.0 / 3, 2500.0, 700.0), table(AggFn.AVG))
