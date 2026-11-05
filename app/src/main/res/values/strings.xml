@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">노션 월간</string>
+    <string name="app_name">노션 홈</string>
 
     <string name="settings_title">설정</string>
     <string name="settings_back">뒤로</string>
