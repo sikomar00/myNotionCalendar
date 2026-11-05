@@ -144,8 +144,8 @@ object Recipes {
 
     private fun RecipeView.column(id: String, type: String) = columns.firstOrNull { it.id == id && it.type == type }
 
-    /** 새 항목의 날짜가 들어가는 열(보기의 첫 날짜 열). */
-    private fun RecipeView.firstDate() = columns.firstOrNull { it.type == "date" }
+    /** 새 항목의 날짜가 들어가는 열(캘린더의 날짜 속성, 없으면 보기의 첫 날짜 열). */
+    private fun RecipeView.firstDate() = ViewColumn.dateColumnOf(columns)
 
     private fun RecipeView.keep(id: String, type: String): String = keep(id, setOf(type))
 

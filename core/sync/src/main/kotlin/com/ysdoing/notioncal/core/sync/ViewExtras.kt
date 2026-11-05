@@ -132,6 +132,18 @@ internal fun withGroupRole(columns: List<ViewColumn>, schema: DataSourceDto, con
 private val GROUPABLE = setOf("select", "status")
 
 /**
+ * Phase 12a 캘린더 보기의 `date_property_id` 속성(날짜만)에 [ViewColumn.ROLE_DATE]를 달아 쓰기 정보에 넣는다. 보기에서 숨긴 속성이어도 월 격자가 날짜를
+ * 읽고 새 항목이 같은 열에 날짜를 쓰려면 값(typed)이 있어야 해서다. 캘린더가 아니거나(호출하는 쪽이 설정을 넘기지 않는다) 못 알아보면 그대로 돌려준다.
+ */
+internal fun withDateRole(columns: List<ViewColumn>, schema: DataSourceDto, config: JsonObject?): List<ViewColumn> {
+    val id = (config?.get("date_property_id") as? JsonPrimitive)?.contentOrNull ?: return columns
+    val property = schema.properties.values.firstOrNull { it.id == id && it.type == "date" } ?: return columns
+    val tagged = columns.map { if (it.id == id) it.copy(role = ViewColumn.ROLE_DATE) else it }
+    if (tagged.any { it.id == id }) return tagged
+    return tagged + (viewColumn(property)?.copy(role = ViewColumn.ROLE_DATE) ?: return columns)
+}
+
+/**
  * Phase 11c 보기 필터가 가리키는 속성 중 보이는 열에 없는 것(쓸 수 있는 유형만)에 [ViewColumn.ROLE_FILTER]를 달아 쓰기 정보에 넣는다.
  * 그래야 그 속성의 값이 행(typed)에 남아 폰에서 필터를 판정한다(IX-06). 수식·롤업 같은 유형은 판정하지 않으니 넣지 않는다.
  */

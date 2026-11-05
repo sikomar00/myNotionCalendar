@@ -208,6 +208,14 @@ class RecipesTest {
     }
 
     @Test
+    fun aCalendarsHiddenDatePropertyIsTheTilesDateEvenWhenAnotherDateColumnComesFirst() {
+        val hidden = ViewColumn("hd", "예정일", "date", role = ViewColumn.ROLE_DATE)
+        val twoDates = view("two", "table", title, date, amount, hidden)
+        val tile = layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "two", amountProp = "n"), listOf(twoDates))!!).tiles.single()
+        assertEquals("hd", tile.dateProp)
+    }
+
+    @Test
     fun theBudgetBecomesTheTilesGoal() {
         assertEquals(1000.0, layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "n", budget = 1000.0), listOf(ledger))!!).tiles.single().goal)
     }

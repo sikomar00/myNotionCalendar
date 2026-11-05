@@ -392,6 +392,65 @@ class ViewSyncTest {
     }
 
     @Test
+    fun aCalendarViewsDatePropertyIsKeptEvenWhenTheViewHidesIt() = runTest {
+        // Phase 12a: 캘린더 보기의 date_property_id 속성은 보기에서 숨겨도 행의 값(typed)을 알아야 월 격자에 그린다. 'date' 역할로 담는다.
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "When":{"id":"wh","name":"When","type":"date"}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name")) // When은 보이지 않는다
+        viewType = "calendar"
+        viewRaw = Json.parseToJsonElement("""{"type":"calendar","date_property_id":"wh"}""").jsonObject
+        rowPages = listOf(
+            PageDto(
+                id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+                properties = Json.parseToJsonElement("""{"Name":{"type":"title","title":[{"plain_text":"a"}]},"When":{"type":"date","date":{"start":"2026-11-04","end":null}}}""").jsonObject,
+            ),
+        )
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to "", "When" to ViewColumn.ROLE_DATE), columns.map { it.name to it.role })
+        val typed = ViewJson.typed(db.viewDao().rows("v1").single().typed)["wh"] as kotlinx.serialization.json.JsonObject
+        assertEquals(JsonPrimitive("2026-11-04"), typed["start"])
+    }
+
+    @Test
+    fun aTableViewGetsNoDateRoleEvenIfItsConfigNamesADateProperty() = runTest {
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "When":{"id":"wh","name":"When","type":"date"}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name"))
+        viewType = "table"
+        viewRaw = Json.parseToJsonElement("""{"type":"table","date_property_id":"wh"}""").jsonObject
+        register("v1")
+        sync().syncAll()
+        assertEquals(listOf("Name"), ViewJson.columns(db.viewDao().all().single().columnInfo).map { it.name })
+    }
+
+    @Test
+    fun theDatePropertyIdIsTaggedOnAVisibleColumnAddedWhenHiddenAndIgnoredWhenNotADate() {
+        val schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{"When":{"id":"wh","name":"When","type":"date"},"Memo":{"id":"mm","name":"Memo","type":"rich_text"}}}""",
+        )
+        fun roles(columns: List<ViewColumn>, config: String?) =
+            withDateRole(columns, schema, config?.let { Json.parseToJsonElement(it).jsonObject }).map { it.id to it.role }
+        val visible = listOf(ViewColumn("wh", "When", "date"))
+        assertEquals(listOf("wh" to ViewColumn.ROLE_DATE), roles(visible, """{"date_property_id":"wh"}""")) // 보이는 열에는 역할만 단다
+        assertEquals(listOf("wh" to ViewColumn.ROLE_DATE), roles(emptyList(), """{"date_property_id":"wh"}""")) // 숨긴 열은 덧붙인다
+        assertEquals(visible.map { it.id to it.role }, roles(visible, """{"date_property_id":"mm"}""")) // 날짜가 아니면 무시
+        assertEquals(visible.map { it.id to it.role }, roles(visible, """{"date_property_id":"gone"}"""))
+        assertEquals(visible.map { it.id to it.role }, roles(visible, """{"type":"calendar"}"""))
+        assertEquals(visible.map { it.id to it.role }, roles(visible, null))
+    }
+
+    @Test
     fun columnInfoCoversEveryVisiblePropertyWithOptionColors() = runTest {
         // Phase 11a: 읽기 전용 유형(수식·롤업)도 보이는 열이면 쓰기 정보에 담아 편집 시트가 잠금 줄로 보여 주고, 옵션은 색을 함께 담는다.
         schema = Json { ignoreUnknownKeys = true }.decodeFromString(

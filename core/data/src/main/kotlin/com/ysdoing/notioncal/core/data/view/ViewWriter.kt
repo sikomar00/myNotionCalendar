@@ -104,7 +104,7 @@ class ViewWriter @Inject constructor(
 
     /**
      * 새 항목(제목 + 선택 날짜)을 만든다. 로컬 행은 만들지 않고 큐에만 쌓는다. 노션이 만든 뒤 처리기가 이 보기를 바로 다시 받아 행이 나타난다.
-     * 제목이 비었거나 보기에 제목 열 정보가 없으면 false. 보기에 날짜 열이 없으면 날짜는 넣지 않는다(첫 날짜 열에 넣는다).
+     * 제목이 비었거나 보기에 제목 열 정보가 없으면 false. 보기에 날짜 열이 없으면 날짜는 넣지 않는다(캘린더의 날짜 속성, 없으면 첫 날짜 열에 넣는다).
      * shortcut: 노션이 만들었는데 응답이 끊기면(시간 초과·연결 끊김·5xx) 처리기가 다시 보내 같은 항목이 둘 생길 수 있다(일정 아웃박스의
      * '이미 만들었나' 확인이 없다), 문제가 되면 만든 시각과 제목으로 찾아본다.
      */
@@ -114,7 +114,7 @@ class ViewWriter @Inject constructor(
         val snapshot = dao.snapshot(viewId) ?: return false
         val columns = ViewJson.columns(snapshot.columnInfo)
         val titleColumn = columns.firstOrNull { it.type == "title" } ?: return false
-        val dateColumn = columns.firstOrNull { it.type == "date" }?.takeIf { date != null }
+        val dateColumn = ViewColumn.dateColumnOf(columns)?.takeIf { date != null }
         // 값 묶음(프리셋·맥락 채움)은 쓸 수 있는 속성에 맞는 값만 싣는다. 제목과 날짜 인자가 정한 날짜 속성은 따로 정하니 뺀다(잘못된 값 하나로 항목을 잃지 않게 거른다).
         val extra = props.filter { (id, value) ->
             val column = columns.firstOrNull { it.id == id }

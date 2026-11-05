@@ -63,16 +63,19 @@ data class ViewBoard(
     val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
 
     /**
-     * 새 항목의 날짜가 들어가는 첫 날짜 열에 이미 항목이 있는 날짜들: 받아 둔 행과 아직 보내지 않은 새 항목. 날짜 열이 없으면 비어 있다.
+     * 새 항목의 날짜가 들어가는 날짜 열([dateColumn])에 이미 항목이 있는 날짜들: 받아 둔 행과 아직 보내지 않은 새 항목. 날짜 열이 없으면 비어 있다.
      * 행은 상한(100) 안에서만 알아서 그보다 먼 날짜는 못 볼 수 있다.
      */
     fun takenDates(): Set<LocalDate> {
-        val prop = columnInfo.firstOrNull { it.type == "date" }?.id ?: return emptySet()
+        val prop = dateColumn?.id ?: return emptySet()
         return rows.mapNotNull { it.typed[prop].startDate() }.toSet() + pendingCreateDates
     }
 
+    /** 새 항목의 날짜가 들어가는 열이자 캘린더가 읽는 열([ViewColumn.dateColumnOf]). 없으면 null. */
+    val dateColumn: ViewColumn? get() = ViewColumn.dateColumnOf(columnInfo)
+
     /** 새 항목에 날짜를 넣을 열이 있다. */
-    val hasDateColumn: Boolean get() = columnInfo.any { it.type == "date" }
+    val hasDateColumn: Boolean get() = dateColumn != null
 
     /** 새 항목 시트·입력 양식이 다루는 속성([InputForm.usable]). */
     val formColumns: List<ViewColumn> get() = InputForm.usable(columnInfo, columns)

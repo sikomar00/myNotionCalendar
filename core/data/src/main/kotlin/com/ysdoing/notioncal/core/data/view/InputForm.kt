@@ -85,8 +85,9 @@ data class InputForm(
         /**
          * 새 항목 시트·입력 양식이 다루는 속성: 보기에 보이지 않으면서 필터·보드·책 쪽수용으로만 쓰기 정보에 따라온 것(role이 있는 열)은 뺀다.
          * (그런 열을 양식 후보나 한 줄 입력의 숫자 칸으로 잘못 고르지 않게. 필터에서 채우는 값은 따로 숨은 속성도 다룬다.)
+         * 캘린더의 날짜 속성([ViewColumn.ROLE_DATE])은 숨겨도 남긴다: 새 항목의 날짜 열이라 시트가 알아야 한다(양식 후보는 아니다, [editable]이 날짜를 뺀다).
          */
-        fun usable(columnInfo: List<ViewColumn>, visibleNames: Collection<String>): List<ViewColumn> = columnInfo.filter { it.role.isEmpty() || it.name in visibleNames }
+        fun usable(columnInfo: List<ViewColumn>, visibleNames: Collection<String>): List<ViewColumn> = columnInfo.filter { it.role.isEmpty() || it.role == ViewColumn.ROLE_DATE || it.name in visibleNames }
 
         private fun fitted(column: ViewColumn, value: JsonElement): JsonElement? {
             val ids = column.options.map { it.id }.toSet()

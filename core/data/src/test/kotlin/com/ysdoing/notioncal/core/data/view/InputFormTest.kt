@@ -57,6 +57,14 @@ class InputFormTest {
     }
 
     @Test
+    fun usableKeepsTheCalendarsHiddenDatePropertySoTheSheetStillKnowsTheDateColumn() {
+        val hiddenDate = ViewColumn("hd", "예정일", "date", role = ViewColumn.ROLE_DATE)
+        val hiddenFilter = ViewColumn("hf", "상태", "select", role = ViewColumn.ROLE_FILTER)
+        assertEquals(listOf("t", "hd"), InputForm.usable(listOf(title, hiddenDate, hiddenFilter), listOf("이름")).map { it.id })
+        assertEquals(emptyList<ViewColumn>(), InputForm.editable(listOf(hiddenDate))) // 날짜는 날짜 칩이 맡는다(양식 속성이 아니다)
+    }
+
+    @Test
     fun toggleAppendsOnAndRemovesOffAndIgnoresRepeats() {
         val f = InputForm().toggle("n", true).toggle("k", true).toggle("n", true)
         assertEquals(listOf("n", "k"), f.fields.map { it.propId })

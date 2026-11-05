@@ -204,6 +204,14 @@ class ViewWriterTest {
     }
 
     @Test
+    fun createWritesTheDateToTheCalendarsDatePropertyNotTheFirstDateColumn() = runTest {
+        val calendarDate = ViewColumn("hid", "예정일", "date", role = ViewColumn.ROLE_DATE)
+        db.viewDao().upsert(snapshot.copy(columnInfo = ViewJson.encodeColumns(columns + calendarDate)))
+        assertTrue(writer().create("v1", "회의", LocalDate.of(2026, 11, 4)))
+        assertEquals(ViewCreate("회의", "2026-11-04", "hid"), ViewJson.parseCreate(db.viewDao().firstWrite()!!.value)) // wh(첫 날짜 열)가 아니라 hid
+    }
+
+    @Test
     fun createWithoutADateLeavesTheDateOut() = runTest {
         writer().create("v1", "메모", null)
         assertEquals(ViewCreate("메모", null, null), ViewJson.parseCreate(db.viewDao().firstWrite()!!.value))

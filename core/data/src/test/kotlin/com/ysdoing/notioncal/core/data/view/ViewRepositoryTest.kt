@@ -81,6 +81,23 @@ class ViewRepositoryTest {
     }
 
     @Test
+    fun theDateColumnPrefersTheCalendarsDatePropertyAndEveryUseFollowsIt() {
+        fun day(iso: String) = kotlinx.serialization.json.JsonObject(mapOf("start" to kotlinx.serialization.json.JsonPrimitive(iso)))
+        val first = ViewColumn("d1", "작성일", "date")
+        val calendarDate = ViewColumn("d2", "예정일", "date", role = ViewColumn.ROLE_DATE) // 보기에서 숨겼어도 date_property_id의 열
+        val rows = listOf(ViewRow("p", "", emptyList(), typed = mapOf("d1" to day("2026-11-01"), "d2" to day("2026-12-25"))))
+        val board = ViewBoard("v", "일정", "calendar", emptyList(), rows, 1, null, columnInfo = listOf(ViewColumn("t", "이름", "title"), first, calendarDate))
+        assertEquals("d2", board.dateColumn!!.id)
+        assertEquals(setOf(java.time.LocalDate.of(2026, 12, 25)), board.takenDates()) // 하루 한 줄 가드도 같은 열을 본다
+        assertTrue(board.hasDateColumn)
+        // 역할이 없으면(옛 스냅샷) 첫 날짜 열
+        assertEquals("d1", board.copy(columnInfo = listOf(first, calendarDate.copy(role = ""))).dateColumn!!.id)
+        // 날짜 열이 하나도 없으면 없다. 날짜가 아닌 열에 달린 역할은 무시한다.
+        assertNull(board.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"), ViewColumn("n", "금액", "number", role = ViewColumn.ROLE_DATE))).dateColumn)
+        assertEquals(false, board.copy(columnInfo = emptyList()).hasDateColumn)
+    }
+
+    @Test
     fun aViewWithoutADateColumnHasNoTakenDays() = runTest {
         seed(ViewSnapshotEntity("v1", "ds", "메모", "table", columns = "이름", syncedAt = 5, columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title")))), emptyList())
         assertEquals(emptySet<java.time.LocalDate>(), repo().observe("v1").first()!!.takenDates())

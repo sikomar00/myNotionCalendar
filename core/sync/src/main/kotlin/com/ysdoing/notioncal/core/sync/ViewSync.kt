@@ -176,10 +176,12 @@ class ViewSync @Inject constructor(
         val columns = visibleColumns(configured, titleName)
         // group_by는 표·목록도 갖지만 열로 나눠 그리는 것은 보드뿐이다. 그 밖의 보기에 숨은 선택 열을 넣으면 눌림 열로 세어져 모든 행이 높아진다.
         val groupConfig = view.configuration?.raw?.takeIf { view.type == "board" }
+        // 캘린더는 date_property_id 속성(숨겨도)의 날짜로 월 격자를 그린다.
+        val dateConfig = view.configuration?.raw?.takeIf { view.type == "calendar" }
         // 보기 필터(보기 필터 + 빠른 필터)는 폰에서 항목이 필터에서 빠지는지 판정하려고 저장한다(IX-06). 필터가 가리키는 속성은 숨겨져 있어도 값을 남긴다.
         val filterJson = viewFilter(view)?.toString().orEmpty()
         val filter = ViewFilter.parse(filterJson)
-        val writable = schema?.let { withFilterRole(withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, groupConfig), it, filter) }
+        val writable = schema?.let { withFilterRole(withDateRole(withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, groupConfig), it, dateConfig), it, filter) }
             ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
         val meta = registered.copy(
             name = view.name,
