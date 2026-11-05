@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.data.SettingsTab
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.sync.ConnectionResult
 import com.ysdoing.notioncal.core.sync.ConnectionService
@@ -122,6 +123,15 @@ class SettingsViewModel @Inject constructor(
 
     fun setWeatherMonthCells(show: Boolean) {
         viewModelScope.launch { settingsRepository.setWeatherMonthCellIcons(show) }
+    }
+
+    /** ST-05 설정 화면이 처음 보일 카테고리. 토큰 여부를 읽은 뒤 정한다. */
+    suspend fun startTab(shortcut: SettingsTab?): SettingsTab =
+        settingsStartTab(shortcut, tokenSaved.first { it != null }, settingsRepository.settings.first().lastSettingsTab)
+
+    /** ST-05 고른 카테고리를 기억한다(다음에 열 때 그 카테고리부터). */
+    fun rememberTab(tab: SettingsTab) {
+        viewModelScope.launch { settingsRepository.setLastSettingsTab(tab) }
     }
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings

@@ -57,6 +57,9 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
+/** NS-09 매핑한 속성이 사라지거나 종류가 바뀌었다(이름만 바뀐 것은 제외). DB 줄 경고와 설정 탭의 문제 배지가 같이 쓴다. */
+internal fun hasSchemaProblem(source: DataSourceEntity): Boolean = SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }
+
 /**
  * DB 한 줄. 윗줄은 색 점·이름(+종류)·스키마 경고·사용 스위치(스위치는 DB 이름으로 읽힌다), 아랫줄은 색·강조·속성·삭제(error 색 글자 버튼)다.
  * 글꼴을 키워도 이름이 사라지거나 삭제가 스위치 옆에 붙지 않게 두 줄로 나눈다(부록 A-5·A-6).
@@ -96,7 +99,7 @@ internal fun SourceRow(
                 }
             }
             // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
-            if (SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }) {
+            if (hasSchemaProblem(source)) {
                 Icon(
                     Icons.Filled.Warning,
                     contentDescription = stringResource(R.string.settings_schema_warning),

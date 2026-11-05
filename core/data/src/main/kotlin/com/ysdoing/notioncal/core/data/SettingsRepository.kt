@@ -69,6 +69,8 @@ data class AppSettings(
     val weatherPlace: WeatherPlace? = null,
     /** WX-03 월 보기에서 예보가 있는 모든 칸에 아이콘(기본은 오늘 칸만). */
     val weatherMonthCellIcons: Boolean = false,
+    /** ST-05 설정에서 마지막으로 본 카테고리. 아직 없으면 null(첫 실행은 연결). */
+    val lastSettingsTab: SettingsTab? = null,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
@@ -98,6 +100,7 @@ class SettingsRepository @Inject constructor(
                 showWeekNumbers = prefs[SHOW_WEEK_NUMBERS] ?: false,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
+                lastSettingsTab = SettingsTab.fromId(prefs[SETTINGS_TAB]),
                 remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
                 reminderRules = ReminderRules(
                     timedMinutes = prefs[TIMED_REMINDERS]?.let { saved ->
@@ -201,6 +204,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[REMINDERS_HANDLED_UNTIL] = at }
     }
 
+    suspend fun setLastSettingsTab(tab: SettingsTab) {
+        dataStore.edit { it[SETTINGS_TAB] = tab.id }
+    }
+
     suspend fun setWidgetPreviewsVersion(version: Int) {
         dataStore.edit { it[WIDGET_PREVIEWS_VERSION] = version }
     }
@@ -257,6 +264,7 @@ class SettingsRepository @Inject constructor(
         val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
+        val SETTINGS_TAB = stringPreferencesKey("settings_tab")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
         val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")

@@ -1,6 +1,8 @@
 package com.ysdoing.notioncal.settings
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,15 +46,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.AppSettings
+import com.ysdoing.notioncal.core.data.SettingsTab
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.designsystem.RadioRow
 import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.sync.ConnectionResult
+import com.ysdoing.notioncal.reminders.notificationPermissionGranted
 import java.time.DayOfWeek
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
@@ -74,15 +79,31 @@ fun SettingsRoute(
     onAddView: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenDday: () -> Unit = {},
+    startTab: SettingsTab? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val tokenSaved by viewModel.tokenSaved.collectAsStateWithLifecycle()
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val exactAlarm by viewModel.exactAlarm.collectAsStateWithLifecycle()
     var pendingDelete by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingProps by rememberSaveable { mutableStateOf<String?>(null) }
     var choosingColor by rememberSaveable { mutableStateOf<String?>(null) }
+    // ST-05: 바로가기 인자 > 토큰 없음이면 연결 > 마지막으로 본 카테고리. 토큰 여부를 읽을 때까지는 고르지 않는다.
+    var tabId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { if (tabId == null) tabId = viewModel.startTab(startTab).id }
+    val context = LocalContext.current
+    val facts = SettingsFacts(
+        tokenSaved = tokenSaved,
+        connectionFailed = (connection as? ConnectionUi.Done)?.result is ConnectionResult.Failed,
+        schemaProblem = sources.any(::hasSchemaProblem),
+        remindersBlocked = settings.remindersEnabled && (!exactAlarm || !notificationPermissionGranted(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()),
+    )
+    val actions = SettingsActions(
+        onAddDatabase = onAddDatabase, onAddView = onAddView, onOpenDiagnostics = onOpenDiagnostics, onOpenDday = onOpenDday,
+        onChooseProps = { choosingProps = it }, onChooseColor = { choosingColor = it }, onDelete = { pendingDelete = it },
+    )
 
     Scaffold(
         topBar = {
@@ -96,124 +117,10 @@ fun SettingsRoute(
             )
         },
     ) { padding ->
-        Column(
-            Modifier.padding(padding).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Section(stringResource(R.string.settings_section_connection))
-            TokenSection(tokenSaved, connection, onSave = viewModel::saveToken, onTest = viewModel::test)
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_databases))
-            if (sources.isEmpty()) {
-                Text(stringResource(R.string.settings_no_databases), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        SettingsTab.fromId(tabId)?.let { current ->
+            SettingsCategoryNav(current, settingsBadges(facts), onSelect = { tabId = it.id; viewModel.rememberTab(it) }, modifier = Modifier.padding(padding)) {
+                key(current) { SettingsPage(current, viewModel, actions) }
             }
-            sources.forEach { source ->
-                SourceRow(
-                    source,
-                    onToggle = { viewModel.setEnabled(source.dataSourceId, it) },
-                    onChooseProps = { choosingProps = source.dataSourceId },
-                    onChooseColor = { choosingColor = source.dataSourceId },
-                    onDelete = { pendingDelete = source.dataSourceId },
-                )
-            }
-            OutlinedButton(onClick = onAddDatabase) { Text(stringResource(R.string.settings_add_database)) }
-            OutlinedButton(onClick = onAddView) { Text(stringResource(R.string.settings_add_view)) }
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_general))
-            Text(stringResource(R.string.settings_week_start))
-            SingleChoiceSegmentedButtonRow {
-                listOf(DayOfWeek.SUNDAY to R.string.settings_sunday, DayOfWeek.MONDAY to R.string.settings_monday)
-                    .forEachIndexed { index, (day, label) ->
-                        SegmentedButton(
-                            selected = settings.weekStart == day,
-                            onClick = { viewModel.setWeekStart(day) },
-                            shape = SegmentedButtonDefaults.itemShape(index, 2),
-                            icon = {},
-                        ) { Text(stringResource(label), maxLines = 1) }
-                    }
-            }
-            SwitchRow(stringResource(R.string.settings_hide_done), settings.hideDone, note = stringResource(R.string.settings_hide_done_off), onChange = viewModel::setHideDone)
-            HolidaySetting(settings.showHolidays, onChange = viewModel::setShowHolidays)
-            SwitchRow(stringResource(R.string.settings_week_numbers), settings.showWeekNumbers, note = stringResource(R.string.settings_week_numbers_note), onChange = viewModel::setShowWeekNumbers)
-            SwitchRow(stringResource(R.string.settings_dynamic_color), settings.dynamicColor, note = stringResource(R.string.settings_dynamic_color_note), onChange = viewModel::setDynamicColor)
-
-            Text(stringResource(R.string.settings_sync_interval))
-            SingleChoiceSegmentedButtonRow {
-                AppSettings.SYNC_INTERVALS.forEachIndexed { index, minutes ->
-                    SegmentedButton(
-                        selected = settings.syncIntervalMinutes == minutes,
-                        onClick = { viewModel.setSyncInterval(minutes) },
-                        shape = SegmentedButtonDefaults.itemShape(index, AppSettings.SYNC_INTERVALS.size),
-                        icon = {},
-                    ) { Text(stringResource(R.string.settings_minutes, minutes), maxLines = 1) }
-                }
-            }
-            Text(
-                stringResource(R.string.settings_sync_interval_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            // WI-02 퀵 추가 기본 DB는 일정 DB 중에서만 고른다(습관 기록은 습관 화면에서 만든다).
-            val enabled = sources.filter { it.enabled && it.sourceKind == SourceKind.CALENDAR }
-            if (enabled.size > 1) {
-                Text(stringResource(R.string.settings_default_database))
-                val current = settings.defaultDataSourceId?.takeIf { id -> enabled.any { it.dataSourceId == id } } ?: enabled.first().dataSourceId
-                enabled.forEach { source ->
-                    RadioRow(source.name, source.dataSourceId == current) { viewModel.setDefaultDataSource(source.dataSourceId) }
-                }
-            }
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_weather))
-            val weatherStatus by viewModel.weatherStatus.collectAsStateWithLifecycle()
-            WeatherSection(
-                settings,
-                weatherStatus,
-                WeatherSettingsActions(
-                    onEnable = viewModel::setWeatherEnabled,
-                    onMode = viewModel::setWeatherMode,
-                    onSearch = viewModel::searchRegions,
-                    onPickRegion = viewModel::pickRegion,
-                    onLocation = viewModel::useLocation,
-                    onMonthCells = viewModel::setWeatherMonthCells,
-                ),
-            )
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_dday))
-            Text(
-                stringResource(R.string.settings_dday_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(onClick = onOpenDday) { Text(stringResource(R.string.settings_open_dday)) }
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_reminders))
-            val exactAlarm by viewModel.exactAlarm.collectAsStateWithLifecycle()
-            LifecycleResumeEffect(Unit) {
-                viewModel.refreshExactAlarm()
-                onPauseOrDispose { }
-            }
-            ReminderSection(
-                enabled = settings.remindersEnabled,
-                rules = settings.reminderRules,
-                exactAllowed = exactAlarm,
-                onEnable = viewModel::setRemindersEnabled,
-                onRulesChange = viewModel::setReminderRules,
-            )
-
-            HorizontalDivider()
-            Section(stringResource(R.string.settings_section_diagnostics))
-            Text(
-                stringResource(R.string.settings_diagnostics_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.settings_open_diagnostics)) }
         }
     }
 
@@ -262,13 +169,13 @@ fun SettingsRoute(
 }
 
 @Composable
-private fun Section(title: String) {
+internal fun Section(title: String) {
     // 구역 제목은 먹색 굵은 글자(파랑은 누르는 것에만 쓴다).
     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 }
 
 @Composable
-private fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave: (String) -> Unit, onTest: () -> Unit) {
+internal fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave: (String) -> Unit, onTest: () -> Unit) {
     // 토큰은 저장 상태(Bundle)에 남기지 않도록 remember만 쓰고, 저장 후 바로 지운다. 표시는 항상 가린다.
     var input by remember { mutableStateOf("") }
     Text(
@@ -317,7 +224,7 @@ private fun TokenSection(tokenSaved: Boolean?, connection: ConnectionUi, onSave:
  * 거부하면 꺼 둔 채 안내하고, 앱 설정에서 허용할 수 있게 버튼을 보인다. 노션 일정은 권한과 무관하다.
  */
 @Composable
-private fun HolidaySetting(show: Boolean, onChange: (Boolean) -> Unit) {
+internal fun HolidaySetting(show: Boolean, onChange: (Boolean) -> Unit) {
     val context = LocalContext.current
     var denied by rememberSaveable { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->

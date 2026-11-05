@@ -91,6 +91,8 @@ internal val SheetSaver = Saver<QuickSheetStart?, String>(
 @Composable
 fun MonthRoute(
     onOpenSettings: () -> Unit,
+    /** ST-04 인증·공유 오류 배너와 첫 안내 카드의 버튼이 여는 설정(연결 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenConnectionSettings: () -> Unit = onOpenSettings,
     openDate: LocalDate? = null,
     /** MV-10 검색 화면 열기. */
     onOpenSearch: () -> Unit = {},
@@ -189,7 +191,7 @@ fun MonthRoute(
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 SyncStatusLine(header, weather, today)
-                Banner(header, onOpenSettings)
+                Banner(header, onOpenConnectionSettings)
                 WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
                 SchemaBanner(header.schemaAlerts, onReconnect = onReconnect, onAcknowledge = viewModel::acknowledgeSchema)
                 topBanner()

@@ -6,10 +6,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.ysdoing.notioncal.core.data.AppFailure
+import com.ysdoing.notioncal.core.data.SettingsTab
 import com.ysdoing.notioncal.feature.dday.DdayRoute
 import com.ysdoing.notioncal.feature.diagnostics.BatteryGuideCard
 import com.ysdoing.notioncal.feature.diagnostics.DiagnosticsRoute
@@ -21,11 +24,13 @@ import com.ysdoing.notioncal.feature.viewer.ViewerRoute
 import com.ysdoing.notioncal.settings.AddDatabaseRoute
 import com.ysdoing.notioncal.settings.AddViewRoute
 import com.ysdoing.notioncal.settings.SettingsRoute
+import com.ysdoing.notioncal.settings.settingsRoute
 import java.time.LocalDate
 
 private object Routes {
     const val MONTH = "month"
-    const val SETTINGS = "settings"
+    /** ST-04 설정. `?tab=<id>`가 있으면 그 카테고리로 연다(없으면 첫 카테고리 규칙). */
+    const val SETTINGS = "settings?tab={tab}"
     const val ADD_DATABASE = "settings/add"
     const val ADD_VIEW = "settings/add-view"
 
@@ -97,13 +102,15 @@ fun NotionCalNavHost(
     }
     NavHost(navController = nav, startDestination = if (safeMode) Routes.DIAGNOSTICS else Routes.MONTH) {
         composable(Routes.MONTH) {
-            val openSettings = { nav.navigate(Routes.SETTINGS) { launchSingleTop = true } }
+            val openSettings = { nav.navigate(settingsRoute()) { launchSingleTop = true } }
+            val openConnection = { nav.navigate(settingsRoute(SettingsTab.CONNECTION)) { launchSingleTop = true } }
             HomeTabs(
                 tab = tab,
                 onTabChange = { tab = it },
                 calendar = {
                     MonthRoute(
                         onOpenSettings = openSettings,
+                        onOpenConnectionSettings = openConnection,
                         openDate = openDate ?: searchDate,
                         onOpenDateHandled = {
                             if (openDate != null) onOpenDateHandled() else searchDate = null
@@ -126,8 +133,9 @@ fun NotionCalNavHost(
                 },
             )
         }
-        composable(Routes.SETTINGS) {
+        composable(Routes.SETTINGS, arguments = listOf(navArgument("tab") { type = NavType.StringType; nullable = true; defaultValue = null })) { entry ->
             SettingsRoute(
+                startTab = SettingsTab.fromId(entry.arguments?.getString("tab")),
                 onBack = { nav.popBackStack() },
                 onAddDatabase = { nav.navigate(Routes.ADD_DATABASE) },
                 onAddView = { nav.navigate(Routes.ADD_VIEW) },
