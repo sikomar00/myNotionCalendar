@@ -144,6 +144,20 @@ internal fun withDateRole(columns: List<ViewColumn>, schema: DataSourceDto, conf
 }
 
 /**
+ * Phase 12b 차트 보기의 축·값 속성(`x_axis`·`y_axis`·`value`의 `property_id`) 중 보기 열에 없는 것(쓸 수 있는 종류만)에 [ViewColumn.ROLE_CHART]를 달아
+ * 쓰기 정보에 넣는다. 차트 보기는 보이는 속성 목록이 비었거나 축 속성을 숨기는 일이 흔해서, 그래야 그 속성의 값이 행(typed)에 남아 폰에서 묶고 집계한다.
+ * 이미 있는 열은 그대로 둔다(그 값은 이미 있다). 차트가 아니면(호출하는 쪽이 설정을 넘기지 않는다) 그대로 돌려준다.
+ */
+internal fun withChartRole(columns: List<ViewColumn>, schema: DataSourceDto, config: JsonObject?): List<ViewColumn> {
+    config ?: return columns
+    val ids = listOf("x_axis", "y_axis", "value").mapNotNull { key -> ((config[key] as? JsonObject)?.get("property_id") as? JsonPrimitive)?.contentOrNull }.distinct()
+    val added = ids.filter { id -> columns.none { it.id == id } }.mapNotNull { id ->
+        schema.properties.values.firstOrNull { it.id == id && it.type in ViewColumn.INFO_TYPES }?.let(::viewColumn)?.copy(role = ViewColumn.ROLE_CHART)
+    }
+    return columns + added
+}
+
+/**
  * Phase 11c 보기 필터가 가리키는 속성 중 보이는 열에 없는 것(쓸 수 있는 유형만)에 [ViewColumn.ROLE_FILTER]를 달아 쓰기 정보에 넣는다.
  * 그래야 그 속성의 값이 행(typed)에 남아 폰에서 필터를 판정한다(IX-06). 수식·롤업 같은 유형은 판정하지 않으니 넣지 않는다.
  */

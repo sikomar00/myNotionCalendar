@@ -178,11 +178,15 @@ class ViewSync @Inject constructor(
         val groupConfig = view.configuration?.raw?.takeIf { view.type == "board" }
         // 캘린더는 date_property_id 속성(숨겨도)의 날짜로 월 격자를 그린다.
         val dateConfig = view.configuration?.raw?.takeIf { view.type == "calendar" }
+        // 차트는 x축·y축·값 속성(숨겨도)의 값으로 폰에서 묶고 집계한다.
+        val chartConfig = view.configuration?.raw?.takeIf { view.type == "chart" }
         // 보기 필터(보기 필터 + 빠른 필터)는 폰에서 항목이 필터에서 빠지는지 판정하려고 저장한다(IX-06). 필터가 가리키는 속성은 숨겨져 있어도 값을 남긴다.
         val filterJson = viewFilter(view)?.toString().orEmpty()
         val filter = ViewFilter.parse(filterJson)
-        val writable = schema?.let { withFilterRole(withDateRole(withGroupRole(withReadingRoles(writableColumns(columns, it), it), it, groupConfig), it, dateConfig), it, filter) }
-            ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
+        val writable = schema?.let { s ->
+            val roles = withChartRole(withDateRole(withGroupRole(withReadingRoles(writableColumns(columns, s), s), s, groupConfig), s, dateConfig), s, chartConfig)
+            withFilterRole(roles, s, filter)
+        } ?: ViewJson.columns(registered.columnInfo).filter { it.name in columns || it.role.isNotEmpty() }
         val meta = registered.copy(
             name = view.name,
             viewType = view.type,

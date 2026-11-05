@@ -11,6 +11,8 @@ import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
 import com.ysdoing.notioncal.core.data.view.CoverStore
 import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.chart.ChartConfig
+import com.ysdoing.notioncal.core.data.view.chart.ChartParse
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import kotlinx.serialization.json.JsonPrimitive
 import com.ysdoing.notioncal.core.notion.NotionError
@@ -448,6 +450,65 @@ class ViewSyncTest {
         assertEquals(visible.map { it.id to it.role }, roles(visible, """{"date_property_id":"gone"}"""))
         assertEquals(visible.map { it.id to it.role }, roles(visible, """{"type":"calendar"}"""))
         assertEquals(visible.map { it.id to it.role }, roles(visible, null))
+    }
+
+    private val chartSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
+        DataSourceDto.serializer(),
+        """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "Cat":{"id":"cat","name":"Cat","type":"select","select":{"options":[{"id":"o1","name":"식비","color":"red"}]}},
+                "Amount":{"id":"amt","name":"Amount","type":"number"},
+                "Calc":{"id":"calc","name":"Calc","type":"formula"}}}""",
+    )
+
+    private val chartConfig = """{"type":"chart","chart_type":"column","x_axis":{"type":"select","property_id":"cat","sort":{"type":"manual"}},"y_axis":{"aggregator":"sum","property_id":"amt"}}"""
+
+    private val chartPage = PageDto(
+        id = "a", url = "u", lastEditedTime = "2026-10-22T00:00:00.000Z",
+        properties = Json.parseToJsonElement("""{"Name":{"type":"title","title":[{"plain_text":"a"}]},"Cat":{"type":"select","select":{"id":"o1","name":"식비","color":"red"}},"Amount":{"type":"number","number":12000}}""").jsonObject,
+    )
+
+    @Test
+    fun aChartViewsHiddenAxisPropertiesAreKeptWithTheirValues() = runTest {
+        // Phase 12b: 차트 보기는 보이는 속성이 제목뿐이어도 x축·y축 속성의 값을 알아야 폰에서 묶고 집계한다. 'chart' 역할로 담는다.
+        schema = chartSchema
+        viewProperties = listOf(ViewPropertyDto("title", "Name"))
+        viewType = "chart"
+        viewRaw = Json.parseToJsonElement(chartConfig).jsonObject
+        rowPages = listOf(chartPage)
+        register("v1")
+        sync().syncAll()
+        val view = db.viewDao().all().single()
+        val columns = ViewJson.columns(view.columnInfo)
+        assertEquals(listOf("Name" to "", "Cat" to ViewColumn.ROLE_CHART, "Amount" to ViewColumn.ROLE_CHART), columns.map { it.name to it.role })
+        val typed = ViewJson.typed(db.viewDao().rows("v1").single().typed)
+        assertEquals(JsonPrimitive("o1"), typed["cat"])
+        assertEquals(12000.0, (typed["amt"] as JsonPrimitive).content.toDouble(), 0.0)
+        // 저장된 설정과 열 정보로 위젯이 그대로 차트를 읽을 수 있다
+        assertTrue(ChartConfig.parse(view.viewConfig, columns) is ChartParse.Ok)
+    }
+
+    @Test
+    fun aTableViewGetsNoChartRoleEvenIfItsConfigNamesAxes() = runTest {
+        schema = chartSchema
+        viewProperties = listOf(ViewPropertyDto("title", "Name"))
+        viewType = "table"
+        viewRaw = Json.parseToJsonElement(chartConfig).jsonObject
+        register("v1")
+        sync().syncAll()
+        assertEquals(listOf("Name"), ViewJson.columns(db.viewDao().all().single().columnInfo).map { it.name })
+    }
+
+    @Test
+    fun theChartRoleIsAddedOnlyForHiddenWritableAxisProperties() {
+        val visible = listOf(ViewColumn("cat", "Cat", "select"))
+        fun roles(columns: List<ViewColumn>, config: String?) = withChartRole(columns, chartSchema, config?.let { Json.parseToJsonElement(it).jsonObject }).map { it.id to it.role }
+        assertEquals(listOf("cat" to "", "amt" to ViewColumn.ROLE_CHART), roles(visible, chartConfig)) // 보이는 열은 그대로, 숨긴 열만 덧붙임
+        assertEquals(listOf("cat" to ""), roles(visible, """{"chart_type":"column","x_axis":{"property_id":"cat"},"y_axis":{"aggregator":"count"}}""")) // 개수는 속성이 없다
+        assertEquals(listOf("cat" to ""), roles(visible, """{"chart_type":"number","value":{"aggregator":"sum","property_id":"calc"}}""")) // 수식은 값이 없어 넣지 않는다
+        assertEquals(listOf("cat" to "", "amt" to ViewColumn.ROLE_CHART), roles(visible, """{"chart_type":"number","value":{"aggregator":"sum","property_id":"amt"}}"""))
+        assertEquals(listOf("cat" to ""), roles(visible, """{"chart_type":"column","x_axis":{"property_id":"gone"}}"""))
+        assertEquals(listOf("cat" to ""), roles(visible, null))
     }
 
     @Test

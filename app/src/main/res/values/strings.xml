@@ -26,7 +26,7 @@
     <string name="add_view_database">%1$s의 보기</string>
     <string name="add_view_none">이 DB에 보기가 없습니다</string>
     <string name="add_view_untitled">(이름 없음)</string>
-    <string name="add_view_unsupported">지원하지 않는 보기(대시보드·폼·차트·지도 등)</string>
+    <string name="add_view_unsupported">지원하지 않는 보기(대시보드·폼·지도 등)</string>
     <string name="add_view_as_list">%1$s 보기, 목록으로 표시</string>
     <string name="add_view_register">등록</string>
     <string name="add_view_registered">등록됨</string>
