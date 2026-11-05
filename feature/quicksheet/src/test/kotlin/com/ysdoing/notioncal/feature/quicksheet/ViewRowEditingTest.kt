@@ -88,48 +88,4 @@ class ViewRowEditingTest {
         assertEquals("12", formatNumber(12.0))
         assertEquals("12.5", formatNumber(12.5))
     }
-
-    @Test
-    fun datesKeepTheirTimeWhenOnlyTheDayChanges() {
-        val date = DateDraft("2026-11-04T09:00:00.000+09:00", "2026-11-04T10:00:00.000+09:00", "Asia/Seoul")
-        val moved = date.withStart(LocalDate.of(2026, 11, 6))
-        assertEquals("2026-11-06T09:00:00.000+09:00", moved.start)
-        assertEquals("2026-11-06T10:00:00.000+09:00", moved.end) // 끝이 시작보다 앞서면 끌어 올린다
-        assertEquals("Asia/Seoul", moved.timeZone)
-        assertEquals("2026-11-06", DateDraft("2026-11-04", null, null).withStart(LocalDate.of(2026, 11, 6)).start)
-    }
-
-    @Test
-    fun aTimedEndNeverFallsBeforeTheStartOnTheSameDay() {
-        val range = DateDraft("2026-11-04T15:00:00.000+09:00", "2026-11-05T10:00:00.000+09:00", null)
-        // 끝 날짜를 시작과 같은 날로 옮기면 끝 시간(10:00)이 시작(15:00)보다 앞선다 → 시작과 같게 한다.
-        assertEquals("2026-11-04T15:00:00.000+09:00", range.withEnd(LocalDate.of(2026, 11, 4)).end)
-        // 시작 날짜를 끝과 같은 날로 옮겨도 마찬가지다.
-        assertEquals("2026-11-05T15:00:00.000+09:00", range.withStart(LocalDate.of(2026, 11, 5)).end)
-        // 끝 시간이 시작보다 늦으면 그대로 둔다.
-        assertEquals("2026-11-04T18:00:00.000+09:00", DateDraft("2026-11-04T15:00:00.000+09:00", "2026-11-04T18:00:00.000+09:00", null).withEnd(LocalDate.of(2026, 11, 4)).end)
-    }
-
-    @Test
-    fun anEndBeforeTheStartIsRaisedToTheStartAndEndCanBeCleared() {
-        val date = DateDraft("2026-11-10", null, null)
-        assertEquals("2026-11-10", date.withEnd(LocalDate.of(2026, 11, 8)).end)
-        assertEquals("2026-11-12", date.withEnd(LocalDate.of(2026, 11, 12)).end)
-        assertNull(date.withEnd(LocalDate.of(2026, 11, 12)).withoutEnd().end)
-    }
-
-    @Test
-    fun datesRoundTripThroughJson() {
-        val json: JsonObject = DateDraft("2026-11-10", "2026-11-12", null).toJson()
-        assertEquals("""{"start":"2026-11-10","end":"2026-11-12"}""", json.toString())
-        assertEquals(DateDraft("2026-11-10", "2026-11-12", null), toDateDraft(json))
-        assertNull(toDateDraft(JsonNull))
-        assertNull(toDateDraft(null))
-    }
-
-    @Test
-    fun dayOfAStartWithATimeIsItsDatePart() {
-        assertEquals(LocalDate.of(2026, 11, 4), DateDraft("2026-11-04T09:00:00.000+09:00", null, null).startDay())
-        assertEquals(LocalDate.of(2026, 11, 4), DateDraft("2026-11-04", null, null).startDay())
-    }
 }

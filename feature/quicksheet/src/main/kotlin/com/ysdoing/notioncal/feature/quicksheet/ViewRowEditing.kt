@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.TypedDate
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.serialization.json.JsonArray
@@ -57,7 +58,7 @@ private fun canonical(column: ViewColumn, value: JsonElement?): Any? = when (col
     "number" -> (value as? JsonPrimitive)?.doubleOrNull
     "select", "status" -> (value as? JsonPrimitive)?.contentOrNull
     "multi_select" -> (value as? JsonArray).orEmpty().map(::optionKey).toSet()
-    "date" -> toDateDraft(value)
+    "date" -> TypedDate.parse(value)
     else -> value
 }
 
@@ -82,51 +83,3 @@ internal fun parseNumber(text: String): NumberInput {
 /** 12.0 → "12", 12.5 → "12.5" */
 internal fun formatNumber(value: Double): String =
     if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) value.toLong().toString() else value.toString()
-
-/**
- * 날짜 속성 값(`{"start","end","time_zone"}`)의 편집용 모양. 범용 시트는 날짜만 고치고 시간이 든 값은 날짜 부분만 바꾼다
- * (시간 편집은 Phase 12). 시작·끝은 노션이 준 글자 그대로(`2026-11-04` 또는 `2026-11-04T09:00:00.000+09:00`)다.
- */
-internal data class DateDraft(val start: String, val end: String?, val timeZone: String?) {
-    fun startDay(): LocalDate = LocalDate.parse(start.substringBefore('T'))
-
-    fun endDay(): LocalDate? = end?.let { LocalDate.parse(it.substringBefore('T')) }
-
-    /** 시작 날짜를 바꾼다. 끝이 새 시작보다 앞서면 같은 날로 끌어 올린다. */
-    fun withStart(day: LocalDate): DateDraft {
-        val moved = copy(start = start.withDay(day))
-        return (if (endDay()?.isBefore(day) == true) moved.copy(end = end?.withDay(day)) else moved).ordered()
-    }
-
-    /** 끝 날짜를 바꾼다. 시작보다 앞이면 시작과 같은 날이다. */
-    fun withEnd(day: LocalDate): DateDraft = copy(end = (end ?: start).withDay(maxOf(day, startDay()))).ordered()
-
-    /** 같은 날이고 둘 다 시간이 있으면 끝 시간이 시작보다 앞서지 않게 한다(앞서면 노션이 거부한다). 시간 오프셋이 같다고 보고 글자로 견준다. */
-    private fun ordered(): DateDraft {
-        val e = end ?: return this
-        val sameDay = e.substringBefore('T') == start.substringBefore('T')
-        val timed = 'T' in e && 'T' in start
-        return if (sameDay && timed && e.substringAfter('T') < start.substringAfter('T')) copy(end = start) else this
-    }
-
-    fun withoutEnd(): DateDraft = copy(end = null)
-
-    fun toJson(): JsonObject = JsonObject(
-        buildMap {
-            put("start", JsonPrimitive(start))
-            end?.let { put("end", JsonPrimitive(it)) }
-            timeZone?.let { put("time_zone", JsonPrimitive(it)) }
-        },
-    )
-}
-
-/** 날짜 글자의 날짜 부분만 바꾸고 시간 부분(`T…`)은 그대로 둔다. */
-private fun String.withDay(day: LocalDate): String = if ('T' in this) day.toString() + substring(indexOf('T')) else day.toString()
-
-/** 값이 날짜 객체가 아니거나 시작이 없으면 null(날짜 없음). */
-internal fun toDateDraft(value: JsonElement?): DateDraft? {
-    val json = value as? JsonObject ?: return null
-    fun text(key: String) = (json[key] as? JsonPrimitive)?.contentOrNull
-    val start = text("start") ?: return null
-    return DateDraft(start, text("end"), text("time_zone"))
-}

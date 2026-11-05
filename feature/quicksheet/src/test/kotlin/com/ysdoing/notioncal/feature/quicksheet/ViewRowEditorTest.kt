@@ -104,6 +104,17 @@ class ViewRowEditorTest {
     }
 
     @Test
+    fun turningOffAllDayOnADatePropertyMakesItATimedValue() {
+        // Phase 12c: 종일 스위치를 끄면 기본 9~10시(서울)의 시간 일정이 되고, 날짜는 그대로다
+        show()
+        compose.onNodeWithText("종일").performScrollTo().performClick()
+        compose.onNodeWithText("저장").performScrollTo().assertIsEnabled().performClick()
+        val date = saved.single().getValue("dt") as JsonObject
+        assertEquals(JsonPrimitive("2026-11-04T09:00:00.000+09:00"), date["start"])
+        assertEquals(JsonPrimitive("2026-11-04T10:00:00.000+09:00"), date["end"])
+    }
+
+    @Test
     fun anInvalidNumberShowsAnErrorAndBlocksSaving() {
         show()
         compose.onNodeWithText("쪽수").performTextClearance()

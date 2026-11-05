@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.view.TypedDate
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 import kotlinx.serialization.json.JsonArray
@@ -171,15 +172,18 @@ private fun MultiChoiceProp(column: ViewColumn, value: JsonElement?, onChange: (
 
 private const val NEW_SUFFIX = ":new"
 
-/** 날짜: 시작 날짜 칩, 끝 날짜 추가·지우기, 날짜 지우기. 시간이 든 값은 날짜만 바꾸고 시간은 그대로 둔다. */
+/**
+ * 날짜: 시작 날짜 칩, 끝 날짜 추가·지우기, 시간 켜기·끄기와 시작·끝 시각(종일 스위치 + 시간 칩, Phase 12c), 날짜 지우기.
+ * 날짜만 바꿀 때 시각·오프셋·시간대는 그대로 남는다([TypedDate]).
+ */
 @Composable
 private fun DateProp(column: ViewColumn, value: JsonElement?, onChange: (JsonElement?) -> Unit) {
-    val draft = toDateDraft(value)
+    val draft = TypedDate.parse(value)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         PropLabel(column.name)
         ChipFlow {
             if (draft == null) {
-                DateChip(LocalDate.now(APP_ZONE), label = stringResource(R.string.vre_date_pick)) { onChange(DateDraft(it.toString(), null, null).toJson()) }
+                DateChip(LocalDate.now(APP_ZONE), label = stringResource(R.string.vre_date_pick)) { onChange(TypedDate(it.toString()).toJson()) }
             } else {
                 DateChip(draft.startDay()) { onChange(draft.withStart(it).toJson()) }
                 val end = draft.endDay()
@@ -191,6 +195,11 @@ private fun DateProp(column: ViewColumn, value: JsonElement?, onChange: (JsonEle
                 }
                 TextButton(onClick = { onChange(null) }) { Text(stringResource(R.string.vre_date_clear)) }
             }
+        }
+        if (draft != null) {
+            // 시간 일정이 하나짜리(끝 없음)면 끝 시각 칩은 시작과 같은 시각으로 보인다. 고르면 그때부터 시작~끝 범위가 된다.
+            val time = draft.startTime()?.let { TimeRange(it, draft.endTime() ?: it) }
+            TimeChip(time) { next -> onChange((if (next == null) draft.asAllDay() else draft.withTimes(next.start, next.end)).toJson()) }
         }
     }
 }
