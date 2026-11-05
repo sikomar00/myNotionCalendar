@@ -75,10 +75,22 @@ class InputFormTest {
     }
 
     @Test
-    fun withDefaultsSetsEveryFieldFromTheValuesAndClearsTheMissingOnes() {
-        val f = InputForm(listOf(FormField("n", JsonPrimitive(1.0)), FormField("k", JsonPrimitive("o1"))))
-        val saved = f.withDefaults(mapOf("k" to JsonPrimitive("o2"), "other" to JsonPrimitive("x")))
-        assertEquals(listOf(FormField("n", null), FormField("k", JsonPrimitive("o2"))), saved.fields)
+    fun withDefaultsChangesOnlyTheFieldsInTheValuesAndANullClearsTheDefault() {
+        val f = InputForm(listOf(FormField("n", JsonPrimitive(1.0)), FormField("k", JsonPrimitive("o1")), FormField("c", JsonPrimitive(true))))
+        val saved = f.withDefaults(mapOf("k" to JsonPrimitive("o2"), "n" to null, "other" to JsonPrimitive("x")))
+        // 값 묶음에 없는 c(그때 시트에 안 보이던 속성)는 기본값을 지키고, other는 양식에 없으니 만들지 않는다
+        assertEquals(listOf(FormField("n", null), FormField("k", JsonPrimitive("o2")), FormField("c", JsonPrimitive(true))), saved.fields)
+    }
+
+    @Test
+    fun usableDropsHelperColumnsThatAreNotShownInTheView() {
+        val pages = ViewColumn("p", "읽은 쪽", "number", role = ViewColumn.ROLE_PAGES_READ)
+        val filter = ViewColumn("s", "상태", "select", role = ViewColumn.ROLE_FILTER)
+        val group = ViewColumn("g", "분류", "select", role = ViewColumn.ROLE_GROUP)
+        val all = listOf(title, amount, pages, filter, group)
+        // 보기에 안 보이는 도우미 열은 빠지고, 보이는 열(역할이 붙었어도)은 남는다
+        assertEquals(listOf("t", "n", "g"), InputForm.usable(all, listOf("이름", "금액", "분류")).map { it.id })
+        assertEquals(listOf("t", "n"), InputForm.usable(all, listOf("이름", "금액")).map { it.id })
     }
 
     @Test

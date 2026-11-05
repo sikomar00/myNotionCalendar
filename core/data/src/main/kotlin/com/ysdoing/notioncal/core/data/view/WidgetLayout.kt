@@ -33,6 +33,9 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
     /** 타일 줄이 차지하는 섹션 자리(섹션 배치에 타일이 있으면 1). */
     private val stripSlots: Int get() = if (mode == LayoutMode.SECTIONS && tiles.isNotEmpty()) 1 else 0
 
+    /** 프리셋 줄이 그려지고 프리셋을 만들 수 있는 배치: 보기 하나(단일)일 때만이다. 탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다. */
+    val presetsApply: Boolean get() = mode == LayoutMode.SINGLE
+
     fun add(viewId: String): WidgetLayout? {
         val id = viewId.trim()
         if (id.isEmpty() || items.any { it.viewId == id } || items.size + stripSlots >= mode.limit) return null

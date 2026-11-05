@@ -597,6 +597,16 @@ class ViewWidgetTest {
     }
 
     @Test
+    fun presetFromReadsTheNameAndTypedValuesTheSheetReturns() {
+        val values = mapOf<String, kotlinx.serialization.json.JsonElement>("n" to kotlinx.serialization.json.JsonPrimitive(1200.0))
+        val result = Intent().putExtra(AppIntents.EXTRA_PRESET_NAME, " 점심 ").putExtra(AppIntents.EXTRA_PRESET_PROPS, com.ysdoing.notioncal.core.data.view.ViewJson.encodeTyped(values))
+        assertEquals(com.ysdoing.notioncal.core.data.view.ViewPreset("점심", values), presetFrom(result))
+        assertEquals(com.ysdoing.notioncal.core.data.view.ViewPreset("점심"), presetFrom(Intent().putExtra(AppIntents.EXTRA_PRESET_NAME, "점심"))) // 값이 없는 프리셋
+        assertEquals(null, presetFrom(Intent().putExtra(AppIntents.EXTRA_PRESET_NAME, "  ")))
+        assertEquals(null, presetFrom(null))
+    }
+
+    @Test
     fun listWithOnlyTitleAndCheckboxDrawsTheCheckboxOnce() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(narrow)

@@ -43,6 +43,8 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.ViewJson
+import com.ysdoing.notioncal.core.data.view.ViewPreset
 import com.ysdoing.notioncal.core.data.view.ViewPresets
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -189,6 +191,13 @@ internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 
  */
 internal fun presetAddIntent(context: Context, viewId: String, appWidgetId: Int): Intent =
     viewAddIntent(context, viewId, appWidgetId).setFlags(0).putExtra(AppIntents.EXTRA_PRESET_ONLY, true)
+
+/** 프리셋 만들기 시트([presetAddIntent])가 돌려준 결과의 프리셋. 이름이 비었으면 null이다. */
+internal fun presetFrom(data: Intent?): ViewPreset? {
+    val name = data?.getStringExtra(AppIntents.EXTRA_PRESET_NAME)?.trim().orEmpty()
+    if (name.isEmpty()) return null
+    return ViewPreset(name, ViewJson.typed(data?.getStringExtra(AppIntents.EXTRA_PRESET_PROPS).orEmpty()))
+}
 
 /**
  * 행 편집 시트 열기(ED-01, 행 탭). 행마다 다른 data URI를 달아 PendingIntent가 위젯의 행끼리 서로 덮지 않게 한다

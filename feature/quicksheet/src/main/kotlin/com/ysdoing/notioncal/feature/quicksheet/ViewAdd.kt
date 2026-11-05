@@ -1,43 +1,32 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -58,7 +47,6 @@ import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetConfigRepository
 import com.ysdoing.notioncal.core.data.view.InputForm
 import com.ysdoing.notioncal.core.data.view.InputForms
-import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewFilter
@@ -82,10 +70,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.serialization.json.JsonElement
 
@@ -148,15 +133,15 @@ class ViewAddViewModel @Inject constructor(
         val widget: Flow<WidgetConfig?> = if (appWidgetId > 0) widgetConfigs.observe(appWidgetId) else flowOf(null)
         return views.observe(viewId).combine(widget) { board, config ->
             ViewAddForm(
-                board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.columnInfo.orEmpty(),
+                board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.formColumns.orEmpty(),
                 input = config?.let { InputForms.get(it.formJson, viewId) },
-                canPreset = config != null && WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE,
+                canPreset = config != null && WidgetLayout.parse(config.layoutJson).presetsApply,
             )
         }.flowOn(io)
     }
 
-    /** 양식 속성의 지금 값을 이 위젯·보기의 기본값으로 저장한다. 그 보기에 양식이 없으면 저장하지 않고 false다. */
-    suspend fun saveDefaults(appWidgetId: Int, viewId: String, values: Map<String, JsonElement>): Boolean {
+    /** 보이는 양식 속성의 지금 값을 이 위젯·보기의 기본값으로 저장한다(값이 null이면 기본값을 지운다, 안 보인 속성은 그대로). 그 보기에 양식이 없으면 저장하지 않고 false다. */
+    suspend fun saveDefaults(appWidgetId: Int, viewId: String, values: Map<String, JsonElement?>): Boolean {
         val config = widgetConfigs.get(appWidgetId)
         val updated = InputForms.withDefaults(config.formJson, viewId, values) ?: return false
         widgetConfigs.save(config.copy(formJson = updated))
@@ -184,10 +169,7 @@ class ViewAddViewModel @Inject constructor(
     }
 }
 
-private enum class DateChoice { NONE, TODAY, TOMORROW, PICK }
-
-/** 새 항목 입력 내용: 제목(바로 포커스), 날짜 칩(없음·오늘·내일·직접 고르기, 날짜 열이 있는 보기만), 취소·추가. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** 새 항목 입력 내용: 제목(바로 포커스), 날짜 칩(없음·오늘·내일·직접 고르기, 날짜 열이 있는 보기만), 입력 양식의 속성, 취소·추가. */
 @Composable
 fun ViewAddContent(
     viewName: String,
@@ -206,32 +188,36 @@ fun ViewAddContent(
     columns: List<ViewColumn> = emptyList(),
     /** AD-02 입력 양식. 있으면 양식의 속성만 이 순서로, 기본값으로 시작해 보인다. */
     input: InputForm? = null,
-    onSaveDefaults: (suspend (Map<String, JsonElement>) -> Boolean)? = null,
+    /** '이 값을 기본값으로': 보이는 양식 속성의 지금 값(비웠으면 null)을 넘긴다. 없으면 버튼이 없다. */
+    onSaveDefaults: (suspend (Map<String, JsonElement?>) -> Boolean)? = null,
     onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var choice by rememberSaveable { mutableStateOf(DateChoice.NONE) }
     var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
-    // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 도착하면 그 값으로 시작한다.
+    // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 사용자가 고치기 전에는 도착한 시작 값이 그대로 보이고,
+    // 고친 뒤에는 고친 값을 쓴다(그 뒤 값이 또 와도 덮지 않는다). 편집기는 시작 값이 바뀌면 새로 만들어 글자 칸도 새 값으로 시작한다.
     val plan = remember(columns, hasDate, presetOnly, input, prefill) { sheetPlan(columns, hasDate && !presetOnly, input, prefill) }
     var props by rememberSaveable(stateSaver = PropsSaver) { mutableStateOf(plan.start) }
     var edited by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(plan.start) { if (!edited) props = plan.start } // 사용자가 고친 뒤(화면이 다시 만들어진 뒤 값이 또 와도)에는 덮지 않는다
+    val current = if (edited) props else plan.start
     val change = { id: String, value: JsonElement? ->
         edited = true
-        props = if (value == null) props - id else props + (id to value)
+        props = if (value == null) current - id else current + (id to value)
     }
     var presetSaved by rememberSaveable { mutableStateOf<Boolean?>(null) } // null: 아직, true: 저장함, false: 저장하지 못함
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    // AD-03: 쓰는 글에서 날짜·금액·옵션을 읽는다. 미리 채운 속성(필터·양식 기본값)은 사용자가 정한 값이라 건드리지 않는다. 칩 목록은 끈 것까지 담아 다시 켤 수 있게 한다.
+    // AD-03: 쓰는 글에서 날짜·금액·옵션을 읽는다. 미리 채운 속성(필터·양식 기본값)은 사용자가 정한 값이라 건드리지 않는다.
+    // 끈 칩의 키는 저장해 두되 지금 글에서 읽히는 것만 적용하고(옛 글자의 끈 칩이 남아 보이지 않게 숨은 채 작용하지 않도록), 끈 칩은 다시 켤 수 있게 보인다.
+    // 직접 고른 날짜 칩은 글에서 읽은 날짜를 이긴다: 그 글자는 날짜로 읽지 않고 제목에 남긴다.
     var ignoredText by rememberSaveable { mutableStateOf("") }
-    val ignored = ignoredKeys(ignoredText)
     val candidates = remember(title, plan.readable, today) { ViewQuickInput.parse(title, plan.readable, today) }
-    val quick = remember(title, plan.readable, today, ignoredText) { ViewQuickInput.parse(title, plan.readable, today, ignored) }
-    val allProps = quick.props + props
+    val ignored = ignoredKeys(ignoredText).let { if (choice == DateChoice.NONE) it else it + QUICK_DATE_KEY }.filter { key -> candidates.chips.any { it.key == key } }.toSet()
+    val quick = remember(title, plan.readable, today, ignored) { if (ignored.isEmpty()) candidates else ViewQuickInput.parse(title, plan.readable, today, ignored) }
+    val allProps = quick.props + current
     val date = when (choice) {
         DateChoice.NONE -> quick.date
         DateChoice.TODAY -> today
@@ -259,29 +245,28 @@ fun ViewAddContent(
         // 만들 수 없을 때(보기가 지워졌거나 쓰기 정보를 아직 못 받음)와 쌓지 못했을 때는 이유를 글자로 알린다.
         if (!canAdd && !presetOnly) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         if (failed) Text(stringResource(R.string.view_add_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        QuickChips(candidates.chips, ignored) { ignoredText = toggled(ignoredText, it) }
-        if (plan.showDate) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = choice == DateChoice.NONE, onClick = { choice = DateChoice.NONE }, label = { Text(stringResource(R.string.view_add_no_date)) })
-                FilterChip(selected = choice == DateChoice.TODAY, onClick = { choice = DateChoice.TODAY }, label = { Text(stringResource(R.string.view_add_today)) })
-                FilterChip(selected = choice == DateChoice.TOMORROW, onClick = { choice = DateChoice.TOMORROW }, label = { Text(stringResource(R.string.view_add_tomorrow)) })
-                FilterChip(
-                    selected = choice == DateChoice.PICK,
-                    onClick = { picking = true },
-                    label = { Text(pickedIso?.let { DateTimeFormatter.ofPattern("M/d").format(LocalDate.parse(it)) } ?: stringResource(R.string.view_add_pick)) },
-                )
+        QuickChips((candidates.chips + quick.chips).distinctBy { it.key }, ignored) { key ->
+            if (key == QUICK_DATE_KEY && choice != DateChoice.NONE) {
+                choice = DateChoice.NONE // 글에서 읽은 날짜를 다시 켜면 직접 고른 날짜는 거둔다
+                ignoredText = withoutKey(ignoredText, key)
+            } else {
+                ignoredText = toggled(ignoredText, key)
             }
         }
-        FormSection(plan.fields, props, change, onSaveDefaults)
-        if (prefill.columns.isNotEmpty()) {
-            Text(stringResource(R.string.view_add_prefilled), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            PropEditors(prefill.columns, props, change)
+        if (plan.showDate) {
+            DateChips(choice, noDate = choice == DateChoice.NONE && quick.date == null, pickedIso, onPick = { picking = true }) { chosen ->
+                choice = chosen
+                if (chosen == DateChoice.NONE) ignoredText = withKey(ignoredText, QUICK_DATE_KEY) // '날짜 없음'은 글에서 읽은 날짜도 쓰지 않는다
+            }
         }
-        when (presetSaved) {
-            true -> Text(stringResource(R.string.view_add_preset_saved), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            false -> Text(stringResource(R.string.view_add_preset_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            null -> Unit
+        key(plan.start) {
+            FormSection(plan.fields, current, change, onSaveDefaults)
+            if (prefill.columns.isNotEmpty()) {
+                Text(stringResource(R.string.view_add_prefilled), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                PropEditors(prefill.columns, current, change)
+            }
         }
+        PresetStatus(presetSaved)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             // AD-05: 위젯에서 연 시트면 지금 제목(= 프리셋 이름)과 값을 이 위젯의 프리셋으로 저장한다. 프리셋 만들기 모드는 저장만 하고 항목은 만들지 않는다.
             if (onSavePreset != null && !presetOnly) {
@@ -296,20 +281,7 @@ fun ViewAddContent(
         }
     }
     if (picking) {
-        val state = rememberDatePickerState()
-        DatePickerDialog(
-            onDismissRequest = { picking = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let {
-                        pickedIso = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString()
-                        choice = DateChoice.PICK
-                    }
-                    picking = false
-                }) { Text(stringResource(R.string.view_add_ok)) }
-            },
-            dismissButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.qs_cancel)) } },
-        ) { DatePicker(state = state) }
+        PickDateDialog(onPicked = { iso -> pickedIso = iso; choice = DateChoice.PICK }, onDismiss = { picking = false })
     }
 }
 
@@ -318,6 +290,16 @@ fun ViewAddContent(
 class ViewAddActivity : ComponentActivity() {
     @Inject
     lateinit var settings: SettingsRepository
+
+    /**
+     * 프리셋 만들기 모드: 프리셋을 저장하지 않고 이름과 값을 위젯 편집 화면에 돌려준다. 프리셋 목록은 편집 화면이 들고 있다가 '저장'에서 함께 저장하니
+     * (화면에서 지운 프리셋을 되살리지 않고, 5개 상한도 화면의 목록으로 센다) 여기서 DB를 건드리지 않는다.
+     */
+    private fun finishWithPreset(title: String, props: Map<String, JsonElement>): Boolean {
+        setResult(RESULT_OK, Intent().putExtra(AppIntents.EXTRA_PRESET_NAME, title).putExtra(AppIntents.EXTRA_PRESET_PROPS, ViewJson.encodeTyped(props)))
+        finish()
+        return true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -355,9 +337,11 @@ class ViewAddActivity : ComponentActivity() {
                         input = form.input,
                         presetOnly = presetOnly,
                         onSaveDefaults = if (appWidgetId > 0 && !presetOnly) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
-                        onSavePreset = if (form.canPreset || presetOnly) { title, props ->
-                            viewModel.savePreset(appWidgetId, title, props).also { if (it && presetOnly) finish() } // 만들기 모드는 저장하면 편집 화면으로 돌아간다
-                        } else null,
+                        onSavePreset = when {
+                            presetOnly -> { title, props -> finishWithPreset(title, props) }
+                            form.canPreset -> { title, props -> viewModel.savePreset(appWidgetId, title, props) }
+                            else -> null
+                        },
                     )
                 }
             }

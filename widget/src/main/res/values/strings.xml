@@ -213,6 +213,8 @@
     <string name="widget_config_preset_delete">%1$s 프리셋 삭제</string>
     <string name="widget_config_preset_delete_label">삭제</string>
     <string name="widget_config_presets_none">프리셋이 없습니다. 아래 버튼으로 만들거나, 새 항목 시트에서 \'프리셋으로 저장\'을 누르세요</string>
+    <string name="widget_config_presets_none_pick">프리셋이 없습니다. 보기를 고르면 여기서 만들 수 있습니다</string>
+    <string name="widget_config_preset_full">프리셋은 5개까지 만들 수 있습니다. 하나를 지우거나 같은 이름으로 덮어쓰세요</string>
     <string name="widget_config_preset_create">프리셋 만들기</string>
     <string name="widget_config_tab_content">내용</string>
     <string name="widget_config_tab_look">모양</string>

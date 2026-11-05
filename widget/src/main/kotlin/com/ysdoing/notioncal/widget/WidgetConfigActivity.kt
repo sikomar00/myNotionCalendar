@@ -5,9 +5,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.FrameLayout
 import android.widget.RemoteViews
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,6 +61,8 @@ import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.ViewPreset
+import com.ysdoing.notioncal.core.data.view.ViewPresets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -123,15 +127,14 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
-    /** 프리셋 만들기 시트를 닫고 돌아오면 늘어난다. 화면이 프리셋 목록을 다시 읽는 신호다. */
-    private var resumes by mutableIntStateOf(0)
+    /** 프리셋 만들기 시트가 돌려준 프리셋. 화면이 목록에 더하고 비운다(DB는 '저장'에서 목록과 함께 쓴다). */
+    private var madePreset by mutableStateOf<ViewPreset?>(null)
 
-    override fun onResume() {
-        super.onResume()
-        resumes++
+    private val presetSheet = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) madePreset = presetFrom(result.data)
     }
 
-    private fun createPreset(viewId: String) = startActivity(presetAddIntent(this, viewId, appWidgetId))
+    private fun createPreset(viewId: String) = presetSheet.launch(presetAddIntent(this, viewId, appWidgetId))
 
     private fun finishSaved() {
         setResult(RESULT_OK, resultIntent())
@@ -170,15 +173,20 @@ class WidgetConfigActivity : ComponentActivity() {
             val ddays = if (kind == ConfigKind.DDAY || kind == ConfigKind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
             val views = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.BOOK) deps.views().observeRegistered().first() else emptyList()
             // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번, 행 JSON을 읽으니 메인 스레드 밖에서).
-            val boards = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
+            val boards = if (kind == ConfigKind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
             loaded = ConfigData(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
         }
         val data = loaded ?: run {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } // 로딩 중 빈 화면 방지(부록 A-8)
             return
         }
-        // 프리셋 만들기 시트가 프리셋을 저장하고 돌아오면 목록만 다시 읽는다(저장 때 옛 목록으로 덮어쓰지 않게).
-        LaunchedEffect(resumes) { config = config.copy(presetsJson = deps.widgetConfigs().get(appWidgetId).presetsJson) }
+        LaunchedEffect(madePreset) {
+            val preset = madePreset ?: return@LaunchedEffect
+            madePreset = null
+            // 화면에 있는 목록으로 센다: 화면에서 지운 프리셋은 되살아나지 않고, 5개가 차 있으면 알린다.
+            val updated = ViewPresets.add(config.presetsJson, preset)
+            if (updated == null) Toast.makeText(this@WidgetConfigActivity, R.string.widget_config_preset_full, Toast.LENGTH_SHORT).show() else config = config.copy(presetsJson = updated)
+        }
         val tabs = remember { configTabs(kind) }
         var tabIndex by rememberSaveable { mutableIntStateOf(0) }
         val tab = tabs[tabIndex.coerceIn(tabs.indices)]

@@ -7,6 +7,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,17 +29,21 @@ internal fun ActionSettings(kind: ConfigKind, data: ConfigData, config: WidgetCo
     ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
         onChange(config.copy(numberStep = it.toDouble()))
     }
-    // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다.
-    if (presetsApply(kind, config)) PresetList(config, presetViewId(kind, config), onChange, onCreatePreset)
-    InputFormSettings(formViewIds(kind, config), data, config, onChange)
+    // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다. 배치 글자를 읽는 것은 바뀔 때만 한다.
+    val applies = remember(kind, config.layoutJson) { presetsApply(kind, config) }
+    val presetView = remember(kind, config.layoutJson, config.viewId) { presetViewId(kind, config) }
+    val formViews = remember(kind, config.layoutJson, config.viewId) { formViewIds(kind, config) }
+    if (applies) PresetList(config, presetView, onChange, onCreatePreset)
+    InputFormSettings(formViews, data, config, onChange)
 }
 
 /** AD-05: 저장해 둔 프리셋 목록과 삭제, 그리고 '프리셋 만들기'([viewId]가 있을 때). 프리셋은 새 항목 시트의 '프리셋으로 저장'으로도 쌓인다. */
 @Composable
 private fun PresetList(config: WidgetConfig, viewId: String?, onChange: (WidgetConfig) -> Unit, onCreatePreset: (String) -> Unit) {
-    val presets = ViewPresets.parse(config.presetsJson)
+    val presets = remember(config.presetsJson) { ViewPresets.parse(config.presetsJson) }
     ConfigSection(stringResource(R.string.widget_config_presets))
-    if (presets.isEmpty()) ConfigNote(stringResource(R.string.widget_config_presets_none))
+    // 만들기 버튼은 보기를 골랐을 때만 있다.
+    if (presets.isEmpty()) ConfigNote(stringResource(if (viewId != null) R.string.widget_config_presets_none else R.string.widget_config_presets_none_pick))
     presets.forEach { preset ->
         val delete = stringResource(R.string.widget_config_preset_delete, preset.name)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

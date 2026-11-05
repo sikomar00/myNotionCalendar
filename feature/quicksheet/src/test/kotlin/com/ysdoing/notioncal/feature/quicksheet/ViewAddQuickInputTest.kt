@@ -1,6 +1,7 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -91,12 +92,53 @@ class ViewAddQuickInputTest {
     }
 
     @Test
-    fun anExplicitDateChipBeatsTheDateReadFromTheSentence() {
+    fun anExplicitDateChipBeatsTheDateReadFromTheSentenceAndLeavesItsWordInTheTitle() {
+        show()
+        type("내일 보고서")
+        compose.onNodeWithText("11/4").assertIsSelected()
+        compose.onNodeWithText("오늘").performClick()
+        compose.onNodeWithText("11/4").assertIsNotSelected() // 문장에서 읽은 날짜는 쓰이지 않으니 선택으로 보이면 안 된다
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(today, saved.single().second)
+        assertEquals("내일 보고서", saved.single().first) // 읽지 않은 날짜 낱말은 제목에 남는다
+    }
+
+    @Test
+    fun theNoDateChipDropsTheDateReadFromTheSentence() {
+        show()
+        type("내일 보고서")
+        compose.onNodeWithText("날짜 없음").assertIsNotSelected() // 읽은 날짜가 쓰이는 동안은 그 칩이 선택이다
+        compose.onNodeWithText("날짜 없음").performClick()
+        compose.onNodeWithText("날짜 없음").assertIsSelected()
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(null, saved.single().second)
+        assertEquals("내일 보고서", saved.single().first)
+    }
+
+    @Test
+    fun turningTheReadDateBackOnTakesBackTheExplicitDate() {
         show()
         type("내일 보고서")
         compose.onNodeWithText("오늘").performClick()
+        compose.onNodeWithText("11/4").performClick()
+        compose.onNodeWithText("11/4").assertIsSelected()
         compose.onNodeWithText("추가").performClick()
-        assertEquals(today, saved.single().second)
+        assertEquals(today.plusDays(1), saved.single().second)
+        assertEquals("보고서", saved.single().first)
+    }
+
+    @Test
+    fun aValueFreedByTurningAnInterpretationOffGetsItsOwnChip() {
+        show()
+        type("마트 1.5 쇼핑")
+        compose.onNodeWithText("1/5").assertIsSelected() // 점이 든 숫자는 날짜 열이 있으면 먼저 날짜로 읽힌다
+        compose.onNodeWithText("1/5").performClick()
+        compose.onNodeWithText("1/5").assertIsNotSelected() // 끈 칩은 남아 다시 켤 수 있다
+        compose.onNodeWithText("금액 1.5").assertIsSelected() // 풀린 숫자는 금액으로 읽히고 보이는 칩이 있다
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(null, saved.single().second)
+        assertEquals("마트 쇼핑", saved.single().first)
+        assertEquals(mapOf<String, JsonElement>("n1" to JsonPrimitive(1.5)), saved.single().third)
     }
 
     @Test

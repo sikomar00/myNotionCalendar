@@ -50,7 +50,7 @@ internal fun FormSection(
     fields: List<ViewColumn>,
     props: Map<String, JsonElement>,
     onChange: (String, JsonElement?) -> Unit,
-    onSaveDefaults: (suspend (Map<String, JsonElement>) -> Boolean)?,
+    onSaveDefaults: (suspend (Map<String, JsonElement?>) -> Boolean)?,
 ) {
     if (fields.isEmpty()) return
     var saved by rememberSaveable { mutableStateOf<Boolean?>(null) } // null: 아직, true: 저장함, false: 저장하지 못함
@@ -58,7 +58,7 @@ internal fun FormSection(
     PropEditors(fields, props, onChange)
     if (onSaveDefaults == null) return
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-        TextButton(onClick = { scope.launch { saved = onSaveDefaults(props.filterKeys { id -> fields.any { it.id == id } }) } }) {
+        TextButton(onClick = { scope.launch { saved = onSaveDefaults(fields.associate { it.id to props[it.id] }) } }) {
             Text(stringResource(R.string.view_add_defaults_save))
         }
     }

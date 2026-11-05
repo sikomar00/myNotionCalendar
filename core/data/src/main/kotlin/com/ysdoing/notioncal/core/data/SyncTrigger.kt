@@ -96,4 +96,8 @@ object AppIntents {
 
     /** Phase 11g AD-05: 새 항목 시트를 '프리셋 만들기'로 연다(항목은 만들지 않고 프리셋만 저장). 위젯 편집 화면이 EXTRA_APPWIDGET_ID와 함께 싣는다. */
     const val EXTRA_PRESET_ONLY = "com.ysdoing.notioncal.extra.PRESET_ONLY"
+
+    /** 프리셋 만들기 시트가 편집 화면에 돌려주는 결과: 프리셋 이름과 값 묶음(`ViewJson.encodeTyped` 글자). */
+    const val EXTRA_PRESET_NAME = "com.ysdoing.notioncal.extra.PRESET_NAME"
+    const val EXTRA_PRESET_PROPS = "com.ysdoing.notioncal.extra.PRESET_PROPS"
 }

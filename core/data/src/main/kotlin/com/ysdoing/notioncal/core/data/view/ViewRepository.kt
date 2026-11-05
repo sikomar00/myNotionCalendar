@@ -62,6 +62,9 @@ data class ViewBoard(
     /** 새 항목에 날짜를 넣을 열이 있다. */
     val hasDateColumn: Boolean get() = columnInfo.any { it.type == "date" }
 
+    /** 새 항목 시트·입력 양식이 다루는 속성([InputForm.usable]). */
+    val formColumns: List<ViewColumn> get() = InputForm.usable(columnInfo, columns)
+
     /** M5b 책 위젯의 ±쪽: 읽은 쪽 속성을 안다(보기에서 숨겨져 있어도 된다). */
     val canAdjustPages: Boolean get() = columnInfo.any { it.role == ViewColumn.ROLE_PAGES_READ }
 

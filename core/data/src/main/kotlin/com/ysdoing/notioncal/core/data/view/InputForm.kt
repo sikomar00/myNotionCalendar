@@ -1,5 +1,7 @@
 package com.ysdoing.notioncal.core.data.view
 
+import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
+import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -42,8 +44,11 @@ data class InputForm(val fields: List<FormField> = emptyList(), val showDate: Bo
     /** 보기에서 사라졌거나 양식에 못 쓰게 된 속성을 뺀 양식. 편집 화면이 순서를 옮기기 전에 쓴다(안 보이는 속성과 자리를 바꾸지 않게). */
     fun pruned(columns: List<ViewColumn>): InputForm = copy(fields = fields.filter { f -> editable(columns).any { it.id == f.propId } })
 
-    /** 시트에서 '이 값을 기본값으로'를 눌렀을 때: 양식의 모든 속성의 기본값을 [values]로 바꾼다(값이 없으면 기본값을 지운다). */
-    fun withDefaults(values: Map<String, JsonElement>): InputForm = copy(fields = fields.map { it.copy(default = values[it.propId]) })
+    /**
+     * 시트에서 '이 값을 기본값으로'를 눌렀을 때: [values]에 든 속성의 기본값을 그 값으로 바꾼다(값이 null이면 기본값을 지운다).
+     * [values]에 없는 속성(그때 시트에 보이지 않던 것)은 그대로 둔다.
+     */
+    fun withDefaults(values: Map<String, JsonElement?>): InputForm = copy(fields = fields.map { if (it.propId in values) it.copy(default = values[it.propId]) else it })
 
     /** 시트가 편집기로 보일 속성들: 양식 순서대로, 보기에 없어졌거나 양식에 못 쓰는 속성은 뺀다. */
     fun visibleColumns(columns: List<ViewColumn>): List<ViewColumn> = resolved(columns).map { it.first }
@@ -60,6 +65,12 @@ data class InputForm(val fields: List<FormField> = emptyList(), val showDate: Bo
     companion object {
         /** 양식에 담을 수 있는 속성: 앱에서 쓸 수 있는 종류에서 제목(늘 있다)과 날짜(날짜 칩)를 뺀 것. */
         fun editable(columns: List<ViewColumn>): List<ViewColumn> = columns.filter { it.writable && it.type != "title" && it.type != "date" }
+
+        /**
+         * 새 항목 시트·입력 양식이 다루는 속성: 보기에 보이지 않으면서 필터·보드·책 쪽수용으로만 쓰기 정보에 따라온 것(role이 있는 열)은 뺀다.
+         * (그런 열을 양식 후보나 한 줄 입력의 숫자 칸으로 잘못 고르지 않게. 필터에서 채우는 값은 따로 숨은 속성도 다룬다.)
+         */
+        fun usable(columnInfo: List<ViewColumn>, visibleNames: Collection<String>): List<ViewColumn> = columnInfo.filter { it.role.isEmpty() || it.name in visibleNames }
 
         private fun fitted(column: ViewColumn, value: JsonElement): JsonElement? {
             val ids = column.options.map { it.id }.toSet()
@@ -94,9 +105,13 @@ object InputForms {
     }
 
     /** [viewId]의 양식이 있을 때만 그 기본값을 [values]로 바꾼 글자. 양식이 없으면 null이다. */
-    fun withDefaults(text: String, viewId: String, values: Map<String, JsonElement>): String? =
+    fun withDefaults(text: String, viewId: String, values: Map<String, JsonElement?>): String? =
         get(text, viewId)?.let { put(text, viewId, it.withDefaults(values)) }
 
     private fun InputForm.normalized(): InputForm =
         copy(fields = fields.map { it.copy(propId = it.propId.trim()) }.filter { it.propId.isNotEmpty() }.distinctBy { it.propId })
 }
+
+/** 등록한 보기의 [InputForm.usable] 속성(설정 화면이 보기 행을 읽지 않고 입력 양식 후보를 만든다). */
+fun ViewSnapshotEntity.formColumns(): List<ViewColumn> =
+    InputForm.usable(ViewJson.columns(columnInfo), columns.split(VIEW_CELL_SEPARATOR).filter(String::isNotEmpty))

@@ -12,7 +12,6 @@ import com.ysdoing.notioncal.core.data.dday.Dday
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
-import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 
@@ -53,7 +52,7 @@ private val ACTION_KINDS = setOf(ConfigKind.VIEW, ConfigKind.LAYOUT)
  * 프리셋 줄이 그려지는 위젯인가: 보기 위젯, 그리고 보기 하나(단일 배치)인 노션 위젯. 탭·섹션은 보기마다 값이 달라 프리셋 줄을 그리지 않는다.
  * 배치를 정하지 않은 노션 위젯은 단일이다.
  */
-internal fun presetsApply(kind: ConfigKind, config: WidgetConfig): Boolean = kind == ConfigKind.VIEW || (kind == ConfigKind.LAYOUT && layoutOf(config).mode == LayoutMode.SINGLE)
+internal fun presetsApply(kind: ConfigKind, config: WidgetConfig): Boolean = kind == ConfigKind.VIEW || (kind == ConfigKind.LAYOUT && layoutOf(config).presetsApply)
 
 /** '프리셋 만들기'가 새 항목 시트를 열 보기. [presetsApply]이고 보기를 골랐을 때만 있다. */
 internal fun presetViewId(kind: ConfigKind, config: WidgetConfig): String? = when {

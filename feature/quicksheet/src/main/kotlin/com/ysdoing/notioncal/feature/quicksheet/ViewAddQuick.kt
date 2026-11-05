@@ -14,6 +14,15 @@ import com.ysdoing.notioncal.core.data.view.QuickChip
 /** 끈 칩의 키 목록을 저장할 수 있는 글자 하나(`|`로 이음)로 다룬다. */
 internal fun ignoredKeys(text: String): Set<String> = text.split('|').filter { it.isNotEmpty() }.toSet()
 
+/** 한 줄 입력에서 읽은 날짜 칩의 키. */
+internal const val QUICK_DATE_KEY = "date"
+
+/** [key]를 끈 칩에 더한 글자(이미 있으면 그대로). */
+internal fun withKey(text: String, key: String): String = (ignoredKeys(text) + key).joinToString("|")
+
+/** [key]를 끈 칩에서 뺀 글자(켠다). */
+internal fun withoutKey(text: String, key: String): String = (ignoredKeys(text) - key).joinToString("|")
+
 /** [key] 칩을 끄고 켠 뒤의 글자. */
 internal fun toggled(text: String, key: String): String = ignoredKeys(text).let { if (key in it) it - key else it + key }.joinToString("|")
 

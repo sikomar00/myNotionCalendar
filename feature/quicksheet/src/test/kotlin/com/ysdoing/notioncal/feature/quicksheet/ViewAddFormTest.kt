@@ -1,6 +1,9 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -37,7 +40,7 @@ class ViewAddFormTest {
     private val date = ViewColumn("d", "날짜", "date")
     private val columns = listOf(ViewColumn("t", "이름", "title"), amount, kind, memo, date)
     private val saved = mutableListOf<Triple<String, LocalDate?, Map<String, JsonElement>>>()
-    private val defaultsSaved = mutableListOf<Map<String, JsonElement>>()
+    private val defaultsSaved = mutableListOf<Map<String, JsonElement?>>()
     private var defaultsResult = true
 
     private fun show(input: InputForm?, prefill: ViewAddPrefill = ViewAddPrefill(), canSaveDefaults: Boolean = true) {
@@ -145,8 +148,40 @@ class ViewAddFormTest {
         show(form(FormField("k", JsonPrimitive("o1")), FormField("n")))
         compose.onNodeWithText("교통").performClick() // 기본값을 바꾼다
         compose.onNodeWithText("이 값을 기본값으로").performClick()
-        assertEquals(listOf(mapOf<String, JsonElement>("k" to JsonPrimitive("o2"))), defaultsSaved)
+        // 값이 없는 보이는 속성(금액)도 null로 넘겨 기본값을 지울 수 있게 한다
+        assertEquals(listOf(mapOf<String, JsonElement?>("k" to JsonPrimitive("o2"), "n" to null)), defaultsSaved)
         compose.onNodeWithText("기본값으로 저장했습니다").assertExists()
+    }
+
+    @Test
+    fun saveDefaultsLeavesOutAPropertyTheFilterPinsBecauseItIsNotInTheFormSection() {
+        show(form(FormField("k", JsonPrimitive("o1")), FormField("n", JsonPrimitive(5000.0))), ViewAddPrefill(listOf(kind), mapOf("k" to JsonPrimitive("o2"))))
+        compose.onNodeWithText("이 값을 기본값으로").performClick()
+        assertEquals(listOf(mapOf<String, JsonElement?>("n" to JsonPrimitive(5000.0))), defaultsSaved) // 분류의 기본값(식비)은 건드리지 않는다
+    }
+
+    @Test
+    fun defaultsThatArriveAfterTheSheetOpensStillFillTheNumberAndTextFields() {
+        var cols by mutableStateOf(emptyList<ViewColumn>())
+        var input by mutableStateOf<InputForm?>(null)
+        compose.setContent {
+            MaterialTheme {
+                ViewAddContent(
+                    viewName = "가계부", hasDate = true, today = today, columns = cols, input = input,
+                    onSave = { title, day, props -> saved += Triple(title, day, props) }, onCancel = {},
+                )
+            }
+        }
+        // 실제 시트는 보기·위젯 설정을 읽어 오는 동안 빈 양식으로 먼저 그려진다
+        compose.runOnIdle {
+            cols = columns
+            input = form(FormField("n", JsonPrimitive(5000.0)), FormField("r", JsonPrimitive("점심")))
+        }
+        compose.onNodeWithText("5000").assertExists()
+        compose.onNodeWithText("점심").assertExists()
+        compose.onNodeWithText("제목").performTextInput("택시")
+        compose.onNodeWithText("추가").performClick()
+        assertEquals(mapOf<String, JsonElement>("n" to JsonPrimitive(5000.0), "r" to JsonPrimitive("점심")), saved.single().third)
     }
 
     @Test
