@@ -48,7 +48,8 @@ data class InputForm(
         return copy(fields = fields.toMutableList().also { it.add(to, it.removeAt(from)) })
     }
 
-    fun withShowDate(on: Boolean): InputForm = copy(showDate = on)
+    /** 날짜 칩을 끄면 날짜에 기대는 플래그([dateToday]·[oncePerDay])도 끈다(제목 날짜는 날짜 칩과 상관없이 남는다). */
+    fun withShowDate(on: Boolean): InputForm = copy(showDate = on, dateToday = dateToday && on, oncePerDay = oncePerDay && on)
 
     fun withDateToday(on: Boolean): InputForm = copy(dateToday = on)
 

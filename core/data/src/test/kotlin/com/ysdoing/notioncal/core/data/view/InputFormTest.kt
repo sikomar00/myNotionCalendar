@@ -104,6 +104,14 @@ class InputFormTest {
     }
 
     @Test
+    fun hidingTheDateChipsTurnsOffTheFlagsThatNeedADateButKeepsTheDateTitle() {
+        val f = InputForm(dateToday = true, titleDate = true, oncePerDay = true).withShowDate(false)
+        assertEquals(InputForm(showDate = false, titleDate = true), f)
+        assertEquals(true, f.withShowDate(true).showDate) // 다시 켜도 꺼진 플래그는 돌아오지 않는다
+        assertEquals(false, f.withShowDate(true).dateToday)
+    }
+
+    @Test
     fun recipeFlagsSurviveStorageEditsAndPruningAndOldFormsReadAsOff() {
         val flagged = InputForm(listOf(FormField("n"), FormField("gone")), showDate = true, dateToday = true, titleDate = true, oncePerDay = true)
         val text = InputForms.put("", "v1", flagged)

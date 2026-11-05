@@ -49,8 +49,8 @@ private val CONTENT_KINDS = setOf(ConfigKind.DDAY, ConfigKind.VIEW, ConfigKind.B
 private val ACTION_KINDS = setOf(ConfigKind.VIEW, ConfigKind.LAYOUT)
 
 /**
- * 프리셋 줄이 그려지는 위젯인가: 보기 위젯, 그리고 보기 하나(단일 배치)인 노션 위젯. 탭·섹션은 보기마다 값이 달라 프리셋 줄을 그리지 않는다.
- * 배치를 정하지 않은 노션 위젯은 단일이다.
+ * 프리셋 줄이 그려지는 위젯인가: 보기 위젯, 그리고 프리셋을 가르지 않는 배치(`WidgetLayout.presetsApply`: 단일, 또는 보기가 하나뿐인 섹션)의 노션 위젯.
+ * 탭·여러 보기는 보기마다 값이 달라 프리셋 줄을 그리지 않는다. 배치를 정하지 않은 노션 위젯은 단일이다.
  */
 internal fun presetsApply(kind: ConfigKind, config: WidgetConfig): Boolean = kind == ConfigKind.VIEW || (kind == ConfigKind.LAYOUT && layoutOf(config).presetsApply)
 

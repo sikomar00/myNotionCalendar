@@ -121,6 +121,16 @@ class ViewAddRecipeFlagsTest {
     }
 
     @Test
+    fun theDateTitleFollowsTheChosenDayNotAlwaysToday() {
+        show(InputForm(titleDate = true))
+        compose.onNodeWithText("내일").performClick()
+        compose.onNodeWithText("제목 (비우면 11월 5일)").assertExists() // 칸 이름도 고른 날을 따른다
+        compose.onNodeWithText("추가").performClick()
+        assertEquals("11월 5일", saved.single().first)
+        assertEquals(today.plusDays(1), saved.single().second) // 제목과 날짜가 어긋나지 않는다
+    }
+
+    @Test
     fun aTypedTitleBeatsTheDateTitle() {
         show(InputForm(titleDate = true))
         type("아침 운동")

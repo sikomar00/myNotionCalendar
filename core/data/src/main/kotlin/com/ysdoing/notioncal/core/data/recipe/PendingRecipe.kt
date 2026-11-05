@@ -32,7 +32,8 @@ object PendingRecipes {
 
 /**
  * 핀 요청 전후의 대기 레시피를 위젯 설정에 옮기는 일. 옮기는 길이 둘이다(런처마다 순서가 달라 둘 다 둔다):
- * 핀 성공 콜백([applyToNew])과 그 위젯의 설정 화면이 열릴 때([startFor]). 먼저 온 쪽이 대기를 가져가 지우니 한 번만 쓰이고, 이미 저장된 설정은 덮지 않는다.
+ * 핀 성공 콜백([applyToNew], 가져가며 지움)과 그 위젯의 설정 화면이 열릴 때([startFor], 보기만 하고 저장 뒤 [consume]).
+ * 한 번만 쓰이고, 이미 저장된 설정은 덮지 않는다.
  */
 @Singleton
 class RecipeClaims @Inject constructor(private val widgets: WidgetConfigRepository, private val settings: SettingsRepository) {
@@ -48,9 +49,17 @@ class RecipeClaims @Inject constructor(private val widgets: WidgetConfigReposito
         return PendingRecipes.configFor(appWidgetId, pending, now)?.also { widgets.save(it) }
     }
 
-    /** 설정 화면: 저장된 설정이 없는 새 위젯이면 대기 레시피를 가져와 시작 설정으로 돌려준다(저장은 사용자가 '저장'을 누를 때). 다시 설정하는 위젯은 건드리지 않는다. */
+    /**
+     * 설정 화면: 저장된 설정이 없는 새 위젯이면 대기 레시피를 시작 설정으로 돌려준다. 지우지 않고 보기만 하니 화면이 다시 만들어져도(회전·글꼴 변경)
+     * 같은 구성으로 시작하고, 지우는 것은 사용자가 '저장'을 누른 뒤의 [consume]이다. 다시 설정하는 위젯은 건드리지 않는다.
+     */
     suspend fun startFor(appWidgetId: Int, now: Long): WidgetConfig? {
         if (widgets.saved(appWidgetId) != null) return null
-        return PendingRecipes.configFor(appWidgetId, settings.takePendingRecipe(), now)
+        return PendingRecipes.configFor(appWidgetId, settings.pendingRecipe(), now)
+    }
+
+    /** 설정 화면이 저장한 뒤: 대기 레시피를 지운다(뒤늦은 핀 콜백이나 다른 새 위젯이 가져가지 않게). */
+    suspend fun consume() {
+        settings.takePendingRecipe()
     }
 }

@@ -76,10 +76,10 @@ class RecipesTest {
         assertEquals(RecipePicks(viewId = "cal", boardViewId = "brd"), tasks) // 새 항목의 날짜는 시트가 보기의 날짜 열에 넣는다
 
         val habits = Recipes.defaultPicks(Recipe.HABITS, listOf(table, habitTable))
-        assertEquals(RecipePicks(viewId = "hab", dateProp = "d", checkProps = listOf("c1", "c2", "c3")), habits) // 체크박스는 최대 3개
+        assertEquals(RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2", "c3")), habits) // 체크박스는 최대 3개
 
         val money = Recipes.defaultPicks(Recipe.LEDGER, listOf(ledger))
-        assertEquals(RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", categoryProp = "k"), money)
+        assertEquals(RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k"), money)
     }
 
     @Test
@@ -95,9 +95,9 @@ class RecipesTest {
 
     @Test
     fun changingTheViewRederivesItsPropertiesAndKeepsWhatStillFits() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", categoryProp = "k")
+        val picks = RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k")
         val other = view("led2", "table", title, due, count, status)
-        assertEquals(RecipePicks(viewId = "led2", dateProp = "e", amountProp = "q", categoryProp = "s"), Recipes.withView(Recipe.LEDGER, picks, other))
+        assertEquals(RecipePicks(viewId = "led2", amountProp = "q", categoryProp = "s"), Recipes.withView(Recipe.LEDGER, picks, other))
         // 같은 속성 ID가 새 보기에도 있으면 사용자가 고른 것을 지킨다
         val same = view("led3", "table", title, date, amount, count, kind)
         assertEquals(picks.copy(viewId = "led3"), Recipes.withView(Recipe.LEDGER, picks, same))
@@ -135,7 +135,7 @@ class RecipesTest {
 
     @Test
     fun habitsBuildsStreakAndWeeklyRatioTilesAndAOncePerDayTodayForm() {
-        val config = Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", dateProp = "d", checkProps = listOf("c1", "c2")), listOf(habitTable))!!
+        val config = Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2")), listOf(habitTable))!!
         val layout = layoutOf(config)
         assertEquals(LayoutMode.SECTIONS, layout.mode)
         assertEquals(listOf("hab"), layout.items.map { it.viewId })
@@ -158,7 +158,7 @@ class RecipesTest {
 
     @Test
     fun habitsKeepsAtMostThreeCheckboxesSoTheTileStripFits() {
-        val picks = RecipePicks(viewId = "hab", dateProp = "d", checkProps = listOf("c1", "c2", "c3", "c4"))
+        val picks = RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2", "c3", "c4"))
         val layout = layoutOf(Recipes.build(Recipe.HABITS, picks, listOf(habitTable))!!)
         assertEquals(listOf("c1", "c2", "c3"), layout.tiles.filter { it.fn == AggFn.RATIO }.map { it.propId })
         assertTrue(layout.tiles.size <= WidgetLayout.TILE_LIMIT)
@@ -166,7 +166,7 @@ class RecipesTest {
 
     @Test
     fun ledgerBuildsAMonthlySumTileWithTheBudgetAsGoalAndAnAmountCategoryForm() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", categoryProp = "k", budget = 500000.0)
+        val picks = RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k", budget = 500000.0)
         val config = Recipes.build(Recipe.LEDGER, picks, listOf(ledger))!!
         val layout = layoutOf(config)
         assertEquals(LayoutMode.SECTIONS, layout.mode)
@@ -178,7 +178,7 @@ class RecipesTest {
 
     @Test
     fun ledgerWithoutABudgetOrCategoryStillBuilds() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", budget = 0.0)
+        val picks = RecipePicks(viewId = "led", amountProp = "n", budget = 0.0)
         val config = Recipes.build(Recipe.LEDGER, picks, listOf(ledger))!!
         assertNull(layoutOf(config).tiles.single().goal) // 0 이하는 목표가 아니다
         assertEquals(listOf(FormField("n")), InputForms.get(config.formJson, "led")!!.fields)
@@ -188,34 +188,36 @@ class RecipesTest {
     fun missingRequiredPicksOrViewsGiveNoConfig() {
         assertNull(Recipes.build(Recipe.TASKS, RecipePicks(), listOf(calendar)))
         assertNull(Recipes.build(Recipe.TASKS, RecipePicks(viewId = "gone"), listOf(calendar)))
-        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", dateProp = "d"), listOf(habitTable))) // 체크박스 없음
-        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", checkProps = listOf("c1")), listOf(habitTable))) // 날짜 없음
-        assertNull(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", dateProp = "d"), listOf(ledger))) // 금액 없음
-        assertNull(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "n"), listOf(ledger))) // 날짜 없음
+        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab"), listOf(habitTable))) // 체크박스 없음
+        assertNull(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led"), listOf(ledger))) // 금액 없음
     }
 
     @Test
     fun picksThatNoLongerMatchTheViewsColumnsGiveNoConfig() {
         // 속성 ID가 보기에 없거나 종류가 안 맞으면(숫자 열이 아닌 것을 금액으로) 만들지 않는다
-        assertNull(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", dateProp = "d", amountProp = "k"), listOf(ledger)))
-        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", dateProp = "d", checkProps = listOf("zzz")), listOf(habitTable)))
-        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", dateProp = "n", checkProps = listOf("c1")), listOf(habitTable)))
+        assertNull(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "k"), listOf(ledger)))
+        assertNull(Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", checkProps = listOf("zzz")), listOf(habitTable)))
     }
 
     @Test
-    fun validMatchesBuild() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n")
-        assertTrue(Recipes.valid(Recipe.LEDGER, picks, listOf(ledger)))
-        assertFalse(Recipes.valid(Recipe.LEDGER, picks.copy(amountProp = ""), listOf(ledger)))
-        assertNotNull(Recipes.build(Recipe.LEDGER, picks, listOf(ledger)))
+    fun theTilesAndTheNewItemUseTheViewsFirstDateColumn() {
+        // 새 항목은 보기의 첫 날짜 열에 날짜를 쓰니(ViewWriter), 타일과 하루 한 줄 판정도 같은 열을 읽어야 어긋나지 않는다
+        val twoDates = view("two", "table", title, due, date, amount)
+        val tile = layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "two", amountProp = "n"), listOf(twoDates))!!).tiles.single()
+        assertEquals("e", tile.dateProp)
+    }
+
+    @Test
+    fun theBudgetBecomesTheTilesGoal() {
+        assertEquals(1000.0, layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "n", budget = 1000.0), listOf(ledger))!!).tiles.single().goal)
     }
 
     @Test
     fun theBuiltLayoutRoundTripsThroughTheWidgetLayoutParser() {
         listOf(
             Recipe.TASKS to RecipePicks(viewId = "cal", boardViewId = "brd"),
-            Recipe.HABITS to RecipePicks(viewId = "hab", dateProp = "d", checkProps = listOf("c1", "c2", "c3")),
-            Recipe.LEDGER to RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", categoryProp = "k", budget = 1000.0),
+            Recipe.HABITS to RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2", "c3")),
+            Recipe.LEDGER to RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k", budget = 1000.0),
         ).forEach { (recipe, picks) ->
             val config = Recipes.build(recipe, picks, listOf(calendar, board, habitTable, ledger))!!
             val layout = layoutOf(config)

@@ -44,7 +44,7 @@ class RecipeContentTest {
 
     private val calls = mutableListOf<String>()
     private val actions = RecipeActions(
-        onRecipe = { calls += "recipe:${it.name}" }, onView = { calls += "view:$it" }, onBoard = { calls += "board:$it" }, onDate = { calls += "date:$it" },
+        onRecipe = { calls += "recipe:${it.name}" }, onView = { calls += "view:$it" }, onBoard = { calls += "board:$it" },
         onAmount = { calls += "amount:$it" }, onCategory = { calls += "category:$it" }, onCheck = { calls += "check:$it" }, onBudget = { calls += "budget:$it" },
         onAddView = { calls += "addView" }, onPin = { calls += "pin" },
     )
@@ -103,6 +103,13 @@ class RecipeContentTest {
         compose.onNodeWithText("분류 없음").performScrollTo().performClick()
         compose.onNodeWithText("한 달 예산", substring = true).performScrollTo().performTextInput("500000")
         assertEquals(listOf("amount:m", "category:", "budget:500000"), calls)
+    }
+
+    @Test
+    fun theDateColumnIsNotAChoiceButItsNameIsShownForHabitsAndLedger() {
+        show(Recipe.LEDGER)
+        compose.onNodeWithText("새 항목의 날짜는", substring = true).assertExists()
+        compose.onNodeWithText("‘날짜’", substring = true).assertExists() // 첫 날짜 열의 이름
     }
 
     @Test

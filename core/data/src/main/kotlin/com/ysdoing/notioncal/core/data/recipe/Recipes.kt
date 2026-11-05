@@ -19,13 +19,12 @@ data class RecipeView(val viewId: String, val name: String, val type: String, va
 
 /**
  * 사용자가 고른 것. [viewId]가 주 보기이고(일정·할 일은 캘린더 쪽), [boardViewId]는 일정·할 일의 상태 보드(선택)다.
- * 해빗트래커는 [dateProp]·[checkProps], 가계부는 [dateProp]·[amountProp]·[categoryProp](선택)·[budget](선택, 타일의 목표)을 쓴다.
- * 일정·할 일의 새 항목 날짜는 시트가 보기의 날짜 열에 넣으니 속성을 고르지 않는다.
+ * 해빗트래커는 [checkProps], 가계부는 [amountProp]·[categoryProp](선택)·[budget](선택, 타일의 목표)을 쓴다.
+ * 날짜 속성은 고르지 않는다: 새 항목은 보기의 첫 날짜 열에 날짜를 쓰니(`ViewWriter`) 타일·하루 한 줄 판정도 그 열을 읽어야 어긋나지 않는다.
  */
 data class RecipePicks(
     val viewId: String = "",
     val boardViewId: String = "",
-    val dateProp: String = "",
     val checkProps: List<String> = emptyList(),
     val amountProp: String = "",
     val categoryProp: String = "",
@@ -73,19 +72,15 @@ object Recipes {
         return when (recipe) {
             Recipe.TASKS -> moved
             Recipe.HABITS -> moved.copy(
-                dateProp = view.keep(picks.dateProp, "date"),
                 checkProps = picks.checkProps.filter { id -> view.columns.any { it.id == id && it.type == "checkbox" } }
                     .ifEmpty { view.columns.filter { it.type == "checkbox" }.take(MAX_HABITS).map { it.id } },
             )
             Recipe.LEDGER -> moved.copy(
-                dateProp = view.keep(picks.dateProp, "date"),
                 amountProp = view.keep(picks.amountProp, "number"),
                 categoryProp = view.keep(picks.categoryProp, OPTION_TYPES),
             )
         }
     }
-
-    fun valid(recipe: Recipe, picks: RecipePicks, views: List<RecipeView>): Boolean = build(recipe, picks, views) != null
 
     /** 고른 것으로 만든 위젯 구성. 필요한 보기·속성이 없거나 종류가 맞지 않으면 null이다(화면이 '홈 화면에 추가'를 막는다). */
     fun build(recipe: Recipe, picks: RecipePicks, views: List<RecipeView>): RecipeConfig? {
@@ -108,7 +103,7 @@ object Recipes {
 
     /** 연속 달성일 + 체크박스마다 이번 주 달성률(목표 [WEEKLY_GOAL]%) 타일과 보기. 새 항목은 체크박스 칸·오늘 날짜·제목 'M월 d일'로 하루에 한 줄만 만든다. */
     private fun habits(picks: RecipePicks, view: RecipeView): RecipeConfig? {
-        val date = view.column(picks.dateProp, "date") ?: return null
+        val date = view.firstDate() ?: return null
         val checks = picks.checkProps.mapNotNull { view.column(it, "checkbox") }.distinctBy { it.id }.take(MAX_HABITS)
         if (checks.isEmpty()) return null
         var layout = WidgetLayout(LayoutMode.SECTIONS, listOf(LayoutItem(view.viewId)))
@@ -122,10 +117,10 @@ object Recipes {
 
     /** 이번 달 합계 타일(예산이 있으면 목표로 진행 막대)과 보기. 새 항목은 금액·분류 칸과 오늘 날짜로 시작하고 프리셋 줄이 보인다(섹션에 보기 하나). */
     private fun ledger(picks: RecipePicks, view: RecipeView): RecipeConfig? {
-        val date = view.column(picks.dateProp, "date") ?: return null
+        val date = view.firstDate() ?: return null
         val amount = view.column(picks.amountProp, "number") ?: return null
         val category = view.columns.firstOrNull { it.id == picks.categoryProp && it.type in OPTION_TYPES }
-        val tile = AggTile("", view.viewId, AggFn.SUM, amount.id, date.id, AggPeriod.THIS_MONTH, picks.budget?.takeIf { it.isFinite() && it > 0 }, label = MONTH_SUM)
+        val tile = AggTile("", view.viewId, AggFn.SUM, amount.id, date.id, AggPeriod.THIS_MONTH, picks.budget, label = MONTH_SUM)
         val layout = WidgetLayout(LayoutMode.SECTIONS, listOf(LayoutItem(view.viewId))).addTile(tile) ?: return null
         val form = InputForm(listOfNotNull(amount, category).map { FormField(it.id) }, dateToday = true)
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
@@ -148,6 +143,9 @@ object Recipes {
     private fun RecipeView.has(type: String) = columns.any { it.type == type }
 
     private fun RecipeView.column(id: String, type: String) = columns.firstOrNull { it.id == id && it.type == type }
+
+    /** 새 항목의 날짜가 들어가는 열(보기의 첫 날짜 열). */
+    private fun RecipeView.firstDate() = columns.firstOrNull { it.type == "date" }
 
     private fun RecipeView.keep(id: String, type: String): String = keep(id, setOf(type))
 

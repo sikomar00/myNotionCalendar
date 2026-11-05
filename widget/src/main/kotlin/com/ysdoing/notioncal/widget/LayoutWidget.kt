@@ -76,7 +76,7 @@ internal data class LayoutLook(val palette: WidgetPalette, val metrics: ViewMetr
 /**
  * Phase 11d WL-01~03 '노션 위젯': 등록한 보기를 하나로, 탭으로, 또는 섹션(위아래로 쌓기)으로 담는다. 틀(`appWidgetBackground`)은 여기서 한 번만 두고
  * 본문은 보기 위젯과 같은 [ViewPane]을 쓴다. 탭·섹션은 칸의 크기를 [LocalSize]로 알려 줘 크기 단계·행 수가 그 칸에 맞는다.
- * 프리셋은 한 보기의 값이라 단일일 때만 둔다.
+ * 프리셋은 한 보기의 값이라 보기 하나(단일, 또는 보기가 하나뿐인 섹션, `WidgetLayout.presetsApply`)일 때만 둔다.
  */
 @Composable
 internal fun LayoutWidgetContent(

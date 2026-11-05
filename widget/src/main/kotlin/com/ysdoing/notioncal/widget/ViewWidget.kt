@@ -176,7 +176,7 @@ internal fun ViewPane(state: ViewWidgetState, palette: WidgetPalette, metrics: V
 
 /**
  * VW-08 새 항목 입력 시트 열기. 보기마다(위젯이 있으면 위젯마다) 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다(:widget은 :feature에 의존하지 않아
- * action 문자열로 연다). [appWidgetId]는 시트가 이 위젯의 입력 양식을 읽고 기본값·프리셋을 저장하도록 싣는다(0이면 양식·프리셋이 없다. 프리셋은 시트가 단일 배치일 때만 보인다).
+ * action 문자열로 연다). [appWidgetId]는 시트가 이 위젯의 입력 양식을 읽고 기본값·프리셋을 저장하도록 싣는다(0이면 양식·프리셋이 없다. 프리셋은 시트가 프리셋 줄을 그리는 배치일 때만 보인다).
  */
 internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 0): Intent =
     Intent(AppIntents.ACTION_VIEW_ADD)

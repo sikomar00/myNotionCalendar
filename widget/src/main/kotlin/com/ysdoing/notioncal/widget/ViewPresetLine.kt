@@ -26,9 +26,13 @@ import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.view.InputForm
+import com.ysdoing.notioncal.core.data.view.InputForms
 import com.ysdoing.notioncal.core.data.view.ViewPreset
 import com.ysdoing.notioncal.core.data.view.ViewPresets
 import com.ysdoing.notioncal.core.data.view.ViewWriter
+import java.time.LocalDate
 
 // Phase 11c IX-04·AD-05: 위젯 프리셋 줄. 눌러서 프리셋 이름을 제목으로, 저장해 둔 값 묶음으로 새 항목을 만든다(4초 지연이라 되돌릴 수 있다).
 
@@ -62,6 +66,9 @@ internal fun ViewPresetLine(viewId: String, presets: List<ViewPreset>, palette: 
     }
 }
 
+/** 프리셋으로 만드는 항목의 날짜: 그 보기의 입력 양식이 날짜를 오늘로 시작하면(레시피) 오늘, 아니면 없다. 날짜 칩을 숨긴 양식은 날짜를 쓰지 않는다. */
+internal fun presetDate(form: InputForm?, today: LocalDate): LocalDate? = today.takeIf { form?.dateToday == true && form.showDate }
+
 /** 프리셋 누르기: 그 위젯의 같은 이름 프리셋으로 새 항목을 쓰기 큐에 4초 지연으로 쌓고(되돌릴 수 있다) 위젯을 다시 그린다. 노션은 부르지 않는다. */
 class PresetAddAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
@@ -69,8 +76,10 @@ class PresetAddAction : ActionCallback {
         val name = parameters[PresetKey] ?: return
         val dependencies = WidgetDependencies.from(context)
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
-        val preset = ViewPresets.parse(dependencies.widgetConfigs().get(appWidgetId).presetsJson).firstOrNull { it.name == name } ?: return
-        dependencies.viewWriter().create(viewId, preset.name, null, preset.props, ViewWriter.UNDO_WINDOW_MS)
+        val config = dependencies.widgetConfigs().get(appWidgetId)
+        val preset = ViewPresets.parse(config.presetsJson).firstOrNull { it.name == name } ?: return
+        val date = presetDate(InputForms.get(config.formJson, viewId), LocalDate.now(APP_ZONE))
+        dependencies.viewWriter().create(viewId, preset.name, date, preset.props, ViewWriter.UNDO_WINDOW_MS)
         WidgetKinds.update(context, glanceId)
     }
 

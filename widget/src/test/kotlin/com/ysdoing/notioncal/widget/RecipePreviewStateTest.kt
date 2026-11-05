@@ -36,7 +36,7 @@ class RecipePreviewStateTest {
 
     @Test
     fun theLedgerRecipeGivesAMonthlySumTileFromTheViewsRealRows() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", budget = 100_000.0)
+        val picks = RecipePicks(viewId = "led", amountProp = "n", budget = 100_000.0)
         val config = Recipes.build(Recipe.LEDGER, picks, listOf(recipeView))!!
         val state = WidgetPreviews.layoutPreview(
             com.ysdoing.notioncal.core.data.WidgetConfig(0, layoutJson = config.layoutJson, formJson = config.formJson),
@@ -51,7 +51,7 @@ class RecipePreviewStateTest {
 
     @Test
     fun aViewWithoutRealRowsStillGetsAPaneFromTheSampleRows() {
-        val picks = RecipePicks(viewId = "led", dateProp = "d", amountProp = "n")
+        val picks = RecipePicks(viewId = "led", amountProp = "n")
         val config = Recipes.build(Recipe.LEDGER, picks, listOf(recipeView))!!
         val state = WidgetPreviews.layoutPreview(
             com.ysdoing.notioncal.core.data.WidgetConfig(0, layoutJson = config.layoutJson), names = mapOf("led" to "가계부"), now = now,

@@ -22,7 +22,7 @@ class RecipeDraftTest {
     fun startingARecipeTakesItsDefaultPicks() {
         val draft = RecipeDraft().start(Recipe.LEDGER, views)
         assertEquals(Recipe.LEDGER, draft.recipe)
-        assertEquals(RecipePicks(viewId = "led", dateProp = "d", amountProp = "n", categoryProp = "k"), draft.picks)
+        assertEquals(RecipePicks(viewId = "led", amountProp = "n", categoryProp = "k"), draft.picks)
         assertEquals("", draft.budgetText)
     }
 
@@ -38,7 +38,7 @@ class RecipeDraftTest {
     fun selectingAViewRederivesItsPropertiesButOnlyForRegisteredViews() {
         val draft = RecipeDraft().start(Recipe.HABITS, views)
         val moved = draft.selectView("hab2", views)
-        assertEquals(RecipePicks(viewId = "hab2", dateProp = "d2", checkProps = listOf("x")), moved.picks)
+        assertEquals(RecipePicks(viewId = "hab2", checkProps = listOf("x")), moved.picks)
         assertEquals(draft, draft.selectView("gone", views)) // 등록에 없는 보기는 무시한다
     }
 
@@ -55,12 +55,20 @@ class RecipeDraftTest {
     }
 
     @Test
+    fun choosingWhatIsAlreadyChosenChangesNothing() {
+        val draft = RecipeDraft().start(Recipe.LEDGER, views).selectCategory("").withBudget("300000")
+        assertEquals(draft, draft.switchTo(Recipe.LEDGER, views)) // 같은 레시피 칩을 또 눌러도 고른 것·예산이 그대로다
+        assertEquals(draft, draft.selectView("led", views)) // 같은 보기를 또 눌러도 '분류 없음' 같은 고른 값이 첫 속성으로 돌아가지 않는다
+        assertEquals(Recipe.HABITS, draft.switchTo(Recipe.HABITS, views).recipe) // 다른 레시피면 기본 선택으로 다시 시작
+        assertEquals(Recipe.LEDGER, RecipeDraft().switchTo(Recipe.LEDGER, views).recipe) // 아직 시작 전이면 시작한다
+    }
+
+    @Test
     fun propertySettersAndTheBoardChangeOnlyTheirOwnPick() {
         val draft = RecipeDraft().start(Recipe.LEDGER, views)
         assertEquals("m", draft.selectAmount("m").picks.amountProp)
         assertEquals("s", draft.selectCategory("s").picks.categoryProp)
         assertEquals("", draft.selectCategory("").picks.categoryProp) // 분류는 비울 수 있다
-        assertEquals("e2", draft.selectDate("e2").picks.dateProp)
         val tasks = RecipeDraft().start(Recipe.TASKS, views)
         assertEquals("", tasks.selectBoard("").picks.boardViewId) // '보드 없음'
         assertEquals("brd", tasks.selectBoard("").selectBoard("brd").picks.boardViewId)
@@ -97,6 +105,8 @@ class RecipeDraftTest {
         assertEquals(draft, draft.repaired(views)) // 그대로면 바뀌지 않는다
         val without = views.filter { it.viewId != "led" }
         assertEquals(RecipePicks(), draft.repaired(without).picks) // 가계부에 맞는 보기가 하나도 없다
+        val budgeted = draft.withBudget("300000").repaired(without + RecipeView("led3", "셋", "table", listOf(title, col("d", "date"), col("q", "number"))))
+        assertEquals(300000.0, budgeted.picks.budget) // 입력 칸에 글자가 남아 있으니 목표도 함께 남는다
         val other = views + RecipeView("led2", "가계부 둘", "table", listOf(title, col("d", "date"), col("q", "number")))
         assertEquals("led2", draft.repaired(other.filter { it.viewId != "led" }).picks.viewId)
         assertEquals("cal", RecipeDraft().repaired(views).picks.viewId) // 시작 전(고른 보기가 없음)이면 기본 선택으로 채운다

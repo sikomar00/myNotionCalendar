@@ -68,7 +68,7 @@
     <string name="recipe_section_view">노션 보기</string>
     <string name="recipe_section_board">상태 보드(선택)</string>
     <string name="recipe_board_none">보드 없음</string>
-    <string name="recipe_section_date">날짜 속성</string>
+    <string name="recipe_date_note">새 항목의 날짜는 ‘%1$s’ 속성에 기록되고, 타일도 이 속성을 읽습니다.</string>
     <string name="recipe_section_checks">체크할 습관(최대 3개)</string>
     <string name="recipe_section_amount">금액 속성</string>
     <string name="recipe_section_category">분류 속성(선택)</string>

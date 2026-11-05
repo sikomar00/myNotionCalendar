@@ -58,7 +58,9 @@ class RecipeViewModel @Inject constructor(
     private val draft = MutableStateFlow(RecipeDraft())
     private val pinState = MutableStateFlow(PinState.IDLE)
 
+    // 구성을 만들 때 글자를 읽고 쓰니(JSON) 메인 스레드 밖에서 한다.
     internal val ui: StateFlow<RecipeUi> = combine(registered, draft, pinState) { list, current, pin -> RecipeUi(list, current, list?.let { current.config(it) }, pin) }
+        .flowOn(io)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), RecipeUi(null, RecipeDraft(), null, PinState.IDLE))
 
     /** 구성이 읽는 보기(칸과 타일)의 실제 행. 구성이 바뀔 때만 다시 구독한다. */
@@ -74,13 +76,11 @@ class RecipeViewModel @Inject constructor(
         viewModelScope.launch { registered.filterNotNull().collect { list -> draft.update { it.repaired(list) } } }
     }
 
-    fun selectRecipe(recipe: Recipe) = edit { it.start(recipe, registered.value.orEmpty()) }
+    fun selectRecipe(recipe: Recipe) = edit { it.switchTo(recipe, registered.value.orEmpty()) }
 
     fun selectView(viewId: String) = edit { it.selectView(viewId, registered.value.orEmpty()) }
 
     fun selectBoard(viewId: String) = edit { it.selectBoard(viewId) }
-
-    fun selectDate(propId: String) = edit { it.selectDate(propId) }
 
     fun selectAmount(propId: String) = edit { it.selectAmount(propId) }
 

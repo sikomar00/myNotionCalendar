@@ -62,12 +62,10 @@ private fun ViewFormEditor(viewId: String, view: ViewSnapshotEntity?, stored: In
     rows.forEachIndexed { index, row -> FormRowEditor(row, index, checkedCount, defaults[row.column.id]?.let(row.column::display), form, set) }
     if (hasDate) {
         SwitchRow(stringResource(R.string.widget_config_form_date), form.showDate) { set(form.withShowDate(it)) }
-        // 레시피 동작(Phase 11h): 날짜 칩이 보일 때만 뜻이 있다.
-        if (form.showDate) {
-            SwitchRow(stringResource(R.string.widget_config_form_date_today), form.dateToday) { set(form.withDateToday(it)) }
-            SwitchRow(stringResource(R.string.widget_config_form_title_date), form.titleDate, note = stringResource(R.string.widget_config_form_title_date_note)) { set(form.withTitleDate(it)) }
-            SwitchRow(stringResource(R.string.widget_config_form_once), form.oncePerDay, note = stringResource(R.string.widget_config_form_once_note)) { set(form.withOncePerDay(it)) }
-        }
+        // 레시피 동작(Phase 11h). 제목 날짜는 날짜 칩과 상관없이 쓰이니 늘 보이고, 오늘 시작·하루 한 줄은 날짜 칩이 보일 때만 뜻이 있다(끄면 함께 꺼진다).
+        if (form.showDate) SwitchRow(stringResource(R.string.widget_config_form_date_today), form.dateToday) { set(form.withDateToday(it)) }
+        SwitchRow(stringResource(R.string.widget_config_form_title_date), form.titleDate, note = stringResource(R.string.widget_config_form_title_date_note)) { set(form.withTitleDate(it)) }
+        if (form.showDate) SwitchRow(stringResource(R.string.widget_config_form_once), form.oncePerDay, note = stringResource(R.string.widget_config_form_once_note)) { set(form.withOncePerDay(it)) }
     }
 }
 

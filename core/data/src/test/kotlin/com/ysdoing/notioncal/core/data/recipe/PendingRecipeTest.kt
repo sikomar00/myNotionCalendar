@@ -97,13 +97,35 @@ class PendingRecipeTest {
     }
 
     @Test
-    fun theConfigScreenStartsFromThePendingRecipeWithoutWritingItAndTheCallbackThenFindsNothing() = runTest {
+    fun theConfigScreenSeesThePendingRecipeWithoutTakingItSoARotationStillStartsFromIt() = runTest {
         val claims = claims()
         claims.request(recipe, t0)
         val start = claims.startFor(7, t0 + 2_000)!!
         assertEquals(recipe.formJson, start.formJson)
         assertNull(db.widgetConfigDao().get(7)) // 저장은 사용자가 '저장'을 누를 때
-        assertNull(claims.applyToNew(7, t0 + 3_000)) // 콜백이 설정 화면보다 늦게 와도 두 번 쓰지 않는다
+        assertEquals(start, claims.startFor(7, t0 + 2_500)) // 화면이 다시 만들어져도(회전·글꼴 변경) 같은 구성으로 시작한다
+    }
+
+    @Test
+    fun savingTheConfigScreenConsumesThePendingRecipeSoNothingElseGetsIt() = runTest {
+        val claims = claims()
+        claims.request(recipe, t0)
+        claims.startFor(7, t0 + 1_000)
+        db.widgetConfigDao().upsert(com.ysdoing.notioncal.core.data.db.WidgetConfigEntity(7, layoutJson = "saved")) // 화면이 '저장'을 눌렀다
+        claims.consume()
+        assertNull(claims.applyToNew(7, t0 + 2_000)) // 콜백이 뒤늦게 와도 저장된 설정을 덮지 않는다
+        assertNull(claims.startFor(8, t0 + 3_000)) // 다른 새 위젯에도 붙지 않는다
+        assertEquals("saved", db.widgetConfigDao().get(7)!!.layoutJson)
+    }
+
+    @Test
+    fun theCallbackArrivingWhileTheConfigScreenIsOpenWritesTheRecipeForTheScreenToSave() = runTest {
+        val claims = claims()
+        claims.request(recipe, t0)
+        val start = claims.startFor(7, t0 + 1_000)!!
+        val applied = claims.applyToNew(7, t0 + 2_000)!!
+        assertEquals(start, applied) // 화면이 본 구성과 같다
+        assertEquals(recipe.formJson, db.widgetConfigDao().get(7)!!.formJson)
     }
 
     @Test

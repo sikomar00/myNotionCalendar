@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,7 +53,6 @@ internal class RecipeActions(
     val onRecipe: (Recipe) -> Unit,
     val onView: (String) -> Unit,
     val onBoard: (String) -> Unit,
-    val onDate: (String) -> Unit,
     val onAmount: (String) -> Unit,
     val onCategory: (String) -> Unit,
     val onCheck: (String) -> Unit,
@@ -69,7 +69,7 @@ fun RecipeRoute(onBack: () -> Unit, onAddView: () -> Unit, viewModel: RecipeView
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val actions = remember(viewModel) {
         RecipeActions(
-            viewModel::selectRecipe, viewModel::selectView, viewModel::selectBoard, viewModel::selectDate, viewModel::selectAmount,
+            viewModel::selectRecipe, viewModel::selectView, viewModel::selectBoard, viewModel::selectAmount,
             viewModel::selectCategory, viewModel::toggleCheck, viewModel::setBudget, onAddView, viewModel::pin,
         )
     }
@@ -81,7 +81,7 @@ fun RecipeRoute(onBack: () -> Unit, onAddView: () -> Unit, viewModel: RecipeView
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Column(Modifier.padding(padding).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
             RecipeContent(ui, actions) { ui.config?.let { RecipePreview(it, preview.names, preview.boards, preview.weekStart) } }
         }
     }
@@ -135,12 +135,12 @@ private fun PicksSection(draft: RecipeDraft, candidates: List<RecipeView>, actio
     when (draft.recipe) {
         Recipe.TASKS -> BoardPick(picks.boardViewId, candidates.filter { it.type == "board" && it.viewId != picks.viewId }, actions.onBoard)
         Recipe.HABITS -> {
-            ColumnPick(R.string.recipe_section_date, view, "date", picks.dateProp, actions.onDate)
+            DateNote(view)
             Section(R.string.recipe_section_checks)
             view.columns.filter { it.type == "checkbox" }.forEach { column -> CheckboxRow(column.name, column.id in picks.checkProps) { actions.onCheck(column.id) } }
         }
         Recipe.LEDGER -> {
-            ColumnPick(R.string.recipe_section_date, view, "date", picks.dateProp, actions.onDate)
+            DateNote(view)
             ColumnPick(R.string.recipe_section_amount, view, "number", picks.amountProp, actions.onAmount)
             ColumnPick(R.string.recipe_section_category, view, setOf("select", "status"), picks.categoryProp, actions.onCategory, noneLabel = R.string.recipe_category_none)
             OutlinedTextField(
@@ -154,6 +154,13 @@ private fun PicksSection(draft: RecipeDraft, candidates: List<RecipeView>, actio
             )
         }
     }
+}
+
+/** 새 항목의 날짜는 보기의 첫 날짜 열에 기록되고 타일도 그 열을 읽는다(고르지 않는다). 어느 열인지 알려 준다. */
+@Composable
+private fun DateNote(view: RecipeView) {
+    val date = view.columns.firstOrNull { it.type == "date" } ?: return
+    Text(stringResource(R.string.recipe_date_note, date.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** 일정·할 일의 상태 보드 고르기: 보드 보기가 하나도 없으면 줄을 그리지 않는다. */

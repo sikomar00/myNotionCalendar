@@ -29,7 +29,7 @@ internal fun ActionSettings(kind: ConfigKind, data: ConfigData, config: WidgetCo
     ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
         onChange(config.copy(numberStep = it.toDouble()))
     }
-    // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다. 배치 글자를 읽는 것은 바뀔 때만 한다.
+    // 프리셋 줄은 보기 하나(단일, 또는 보기가 하나뿐인 섹션)일 때만 그려지니(탭·여러 보기는 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다. 배치 글자를 읽는 것은 바뀔 때만 한다.
     val applies = remember(kind, config.layoutJson) { presetsApply(kind, config) }
     val presetView = remember(kind, config.layoutJson, config.viewId) { presetViewId(kind, config) }
     val formViews = remember(kind, config.layoutJson, config.viewId) { formViewIds(kind, config) }

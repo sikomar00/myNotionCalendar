@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
@@ -210,6 +211,9 @@ class SettingsRepository @Inject constructor(
     suspend fun setPendingRecipe(pending: PendingRecipe) {
         dataStore.edit { it[PENDING_RECIPE] = PendingRecipes.encode(pending) }
     }
+
+    /** 대기 레시피를 지우지 않고 읽는다(설정 화면이 시작 구성을 보려고. 화면이 다시 만들어져도 같은 구성이 보인다). */
+    suspend fun pendingRecipe(): PendingRecipe? = PendingRecipes.decode(dataStore.data.first()[PENDING_RECIPE])
 
     /** 대기 레시피를 꺼내며 지운다(한 번의 갱신이라 핀 콜백과 설정 화면 중 먼저 온 쪽만 갖는다). 없거나 깨졌으면 null. */
     suspend fun takePendingRecipe(): PendingRecipe? {

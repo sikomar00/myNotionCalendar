@@ -207,6 +207,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     onClick = {
                         scope.launch {
                             deps.widgetConfigs().save(config)
+                            if (kind == ConfigKind.LAYOUT) deps.recipeClaims().consume() // 레시피로 시작했으면 저장한 지금 대기를 지운다(회전해도 저장 전에는 남는다)
                             val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
                             // 통합 위젯(WG-11)도 월 미리보기·설정을 쓰고, 다시 그릴 때는 제 종류로 그린다.
                             WidgetKinds.update(this@WidgetConfigActivity, glanceId)
