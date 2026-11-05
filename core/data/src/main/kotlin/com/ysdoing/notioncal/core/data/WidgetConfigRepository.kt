@@ -108,6 +108,9 @@ class WidgetConfigRepository @Inject constructor(private val dao: WidgetConfigDa
     /** 저장된 설정이 없으면 기본값(설정 화면을 건너뛰고 놓은 위젯). */
     suspend fun get(appWidgetId: Int): WidgetConfig = dao.get(appWidgetId)?.toModel() ?: WidgetConfig(appWidgetId)
 
+    /** 저장된 행이 있을 때만(기본값이 아니라). 놓은 뒤 한 번도 저장하지 않은 새 위젯인지 가를 때 쓴다(Phase 11h 레시피). */
+    suspend fun saved(appWidgetId: Int): WidgetConfig? = dao.get(appWidgetId)?.toModel()
+
     /** 위젯 화면이 구독한다. 달 이동·설정 저장이 바로 반영된다. */
     fun observe(appWidgetId: Int): Flow<WidgetConfig> =
         dao.observe(appWidgetId).map { it?.toModel() ?: WidgetConfig(appWidgetId) }.distinctUntilChanged()

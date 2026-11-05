@@ -157,7 +157,9 @@ class WidgetConfigActivity : ComponentActivity() {
         var loaded by remember { mutableStateOf<ConfigData?>(null) }
         var config by remember { mutableStateOf(WidgetConfig(appWidgetId)) }
         LaunchedEffect(Unit) {
-            val saved = deps.widgetConfigs().get(appWidgetId)
+            // Phase 11h: 레시피로 놓은 새 노션 위젯(저장된 행이 없는 위젯)이면 대기 레시피의 구성으로 시작한다.
+            val start = if (kind == ConfigKind.LAYOUT) deps.recipeClaims().startFor(appWidgetId, System.currentTimeMillis()) else null
+            val saved = start ?: deps.widgetConfigs().get(appWidgetId)
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)

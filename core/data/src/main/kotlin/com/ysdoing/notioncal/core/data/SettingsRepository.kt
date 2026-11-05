@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
+import com.ysdoing.notioncal.core.data.recipe.PendingRecipe
+import com.ysdoing.notioncal.core.data.recipe.PendingRecipes
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
 import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
 import com.ysdoing.notioncal.core.data.weather.WeatherPlace
@@ -204,6 +206,21 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[REMINDERS_HANDLED_UNTIL] = at }
     }
 
+    /** Phase 11h: 핀(홈 화면에 놓기)을 요청한 레시피 구성을 위젯 번호가 정해질 때까지 보관한다. */
+    suspend fun setPendingRecipe(pending: PendingRecipe) {
+        dataStore.edit { it[PENDING_RECIPE] = PendingRecipes.encode(pending) }
+    }
+
+    /** 대기 레시피를 꺼내며 지운다(한 번의 갱신이라 핀 콜백과 설정 화면 중 먼저 온 쪽만 갖는다). 없거나 깨졌으면 null. */
+    suspend fun takePendingRecipe(): PendingRecipe? {
+        var taken: PendingRecipe? = null
+        dataStore.edit { prefs ->
+            taken = PendingRecipes.decode(prefs[PENDING_RECIPE])
+            prefs.remove(PENDING_RECIPE)
+        }
+        return taken
+    }
+
     suspend fun setLastSettingsTab(tab: SettingsTab) {
         dataStore.edit { it[SETTINGS_TAB] = tab.id }
     }
@@ -265,6 +282,7 @@ class SettingsRepository @Inject constructor(
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
         val SETTINGS_TAB = stringPreferencesKey("settings_tab")
+        val PENDING_RECIPE = stringPreferencesKey("pending_recipe")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
         val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")

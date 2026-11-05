@@ -173,6 +173,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Phase 11h: 레시피로 놓은 노션 위젯의 핀 성공 콜백(런처가 위젯 번호를 덧붙여 보낸다). 앱 안에서만 부른다. -->
+        <receiver
+            android:name=".RecipePinReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".WidgetConfigActivity"
             android:exported="true"
