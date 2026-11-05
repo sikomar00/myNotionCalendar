@@ -3,7 +3,9 @@ package com.ysdoing.notioncal.widget
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.flow.first
 
 /**
  * 월 위젯(WG-01), 보조 위젯(WG-06), 달력 + 일정 위젯(WG-09), 습관 위젯(HB-03), 통합 탭 위젯(WG-11), 가계부 위젯(LD-03),
@@ -28,12 +30,29 @@ object AllWidgets {
     fun anyPlaced(context: Context): Boolean {
         val manager = AppWidgetManager.getInstance(context)
         // 검증 메모 12: 새 위젯을 빠뜨리면 그 위젯만 있을 때 자정 알람이 꺼진다.
-        return listOf(
-            NotionCalWidgetReceiver::class.java, AgendaWidgetReceiver::class.java, SplitWidgetReceiver::class.java,
-            HabitWidgetReceiver::class.java, TabbedWidgetReceiver::class.java, LedgerWidgetReceiver::class.java,
-            DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java, ViewWidgetReceiver::class.java, LayoutWidgetReceiver::class.java, BookWidgetReceiver::class.java,
-        ).any { receiver ->
-            manager.getAppWidgetIds(ComponentName(context, receiver)).isNotEmpty()
-        }
+        return RECEIVERS.any { receiver -> manager.getAppWidgetIds(ComponentName(context, receiver)).isNotEmpty() }
     }
+
+    /** 홈 화면에 놓인 위젯 전부(위젯 ID 순). 설정 화면의 '위젯' 목록이 쓴다. Room만 읽지만 보기 이름을 읽으니 메인 스레드 밖에서 부른다. */
+    suspend fun placed(context: Context): List<PlacedWidget> {
+        val deps = WidgetDependencies.from(context)
+        val viewNames = deps.views().observeRegistered().first().associate { it.viewId to it.name }
+        val manager = AppWidgetManager.getInstance(context)
+        val packages = context.packageManager
+        return RECEIVERS.flatMap { receiver ->
+            val component = ComponentName(context, receiver)
+            val label = packages.getReceiverInfo(component, 0).loadLabel(packages).toString()
+            manager.getAppWidgetIds(component).map { id -> PlacedWidget(id, label, widgetSummary(context, receiver.name, deps.widgetConfigs().get(id), viewNames)) }
+        }.sortedBy { it.appWidgetId }
+    }
+
+    /** 그 위젯의 설정 화면을 여는 인텐트(길게 눌러 다시 설정할 때와 같은 화면). */
+    fun configIntent(context: Context, appWidgetId: Int): Intent = viewConfigIntent(context, appWidgetId)
+
+    private val RECEIVERS = listOf(
+        NotionCalWidgetReceiver::class.java, AgendaWidgetReceiver::class.java, SplitWidgetReceiver::class.java,
+        HabitWidgetReceiver::class.java, TabbedWidgetReceiver::class.java, LedgerWidgetReceiver::class.java,
+        DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java,
+        ViewWidgetReceiver::class.java, LayoutWidgetReceiver::class.java, BookWidgetReceiver::class.java,
+    )
 }
