@@ -62,6 +62,7 @@ import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewPreset
 import com.ysdoing.notioncal.core.data.view.ViewPresets
+import com.ysdoing.notioncal.core.data.view.ViewQuickInput
 import com.ysdoing.notioncal.core.data.view.ViewRepository
 import com.ysdoing.notioncal.core.data.view.ViewWriter
 import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
@@ -83,7 +84,14 @@ import javax.inject.Inject
 import kotlinx.serialization.json.JsonElement
 
 /** 입력 시트가 쓰는 보기 정보(작게). 보기 행 전체를 메인 스레드에서 다루지 않게, 저장소 흐름을 줄이는 일은 IO에서 한다. */
-data class ViewAddForm(val name: String = "", val canCreate: Boolean = true, val hasDate: Boolean = false, val prefill: ViewAddPrefill = ViewAddPrefill())
+data class ViewAddForm(
+    val name: String = "",
+    val canCreate: Boolean = true,
+    val hasDate: Boolean = false,
+    val prefill: ViewAddPrefill = ViewAddPrefill(),
+    /** 한 줄 입력을 읽을 때 쓰는 보기의 쓰기 정보(속성 ID·종류·선택지). */
+    val columns: List<ViewColumn> = emptyList(),
+)
 
 /** AD-01: 새 항목 시트에 미리 채워 보이는 값. [columns]는 채운 속성들(고칠 수 있는 편집기가 붙고), [values]는 그 값(속성 ID → 값). */
 data class ViewAddPrefill(val columns: List<ViewColumn> = emptyList(), val values: Map<String, JsonElement> = emptyMap())
@@ -126,7 +134,7 @@ class ViewAddViewModel @Inject constructor(
     }
 
     fun form(viewId: String): Flow<ViewAddForm> =
-        views.observe(viewId).map { board -> ViewAddForm(board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill()) }.flowOn(io)
+        views.observe(viewId).map { board -> ViewAddForm(board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.columnInfo.orEmpty()) }.flowOn(io)
 
     /** 시트의 제목과 값 묶음을 이 위젯의 프리셋으로 저장한다(이름이 같으면 바꾼다). 이름이 비었거나 새 이름인데 꽉 찼으면 저장하지 않고 false다. */
     suspend fun savePreset(appWidgetId: Int, name: String, props: Map<String, JsonElement>): Boolean {
@@ -165,6 +173,8 @@ fun ViewAddContent(
     saving: Boolean = false,
     failed: Boolean = false,
     prefill: ViewAddPrefill = ViewAddPrefill(),
+    /** AD-03 한 줄 입력을 읽을 속성들. 비면 읽지 않는다. */
+    columns: List<ViewColumn> = emptyList(),
     onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
@@ -179,13 +189,20 @@ fun ViewAddContent(
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // AD-03: 쓰는 글에서 날짜·금액·옵션을 읽는다. 필터에서 채운 속성은 사용자가 정한 값이라 건드리지 않는다. 칩 목록은 끈 것까지 담아 다시 켤 수 있게 한다.
+    var ignoredText by rememberSaveable { mutableStateOf("") }
+    val ignored = ignoredKeys(ignoredText)
+    val readable = columns.filter { c -> prefill.columns.none { it.id == c.id } }
+    val candidates = remember(title, readable, today) { ViewQuickInput.parse(title, readable, today) }
+    val quick = remember(title, readable, today, ignoredText) { ViewQuickInput.parse(title, readable, today, ignored) }
+    val allProps = quick.props + props
     val date = when (choice) {
-        DateChoice.NONE -> null
+        DateChoice.NONE -> quick.date
         DateChoice.TODAY -> today
         DateChoice.TOMORROW -> today.plusDays(1)
         DateChoice.PICK -> pickedIso?.let(LocalDate::parse)
     }
-    val save = { if (title.isNotBlank() && canAdd && !saving) onSave(title, date, props) }
+    val save = { if (title.isNotBlank() && canAdd && !saving) onSave(quick.title, date, allProps) }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.view_add_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -204,6 +221,7 @@ fun ViewAddContent(
         // 만들 수 없을 때(보기가 지워졌거나 쓰기 정보를 아직 못 받음)와 쌓지 못했을 때는 이유를 글자로 알린다.
         if (!canAdd) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         if (failed) Text(stringResource(R.string.view_add_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        QuickChips(candidates.chips, ignored) { ignoredText = toggled(ignoredText, it) }
         if (hasDate) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = choice == DateChoice.NONE, onClick = { choice = DateChoice.NONE }, label = { Text(stringResource(R.string.view_add_no_date)) })
@@ -240,7 +258,7 @@ fun ViewAddContent(
             // AD-05: 위젯에서 연 시트면 지금 제목(= 프리셋 이름)과 값을 이 위젯의 프리셋으로 저장한다(만들지는 않는다).
             if (onSavePreset != null) {
                 TextButton(
-                    onClick = { scope.launch { presetSaved = onSavePreset(title.trim(), props) } },
+                    onClick = { scope.launch { presetSaved = onSavePreset(quick.title.trim(), allProps) } },
                     enabled = title.isNotBlank(),
                 ) { Text(stringResource(R.string.view_add_preset_save)) }
             }
@@ -303,6 +321,7 @@ class ViewAddActivity : ComponentActivity() {
                         saving = saving,
                         failed = failed,
                         prefill = form.prefill,
+                        columns = form.columns,
                         onSavePreset = if (appWidgetId > 0) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
                     )
                 }
