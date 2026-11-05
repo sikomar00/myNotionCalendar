@@ -3,6 +3,9 @@
     <string name="qs_day_title">%1$d월 %2$d일 (%3$s)</string>
     <string name="qs_add_title">일정 추가</string>
     <string name="view_add_prefilled">필터에서 채운 값</string>
+    <string name="view_add_defaults_save">이 값을 기본값으로</string>
+    <string name="view_add_defaults_saved">기본값으로 저장했습니다</string>
+    <string name="view_add_defaults_failed">기본값을 저장하지 못했습니다</string>
     <string name="view_add_parsed">입력에서 읽은 값(누르면 끄고 글자는 제목에 둡니다)</string>
     <string name="view_add_preset_save">프리셋으로 저장</string>
     <string name="view_add_preset_saved">프리셋을 저장했어요</string>

@@ -32,7 +32,6 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -55,7 +54,11 @@ import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
+import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetConfigRepository
+import com.ysdoing.notioncal.core.data.view.InputForm
+import com.ysdoing.notioncal.core.data.view.InputForms
+import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewFilter
@@ -65,6 +68,7 @@ import com.ysdoing.notioncal.core.data.view.ViewPresets
 import com.ysdoing.notioncal.core.data.view.ViewQuickInput
 import com.ysdoing.notioncal.core.data.view.ViewRepository
 import com.ysdoing.notioncal.core.data.view.ViewWriter
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,6 +77,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -91,6 +97,10 @@ data class ViewAddForm(
     val prefill: ViewAddPrefill = ViewAddPrefill(),
     /** 한 줄 입력을 읽을 때 쓰는 보기의 쓰기 정보(속성 ID·종류·선택지). */
     val columns: List<ViewColumn> = emptyList(),
+    /** AD-02: 이 위젯이 이 보기에 정해 둔 입력 양식. 없으면 예전과 같다. */
+    val input: InputForm? = null,
+    /** 이 시트에서 프리셋을 저장·보일 수 있는가: 위젯에서 열었고 그 위젯이 단일 배치일 때만(탭·섹션 칸의 프리셋은 보이는 곳이 없다). */
+    val canPreset: Boolean = false,
 )
 
 /** AD-01: 새 항목 시트에 미리 채워 보이는 값. [columns]는 채운 속성들(고칠 수 있는 편집기가 붙고), [values]는 그 값(속성 ID → 값). */
@@ -99,7 +109,7 @@ data class ViewAddPrefill(val columns: List<ViewColumn> = emptyList(), val value
 /** 보기 필터의 단순 같음 조건(체크박스·선택·상태·숫자)을 미리 채울 값으로. 제목·날짜는 시트가 따로 정하니 뺀다. 조건이 없으면 빈 값이다. */
 internal fun prefillOf(board: ViewBoard): ViewAddPrefill {
     val values = ViewFilter.parse(board.filterJson).equalsConditions(board.columnInfo)
-    val columns = board.columnInfo.filter { it.id in values && it.writable && it.type != "title" && it.type != "date" }
+    val columns = InputForm.editable(board.columnInfo).filter { it.id in values }
     return ViewAddPrefill(columns, values.filterKeys { id -> columns.any { it.id == id } })
 }
 
@@ -133,8 +143,25 @@ class ViewAddViewModel @Inject constructor(
         SheetSyncThrottle.Shared.request(sync)
     }
 
-    fun form(viewId: String): Flow<ViewAddForm> =
-        views.observe(viewId).map { board -> ViewAddForm(board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.columnInfo.orEmpty()) }.flowOn(io)
+    /** [appWidgetId]가 0이면 위젯 없이 연 시트다(양식·프리셋 없음). */
+    fun form(viewId: String, appWidgetId: Int): Flow<ViewAddForm> {
+        val widget: Flow<WidgetConfig?> = if (appWidgetId > 0) widgetConfigs.observe(appWidgetId) else flowOf(null)
+        return views.observe(viewId).combine(widget) { board, config ->
+            ViewAddForm(
+                board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.columnInfo.orEmpty(),
+                input = config?.let { InputForms.get(it.formJson, viewId) },
+                canPreset = config != null && WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE,
+            )
+        }.flowOn(io)
+    }
+
+    /** 양식 속성의 지금 값을 이 위젯·보기의 기본값으로 저장한다. 그 보기에 양식이 없으면 저장하지 않고 false다. */
+    suspend fun saveDefaults(appWidgetId: Int, viewId: String, values: Map<String, JsonElement>): Boolean {
+        val config = widgetConfigs.get(appWidgetId)
+        val updated = InputForms.withDefaults(config.formJson, viewId, values) ?: return false
+        widgetConfigs.save(config.copy(formJson = updated))
+        return true
+    }
 
     /** 시트의 제목과 값 묶음을 이 위젯의 프리셋으로 저장한다(이름이 같으면 바꾼다). 이름이 비었거나 새 이름인데 꽉 찼으면 저장하지 않고 false다. */
     suspend fun savePreset(appWidgetId: Int, name: String, props: Map<String, JsonElement>): Boolean {
@@ -175,26 +202,33 @@ fun ViewAddContent(
     prefill: ViewAddPrefill = ViewAddPrefill(),
     /** AD-03 한 줄 입력을 읽을 속성들. 비면 읽지 않는다. */
     columns: List<ViewColumn> = emptyList(),
+    /** AD-02 입력 양식. 있으면 양식의 속성만 이 순서로, 기본값으로 시작해 보인다. */
+    input: InputForm? = null,
+    onSaveDefaults: (suspend (Map<String, JsonElement>) -> Boolean)? = null,
     onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
     var choice by rememberSaveable { mutableStateOf(DateChoice.NONE) }
     var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
-    // 필터에서 채운 값은 시트가 열린 뒤 보기를 읽어 오면 도착한다. 도착하면 그 값으로 시작한다.
-    var props by rememberSaveable(stateSaver = PropsSaver) { mutableStateOf(prefill.values) }
+    // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 도착하면 그 값으로 시작한다.
+    val plan = remember(columns, hasDate, input, prefill) { sheetPlan(columns, hasDate, input, prefill) }
+    var props by rememberSaveable(stateSaver = PropsSaver) { mutableStateOf(plan.start) }
     var edited by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(prefill) { if (!edited) props = prefill.values } // 사용자가 고친 뒤(화면이 다시 만들어진 뒤 값이 또 와도)에는 덮지 않는다
+    LaunchedEffect(plan.start) { if (!edited) props = plan.start } // 사용자가 고친 뒤(화면이 다시 만들어진 뒤 값이 또 와도)에는 덮지 않는다
+    val change = { id: String, value: JsonElement? ->
+        edited = true
+        props = if (value == null) props - id else props + (id to value)
+    }
     var presetSaved by rememberSaveable { mutableStateOf<Boolean?>(null) } // null: 아직, true: 저장함, false: 저장하지 못함
     val scope = rememberCoroutineScope()
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    // AD-03: 쓰는 글에서 날짜·금액·옵션을 읽는다. 필터에서 채운 속성은 사용자가 정한 값이라 건드리지 않는다. 칩 목록은 끈 것까지 담아 다시 켤 수 있게 한다.
+    // AD-03: 쓰는 글에서 날짜·금액·옵션을 읽는다. 미리 채운 속성(필터·양식 기본값)은 사용자가 정한 값이라 건드리지 않는다. 칩 목록은 끈 것까지 담아 다시 켤 수 있게 한다.
     var ignoredText by rememberSaveable { mutableStateOf("") }
     val ignored = ignoredKeys(ignoredText)
-    val readable = columns.filter { c -> prefill.columns.none { it.id == c.id } }
-    val candidates = remember(title, readable, today) { ViewQuickInput.parse(title, readable, today) }
-    val quick = remember(title, readable, today, ignoredText) { ViewQuickInput.parse(title, readable, today, ignored) }
+    val candidates = remember(title, plan.readable, today) { ViewQuickInput.parse(title, plan.readable, today) }
+    val quick = remember(title, plan.readable, today, ignoredText) { ViewQuickInput.parse(title, plan.readable, today, ignored) }
     val allProps = quick.props + props
     val date = when (choice) {
         DateChoice.NONE -> quick.date
@@ -222,7 +256,7 @@ fun ViewAddContent(
         if (!canAdd) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         if (failed) Text(stringResource(R.string.view_add_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         QuickChips(candidates.chips, ignored) { ignoredText = toggled(ignoredText, it) }
-        if (hasDate) {
+        if (plan.showDate) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = choice == DateChoice.NONE, onClick = { choice = DateChoice.NONE }, label = { Text(stringResource(R.string.view_add_no_date)) })
                 FilterChip(selected = choice == DateChoice.TODAY, onClick = { choice = DateChoice.TODAY }, label = { Text(stringResource(R.string.view_add_today)) })
@@ -234,20 +268,10 @@ fun ViewAddContent(
                 )
             }
         }
+        FormSection(plan.fields, props, change, onSaveDefaults)
         if (prefill.columns.isNotEmpty()) {
             Text(stringResource(R.string.view_add_prefilled), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            prefill.columns.forEach { column ->
-                key(column.id) {
-                    PropField(
-                        column, props[column.id],
-                        onChange = { value ->
-                            edited = true
-                            props = if (value == null) props - column.id else props + (column.id to value)
-                        },
-                        onInvalid = {},
-                    )
-                }
-            }
+            PropEditors(prefill.columns, props, change)
         }
         when (presetSaved) {
             true -> Text(stringResource(R.string.view_add_preset_saved), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
@@ -304,7 +328,7 @@ class ViewAddActivity : ComponentActivity() {
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 val viewModel: ViewAddViewModel = hiltViewModel()
-                val form by remember(viewId) { viewModel.form(viewId) }.collectAsStateWithLifecycle(ViewAddForm())
+                val form by remember(viewId) { viewModel.form(viewId, appWidgetId) }.collectAsStateWithLifecycle(ViewAddForm())
                 val saved by viewModel.saved.collectAsStateWithLifecycle()
                 val saving by viewModel.saving.collectAsStateWithLifecycle()
                 val failed by viewModel.failed.collectAsStateWithLifecycle()
@@ -322,7 +346,9 @@ class ViewAddActivity : ComponentActivity() {
                         failed = failed,
                         prefill = form.prefill,
                         columns = form.columns,
-                        onSavePreset = if (appWidgetId > 0) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
+                        input = form.input,
+                        onSaveDefaults = if (appWidgetId > 0) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
+                        onSavePreset = if (form.canPreset) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
                     )
                 }
             }

@@ -180,13 +180,13 @@ class LayoutWidgetTest {
     }
 
     @Test
-    fun onlyASingleViewSavesPresetsSoTabAndSectionAddButtonsCarryNoWidgetId() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
-        // 프리셋 줄은 단일일 때만 그려지니, 탭·섹션의 '새 항목'이 프리셋을 저장하면 보이지 않는 곳에 쌓인다.
+    fun tabAndSectionAddButtonsCarryTheWidgetIdSoTheSheetCanReadTheFormAndDecidePresets() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        // 입력 양식(AD-02)은 칸의 보기마다 위젯에 저장되니 시트가 위젯 번호를 알아야 한다. 프리셋 저장은 시트가 배치를 보고 단일일 때만 보인다.
         setContext(context)
         setAppWidgetSize(DpSize(358.dp, 380.dp))
         val creatable = { st: LayoutWidgetState -> st.copy(boards = st.boards.mapValues { (_, b) -> b?.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"))) }) }
         provideComposable { LayoutWidgetContent(creatable(state(2, 0)), systemFontScale = 1f) }
-        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 0)))
+        onNode(hasTestTag("viewAdd")).assert(hasStartActivityClickAction(viewAddIntent(context, "v1", 1)))
     }
 
     @Test
