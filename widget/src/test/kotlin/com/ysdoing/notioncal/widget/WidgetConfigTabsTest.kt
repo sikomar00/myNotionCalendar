@@ -61,6 +61,13 @@ class WidgetConfigTabsTest {
     }
 
     @Test
+    fun aSectionLayoutWithOneViewMakesPresetsForThatView() {
+        val one = layoutConfig(LayoutMode.SECTIONS, "v9")
+        assertTrue(presetsApply(ConfigKind.LAYOUT, one))
+        assertEquals("v9", presetViewId(ConfigKind.LAYOUT, one))
+    }
+
+    @Test
     fun otherWidgetsHaveNoPresets() {
         listOf(ConfigKind.MONTH, ConfigKind.LEDGER, ConfigKind.HABIT, ConfigKind.BOOK).forEach {
             assertFalse(it.name, presetsApply(it, WidgetConfig(1, viewId = "v1")))

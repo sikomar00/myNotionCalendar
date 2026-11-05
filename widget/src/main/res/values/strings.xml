@@ -223,6 +223,11 @@
     <string name="widget_config_form_note">새 항목 시트에 보일 속성과 순서입니다. 고르지 않으면 제목과 날짜만 보입니다. 기본값은 시트에서 값을 채운 뒤 \'이 값을 기본값으로\'를 누르면 저장됩니다.</string>
     <string name="widget_config_form_row_default">%1$s (기본값 %2$s)</string>
     <string name="widget_config_form_date">날짜 칩 보이기</string>
+    <string name="widget_config_form_date_today">새 항목의 날짜를 오늘로 시작</string>
+    <string name="widget_config_form_title_date">제목을 비우면 오늘 날짜로</string>
+    <string name="widget_config_form_title_date_note">제목 칸을 비워 두고 추가하면 \'11월 5일\'처럼 날짜가 제목이 됩니다</string>
+    <string name="widget_config_form_once">하루에 한 줄만 만들기</string>
+    <string name="widget_config_form_once_note">고른 날짜의 항목이 이미 있거나 보내는 중이면 새로 만들지 않습니다</string>
     <string name="widget_config_form_none">이 보기에는 입력 양식에 담을 수 있는 속성이 없습니다</string>
     <string name="widget_config_form_unavailable">이 보기를 아직 읽어 오지 못했습니다. 앱에서 동기화한 뒤 다시 여세요</string>
     <string name="view_widget_undo">방금 바꾼 것 되돌리기</string>

@@ -24,6 +24,8 @@ import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewPreset
+import com.ysdoing.notioncal.core.data.view.ViewPresets
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import kotlinx.coroutines.test.runTest
@@ -205,6 +207,27 @@ class LayoutWidgetTest {
         provideComposable { LayoutWidgetContent(state(1, selected = 0, mode = LayoutMode.SINGLE), systemFontScale = 1f) }
         onNode(hasTestTag("layoutTab_0")).assertDoesNotExist()
         onNode(hasTextEqualTo("행 할 일")).assertExists()
+    }
+
+    private fun withPresets(st: LayoutWidgetState): LayoutWidgetState = st.copy(
+        config = st.config.copy(presetsJson = ViewPresets.encode(listOf(ViewPreset("점심")))),
+        boards = st.boards.mapValues { (_, b) -> b?.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"))) },
+    )
+
+    @Test
+    fun aSectionLayoutWithOneViewDrawsThePresetLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 380.dp))
+        provideComposable { LayoutWidgetContent(withPresets(state(1, 0, LayoutMode.SECTIONS)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(1)
+    }
+
+    @Test
+    fun aSectionLayoutWithTwoViewsDrawsNoPresetLine() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 380.dp))
+        provideComposable { LayoutWidgetContent(withPresets(state(2, 0, LayoutMode.SECTIONS)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewPreset")).assertCountEquals(0)
     }
 
     @Test

@@ -60,7 +60,15 @@ private fun ViewFormEditor(viewId: String, view: ViewSnapshotEntity?, stored: In
     val rows = remember(form, columns) { formRows(form, columns) }
     val checkedCount = rows.count { it.checked }
     rows.forEachIndexed { index, row -> FormRowEditor(row, index, checkedCount, defaults[row.column.id]?.let(row.column::display), form, set) }
-    if (hasDate) SwitchRow(stringResource(R.string.widget_config_form_date), form.showDate) { set(form.withShowDate(it)) }
+    if (hasDate) {
+        SwitchRow(stringResource(R.string.widget_config_form_date), form.showDate) { set(form.withShowDate(it)) }
+        // 레시피 동작(Phase 11h): 날짜 칩이 보일 때만 뜻이 있다.
+        if (form.showDate) {
+            SwitchRow(stringResource(R.string.widget_config_form_date_today), form.dateToday) { set(form.withDateToday(it)) }
+            SwitchRow(stringResource(R.string.widget_config_form_title_date), form.titleDate, note = stringResource(R.string.widget_config_form_title_date_note)) { set(form.withTitleDate(it)) }
+            SwitchRow(stringResource(R.string.widget_config_form_once), form.oncePerDay, note = stringResource(R.string.widget_config_form_once_note)) { set(form.withOncePerDay(it)) }
+        }
+    }
 }
 
 /** 속성 하나: 체크, 담았으면 기본값 요약과 위·아래. [index]는 [formRows]에서의 자리(담은 것들이 앞이라 담은 줄에서는 양식 안의 자리와 같다). */

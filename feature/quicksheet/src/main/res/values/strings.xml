@@ -12,6 +12,8 @@
     <string name="view_add_preset_failed">프리셋을 저장하지 못했어요. 프리셋은 5개까지 만들 수 있어요</string>
     <string name="view_add_title">새 항목</string>
     <string name="view_add_preset_title">프리셋 만들기</string>
+    <string name="view_add_title_date_label">제목 (비우면 %1$s)</string>
+    <string name="view_add_day_taken">이 날짜의 항목이 이미 있습니다. 새로 만들지 않고 위젯에서 고치세요</string>
     <string name="view_add_no_date">날짜 없음</string>
     <string name="view_add_today">오늘</string>
     <string name="view_add_tomorrow">내일</string>

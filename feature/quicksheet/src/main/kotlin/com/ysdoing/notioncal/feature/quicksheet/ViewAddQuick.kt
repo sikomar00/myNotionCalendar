@@ -17,9 +17,6 @@ internal fun ignoredKeys(text: String): Set<String> = text.split('|').filter { i
 /** 한 줄 입력에서 읽은 날짜 칩의 키. */
 internal const val QUICK_DATE_KEY = "date"
 
-/** [key]를 끈 칩에 더한 글자(이미 있으면 그대로). */
-internal fun withKey(text: String, key: String): String = (ignoredKeys(text) + key).joinToString("|")
-
 /** [key]를 끈 칩에서 뺀 글자(켠다). */
 internal fun withoutKey(text: String, key: String): String = (ignoredKeys(text) - key).joinToString("|")
 

@@ -71,6 +71,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlinx.serialization.json.JsonElement
 
@@ -86,6 +87,8 @@ data class ViewAddForm(
     val input: InputForm? = null,
     /** 이 시트에서 프리셋을 저장·보일 수 있는가: 위젯에서 열었고 그 위젯이 단일 배치일 때만(탭·섹션 칸의 프리셋은 보이는 곳이 없다). */
     val canPreset: Boolean = false,
+    /** Phase 11h: 새 항목의 날짜 열에 이미 항목이 있는 날짜들(하루 한 줄 가드). */
+    val takenDates: Set<LocalDate> = emptySet(),
 )
 
 /** AD-01: 새 항목 시트에 미리 채워 보이는 값. [columns]는 채운 속성들(고칠 수 있는 편집기가 붙고), [values]는 그 값(속성 ID → 값). */
@@ -136,6 +139,7 @@ class ViewAddViewModel @Inject constructor(
                 board?.name.orEmpty(), board?.canCreate ?: false, board?.hasDateColumn == true, board?.let(::prefillOf) ?: ViewAddPrefill(), board?.formColumns.orEmpty(),
                 input = config?.let { InputForms.get(it.formJson, viewId) },
                 canPreset = config != null && WidgetLayout.parse(config.layoutJson).presetsApply,
+                takenDates = board?.takenDates().orEmpty(),
             )
         }.flowOn(io)
     }
@@ -188,12 +192,14 @@ fun ViewAddContent(
     columns: List<ViewColumn> = emptyList(),
     /** AD-02 입력 양식. 있으면 양식의 속성만 이 순서로, 기본값으로 시작해 보인다. */
     input: InputForm? = null,
+    /** 하루 한 줄 양식([InputForm.oncePerDay])이 이 날짜에 이미 항목이 있는지 가리는 날짜들. */
+    takenDates: Set<LocalDate> = emptySet(),
     /** '이 값을 기본값으로': 보이는 양식 속성의 지금 값(비웠으면 null)을 넘긴다. 없으면 버튼이 없다. */
     onSaveDefaults: (suspend (Map<String, JsonElement?>) -> Boolean)? = null,
     onSavePreset: (suspend (title: String, props: Map<String, JsonElement>) -> Boolean)? = null,
 ) {
     var title by rememberSaveable { mutableStateOf("") }
-    var choice by rememberSaveable { mutableStateOf(DateChoice.NONE) }
+    var choice by rememberSaveable { mutableStateOf(DateChoice.AUTO) }
     var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 사용자가 고치기 전에는 도착한 시작 값이 그대로 보이고,
@@ -215,16 +221,24 @@ fun ViewAddContent(
     // 직접 고른 날짜 칩은 글에서 읽은 날짜를 이긴다: 그 글자는 날짜로 읽지 않고 제목에 남긴다.
     var ignoredText by rememberSaveable { mutableStateOf("") }
     val candidates = remember(title, plan.readable, today) { ViewQuickInput.parse(title, plan.readable, today) }
-    val ignored = ignoredKeys(ignoredText).let { if (choice == DateChoice.NONE) it else it + QUICK_DATE_KEY }.filter { key -> candidates.chips.any { it.key == key } }.toSet()
+    val ignored = ignoredKeys(ignoredText).let { if (choice == DateChoice.AUTO) it else it + QUICK_DATE_KEY }.filter { key -> candidates.chips.any { it.key == key } }.toSet()
     val quick = remember(title, plan.readable, today, ignored) { if (ignored.isEmpty()) candidates else ViewQuickInput.parse(title, plan.readable, today, ignored) }
     val allProps = quick.props + current
+    // 레시피 양식(Phase 11h): 고르지 않았으면 글에서 읽은 날짜, 없으면 오늘 기본값. 제목이 비면 오늘 날짜, 하루 한 줄이면 그 날짜에 항목이 있을 때 막는다.
+    val autoToday = choice == DateChoice.AUTO && quick.date == null && plan.dateToday
     val date = when (choice) {
-        DateChoice.NONE -> quick.date
+        DateChoice.AUTO -> quick.date ?: today.takeIf { plan.dateToday }
+        DateChoice.EMPTY -> null
         DateChoice.TODAY -> today
         DateChoice.TOMORROW -> today.plusDays(1)
         DateChoice.PICK -> pickedIso?.let(LocalDate::parse)
     }
-    val save = { if (title.isNotBlank() && canAdd && !saving) onSave(quick.title, date, allProps) }
+    val dateTitle = plan.titleDate && !presetOnly
+    val todayTitle = remember(today) { DateTimeFormatter.ofPattern("M월 d일").format(today) }
+    val hasTitle = title.isNotBlank() || dateTitle
+    val dayTaken = plan.oncePerDay && !presetOnly && date != null && date in takenDates
+    val canSave = hasTitle && canAdd && !saving && !dayTaken
+    val save = { if (canSave) onSave(quick.title.ifBlank { if (dateTitle) todayTitle else "" }, date, allProps) }
     val savePreset: () -> Unit = { onSavePreset?.let { store -> scope.launch { presetSaved = store(quick.title.trim(), allProps) } } }
     val done = { if (presetOnly) { if (title.isNotBlank()) savePreset() } else save() }
 
@@ -238,26 +252,25 @@ fun ViewAddContent(
             onValueChange = { title = it },
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
             singleLine = true,
-            label = { Text(stringResource(R.string.qs_title_hint)) },
+            label = { Text(if (dateTitle) stringResource(R.string.view_add_title_date_label, todayTitle) else stringResource(R.string.qs_title_hint)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { done() }),
         )
         // 만들 수 없을 때(보기가 지워졌거나 쓰기 정보를 아직 못 받음)와 쌓지 못했을 때는 이유를 글자로 알린다.
         if (!canAdd && !presetOnly) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         if (failed) Text(stringResource(R.string.view_add_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        if (dayTaken) Text(stringResource(R.string.view_add_day_taken), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         QuickChips((candidates.chips + quick.chips).distinctBy { it.key }, ignored) { key ->
-            if (key == QUICK_DATE_KEY && choice != DateChoice.NONE) {
-                choice = DateChoice.NONE // 글에서 읽은 날짜를 다시 켜면 직접 고른 날짜는 거둔다
+            if (key == QUICK_DATE_KEY && choice != DateChoice.AUTO) {
+                choice = DateChoice.AUTO // 글에서 읽은 날짜를 다시 켜면 직접 고른 날짜는 거둔다
                 ignoredText = withoutKey(ignoredText, key)
             } else {
                 ignoredText = toggled(ignoredText, key)
             }
         }
         if (plan.showDate) {
-            DateChips(choice, noDate = choice == DateChoice.NONE && quick.date == null, pickedIso, onPick = { picking = true }) { chosen ->
-                choice = chosen
-                if (chosen == DateChoice.NONE) ignoredText = withKey(ignoredText, QUICK_DATE_KEY) // '날짜 없음'은 글에서 읽은 날짜도 쓰지 않는다
-            }
+            val noDate = choice == DateChoice.EMPTY || (choice == DateChoice.AUTO && quick.date == null && !plan.dateToday)
+            DateChips(choice, noDate, autoToday, pickedIso, onPick = { picking = true }) { chosen -> choice = chosen } // 날짜 없음(EMPTY)은 글에서 읽은 날짜도 쓰지 않는다
         }
         key(plan.start) {
             FormSection(plan.fields, current, change, onSaveDefaults)
@@ -276,7 +289,7 @@ fun ViewAddContent(
             if (presetOnly) {
                 Button(onClick = { savePreset() }, enabled = title.isNotBlank() && onSavePreset != null) { Text(stringResource(R.string.view_add_preset_save)) }
             } else {
-                Button(onClick = { save() }, enabled = title.isNotBlank() && canAdd && !saving) { Text(stringResource(R.string.qs_add)) }
+                Button(onClick = { save() }, enabled = canSave) { Text(stringResource(R.string.qs_add)) }
             }
         }
     }
@@ -335,6 +348,7 @@ class ViewAddActivity : ComponentActivity() {
                         prefill = form.prefill,
                         columns = form.columns,
                         input = form.input,
+                        takenDates = form.takenDates,
                         presetOnly = presetOnly,
                         onSaveDefaults = if (appWidgetId > 0 && !presetOnly) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
                         onSavePreset = when {

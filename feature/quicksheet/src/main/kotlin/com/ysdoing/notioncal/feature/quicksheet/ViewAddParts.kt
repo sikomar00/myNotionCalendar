@@ -18,17 +18,19 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
-internal enum class DateChoice { NONE, TODAY, TOMORROW, PICK }
+/** AUTO는 사용자가 아직 안 골랐다(글에서 읽은 날짜, 없으면 양식의 오늘 기본값). EMPTY는 '날짜 없음'을 직접 골랐다. */
+internal enum class DateChoice { AUTO, EMPTY, TODAY, TOMORROW, PICK }
 
 /**
- * 날짜 칩 줄(없음·오늘·내일·직접 고르기). [noDate]는 '날짜 없음'이 선택돼 보이는가(글에서 읽은 날짜가 쓰이면 그 칩이 선택이라 아니다).
+ * 날짜 칩 줄(없음·오늘·내일·직접 고르기). [noDate]는 '날짜 없음'이 선택돼 보이는가(글에서 읽은 날짜가 쓰이면 그 칩이 선택이라 아니다),
+ * [todayAuto]는 고르지 않았지만 양식의 기본값으로 오늘이 쓰여 '오늘'이 선택돼 보이는가.
  * 없음·오늘·내일은 [onChoose]로, 직접 고르기는 [onPick](대화상자를 연다)으로 알린다.
  */
 @Composable
-internal fun DateChips(choice: DateChoice, noDate: Boolean, pickedIso: String?, onPick: () -> Unit, onChoose: (DateChoice) -> Unit) {
+internal fun DateChips(choice: DateChoice, noDate: Boolean, todayAuto: Boolean, pickedIso: String?, onPick: () -> Unit, onChoose: (DateChoice) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(selected = noDate, onClick = { onChoose(DateChoice.NONE) }, label = { Text(stringResource(R.string.view_add_no_date)) })
-        FilterChip(selected = choice == DateChoice.TODAY, onClick = { onChoose(DateChoice.TODAY) }, label = { Text(stringResource(R.string.view_add_today)) })
+        FilterChip(selected = noDate, onClick = { onChoose(DateChoice.EMPTY) }, label = { Text(stringResource(R.string.view_add_no_date)) })
+        FilterChip(selected = choice == DateChoice.TODAY || todayAuto, onClick = { onChoose(DateChoice.TODAY) }, label = { Text(stringResource(R.string.view_add_today)) })
         FilterChip(selected = choice == DateChoice.TOMORROW, onClick = { onChoose(DateChoice.TOMORROW) }, label = { Text(stringResource(R.string.view_add_tomorrow)) })
         FilterChip(
             selected = choice == DateChoice.PICK,

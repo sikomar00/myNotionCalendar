@@ -58,7 +58,7 @@ internal fun LayoutSectionsBody(state: LayoutWidgetState, look: LayoutLook, size
             Column(GlanceModifier.fillMaxWidth().height(height)) {
                 val pane = state.paneState(items[index])
                 CompositionLocalProvider(LocalSize provides DpSize(size.width, height)) {
-                    ViewPane(pane, look.palette, look.metrics, PaneSpec(look.staticRows, height = height, presets = false))
+                    ViewPane(pane, look.palette, look.metrics, PaneSpec(look.staticRows, height = height, presets = state.layout.presetsApply))
                 }
             }
         }

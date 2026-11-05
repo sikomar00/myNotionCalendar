@@ -25,14 +25,23 @@ import kotlinx.serialization.json.JsonElement
  * [fields]는 편집기로 보일 양식 속성(필터에서 채운 속성은 필터 구역이 따로 보이니 뺀다), [start]는 처음 채울 값(양식 기본값 위에 필터 채움을 덮는다),
  * [readable]은 한 줄 입력이 읽을 속성이다. 시작 값이 있는 속성은 사용자가 정한 값이라 해석하지 않고(글자는 제목에 남는다), 양식이 있으면 양식에 없는 속성도 읽지 않는다.
  */
-internal data class SheetPlan(val fields: List<ViewColumn>, val start: Map<String, JsonElement>, val readable: List<ViewColumn>, val showDate: Boolean)
+internal data class SheetPlan(
+    val fields: List<ViewColumn>,
+    val start: Map<String, JsonElement>,
+    val readable: List<ViewColumn>,
+    val showDate: Boolean,
+    /** Phase 11h 레시피 플래그: 날짜를 오늘로 시작·제목이 비면 오늘 날짜·하루 한 줄([InputForm]의 같은 이름 필드). */
+    val dateToday: Boolean,
+    val titleDate: Boolean,
+    val oncePerDay: Boolean,
+)
 
 internal fun sheetPlan(columns: List<ViewColumn>, hasDate: Boolean, input: InputForm?, prefill: ViewAddPrefill): SheetPlan {
     val start = input?.defaults(columns).orEmpty() + prefill.values
     val fields = input?.visibleColumns(columns).orEmpty().filter { it.id !in prefill.values }
     val showDate = hasDate && input?.showDate != false
     val readable = if (input == null) columns.filter { it.id !in start && (showDate || it.type != "date") } else fields.filter { it.id !in start } + columns.filter { it.type == "date" && showDate }
-    return SheetPlan(fields, start, readable, showDate)
+    return SheetPlan(fields, start, readable, showDate, dateToday = showDate && input?.dateToday == true, titleDate = input?.titleDate == true, oncePerDay = input?.oncePerDay == true)
 }
 
 /** 속성 편집기들. 값이 바뀌면 [onChange]로 속성 ID와 새 값(비웠으면 null)을 알린다. */
