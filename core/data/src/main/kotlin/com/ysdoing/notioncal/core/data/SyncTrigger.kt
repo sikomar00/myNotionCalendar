@@ -93,4 +93,7 @@ object AppIntents {
     /** VW-08 노션 보기 위젯의 새 항목 입력 시트. EXTRA_VIEW_ID = 보기 ID */
     const val ACTION_VIEW_ADD = "com.ysdoing.notioncal.action.VIEW_ADD"
     const val EXTRA_VIEW_ID = "com.ysdoing.notioncal.extra.VIEW_ID"
+
+    /** Phase 11g AD-05: 새 항목 시트를 '프리셋 만들기'로 연다(항목은 만들지 않고 프리셋만 저장). 위젯 편집 화면이 EXTRA_APPWIDGET_ID와 함께 싣는다. */
+    const val EXTRA_PRESET_ONLY = "com.ysdoing.notioncal.extra.PRESET_ONLY"
 }

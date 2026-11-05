@@ -31,7 +31,7 @@ internal fun sheetPlan(columns: List<ViewColumn>, hasDate: Boolean, input: Input
     val start = input?.defaults(columns).orEmpty() + prefill.values
     val fields = input?.visibleColumns(columns).orEmpty().filter { it.id !in prefill.values }
     val showDate = hasDate && input?.showDate != false
-    val readable = if (input == null) columns.filter { it.id !in start } else fields.filter { it.id !in start } + columns.filter { it.type == "date" && showDate }
+    val readable = if (input == null) columns.filter { it.id !in start && (showDate || it.type != "date") } else fields.filter { it.id !in start } + columns.filter { it.type == "date" && showDate }
     return SheetPlan(fields, start, readable, showDate)
 }
 

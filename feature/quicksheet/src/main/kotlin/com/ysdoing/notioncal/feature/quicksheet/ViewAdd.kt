@@ -199,6 +199,8 @@ fun ViewAddContent(
     canAdd: Boolean = true,
     saving: Boolean = false,
     failed: Boolean = false,
+    /** AD-05 프리셋 만들기: 항목은 만들지 않고 프리셋만 저장한다(날짜 칩·추가 버튼 없음). */
+    presetOnly: Boolean = false,
     prefill: ViewAddPrefill = ViewAddPrefill(),
     /** AD-03 한 줄 입력을 읽을 속성들. 비면 읽지 않는다. */
     columns: List<ViewColumn> = emptyList(),
@@ -212,7 +214,7 @@ fun ViewAddContent(
     var pickedIso by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
     // 필터에서 채운 값과 양식의 기본값은 시트가 열린 뒤 보기·위젯 설정을 읽어 오면 도착한다. 도착하면 그 값으로 시작한다.
-    val plan = remember(columns, hasDate, input, prefill) { sheetPlan(columns, hasDate, input, prefill) }
+    val plan = remember(columns, hasDate, presetOnly, input, prefill) { sheetPlan(columns, hasDate && !presetOnly, input, prefill) }
     var props by rememberSaveable(stateSaver = PropsSaver) { mutableStateOf(plan.start) }
     var edited by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(plan.start) { if (!edited) props = plan.start } // 사용자가 고친 뒤(화면이 다시 만들어진 뒤 값이 또 와도)에는 덮지 않는다
@@ -237,9 +239,11 @@ fun ViewAddContent(
         DateChoice.PICK -> pickedIso?.let(LocalDate::parse)
     }
     val save = { if (title.isNotBlank() && canAdd && !saving) onSave(quick.title, date, allProps) }
+    val savePreset: () -> Unit = { onSavePreset?.let { store -> scope.launch { presetSaved = store(quick.title.trim(), allProps) } } }
+    val done = { if (presetOnly) { if (title.isNotBlank()) savePreset() } else save() }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(stringResource(R.string.view_add_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(if (presetOnly) R.string.view_add_preset_title else R.string.view_add_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (viewName.isNotBlank()) {
             Text(viewName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -250,10 +254,10 @@ fun ViewAddContent(
             singleLine = true,
             label = { Text(stringResource(R.string.qs_title_hint)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { save() }),
+            keyboardActions = KeyboardActions(onDone = { done() }),
         )
         // 만들 수 없을 때(보기가 지워졌거나 쓰기 정보를 아직 못 받음)와 쌓지 못했을 때는 이유를 글자로 알린다.
-        if (!canAdd) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        if (!canAdd && !presetOnly) Text(stringResource(R.string.view_add_unavailable), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         if (failed) Text(stringResource(R.string.view_add_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         QuickChips(candidates.chips, ignored) { ignoredText = toggled(ignoredText, it) }
         if (plan.showDate) {
@@ -279,15 +283,16 @@ fun ViewAddContent(
             null -> Unit
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            // AD-05: 위젯에서 연 시트면 지금 제목(= 프리셋 이름)과 값을 이 위젯의 프리셋으로 저장한다(만들지는 않는다).
-            if (onSavePreset != null) {
-                TextButton(
-                    onClick = { scope.launch { presetSaved = onSavePreset(quick.title.trim(), allProps) } },
-                    enabled = title.isNotBlank(),
-                ) { Text(stringResource(R.string.view_add_preset_save)) }
+            // AD-05: 위젯에서 연 시트면 지금 제목(= 프리셋 이름)과 값을 이 위젯의 프리셋으로 저장한다. 프리셋 만들기 모드는 저장만 하고 항목은 만들지 않는다.
+            if (onSavePreset != null && !presetOnly) {
+                TextButton(onClick = { savePreset() }, enabled = title.isNotBlank()) { Text(stringResource(R.string.view_add_preset_save)) }
             }
             TextButton(onClick = onCancel) { Text(stringResource(R.string.qs_cancel)) }
-            Button(onClick = { save() }, enabled = title.isNotBlank() && canAdd && !saving) { Text(stringResource(R.string.qs_add)) }
+            if (presetOnly) {
+                Button(onClick = { savePreset() }, enabled = title.isNotBlank() && onSavePreset != null) { Text(stringResource(R.string.view_add_preset_save)) }
+            } else {
+                Button(onClick = { save() }, enabled = title.isNotBlank() && canAdd && !saving) { Text(stringResource(R.string.qs_add)) }
+            }
         }
     }
     if (picking) {
@@ -324,6 +329,7 @@ class ViewAddActivity : ComponentActivity() {
         }
         val today = LocalDate.now(APP_ZONE)
         val appWidgetId = intent.getIntExtra(AppIntents.EXTRA_APPWIDGET_ID, 0)
+        val presetOnly = intent.getBooleanExtra(AppIntents.EXTRA_PRESET_ONLY, false) && appWidgetId > 0
         setContent {
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
@@ -347,8 +353,11 @@ class ViewAddActivity : ComponentActivity() {
                         prefill = form.prefill,
                         columns = form.columns,
                         input = form.input,
-                        onSaveDefaults = if (appWidgetId > 0) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
-                        onSavePreset = if (form.canPreset) { title, props -> viewModel.savePreset(appWidgetId, title, props) } else null,
+                        presetOnly = presetOnly,
+                        onSaveDefaults = if (appWidgetId > 0 && !presetOnly) { values -> viewModel.saveDefaults(appWidgetId, viewId, values) } else null,
+                        onSavePreset = if (form.canPreset || presetOnly) { title, props ->
+                            viewModel.savePreset(appWidgetId, title, props).also { if (it && presetOnly) finish() } // 만들기 모드는 저장하면 편집 화면으로 돌아간다
+                        } else null,
                     )
                 }
             }

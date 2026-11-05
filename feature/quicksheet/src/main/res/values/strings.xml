@@ -11,6 +11,7 @@
     <string name="view_add_preset_saved">프리셋을 저장했어요</string>
     <string name="view_add_preset_failed">프리셋을 저장하지 못했어요. 프리셋은 5개까지 만들 수 있어요</string>
     <string name="view_add_title">새 항목</string>
+    <string name="view_add_preset_title">프리셋 만들기</string>
     <string name="view_add_no_date">날짜 없음</string>
     <string name="view_add_today">오늘</string>
     <string name="view_add_tomorrow">내일</string>

@@ -39,6 +39,9 @@ data class InputForm(val fields: List<FormField> = emptyList(), val showDate: Bo
 
     fun withShowDate(on: Boolean): InputForm = copy(showDate = on)
 
+    /** 보기에서 사라졌거나 양식에 못 쓰게 된 속성을 뺀 양식. 편집 화면이 순서를 옮기기 전에 쓴다(안 보이는 속성과 자리를 바꾸지 않게). */
+    fun pruned(columns: List<ViewColumn>): InputForm = copy(fields = fields.filter { f -> editable(columns).any { it.id == f.propId } })
+
     /** 시트에서 '이 값을 기본값으로'를 눌렀을 때: 양식의 모든 속성의 기본값을 [values]로 바꾼다(값이 없으면 기본값을 지운다). */
     fun withDefaults(values: Map<String, JsonElement>): InputForm = copy(fields = fields.map { it.copy(default = values[it.propId]) })
 

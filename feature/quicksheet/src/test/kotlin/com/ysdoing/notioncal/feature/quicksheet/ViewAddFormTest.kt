@@ -187,6 +187,8 @@ class ViewAddFormTest {
         assertEquals(mapOf<String, JsonElement>("k" to JsonPrimitive("o1")), plan.start)
         assertEquals(listOf("t", "n", "r", "d"), plan.readable.map { it.id })
         assertEquals(true, plan.showDate)
-        assertEquals(false, sheetPlan(columns, hasDate = false, input = null, prefill = ViewAddPrefill()).showDate)
+        val noDate = sheetPlan(columns, hasDate = false, input = null, prefill = ViewAddPrefill())
+        assertEquals(false, noDate.showDate)
+        assertEquals(listOf("t", "n", "k", "r"), noDate.readable.map { it.id }) // 날짜를 안 쓰면 문장에서 날짜도 읽지 않는다
     }
 }

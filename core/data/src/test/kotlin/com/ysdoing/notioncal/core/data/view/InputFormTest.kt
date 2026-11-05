@@ -51,6 +51,12 @@ class InputFormTest {
     }
 
     @Test
+    fun prunedKeepsOnlyFieldsThatStillHaveAUsableColumnInOrder() {
+        val f = InputForm(listOf(FormField("c"), FormField("gone", JsonPrimitive("x")), FormField("t"), FormField("n", JsonPrimitive(2.0))), showDate = false)
+        assertEquals(InputForm(listOf(FormField("c"), FormField("n", JsonPrimitive(2.0))), showDate = false), f.pruned(columns))
+    }
+
+    @Test
     fun toggleAppendsOnAndRemovesOffAndIgnoresRepeats() {
         val f = InputForm().toggle("n", true).toggle("k", true).toggle("n", true)
         assertEquals(listOf("n", "k"), f.fields.map { it.propId })
