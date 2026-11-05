@@ -116,6 +116,9 @@ data class ViewColumn(
         /** Phase 12a 캘린더 보기의 `date_property_id` 속성. 보기에서 숨겨도 월 격자가 날짜를 읽도록, 그리고 새 항목이 같은 열에 날짜를 쓰도록 쓰기 정보에 담는다. */
         const val ROLE_DATE = "date"
 
+        /** Phase 12b 차트 보기의 축·값 속성(`x_axis`·`y_axis`·`value`). 보기에서 숨겨도 폰이 묶고 집계하도록 쓰기 정보에 담는다. 새 항목 양식에는 나오지 않는다. */
+        const val ROLE_CHART = "chart"
+
         /**
          * 새 항목의 날짜가 들어가고 월 격자·하루 한 줄 판정이 읽는 날짜 열: 캘린더의 [ROLE_DATE] 열이 먼저, 없으면 첫 날짜 열.
          * (옛 스냅샷은 역할이 없어 첫 날짜 열로 폴백하고, 다음 동기화 뒤 역할이 채워진다.)
