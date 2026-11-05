@@ -368,11 +368,14 @@ internal class ChipHitTest(
     }
 }
 
+/** 끄는 칩의 (배경, 글자) 색: 일정 색 불투명 배경과 강조 칸과 같은 규칙(흰색·먹색 중 대비 큰 쪽)의 글자(부록 A-2, 노랑·하늘색 위 흰 글자는 1.5:1이었다). */
+internal fun dragChipColors(event: CalendarEvent): Pair<Color, Color> = Color(NotionColors.argb(event.colorHex)) to event.emphasisTextColor()
+
 /** 끄는 동안 손가락 위에 보이는 칩. */
 @Composable
 private fun DraggedChip(drag: GridDrag, cellWidth: Float) {
     val density = LocalDensity.current
-    val color = Color(NotionColors.argb(drag.event.colorHex))
+    val (color, textColor) = dragChipColors(drag.event)
     val height = with(density) { 18.sp.toPx() }
     Box(
         Modifier
@@ -380,11 +383,11 @@ private fun DraggedChip(drag: GridDrag, cellWidth: Float) {
             .width(with(density) { cellWidth.toDp() } * 1.4f)
             .height(with(density) { height.toDp() })
             .clip(RoundedCornerShape(4.dp))
-            .background(color.copy(alpha = 0.9f))
+            .background(color)
             .padding(horizontal = 4.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Text(drag.event.title, fontSize = 11.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, color = Color.White)
+        Text(drag.event.title, fontSize = 11.sp, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, color = textColor)
     }
 }
 
