@@ -163,6 +163,14 @@
     <string name="layout_tile_period_month">이번 달</string>
     <string name="layout_tile_view_default">보기</string>
     <string name="layout_tile_prop_default">속성</string>
+    <string name="layout_donut_by">%1$s별</string>
+    <string name="layout_tile_form_kind">종류</string>
+    <string name="layout_tile_kind_value">값</string>
+    <string name="layout_tile_kind_donut">분류별 도넛</string>
+    <string name="layout_tile_form_group">분류 속성</string>
+    <string name="layout_tile_no_group">선택·상태·다중 선택 속성이 없어요</string>
+    <string name="layout_tile_donut_limit">도넛 타일은 위젯에 하나까지예요</string>
+    <string name="layout_donut_unavailable">분류 속성을 찾을 수 없어요</string>
     <string name="layout_tile_partial">일부만 계산</string>
     <string name="layout_tile_missing">보기를 찾을 수 없어요</string>
     <string name="layout_tile_empty">계산할 값이 없어요</string>

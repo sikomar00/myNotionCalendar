@@ -35,8 +35,10 @@ import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.AggResult
 import com.ysdoing.notioncal.core.data.view.AggTile
+import com.ysdoing.notioncal.core.data.view.TileKind
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.chart.ChartResult
 import kotlin.math.ceil
 
 internal val AGG_TILE_GAP = 4.dp
@@ -45,8 +47,8 @@ private val BAR_HEIGHT = 6.dp
 private val COLOR_DOT = 8.dp
 private val TILE_THREE_COLUMNS_MIN_WIDTH = 420.dp
 
-/** 타일 하나가 그려질 값: 타일 설정, 계산 결과, 보기([board]가 null이면 등록이 지워진 보기). */
-internal data class TileCell(val tile: AggTile, val result: AggResult, val board: ViewBoard? = null, val nowMillis: Long = 0L) {
+/** 타일 하나가 그려질 값: 타일 설정, 계산 결과, 보기([board]가 null이면 등록이 지워진 보기). [donut]은 도넛 타일의 분류별 값(못 만들면 null)이다. */
+internal data class TileCell(val tile: AggTile, val result: AggResult, val board: ViewBoard? = null, val nowMillis: Long = 0L, val donut: ChartResult? = null) {
     /** 값 아래 줄(막대·글자)이 필요한가: 목표, 일부만 계산, 값 없음, 보기 상태 안내가 있을 때. */
     val needsExtras: Boolean get() = result.progress != null || result.partial || result.number == null || (board != null && viewHasStatus(board, nowMillis))
 }
@@ -54,8 +56,11 @@ internal data class TileCell(val tile: AggTile, val result: AggResult, val board
 /** 타일 줄의 격자: [visible]개를 [columns]열 × [rows]줄로 그린다. */
 internal data class TileGrid(val columns: Int, val rows: Int, val visible: Int)
 
-/** 그릴 타일([cells])과 격자, 줄 전체 [height]. [extras]면 모든 타일이 막대·글자 줄을 둔다(높이를 맞추려고). */
-internal data class TileStripPlan(val cells: List<TileCell>, val grid: TileGrid, val height: Dp, val extras: Boolean)
+/**
+ * 그릴 값 타일([cells])과 격자, 줄 전체 [height]. [extras]면 모든 타일이 막대·글자 줄을 둔다(높이를 맞추려고).
+ * [donut]이 있으면 값 타일 격자([valuesHeight]) 아래에 도넛 줄이 더해진 높이가 [height]다.
+ */
+internal data class TileStripPlan(val cells: List<TileCell>, val grid: TileGrid, val height: Dp, val extras: Boolean, val donut: DonutPlan? = null, val valuesHeight: Dp = height)
 
 /**
  * 타일 줄 격자(PRD 크기별 밀도: 2×2=1개·4×2=2개·4×4=4개·전체=6개). [rowsFit]은 줄 높이에 들어가는 타일 줄 수다.
@@ -86,6 +91,16 @@ internal fun tileHeight(m: ViewMetrics, extras: Boolean): Dp = m.tile + if (extr
  * 막대·글자 줄을 둘지는 실제로 그릴 타일만 보고 정한다(가려진 타일의 목표 때문에 보이는 타일이 커지지 않게, 두 번에 나눠 계산).
  */
 internal fun planTileStrip(cells: List<TileCell>, m: ViewMetrics, size: DpSize, room: Dp): TileStripPlan {
+    val donutCell = cells.firstOrNull { it.tile.kind == TileKind.DONUT } ?: return planValueTiles(cells, m, size, room)
+    val values = cells.filter { it.tile.kind == TileKind.AGG }
+    // 값 타일을 먼저 두 줄짜리 도넛 몫을 남기고 계획한 뒤, 남은 높이에 도넛이 들어가면 더한다. 안 들어가면 도넛은 건너뛰고 값 타일이 높이를 다 쓴다.
+    val valuesPlan = planValueTiles(values, m, size, room - donutMinHeight(m) - AGG_TILE_GAP)
+    val gap = if (valuesPlan.cells.isEmpty()) 0.dp else AGG_TILE_GAP
+    val donut = planDonut(donutCell, m, size, room - valuesPlan.height - gap) ?: return planValueTiles(values, m, size, room)
+    return valuesPlan.copy(height = valuesPlan.height + gap + donut.height, donut = donut, valuesHeight = valuesPlan.height)
+}
+
+private fun planValueTiles(cells: List<TileCell>, m: ViewMetrics, size: DpSize, room: Dp): TileStripPlan {
     fun gridFor(extras: Boolean): TileGrid {
         val rowsFit = ((room + AGG_TILE_GAP) / (tileHeight(m, extras) + AGG_TILE_GAP)).toInt().coerceAtLeast(1)
         return tileGrid(size.width, sizeStep(size), cells.size, rowsFit)
@@ -127,6 +142,10 @@ internal fun tileLabel(context: Context, tile: AggTile, viewName: String?, colum
         columns.firstOrNull { it.id == tile.propId }?.name?.ifBlank { null } ?: context.getString(R.string.layout_tile_prop_default)
     }
     val period = if (tile.fn == AggFn.STREAK) null else periodName(tile.period)
+    if (tile.kind == TileKind.DONUT) {
+        val group = columns.firstOrNull { it.id == tile.groupProp }?.name?.ifBlank { null } ?: context.getString(R.string.layout_tile_prop_default)
+        return listOfNotNull(period?.let(context::getString), context.getString(R.string.layout_donut_by, group), fn).joinToString(" ")
+    }
     return listOfNotNull(period?.let(context::getString), subject, fn).joinToString(" ")
 }
 
@@ -148,10 +167,22 @@ private fun tileNote(context: Context, cell: TileCell): String {
  */
 @Composable
 internal fun TileStrip(plan: TileStripPlan, look: LayoutLook, width: Dp) {
+    val donut = plan.donut ?: return ValueTiles(plan, look, width, plan.height)
+    Column(GlanceModifier.fillMaxWidth().height(plan.height)) {
+        if (plan.cells.isNotEmpty()) {
+            ValueTiles(plan, look, width, plan.valuesHeight)
+            Spacer(GlanceModifier.height(AGG_TILE_GAP))
+        }
+        DonutTile(donut, look, width)
+    }
+}
+
+@Composable
+private fun ValueTiles(plan: TileStripPlan, look: LayoutLook, width: Dp, height: Dp) {
     val grid = plan.grid
     val cardWidth = (width - AGG_TILE_GAP * (grid.columns - 1)) / grid.columns
     val cardHeight = tileHeight(look.metrics, plan.extras)
-    Column(GlanceModifier.fillMaxWidth().height(plan.height)) {
+    Column(GlanceModifier.fillMaxWidth().height(height)) {
         plan.cells.chunked(grid.columns).forEachIndexed { rowIndex, rowCells ->
             if (rowIndex > 0) Spacer(GlanceModifier.height(AGG_TILE_GAP))
             Row(GlanceModifier.fillMaxWidth().height(cardHeight)) {

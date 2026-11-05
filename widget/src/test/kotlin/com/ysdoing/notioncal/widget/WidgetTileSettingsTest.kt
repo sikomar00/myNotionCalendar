@@ -2,6 +2,8 @@ package com.ysdoing.notioncal.widget
 
 import com.ysdoing.notioncal.core.data.view.AggFn
 import com.ysdoing.notioncal.core.data.view.AggPeriod
+import com.ysdoing.notioncal.core.data.view.TileKind
+import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -130,5 +132,45 @@ class WidgetTileSettingsTest {
         assertEquals("가나다", "가나다라".takeCodePoints(3))
         assertEquals("📚📖", "📚📖📕".takeCodePoints(2)) // 이모지를 반으로 자르지 않는다
         assertEquals("짧다", "짧다".takeCodePoints(20))
+    }
+
+    // --- 분류별 도넛(Phase 12c RC-04)
+
+    private val kind = ViewColumn("k", "분류", "select", listOf(ViewChoice("o1", "식비")))
+    private val tags = ViewColumn("g", "태그", "multi_select")
+    private val state = ViewColumn("s", "상태", "status")
+    private val withGroups = columns + listOf(kind, tags, state)
+
+    @Test
+    fun donutGroupChoicesAreTheSelectStatusAndMultiSelectProperties() {
+        assertEquals(listOf(kind, tags, state), groupChoices(withGroups))
+        assertEquals(emptyList<ViewColumn>(), groupChoices(columns))
+    }
+
+    @Test
+    fun turningOnTheDonutKindPicksTheFirstGroupLimitsTheFunctionAndClearsGoalAndColor() {
+        val value = TileDraft().withView("v1", withGroups).withFn(AggFn.AVG, withGroups).copy(goalText = "100", color = "red")
+        val donut = value.withKind(TileKind.DONUT, withGroups)
+        assertEquals(listOf(TileKind.DONUT, "k", AggFn.COUNT, "", ""), listOf(donut.kind, donut.groupProp, donut.fn, donut.goalText, donut.color))
+        assertEquals(AggFn.SUM, donut.withFn(AggFn.SUM, withGroups).withKind(TileKind.DONUT, withGroups).fn) // 합계는 그대로 둔다
+        assertEquals("g", donut.copy(groupProp = "g").withKind(TileKind.DONUT, withGroups).groupProp) // 맞는 분류 속성은 그대로
+        assertEquals("", donut.withKind(TileKind.AGG, withGroups).groupProp)
+    }
+
+    @Test
+    fun aDonutDraftBecomesATileOnlyWithAGroupAndSavesItsKind() {
+        val donut = TileDraft().withView("v1", withGroups).withKind(TileKind.DONUT, withGroups).withFn(AggFn.SUM, withGroups)
+        val tile = donut.toTile()!!
+        assertEquals(listOf(TileKind.DONUT, "k", AggFn.SUM, "n"), listOf(tile.kind, tile.groupProp, tile.fn, tile.propId))
+        assertNull(donut.copy(groupProp = "").toTile()) // 분류 속성이 없으면 '추가'를 막는다
+        assertEquals(donut.copy(editingId = "t2"), TileDraft.from(tile.copy(id = "t2")).copy(label = ""))
+    }
+
+    @Test
+    fun pickingAnotherViewKeepsTheDonutKindWithThatViewsFirstGroup() {
+        val donut = TileDraft().withView("v1", withGroups).withKind(TileKind.DONUT, withGroups)
+        val other = donut.withView("v2", listOf(title, amount, day, tags))
+        assertEquals(listOf(TileKind.DONUT, "g"), listOf(other.kind, other.groupProp))
+        assertEquals(TileKind.AGG, TileDraft().withView("v1", withGroups).withView("v2", columns).kind)
     }
 }

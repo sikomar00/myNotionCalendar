@@ -79,7 +79,7 @@ private fun ChartBody(board: ViewBoard, plan: ChartPlan, look: ViewLook) {
             ChartForm.NUMBER -> NumberTile(result, plan.width, plan.sizing.chartHeight, look)
             ChartForm.COLUMNS -> ColumnBars(result, plan, look)
             ChartForm.ROWS -> RowBars(result, plan, look)
-            ChartForm.DONUT -> DonutChart(result, plan, look)
+            ChartForm.DONUT -> DonutWithLegend(result, plan.width, plan.sizing.chartHeight, plan.sizing.legendRows, look)
             ChartForm.LINE -> LineChart(result, plan, look)
         }
         if (plan.sizing.tableRows > 0) ValueTable(result, plan.sizing.tableRows, look)
@@ -133,13 +133,11 @@ private fun ColumnBars(result: ChartResult, plan: ChartPlan, look: ViewLook) {
 
 /**
  * 도넛: 고리 그림([DonutPicture])의 한가운데에 전체 값을 글자로 얹고, 범례 줄이 있으면 오른쪽에 색 점 · 이름 · 값 · 비율을 세운다.
- * 범례가 없으면(2×2, 노션이 범례를 껐을 때) 도넛이 가운데에 선다.
+ * 범례가 없으면(2×2, 노션이 범례를 껐을 때) 도넛이 가운데에 선다. 차트 보기와 도넛 타일(Phase 12c)이 [width]×[height] 칸을 받아 같이 그린다.
  */
 @Composable
-private fun DonutChart(result: ChartResult, plan: ChartPlan, look: ViewLook) {
-    val height = plan.sizing.chartHeight
-    val legendRows = plan.sizing.legendRows
-    val side = if (legendRows == 0) minOf(plan.width, height) else minOf(height, plan.width * DONUT_SHARE)
+internal fun DonutWithLegend(result: ChartResult, width: Dp, height: Dp, legendRows: Int, look: ViewLook) {
+    val side = if (legendRows == 0) minOf(width, height) else minOf(height, width * DONUT_SHARE)
     val m = look.m
     val hole = side * (1 - 2 * DONUT_RING)
     val textScale = minOf(m.systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
@@ -212,7 +210,7 @@ private val BAR_THICKNESS = 10.dp
 
 /** 전체 크기의 값 표: 색 점 · 이름 · 값 · 비율(개수·합계일 때만, 점들의 합에 대한 몫). */
 @Composable
-private fun ValueTable(result: ChartResult, rows: Int, look: ViewLook) {
+internal fun ValueTable(result: ChartResult, rows: Int, look: ViewLook) {
     Column(GlanceModifier.fillMaxWidth()) {
         result.points.take(rows).forEach { point ->
             Row(GlanceModifier.fillMaxWidth().height(chartTableRowHeight(look.m)), verticalAlignment = Alignment.CenterVertically) {

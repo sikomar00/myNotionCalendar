@@ -32,6 +32,7 @@ import com.ysdoing.notioncal.core.data.view.LayoutItem
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import com.ysdoing.notioncal.core.data.view.chart.TileDonut
 import java.time.DayOfWeek
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -63,8 +64,10 @@ internal data class LayoutWidgetState(
         return layout.tiles.map { tile ->
             val board = boards[tile.viewId]
             // 노션에서 지워졌거나 지원하지 않는 보기의 남은 행은 현재 값이 아니라서 값 없음으로 둔다.
-            val result = board?.takeUnless { it.notFound || it.unsupported }?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false)
-            TileCell(tile, result, board, nowMillis)
+            val live = board?.takeUnless { it.notFound || it.unsupported }
+            val result = live?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false)
+            val donut = live?.let { TileDonut.compute(it, tile, today, weekStart, DONUT_MAX_LEGEND) }
+            TileCell(tile, result, board, nowMillis, donut)
         }
     }
 
