@@ -48,6 +48,8 @@ data class WidgetConfig(
     val layoutJson: String = "",
     /** 탭 배치에서 마지막으로 본 탭 번호(WL-02). */
     val lastTab: Int = 0,
+    /** 보기별 입력 양식 JSON(Phase 11g AD-02). 해석은 `InputForms`가 한다. */
+    val formJson: String = "",
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -75,6 +77,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     presetsJson = presetsJson,
     layoutJson = layoutJson,
     lastTab = lastTab.coerceAtLeast(0),
+    formJson = formJson,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -97,6 +100,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     presetsJson = presetsJson,
     layoutJson = layoutJson,
     lastTab = lastTab.coerceAtLeast(0),
+    formJson = formJson,
 )
 
 @Singleton

@@ -49,6 +49,8 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "") val layoutJson: String = "",
     /** v19(WL-02): 탭 배치에서 마지막으로 본 탭 번호(위젯마다 기억). */
     @ColumnInfo(defaultValue = "0") val lastTab: Int = 0,
+    /** v20(Phase 11g AD-02): 보기별 새 항목 입력 양식(`InputForms` JSON: 보기 ID → 속성·순서·기본값·날짜 칩). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val formJson: String = "",
 )
 
 @Dao

@@ -78,6 +78,16 @@ class WidgetConfigRepositoryTest {
         assertEquals(listOf("{\"mode\":\"SECTIONS\"}", 0), listOf(repo.get(7).layoutJson, repo.get(7).lastTab))
     }
 
+    /** Phase 11g AD-02: 입력 양식은 위젯마다 저장되고 다른 설정을 저장해도 남는다. */
+    @Test
+    fun formJsonRoundTripsPerWidgetAndSurvivesOtherSaves() = runTest {
+        repo.save(WidgetConfig(8, formJson = "{\"v1\":{}}"))
+        repo.save(WidgetConfig(9))
+        repo.save(repo.get(8).copy(theme = WidgetTheme.DARK))
+        assertEquals("{\"v1\":{}}", repo.get(8).formJson)
+        assertEquals("", repo.get(9).formJson)
+    }
+
     /** WL-02: 탭을 누르면 그 위젯의 탭 번호만 바뀌고 나머지 설정·다른 위젯은 그대로다. */
     @Test
     fun selectingALayoutTabKeepsTheRestAndOtherWidgets() = runTest {

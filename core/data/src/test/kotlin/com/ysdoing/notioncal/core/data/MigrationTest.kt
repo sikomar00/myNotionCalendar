@@ -539,4 +539,21 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v19 → v20(Phase 11g): 입력 양식(formJson) 열은 기본값(빈 글자)이고 기존 위젯 설정·배치는 그대로다. */
+    @Test
+    fun v19ToV20AddsFormJson() = runTest {
+        helper.createDatabase(19).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab) VALUES (8, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '{\"mode\":\"TABS\"}', 2)")
+        }
+        helper.runMigrationsAndValidate(20).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(8)!!
+            assertEquals(listOf("v1", "{\"mode\":\"TABS\"}", 2), listOf(widget.viewId, widget.layoutJson, widget.lastTab)) // 기존 설정 보존
+            assertEquals("", widget.formJson)
+        } finally {
+            db.close()
+        }
+    }
 }
