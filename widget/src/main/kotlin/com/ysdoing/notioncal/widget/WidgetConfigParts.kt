@@ -35,7 +35,7 @@ internal fun WidgetConfig.resetLook(): WidgetConfig = WidgetConfig(
     appWidgetId = appWidgetId, monthOffset = monthOffset, selectedTab = selectedTab, ddayPageId = ddayPageId, viewId = viewId,
     viewPage = viewPage, presetsJson = presetsJson, // 보드 위치와 사용자가 만든 프리셋은 모양이 아니다
     layoutJson = layoutJson, lastTab = lastTab, // 배치(보기 목록)와 보고 있는 탭도 모양이 아니다
-    formJson = formJson, // 입력 양식도 사용자가 정한 동작이지 모양이 아니다
+    formJson = formJson, actionsJson = actionsJson, // 입력 양식·액션 버튼도 사용자가 정한 동작이지 모양이 아니다
 )
 
 /**

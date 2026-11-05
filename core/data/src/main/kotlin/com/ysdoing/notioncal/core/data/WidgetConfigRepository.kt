@@ -50,6 +50,8 @@ data class WidgetConfig(
     val lastTab: Int = 0,
     /** 보기별 입력 양식 JSON(Phase 11g AD-02). 해석은 `InputForms`가 한다. */
     val formJson: String = "",
+    /** 액션 버튼 목록 JSON(Phase 12c IX-07). 해석은 `ViewActions`가 한다. */
+    val actionsJson: String = "",
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -78,6 +80,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     layoutJson = layoutJson,
     lastTab = lastTab.coerceAtLeast(0),
     formJson = formJson,
+    actionsJson = actionsJson,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -101,6 +104,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     layoutJson = layoutJson,
     lastTab = lastTab.coerceAtLeast(0),
     formJson = formJson,
+    actionsJson = actionsJson,
 )
 
 @Singleton

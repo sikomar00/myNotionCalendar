@@ -88,6 +88,16 @@ class WidgetConfigRepositoryTest {
         assertEquals("", repo.get(9).formJson)
     }
 
+    /** Phase 12c IX-07: 액션 버튼 목록은 위젯마다 저장되고 다른 설정을 저장해도 남는다. */
+    @Test
+    fun actionsJsonRoundTripsPerWidgetAndSurvivesOtherSaves() = runTest {
+        repo.save(WidgetConfig(10, actionsJson = "[{\"id\":\"a1\"}]"))
+        repo.save(WidgetConfig(11))
+        repo.save(repo.get(10).copy(theme = WidgetTheme.DARK))
+        assertEquals("[{\"id\":\"a1\"}]", repo.get(10).actionsJson)
+        assertEquals("", repo.get(11).actionsJson)
+    }
+
     /** WL-02: 탭을 누르면 그 위젯의 탭 번호만 바뀌고 나머지 설정·다른 위젯은 그대로다. */
     @Test
     fun selectingALayoutTabKeepsTheRestAndOtherWidgets() = runTest {

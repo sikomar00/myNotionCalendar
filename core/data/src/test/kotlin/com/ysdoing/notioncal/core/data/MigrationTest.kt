@@ -556,4 +556,28 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v20 → v21(Phase 12c): 액션 목록(actionsJson)·쓰기 묶음(batchId)은 기본값이고, 보낸 기록(sent_writes) 표가 생기며, 기존 설정·쓰기는 그대로다. */
+    @Test
+    fun v20ToV21AddsActionsJsonBatchIdAndSentWrites() = runTest {
+        helper.createDatabase(20).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts, sendAfter) VALUES ('v1', 'p1', 'ds1', 'dn', 'checkbox', 'true', 9, 1, 12)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab, formJson) VALUES (9, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '', 0, '{\"v1\":{}}')")
+        }
+        helper.runMigrationsAndValidate(21).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val write = db.viewDao().firstDueWrite(now = 100)!!
+            assertEquals(listOf("true", 12L, 0L), listOf(write.value, write.sendAfter, write.batchId)) // 옛 쓰기는 묶음이 아니다
+            val widget = db.widgetConfigDao().get(9)!!
+            assertEquals(listOf("v1", "{\"v1\":{}}", ""), listOf(widget.viewId, widget.formJson, widget.actionsJson)) // 기존 설정 보존
+            db.query("SELECT COUNT(*) FROM sent_writes", null).use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0)) // 표가 있고 비어 있다
+            }
+        } finally {
+            db.close()
+        }
+    }
 }

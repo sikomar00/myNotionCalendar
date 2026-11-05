@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.data.view
 
+import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.EventDao
@@ -147,6 +148,32 @@ class ViewWriter @Inject constructor(
         return queued
     }
 
+    /**
+     * 액션 버튼(Phase 12c IX-07): [action]의 변경을 이 행에 차례로 적용한다. 날짜 연산은 변경마다 그 순간 값에서 계산하고, 변경들은 같은 묶음 번호를 달고
+     * 위젯 즉시 동작처럼 [UNDO_WINDOW_MS] 뒤에 보내져 그 안에 되돌릴 수 있다(변경마다 한 트랜잭션이라 일부만 적용될 수 있다). 모두 적용됐을 때만 true.
+     */
+    suspend fun applyAction(viewId: String, pageId: String, action: ViewAction): Boolean {
+        val batch = clock.millis()
+        val today = LocalDate.now(clock.withZone(APP_ZONE))
+        return action.changes.map { step ->
+            val types = if (step.op == ActionOp.SET) ViewColumn.WRITABLE_TYPES.toTypedArray() else arrayOf("date")
+            change(viewId, pageId, step.propId, *types, sendDelayMs = UNDO_WINDOW_MS, batchId = batch) { column, current, _ -> actionValue(step, column, current, today) }
+        }.all { it }
+    }
+
+    private fun actionValue(change: ActionChange, column: ViewColumn, current: JsonElement?, today: LocalDate): JsonElement? = when (change.op) {
+        ActionOp.SET -> setValueOf(column, change.value)?.takeIf { column.accepts(it) }
+        ActionOp.SHIFT_DAYS -> (TypedDate.parse(current) ?: TypedDate(today.toString())).shiftedDays(change.days.toLong()).toJson()
+        ActionOp.TODAY -> (TypedDate.parse(current)?.withStart(today) ?: TypedDate(today.toString())).toJson()
+    }
+
+    /** 액션의 글자 값을 열 종류에 맞는 JSON으로(체크박스 true/false, 숫자, 그 밖은 글자·옵션 ID). 숫자가 아닌 숫자 글자는 null. */
+    private fun setValueOf(column: ViewColumn, text: String): JsonElement? = when (column.type) {
+        "checkbox" -> JsonPrimitive(text == "true")
+        "number" -> text.toDoubleOrNull()?.let(::JsonPrimitive)
+        else -> JsonPrimitive(text)
+    }
+
     /** 행의 제목: 제목 속성이 보기에 보이면 그 칸, 아니면 빈 글자(실패 기록의 제목이 된다). */
     private fun titleOf(snapshot: ViewSnapshotEntity, row: ViewRowEntity): String {
         val titleName = ViewJson.columns(snapshot.columnInfo).firstOrNull { it.type == "title" }?.name ?: return ""
@@ -160,6 +187,7 @@ class ViewWriter @Inject constructor(
         propId: String,
         vararg types: String,
         sendDelayMs: Long = 0,
+        batchId: Long = 0,
         after: (ViewRowEntity, Map<String, JsonElement>) -> ViewRowEntity = { row, _ -> row },
         next: (ViewColumn, JsonElement?, Map<String, JsonElement>) -> JsonElement?,
     ): Boolean {
@@ -172,7 +200,7 @@ class ViewWriter @Inject constructor(
             if (at in cells.indices) cells[at] = column.display(value)
             val write = ViewWriteEntity(
                 viewId = viewId, pageId = pageId, dataSourceId = snapshot.dataSourceId, propId = propId, propType = column.type,
-                value = ViewJson.valueText(value), createdAt = clock.millis(), baseValue = typed[propId]?.toString(), sendAfter = sendAfterOf(sendDelayMs),
+                value = ViewJson.valueText(value), createdAt = clock.millis(), baseValue = typed[propId]?.toString(), sendAfter = sendAfterOf(sendDelayMs), batchId = batchId,
             )
             val changedTyped = typed + (propId to value)
             after(row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(changedTyped)), changedTyped) to write

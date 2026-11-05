@@ -108,6 +108,26 @@ data class ViewWriteEntity(
      * 그 사이 되돌릴 수 있게 한다(IX-05). 0이면 바로 보낼 수 있다.
      */
     @ColumnInfo(defaultValue = "0") val sendAfter: Long = 0,
+    /** v21(Phase 12c): 한 번의 액션 버튼이 만든 쓰기들의 묶음 번호(보낸 뒤 되돌릴 때 한꺼번에 되돌린다). 0이면 묶음이 아니다. */
+    @ColumnInfo(defaultValue = "0") val batchId: Long = 0,
+)
+
+/**
+ * v21(Phase 12c IX-05 후반): 노션에 **보낸** 속성 바꿈의 기록(캐시). 4초 되돌리기 창이 지난 뒤에도 위젯이 '보낸 변경 되돌리기'를 줄 수 있게,
+ * 처리기가 보낼 때 이전 값([priorValue])과 보낸 값([sentValue])을 남기고 10분 지난 것은 지운다. 새 항목·휴지통은 기록하지 않는다.
+ */
+@Entity(tableName = "sent_writes")
+data class SentWriteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val viewId: String,
+    val pageId: String,
+    val propId: String,
+    val propType: String,
+    /** 바꾸기 전 노션 값(JSON 원시값, 비어 있었으면 null). */
+    val priorValue: String?,
+    val sentValue: String?,
+    val sentAt: Long,
+    val batchId: Long = 0,
 )
 
 /**

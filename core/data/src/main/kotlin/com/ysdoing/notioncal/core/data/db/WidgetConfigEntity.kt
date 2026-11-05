@@ -51,6 +51,8 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "0") val lastTab: Int = 0,
     /** v20(Phase 11g AD-02): 보기별 새 항목 입력 양식(`InputForms` JSON: 보기 ID → 속성·순서·기본값·날짜 칩). 없으면 빈 글자. */
     @ColumnInfo(defaultValue = "") val formJson: String = "",
+    /** v21(Phase 12c IX-07): 액션 버튼 목록(`ViewActions` JSON, 위젯당 최대 5개). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val actionsJson: String = "",
 )
 
 @Dao
