@@ -54,6 +54,17 @@ class WidgetLayoutTest {
     }
 
     @Test
+    fun presetsApplyToASingleViewOrASectionLayoutWithOneView() {
+        assertEquals(true, WidgetLayout().presetsApply) // 배치를 안 정하면 단일
+        assertEquals(true, layout(LayoutMode.SINGLE, "a").presetsApply)
+        assertEquals(true, layout(LayoutMode.SECTIONS, "a").presetsApply) // 타일은 보기가 아니라 프리셋을 가르지 않는다
+        assertEquals(true, layout(LayoutMode.SECTIONS, "a").addTile(tile())!!.presetsApply)
+        assertEquals(false, layout(LayoutMode.SECTIONS, "a", "b").presetsApply)
+        assertEquals(false, layout(LayoutMode.TABS, "a").presetsApply) // 탭은 보기가 하나여도 탭 줄이 있는 배치라 그대로 뺀다
+        assertEquals(false, layout(LayoutMode.TABS, "a", "b").presetsApply)
+    }
+
+    @Test
     fun weightIsKeptBetweenOneAndThreeAndLabelsAreTrimmed() {
         val sections = layout(LayoutMode.SECTIONS, "a")
         assertEquals(3, sections.withWeight("a", 9).items.single().weight)

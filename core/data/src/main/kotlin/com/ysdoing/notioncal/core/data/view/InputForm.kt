@@ -21,7 +21,16 @@ data class FormField(val propId: String, val default: JsonElement? = null)
  * 편집 함수는 새 양식을 돌려준다. 아무것도 고르지 않은 양식([isDefault])은 '양식 없음'과 같다(시트가 예전처럼 동작).
  */
 @Serializable
-data class InputForm(val fields: List<FormField> = emptyList(), val showDate: Boolean = true) {
+data class InputForm(
+    val fields: List<FormField> = emptyList(),
+    val showDate: Boolean = true,
+    /** Phase 11h 레시피: 날짜 칩을 고르지 않고 글에서도 날짜를 못 읽으면 오늘로 만든다. */
+    val dateToday: Boolean = false,
+    /** 제목을 비워 두면 오늘 날짜 'M월 d일'로 만든다(해빗트래커의 하루 한 줄). */
+    val titleDate: Boolean = false,
+    /** 오늘 날짜의 항목이 이미 있거나 만드는 중이면 새로 만들지 않는다(하루 한 줄). */
+    val oncePerDay: Boolean = false,
+) {
     val isDefault: Boolean get() = this == InputForm()
 
     /** 체크하면 맨 뒤에 담고(이미 있으면 그대로), 해제하면 뺀다. */
@@ -40,6 +49,12 @@ data class InputForm(val fields: List<FormField> = emptyList(), val showDate: Bo
     }
 
     fun withShowDate(on: Boolean): InputForm = copy(showDate = on)
+
+    fun withDateToday(on: Boolean): InputForm = copy(dateToday = on)
+
+    fun withTitleDate(on: Boolean): InputForm = copy(titleDate = on)
+
+    fun withOncePerDay(on: Boolean): InputForm = copy(oncePerDay = on)
 
     /** 보기에서 사라졌거나 양식에 못 쓰게 된 속성을 뺀 양식. 편집 화면이 순서를 옮기기 전에 쓴다(안 보이는 속성과 자리를 바꾸지 않게). */
     fun pruned(columns: List<ViewColumn>): InputForm = copy(fields = fields.filter { f -> editable(columns).any { it.id == f.propId } })

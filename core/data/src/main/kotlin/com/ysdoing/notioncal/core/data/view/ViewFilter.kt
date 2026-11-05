@@ -193,3 +193,6 @@ private fun judgeDate(value: JsonElement?, op: String, operand: JsonElement): Fi
 }
 
 internal fun String.dateOrNull(): LocalDate? = runCatching { LocalDate.parse(substringBefore('T')) }.getOrNull()
+
+/** 날짜 속성 값(`{"start": …}`)의 시작 날짜. 날짜가 아니거나 비었으면 null이다. */
+internal fun JsonElement?.startDate(): LocalDate? = ((this as? JsonObject)?.get("start") as? JsonPrimitive)?.contentOrNull?.dateOrNull()

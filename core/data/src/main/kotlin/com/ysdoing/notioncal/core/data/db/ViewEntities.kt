@@ -216,6 +216,10 @@ abstract class ViewDao {
     @Query("SELECT DISTINCT pageId FROM view_writes WHERE viewId = :viewId AND propType NOT IN ('$VIEW_WRITE_CREATE', '$VIEW_WRITE_TRASH')")
     abstract fun observePendingPageIds(viewId: String): Flow<List<String>>
 
+    /** 한 보기에서 아직 노션에 만들러 보내지 않은 새 항목의 [ViewCreate] JSON(Phase 11h '하루 한 줄' 가드가 날짜를 읽는다). */
+    @Query("SELECT value FROM view_writes WHERE viewId = :viewId AND propType = '$VIEW_WRITE_CREATE'")
+    abstract fun observePendingCreateValues(viewId: String): Flow<List<String?>>
+
     /** 한 보기의 지연이 걸린 쓰기들의 전송 시각(위젯이 '되돌리기' 줄을 그릴지 정한다). 지난 시각도 담으니 세는 쪽이 지금과 견준다. */
     @Query("SELECT sendAfter FROM view_writes WHERE viewId = :viewId AND sendAfter > 0")
     abstract fun observePendingSendAfter(viewId: String): Flow<List<Long>>

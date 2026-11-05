@@ -9,6 +9,7 @@ import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.coroutines.flow.combine
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +45,8 @@ data class ViewBoard(
     val filterJson: String = "",
     /** 바꾸고 아직 노션에 보내지 않은 행 ID. 이 행이 필터에서 벗어나면 '빠지는 중'이다([isLeaving]). */
     val pendingPageIds: Set<String> = emptySet(),
+    /** 노션에 아직 만들러 보내지 않은 새 항목의 날짜(Phase 11h '하루 한 줄' 가드, [takenDates]). */
+    val pendingCreateDates: Set<LocalDate> = emptySet(),
 ) {
     private val filter: ViewFilter by lazy { ViewFilter.parse(filterJson) }
 
@@ -58,6 +61,15 @@ data class ViewBoard(
 
     /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
     val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
+
+    /**
+     * 새 항목의 날짜가 들어가는 첫 날짜 열에 이미 항목이 있는 날짜들: 받아 둔 행과 아직 보내지 않은 새 항목. 날짜 열이 없으면 비어 있다.
+     * 행은 상한(100) 안에서만 알아서 그보다 먼 날짜는 못 볼 수 있다.
+     */
+    fun takenDates(): Set<LocalDate> {
+        val prop = columnInfo.firstOrNull { it.type == "date" }?.id ?: return emptySet()
+        return rows.mapNotNull { it.typed[prop].startDate() }.toSet() + pendingCreateDates
+    }
 
     /** 새 항목에 날짜를 넣을 열이 있다. */
     val hasDateColumn: Boolean get() = columnInfo.any { it.type == "date" }
@@ -89,7 +101,7 @@ class ViewRepository @Inject constructor(
 
     /** 등록하지 않았거나 지워졌으면 null. */
     fun observe(viewId: String): Flow<ViewBoard?> =
-        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId), dao.observePendingPageIds(viewId)) { view, rows, pending, pendingPages ->
+        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId), dao.observePendingPageIds(viewId), dao.observePendingCreateValues(viewId)) { view, rows, pending, pendingPages, creates ->
             view?.let {
                 ViewBoard(
                     viewId = it.viewId,
@@ -105,6 +117,7 @@ class ViewRepository @Inject constructor(
                     pendingSendAfter = pending,
                     filterJson = it.filterJson,
                     pendingPageIds = pendingPages.toSet(),
+                    pendingCreateDates = creates.mapNotNull { ViewJson.parseCreate(it)?.date?.dateOrNull() }.toSet(),
                 )
             }
         }

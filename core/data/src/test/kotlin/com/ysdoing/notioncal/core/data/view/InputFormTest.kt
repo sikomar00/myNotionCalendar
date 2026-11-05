@@ -94,6 +94,30 @@ class InputFormTest {
     }
 
     @Test
+    fun recipeFlagsAreEditableAndMakeTheFormNonDefault() {
+        assertTrue(InputForm().isDefault)
+        val f = InputForm().withDateToday(true).withTitleDate(true).withOncePerDay(true)
+        assertEquals(InputForm(dateToday = true, titleDate = true, oncePerDay = true), f)
+        assertEquals(false, f.isDefault)
+        assertEquals(true, f.withDateToday(false).titleDate) // 하나를 꺼도 나머지는 그대로
+        assertEquals(f.copy(dateToday = false, titleDate = false, oncePerDay = false), InputForm())
+    }
+
+    @Test
+    fun recipeFlagsSurviveStorageEditsAndPruningAndOldFormsReadAsOff() {
+        val flagged = InputForm(listOf(FormField("n"), FormField("gone")), showDate = true, dateToday = true, titleDate = true, oncePerDay = true)
+        val text = InputForms.put("", "v1", flagged)
+        assertEquals(flagged, InputForms.get(text, "v1"))
+        assertEquals(true, InputForms.get(text, "v1")!!.pruned(columns).let { it.dateToday && it.titleDate && it.oncePerDay }) // 속성만 가려내고 플래그는 남긴다
+        assertEquals(true, flagged.toggle("k", true).oncePerDay)
+        assertEquals(true, flagged.withDefaults(mapOf("n" to JsonPrimitive(1.0))).dateToday)
+        // 플래그가 없던 옛 글자는 모두 꺼진 양식으로 읽는다
+        assertEquals(InputForm(listOf(FormField("n"))), InputForms.get("""{"v1":{"fields":[{"propId":"n"}]}}""", "v1"))
+        // 켠 플래그만으로도 양식은 저장된다(기본 양식이 아니다)
+        assertEquals(InputForm(dateToday = true), InputForms.get(InputForms.put("", "v2", InputForm(dateToday = true)), "v2"))
+    }
+
+    @Test
     fun withShowDateOnlyChangesTheDateChip() {
         val f = form("n").withShowDate(false)
         assertEquals(InputForm(listOf(FormField("n")), showDate = false), f)

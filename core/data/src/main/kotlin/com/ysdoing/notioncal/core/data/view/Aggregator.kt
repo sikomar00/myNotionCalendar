@@ -2,11 +2,8 @@ package com.ysdoing.notioncal.core.data.view
 
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -170,8 +167,6 @@ object Aggregator {
     }
 
     private fun ViewRow.checked(propId: String) = (typed[propId] as? JsonPrimitive)?.booleanOrNull == true
-
-    private fun JsonElement?.startDate(): LocalDate? = ((this as? JsonObject)?.get("start") as? JsonPrimitive)?.contentOrNull?.dateOrNull()
 
     private const val EPSILON = 1e-9
 }

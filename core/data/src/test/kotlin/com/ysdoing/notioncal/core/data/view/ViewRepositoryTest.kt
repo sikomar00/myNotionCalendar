@@ -59,6 +59,34 @@ class ViewRepositoryTest {
     }
 
     @Test
+    fun takenDatesAreTheFirstDateColumnsRowDatesPlusNewItemsStillWaitingToBeSent() = runTest {
+        // Phase 11h 하루 한 줄: 이미 받은 행의 날짜와, 노션에 아직 만들러 보내지 않은 새 항목의 날짜를 함께 안다.
+        val sep = VIEW_CELL_SEPARATOR
+        val columns = listOf(ViewColumn("t", "이름", "title"), ViewColumn("d", "날짜", "date"), ViewColumn("e", "마감", "date"))
+        fun day(iso: String) = kotlinx.serialization.json.JsonObject(mapOf("start" to kotlinx.serialization.json.JsonPrimitive(iso)))
+        seed(
+            ViewSnapshotEntity("v1", "ds", "습관", "table", columns = "이름", syncedAt = 5, columnInfo = ViewJson.encodeColumns(columns)),
+            listOf(
+                ViewRowEntity("v1", 0, "p1", "u1", "a${sep}", ViewJson.encodeTyped(mapOf("d" to day("2026-11-04"), "e" to day("2026-12-25")))),
+                ViewRowEntity("v1", 1, "p2", "u2", "b${sep}", ViewJson.encodeTyped(mapOf("d" to day("2026-11-03T09:00:00+09:00")))), // 시각이 든 날짜는 그날로
+                ViewRowEntity("v1", 2, "p3", "u3", "c${sep}", ""), // 날짜가 없는 행
+            ),
+        )
+        val clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-05T00:00:00Z"), java.time.ZoneOffset.UTC)
+        ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock).create("v1", "오늘", java.time.LocalDate.of(2026, 11, 5))
+        val board = repo().observe("v1").first()!!
+        // 첫 날짜 열(d)만 센다(마감 e는 새 항목의 날짜가 아니다)
+        assertEquals(setOf("2026-11-04", "2026-11-03", "2026-11-05"), board.takenDates().map { it.toString() }.toSet())
+        assertEquals(setOf(java.time.LocalDate.of(2026, 11, 5)), board.pendingCreateDates)
+    }
+
+    @Test
+    fun aViewWithoutADateColumnHasNoTakenDays() = runTest {
+        seed(ViewSnapshotEntity("v1", "ds", "메모", "table", columns = "이름", syncedAt = 5, columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title")))), emptyList())
+        assertEquals(emptySet<java.time.LocalDate>(), repo().observe("v1").first()!!.takenDates())
+    }
+
+    @Test
     fun theBoardKnowsWhichWritesAreStillInTheirUndoWindow() = runTest {
         // Phase 11c: 지연 중인 쓰기의 전송 시각을 위젯이 알아 '되돌리기' 줄을 그린다. 지난 시각은 세지 않는다.
         val sep = VIEW_CELL_SEPARATOR
