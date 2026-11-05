@@ -121,10 +121,10 @@ data class ViewColumn(
 
         /**
          * 새 항목의 날짜가 들어가고 월 격자·하루 한 줄 판정이 읽는 날짜 열: 캘린더의 [ROLE_DATE] 열이 먼저, 없으면 첫 날짜 열.
-         * (옛 스냅샷은 역할이 없어 첫 날짜 열로 폴백하고, 다음 동기화 뒤 역할이 채워진다.)
+         * (옛 스냅샷은 역할이 없어 첫 날짜 열로 폴백하고, 다음 동기화 뒤 역할이 채워진다. 차트·필터 때문에 담아 둔 숨은 날짜 열은 새 항목의 날짜 열이 아니라서 폴백에서 뺀다.)
          */
         fun dateColumnOf(columns: List<ViewColumn>): ViewColumn? =
-            columns.firstOrNull { it.type == "date" && it.role == ROLE_DATE } ?: columns.firstOrNull { it.type == "date" }
+            columns.firstOrNull { it.type == "date" && it.role == ROLE_DATE } ?: columns.firstOrNull { it.type == "date" && it.role.isEmpty() }
 
         /** 앱에서 쓸 수 있는 속성 유형(PRD §5.8 MVP 편집: 제목·텍스트·숫자·선택·다중 선택·상태·날짜·체크박스·URL·이메일·전화). */
         val WRITABLE_TYPES = setOf("title", "rich_text", "number", "select", "multi_select", "status", "date", "checkbox", "url", "email", "phone_number")
