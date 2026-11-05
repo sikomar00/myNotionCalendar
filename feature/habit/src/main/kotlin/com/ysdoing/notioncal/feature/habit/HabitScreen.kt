@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ysdoing.notioncal.core.data.DesignTokens
 import com.ysdoing.notioncal.core.data.habit.DayMark
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
@@ -249,4 +250,4 @@ private fun MonthGrass(today: LocalDate, done: Set<LocalDate>, monthCount: Int) 
 
 /** 일요일 글자색(앱 달력·위젯과 같은 값, 흰 배경 5.6:1·#191919 위 6.3:1). */
 private val SundayColor: Color
-    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFFFF6B6B) else Color(0xFFC62828)
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(DesignTokens.Dark.SUNDAY) else Color(DesignTokens.Light.SUNDAY)

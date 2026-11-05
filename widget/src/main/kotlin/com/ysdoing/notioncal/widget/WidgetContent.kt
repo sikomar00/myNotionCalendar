@@ -380,10 +380,10 @@ class WidgetPalette private constructor(
         }
         // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
         // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
-        private val SUNDAY_LIGHT = Color(0xFFC62828)
-        private val SUNDAY_DARK = Color(0xFFFF6B6B)
-        private val SATURDAY_LIGHT = Color(0xFF1565C0)
-        private val SATURDAY_DARK = Color(0xFF5B9BF8)
+        private val SUNDAY_LIGHT = Color(DesignTokens.Light.SUNDAY)
+        private val SUNDAY_DARK = Color(DesignTokens.Dark.SUNDAY)
+        private val SATURDAY_LIGHT = Color(DesignTokens.Light.SATURDAY)
+        private val SATURDAY_DARK = Color(DesignTokens.Dark.SATURDAY)
 
         /**
          * Material You 색은 그릴 때마다 시스템 색 자원(android.R.color.system_*)에서 읽는다. 배경화면이 바뀌면
