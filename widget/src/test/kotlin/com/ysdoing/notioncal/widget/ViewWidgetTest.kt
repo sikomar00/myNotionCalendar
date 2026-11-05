@@ -587,6 +587,16 @@ class ViewWidgetTest {
     }
 
     @Test
+    fun presetAddIntentOpensThePresetOnlySheetOnTopOfTheConfigScreen() {
+        val intent = presetAddIntent(context, "v1", 7)
+        assertEquals(true, intent.getBooleanExtra(AppIntents.EXTRA_PRESET_ONLY, false))
+        assertEquals(7, intent.getIntExtra(AppIntents.EXTRA_APPWIDGET_ID, -1))
+        assertEquals("v1", intent.getStringExtra(AppIntents.EXTRA_VIEW_ID))
+        assertEquals(0, intent.flags) // 새 작업·작업 비우기가 편집 화면을 닫아 버리지 않는다
+        assertEquals(false, viewAddIntent(context, "v1", 7).getBooleanExtra(AppIntents.EXTRA_PRESET_ONLY, false)) // 위젯의 '+'는 그대로 항목을 만든다
+    }
+
+    @Test
     fun listWithOnlyTitleAndCheckboxDrawsTheCheckboxOnce() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(narrow)

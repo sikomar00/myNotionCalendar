@@ -12,7 +12,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.graphics.graphicsLayer
@@ -40,6 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,8 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -57,25 +57,17 @@ import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
-import com.ysdoing.notioncal.core.data.AppSettings
-import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
-import com.ysdoing.notioncal.core.data.db.DataSourceEntity
-import com.ysdoing.notioncal.core.data.view.LayoutMode
-import com.ysdoing.notioncal.core.data.view.ViewPresets
-import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
-import com.ysdoing.notioncal.core.data.dday.Dday
 import com.ysdoing.notioncal.core.designsystem.RadioRow
 import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
 import com.ysdoing.notioncal.core.designsystem.selectableRow
-import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
 import com.ysdoing.notioncal.core.designsystem.notionColorScheme
@@ -91,24 +83,18 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    /**
-     * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
-     * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 모양 설정(테마·투명도·글자)만 있다.
-     */
-    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW, LAYOUT, HABIT, BOOK }
-
     private val kind by lazy {
         when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
-            AgendaWidgetReceiver::class.java.name -> Kind.AGENDA
-            SplitWidgetReceiver::class.java.name -> Kind.SPLIT
-            LedgerWidgetReceiver::class.java.name -> Kind.LEDGER
-            DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> Kind.DDAY
-            DdayListWidgetReceiver::class.java.name -> Kind.DDAY_LIST
-            ViewWidgetReceiver::class.java.name -> Kind.VIEW
-            LayoutWidgetReceiver::class.java.name -> Kind.LAYOUT
-            HabitWidgetReceiver::class.java.name -> Kind.HABIT
-            BookWidgetReceiver::class.java.name -> Kind.BOOK
-            else -> Kind.MONTH
+            AgendaWidgetReceiver::class.java.name -> ConfigKind.AGENDA
+            SplitWidgetReceiver::class.java.name -> ConfigKind.SPLIT
+            LedgerWidgetReceiver::class.java.name -> ConfigKind.LEDGER
+            DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> ConfigKind.DDAY
+            DdayListWidgetReceiver::class.java.name -> ConfigKind.DDAY_LIST
+            ViewWidgetReceiver::class.java.name -> ConfigKind.VIEW
+            LayoutWidgetReceiver::class.java.name -> ConfigKind.LAYOUT
+            HabitWidgetReceiver::class.java.name -> ConfigKind.HABIT
+            BookWidgetReceiver::class.java.name -> ConfigKind.BOOK
+            else -> ConfigKind.MONTH
         }
     }
 
@@ -137,6 +123,16 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
+    /** 프리셋 만들기 시트를 닫고 돌아오면 늘어난다. 화면이 프리셋 목록을 다시 읽는 신호다. */
+    private var resumes by mutableIntStateOf(0)
+
+    override fun onResume() {
+        super.onResume()
+        resumes++
+    }
+
+    private fun createPreset(viewId: String) = startActivity(presetAddIntent(this, viewId, appWidgetId))
+
     private fun finishSaved() {
         setResult(RESULT_OK, resultIntent())
         finish()
@@ -155,42 +151,56 @@ class WidgetConfigActivity : ComponentActivity() {
     @Composable
     private fun ConfigScreen(deps: WidgetDependencies, previewSize: DpSize, onSaved: () -> Unit) {
         val scope = rememberCoroutineScope()
-        var loaded by remember { mutableStateOf<Loaded?>(null) }
+        var loaded by remember { mutableStateOf<ConfigData?>(null) }
         var config by remember { mutableStateOf(WidgetConfig(appWidgetId)) }
         LaunchedEffect(Unit) {
             val saved = deps.widgetConfigs().get(appWidgetId)
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.HABIT || kind == Kind.BOOK) {
+            val events = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.HABIT || kind == ConfigKind.BOOK) {
                 emptyList()
-            } else if (kind == Kind.MONTH) {
+            } else if (kind == ConfigKind.MONTH) {
                 deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
             } else {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
-            val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
-            val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
-            val views = if (kind == Kind.VIEW || kind == Kind.LAYOUT || kind == Kind.BOOK) deps.views().observeRegistered().first() else emptyList()
+            val ledger = if (kind == ConfigKind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
+            val ddays = if (kind == ConfigKind.DDAY || kind == ConfigKind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
+            val views = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.BOOK) deps.views().observeRegistered().first() else emptyList()
             // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번, 행 JSON을 읽으니 메인 스레드 밖에서).
-            val boards = if (kind == Kind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
+            val boards = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
+            loaded = ConfigData(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
         }
         val data = loaded ?: run {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } // 로딩 중 빈 화면 방지(부록 A-8)
             return
         }
+        // 프리셋 만들기 시트가 프리셋을 저장하고 돌아오면 목록만 다시 읽는다(저장 때 옛 목록으로 덮어쓰지 않게).
+        LaunchedEffect(resumes) { config = config.copy(presetsJson = deps.widgetConfigs().get(appWidgetId).presetsJson) }
+        val tabs = remember { configTabs(kind) }
+        var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+        val tab = tabs[tabIndex.coerceIn(tabs.indices)]
 
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.widget_config_title), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
             // 미리보기는 위에 고정하고 설정만 스크롤한다: 슬라이더를 만지며 바로 결과를 본다.
             Preview(data, config, previewSize)
-            Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) { Settings(data, config) { config = it } }
+            if (tabs.size > 1) ConfigTabRow(tabs, tab) { tabIndex = tabs.indexOf(it) }
+            key(tab) { // 탭을 바꾸면 위에서부터 보인다
+                Column(
+                    Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when (tab) {
+                        ConfigTab.CONTENT -> ContentSettings(data, config) { config = it }
+                        ConfigTab.LOOK -> LookSettings(data, config) { config = it }
+                        ConfigTab.ACTION -> ActionSettings(kind, data, config, { config = it }, ::createPreset)
+                    }
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { config = config.resetLook() }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.widget_config_reset)) }
                 Button(
@@ -210,29 +220,33 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 
     /**
-     * 설정 목록. 통합 위젯(WG-11)은 탭마다 적용 범위가 달라 '모든 탭'(습관 탭은 이것만 따름)·'일정 탭'·'가계부 탭'으로 나눠 보인다.
-     * 그 밖의 위젯은 해당하는 것만 한 줄로 이어 보인다.
+     * 내용 탭: 위젯이 가리킬 대상(디데이·보기·배치)과 일정 DB 고르기. 통합 위젯(WG-11)은 탭마다 적용 범위가 달라 '일정 탭' 아래에 DB를 둔다.
      */
     @Composable
-    private fun Settings(data: Loaded, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+    private fun ContentSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
         TargetSettings(data, config, onChange)
+        if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_calendar))
+        if (kind in CALENDAR_KINDS) {
+            ConfigSection(stringResource(R.string.widget_config_sources))
+            SourcePicker(data.sources, config.dataSourceIds) { onChange(config.copy(dataSourceIds = it)) }
+        }
+    }
+
+    /**
+     * 모양 탭: 테마·투명도·글자 크기와 위젯 종류별 표시 방식. 통합 위젯(WG-11)은 탭마다 적용 범위가 달라 '모든 탭'(습관 탭은 이것만 따름)·'일정 탭'·'가계부 탭'으로 나눠 보인다.
+     */
+    @Composable
+    private fun LookSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
         if (tabbed) {
             ConfigSection(stringResource(R.string.widget_config_tab_all))
             ConfigNote(stringResource(R.string.widget_config_tab_all_note))
-        } else if (kind in CALENDAR_KINDS) {
-            ConfigSection(stringResource(R.string.widget_config_sources))
-            SourcePicker(data.sources, config.dataSourceIds) { onChange(config.copy(dataSourceIds = it)) }
         }
         AppearanceSettings(config, onChange)
-        if (tabbed) {
-            ConfigSection(stringResource(R.string.widget_config_tab_calendar))
-            ConfigSection(stringResource(R.string.widget_config_sources))
-            SourcePicker(data.sources, config.dataSourceIds) { onChange(config.copy(dataSourceIds = it)) }
-        }
+        if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_calendar))
         CalendarSettings(data, config, onChange)
         if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_ledger))
         // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
-        if (kind == Kind.LEDGER || tabbed) {
+        if (kind == ConfigKind.LEDGER || tabbed) {
             SwitchRow(
                 stringResource(R.string.widget_config_hide_amounts), config.hideAmounts, note = stringResource(R.string.widget_config_hide_amounts_note),
             ) { onChange(config.copy(hideAmounts = it)) }
@@ -241,8 +255,8 @@ class WidgetConfigActivity : ComponentActivity() {
 
     /** 위젯이 가리킬 대상: 디데이(DD-03·04, 고르지 않으면 가장 가까운 것)와 노션 보기(VW-04, 앱 설정의 '보기 추가'로 등록한 것). */
     @Composable
-    private fun TargetSettings(data: Loaded, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
-        if (kind == Kind.DDAY) {
+    private fun TargetSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        if (kind == ConfigKind.DDAY) {
             ConfigSection(stringResource(R.string.widget_config_dday))
             Row(Modifier.selectableRow(config.ddayPageId == null) { onChange(config.copy(ddayPageId = null)) }, verticalAlignment = Alignment.CenterVertically) {
                 RadioButton(selected = config.ddayPageId == null, onClick = null)
@@ -257,29 +271,20 @@ class WidgetConfigActivity : ComponentActivity() {
             }
             if (data.ddays.isEmpty()) ConfigNote(stringResource(R.string.widget_config_dday_none))
         }
-        if (kind == Kind.VIEW || kind == Kind.BOOK) {
+        if (kind == ConfigKind.VIEW || kind == ConfigKind.BOOK) {
             ConfigSection(stringResource(R.string.widget_config_view))
             data.views.forEach { view ->
                 RadioRow(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, config.viewId == view.viewId) { onChange(config.copy(viewId = view.viewId)) }
             }
             if (data.views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
         }
-        if (kind == Kind.LAYOUT) LayoutSettings(data.views, config, onChange)
-        if (kind == Kind.VIEW || kind == Kind.LAYOUT) {
-            // IX-03: 숫자 열의 − + 가 한 번에 바꾸는 값. 정수 단계만 고른다(소수 단계는 시트에서 직접 고친다).
-            ConfigSection(stringResource(R.string.widget_config_number_step))
-            ChoiceChips(NUMBER_STEPS.map { it to null }, config.numberStep.toInt().takeIf { it.toDouble() == config.numberStep } ?: -1) {
-                onChange(config.copy(numberStep = it.toDouble()))
-            }
-            // 프리셋 줄은 보기 하나일 때만 그려지니(탭·섹션은 보기마다 값이 달라 뜻이 안 맞는다) 목록도 그때만 둔다.
-            if (kind == Kind.VIEW || remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson).mode == LayoutMode.SINGLE }) PresetList(config, onChange)
-        }
+        if (kind == ConfigKind.LAYOUT) LayoutSettings(data.views, config, onChange)
     }
 
     /** 일정 위젯 전용: 칸당 줄 수·줄 간격(월간), 머리 날씨(월간·달력 + 일정, WX-04·05), 완료 숨김. */
     @Composable
-    private fun CalendarSettings(data: Loaded, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
-        if (kind == Kind.MONTH) {
+    private fun CalendarSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        if (kind == ConfigKind.MONTH) {
             ConfigSection(stringResource(R.string.widget_config_lanes))
             ChoiceChips(
                 WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
@@ -297,7 +302,7 @@ class WidgetConfigActivity : ComponentActivity() {
             ) { onChange(config.copy(lineSpacing = it)) }
         }
         // 날씨가 보이는 설정 화면이라 출처를 둔다.
-        if (kind == Kind.MONTH || kind == Kind.SPLIT) {
+        if (kind == ConfigKind.MONTH || kind == ConfigKind.SPLIT) {
             SwitchRow(
                 stringResource(R.string.widget_config_weather), config.showWeather,
                 note = stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
@@ -307,59 +312,49 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind in CALENDAR_KINDS) SwitchRow(stringResource(R.string.widget_config_hide_done), config.hideDone) { onChange(config.copy(hideDone = it)) }
     }
 
-    private data class Loaded(
-        val settings: AppSettings,
-        val events: List<CalendarEvent>,
-        val sources: List<DataSourceEntity>,
-        val ledger: LedgerBoard? = null,
-        val ddays: List<Dday> = emptyList(),
-        val views: List<com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity> = emptyList(),
-        val boards: Map<String, com.ysdoing.notioncal.core.data.view.ViewBoard?> = emptyMap(),
-    )
-
     @OptIn(ExperimentalGlanceRemoteViewsApi::class)
     @Composable
-    private fun Preview(data: Loaded, config: WidgetConfig, size: DpSize) {
+    private fun Preview(data: ConfigData, config: WidgetConfig, size: DpSize) {
         var views by remember { mutableStateOf<RemoteViews?>(null) }
         LaunchedEffect(config) {
             val today = LocalDate.now(APP_ZONE)
             views = when (kind) {
-                Kind.AGENDA -> {
+                ConfigKind.AGENDA -> {
                     val state = AgendaWidget.uiState(today, config, data.events)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
                 }
-                Kind.SPLIT -> {
+                ConfigKind.SPLIT -> {
                     val state = SplitWidget.uiState(today, data.settings, config, data.events)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }.remoteViews
                 }
-                Kind.MONTH -> {
+                ConfigKind.MONTH -> {
                     val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
                 }
-                Kind.LEDGER -> {
+                ConfigKind.LEDGER -> {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
                 }
-                Kind.VIEW -> {
+                ConfigKind.VIEW -> {
                     val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
                 }
-                Kind.LAYOUT -> {
+                ConfigKind.LAYOUT -> {
                     val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }.remoteViews
                 }
-                Kind.BOOK -> {
+                ConfigKind.BOOK -> {
                     val state = WidgetPreviews.bookState().copy(config = config.copy(viewId = "preview"))
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { BookWidgetContent(state) }.remoteViews
                 }
-                Kind.HABIT -> {
+                ConfigKind.HABIT -> {
                     val state = WidgetPreviews.habitState(today).copy(config = config)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { HabitWidgetContent(state) }.remoteViews
                 }
-                Kind.DDAY, Kind.DDAY_LIST -> {
+                ConfigKind.DDAY, ConfigKind.DDAY_LIST -> {
                     val state = DdayWidgetState(data.ddays, config, today)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) {
-                        if (kind == Kind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
+                        if (kind == ConfigKind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
                     }.remoteViews
                 }
             }
@@ -386,29 +381,7 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 
     private companion object {
-        /** 일정 DB 고르기·완료 숨김을 쓰는 위젯. */
-        val CALENDAR_KINDS = setOf(Kind.MONTH, Kind.AGENDA, Kind.SPLIT)
-
         /** 고정 미리보기가 차지하는 화면 높이 비율 상한(설정 목록에 나머지를 남긴다). */
         const val PREVIEW_MAX_SCREEN_FRACTION = 0.30f
-    }
-}
-
-private val NUMBER_STEPS = listOf(1, 5, 10, 50, 100)
-
-/** AD-05: 저장해 둔 프리셋 목록과 삭제(만들기는 새 항목 시트의 '프리셋으로 저장'이다). 프리셋이 없으면 아무것도 그리지 않는다. */
-@Composable
-private fun PresetList(config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
-    val presets = ViewPresets.parse(config.presetsJson)
-    if (presets.isEmpty()) return
-    ConfigSection(stringResource(R.string.widget_config_presets))
-    presets.forEach { preset ->
-        val delete = stringResource(R.string.widget_config_preset_delete, preset.name)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(preset.name, Modifier.weight(1f))
-            TextButton(onClick = { onChange(config.copy(presetsJson = ViewPresets.remove(config.presetsJson, preset.name))) }, modifier = Modifier.semantics { contentDescription = delete }) {
-                Text(stringResource(R.string.widget_config_preset_delete_label), color = MaterialTheme.colorScheme.error)
-            }
-        }
     }
 }

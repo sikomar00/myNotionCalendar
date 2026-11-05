@@ -185,6 +185,12 @@ internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /**
+ * Phase 11g AD-05: 위젯 편집 화면에서 새 항목 시트를 '프리셋 만들기'로 연다. 편집 화면 위에 쌓아야 하니 [viewAddIntent]의 새 작업·작업 비우기 플래그는 쓰지 않는다.
+ */
+internal fun presetAddIntent(context: Context, viewId: String, appWidgetId: Int): Intent =
+    viewAddIntent(context, viewId, appWidgetId).setFlags(0).putExtra(AppIntents.EXTRA_PRESET_ONLY, true)
+
+/**
  * 행 편집 시트 열기(ED-01, 행 탭). 행마다 다른 data URI를 달아 PendingIntent가 위젯의 행끼리 서로 덮지 않게 한다
  * (:widget은 :feature에 의존하지 않아 action 문자열로 연다).
  */
