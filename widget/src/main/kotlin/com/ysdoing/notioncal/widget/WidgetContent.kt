@@ -76,6 +76,8 @@ data class WidgetUiState(
     val weather: WidgetWeather = WidgetWeather(),
     /** M6 앱 설정 '주차 표시'(기본 끔). 켜면 중간·큼 단계에 주차 열이 생기고 칸 폭이 그만큼 줄어든다. 일정 줄 수·머리 높이는 그대로다. */
     val showWeekNumbers: Boolean = false,
+    /** 보이는 달 밖의 날짜를 흐리게 그린다. 이번 주 한 줄(보기 위젯의 4×2 캘린더)은 달이 아니라 7일이라 끈다. */
+    val dimOutsideMonth: Boolean = true,
 )
 
 /**
@@ -239,7 +241,7 @@ internal fun appIntent(context: Context): Intent =
     (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
+internal fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
 /**
  * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 원형 톤 버튼으로 폭 48dp(큼은 머리줄도 48dp라 48×48).

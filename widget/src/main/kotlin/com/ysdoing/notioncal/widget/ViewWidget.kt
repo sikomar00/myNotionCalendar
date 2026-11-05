@@ -49,10 +49,11 @@ import com.ysdoing.notioncal.core.data.view.ViewPresets
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /** [board]가 null이고 [config]에 보기가 있으면 등록을 해제한 보기다(VW-06). 노션에서 지워진 보기는 [ViewBoard.notFound]로 온다. */
-data class ViewWidgetState(val board: ViewBoard?, val config: WidgetConfig, val nowMillis: Long)
+data class ViewWidgetState(val board: ViewBoard?, val config: WidgetConfig, val nowMillis: Long, val calendar: CalendarInfo = CalendarInfo())
 
 /** 표(넓을 때)에 넣을 열 수. 열 하나에 [COLUMN_MIN]dp는 있어야 글자가 읽힌다. */
 internal fun tableColumnCount(width: Dp, columns: Int): Int =
@@ -83,6 +84,8 @@ internal data class ViewMetrics(
     val valueSp: Float = 18f,
     val tile: Dp = 64.dp,
     val tileExtras: Dp = 28.dp,
+    /** 기기 글꼴 배율 그대로(상한을 자르기 전). 캘린더 격자가 [WidgetMetrics]를 다시 계산할 때 쓴다. */
+    val systemFontScale: Float = 1f,
 )
 
 internal fun viewMetrics(userScale: Float, systemFontScale: Float): ViewMetrics {
@@ -105,6 +108,7 @@ internal fun viewMetrics(userScale: Float, systemFontScale: Float): ViewMetrics 
         valueSp = 18f * userScale,
         tile = box(subSp) + box(18f * userScale) + AGG_TILE_PADDING * 2,
         tileExtras = 6.dp + box(subSp) + 4.dp, // 막대 + 목표 글자 줄 + 위아래 틈
+        systemFontScale = systemFontScale,
     )
 }
 
@@ -177,13 +181,15 @@ internal fun ViewPane(state: ViewWidgetState, palette: WidgetPalette, metrics: V
 /**
  * VW-08 새 항목 입력 시트 열기. 보기마다(위젯이 있으면 위젯마다) 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다(:widget은 :feature에 의존하지 않아
  * action 문자열로 연다). [appWidgetId]는 시트가 이 위젯의 입력 양식을 읽고 기본값·프리셋을 저장하도록 싣는다(0이면 양식·프리셋이 없다. 프리셋은 시트가 프리셋 줄을 그리는 배치일 때만 보인다).
+ * [date]는 캘린더 날짜 칸을 눌렀을 때의 날짜다(시트의 날짜 칩이 그날로 시작한다). 날짜마다 다른 data URI라 PendingIntent가 날짜끼리 덮지 않는다.
  */
-internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 0): Intent =
+internal fun viewAddIntent(context: Context, viewId: String, appWidgetId: Int = 0, date: LocalDate? = null): Intent =
     Intent(AppIntents.ACTION_VIEW_ADD)
         .setPackage(context.packageName)
-        .setData((if (appWidgetId > 0) "notioncal://view/add/$viewId/$appWidgetId" else "notioncal://view/add/$viewId").toUri())
+        .setData(((if (appWidgetId > 0) "notioncal://view/add/$viewId/$appWidgetId" else "notioncal://view/add/$viewId") + (date?.let { "?d=$it" } ?: "")).toUri())
         .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
         .apply { if (appWidgetId > 0) putExtra(AppIntents.EXTRA_APPWIDGET_ID, appWidgetId) }
+        .apply { if (date != null) putExtra(AppIntents.EXTRA_DATE, date.toString()) }
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /**
@@ -231,7 +237,7 @@ private fun ViewHeader(board: ViewBoard?, appWidgetId: Int, m: ViewMetrics, pale
     // 이름 없는 보기도 노션에서 허용된다. 접근성 설명이 글자를 대신하므로 보기 이름을 함께 읽게 한다.
     val title = board?.name?.takeIf { it.isNotBlank() } ?: context.getString(R.string.view_widget_label)
     val size = LocalSize.current
-    val progress = board?.takeIf { size.height >= SUBTITLE_MIN_HEIGHT }?.let(::viewProgress)
+    val progress = progressOf(board, size)
     val height = if (progress != null) m.headerWithSub else m.header
     val subtitle = progress?.let {
         if (it.label == null) context.getString(R.string.view_widget_progress, it.done, it.total)
@@ -270,6 +276,9 @@ private fun ViewHeader(board: ViewBoard?, appWidgetId: Int, m: ViewMetrics, pale
 internal fun viewerIntent(context: Context, viewId: String): Intent =
     Intent(Intent.ACTION_VIEW, "notioncal://view/$viewId".toUri()).setPackage(context.packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+/** 머리 부제('완료 n/m')의 값. 높이가 [SUBTITLE_MIN_HEIGHT] 이상이고 진행을 셀 수 있을 때만 있고, 그러면 머리가 [ViewMetrics.headerWithSub]만큼 높다. */
+internal fun progressOf(board: ViewBoard?, size: DpSize): ViewProgress? = board?.takeIf { size.height >= SUBTITLE_MIN_HEIGHT }?.let(::viewProgress)
+
 /** 부제는 3줄 높이쯤부터, 새로고침 버튼은 4칸 폭쯤부터 둔다(2×2에서 머리와 한 줄이 함께 보여야 한다). */
 internal val SUBTITLE_MIN_HEIGHT = 140.dp
 internal val REFRESH_MIN_WIDTH = 200.dp
@@ -301,6 +310,12 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     if (presets.isNotEmpty()) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
     // 되돌리기·프리셋 줄이 높이를 차지하니 보드는 줄 수만큼 열마다 카드를 줄인다(보드는 목록과 달리 스크롤이 없어 넘치면 잘린다).
     val extraLines = (if (undoShown) 1 else 0) + (presets.size + PRESETS_PER_ROW - 1) / PRESETS_PER_ROW
+    // 캘린더는 행이 없어도 격자를 그린다(날짜 칸을 눌러 새 항목을 만든다). 격자가 읽힐 높이가 없으면 아래 표·목록으로 대체한다.
+    val calendar = calendarLayoutFor(board, size, spec, m, lines + presetLinesHeight(presets.size))
+    if (calendar != null) {
+        CalendarBody(board, state, ViewLook(m, palette), calendar)
+        return
+    }
     if (board.rows.isEmpty()) {
         ViewEmpty(board, state.config.appWidgetId, m, palette)
         return
@@ -378,12 +393,14 @@ class ViewWidget : GlanceAppWidget() {
         val deps = WidgetDependencies.from(context)
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialBoard = initialConfig.viewId?.let { deps.views().observe(it).first() }
+        val initialCalendar = if (initialBoard?.drawsCalendar() == true) CalendarSession.load(deps, initialConfig) else CalendarInfo()
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val board by remember(config.viewId) { config.viewId?.let { deps.views().observe(it) } ?: flowOf(null) }
                 .collectAsState(initialBoard)
+            val calendar = CalendarSession.info(deps, initialCalendar, config, board?.drawsCalendar() == true)
             val fontScale by SystemFontScale.flow.collectAsState()
-            ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis()), fontScale ?: SystemFontScale.current(context))
+            ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar), fontScale ?: SystemFontScale.current(context))
         }
     }
 }

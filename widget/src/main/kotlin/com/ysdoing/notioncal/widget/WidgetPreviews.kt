@@ -136,13 +136,14 @@ object WidgetPreviews {
         now: Long = System.currentTimeMillis(),
         boards: Map<String, ViewBoard?> = emptyMap(),
         weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+        showWeekNumbers: Boolean = false,
     ): LayoutWidgetState {
         val layout = WidgetLayout.parse(config.layoutJson)
         val sample = viewState(now).board!!
         // 같은 보기는 칸이든 타일이든 같은 행을 쓴다(실제 행이 없으면 칸만 예시 행).
         val panes = layout.items.associate { it.viewId to (boards[it.viewId] ?: sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty())) }
         val tiles = layout.tiles.mapNotNull { tile -> boards[tile.viewId]?.let { tile.viewId to it } }.toMap()
-        return LayoutWidgetState(config, layout, tiles + panes, now, weekStart)
+        return LayoutWidgetState(config, layout, tiles + panes, now, weekStart, CalendarInfo(weekStart, showWeekNumbers))
     }
 
     /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */

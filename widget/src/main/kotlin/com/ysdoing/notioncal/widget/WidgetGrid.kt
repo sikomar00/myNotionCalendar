@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
@@ -70,21 +71,23 @@ internal fun WeekRow(
     metrics: WidgetMetrics,
     palette: WidgetPalette,
     context: Context,
+    dayAction: ((LocalDate) -> Action)? = null,
 ) {
     val frame = GlanceModifier.fillMaxWidth().height(metrics.weekHeight)
     if (metrics.mode == WidgetMode.SMALL) {
-        Box(modifier = frame) { WeekContent(weekStart, state, metrics, palette, context, divider = true) }
+        Box(modifier = frame) { WeekContent(weekStart, state, metrics, palette, context, dayAction) }
         return
     }
     // 시안: 주마다 둥근 타일 한 장. 위 1dp 틈이 이전 구분선(1dp Spacer) 자리를 대신하므로 높이·일정 줄 수는 그대로고 View도 늘지 않는다.
     // (칸마다 타일을 깔면 View가 주당 14개 늘어 빽빽한 큰 위젯이 Glance의 View 개수 한도를 넘는다.)
     Box(modifier = frame.padding(top = 1.dp)) {
         Box(modifier = GlanceModifier.fillMaxSize().tile(palette, radius = WidgetShape.CELL)) {
-            WeekContent(weekStart, state, metrics, palette, context, divider = false)
+            WeekContent(weekStart, state, metrics, palette, context, dayAction)
         }
     }
 }
 
+/** [dayAction]이 null이면 v1 월 위젯처럼 그날 퀵 시트(WI-01)를 연다. 보기 위젯의 캘린더는 그 보기의 새 항목 시트를 넘긴다(Phase 12a). */
 @Composable
 private fun WeekContent(
     weekStart: LocalDate,
@@ -92,15 +95,16 @@ private fun WeekContent(
     metrics: WidgetMetrics,
     palette: WidgetPalette,
     context: Context,
-    divider: Boolean,
+    dayAction: ((LocalDate) -> Action)?,
 ) {
     Column(modifier = GlanceModifier.fillMaxSize()) {
-        if (divider) Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
+        // 작음 단계는 주마다 구분선(타일이 없다), 그 밖은 주 타일이 구분을 맡는다.
+        if (metrics.mode == WidgetMode.SMALL) Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
         Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
             if (metrics.weekNumberWidth > 0.dp) WeekNumber(weekStart, state.weekStart, metrics, palette)
             repeat(7) { col ->
                 val date = weekStart.plusDays(col.toLong())
-                DateLabel(date, YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
+                DateLabel(date, !state.dimOutsideMonth || YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
             }
         }
         if (metrics.mode == WidgetMode.SMALL) {
@@ -121,14 +125,14 @@ private fun WeekContent(
     Row(modifier = GlanceModifier.fillMaxSize().padding(start = metrics.weekNumberWidth)) {
         repeat(7) { col ->
             val date = weekStart.plusDays(col.toLong())
-            val count = state.events.count { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
+            val count = state.events.count { it.occursOn(date) }
             // Spacer에는 클릭이 붙지 않아(실기기 확인) 빈 Box로 터치 영역을 만든다.
             Box(
                 GlanceModifier
                     .width(metrics.cellWidth)
                     .fillMaxHeight()
                     // WI-01: 그날 퀵 시트(목록·체크·추가)가 홈 화면 위에 뜬다.
-                    .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
+                    .clickable(dayAction?.invoke(date) ?: actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
                     .semantics {
                         contentDescription = listOfNotNull(
                             "${date.monthValue}월 ${date.dayOfMonth}일",
@@ -191,7 +195,7 @@ private fun DotRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: W
     Row(modifier = GlanceModifier.fillMaxWidth()) {
         repeat(7) { col ->
             val date = weekStart.plusDays(col.toLong())
-            val colors = events.filter { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }.take(3)
+            val colors = events.filter { it.occursOn(date) }.take(3)
             Row(
                 modifier = GlanceModifier.width(metrics.cellWidth),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -221,7 +225,7 @@ private fun SingleLineRow(weekStart: LocalDate, events: List<CalendarEvent>, met
     Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight).padding(start = metrics.weekNumberWidth)) {
         repeat(7) { col ->
             val date = weekStart.plusDays(col.toLong())
-            val dayEvents = events.filter { !it.startDate.isAfter(date) && !it.lastDate.isBefore(date) }
+            val dayEvents = events.filter { it.occursOn(date) }
             val first = dayEvents.firstOrNull()
             Row(
                 modifier = GlanceModifier.width(metrics.cellWidth).height(metrics.laneHeight).padding(start = 2.dp),

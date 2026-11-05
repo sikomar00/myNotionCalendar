@@ -341,7 +341,7 @@ class WidgetConfigActivity : ComponentActivity() {
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 ConfigKind.LAYOUT -> {
-                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart)
+                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart, showWeekNumbers = data.settings.showWeekNumbers)
                     GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }.remoteViews
                 }
                 ConfigKind.BOOK -> {

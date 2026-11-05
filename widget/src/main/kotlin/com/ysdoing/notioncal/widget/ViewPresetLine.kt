@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -38,6 +39,9 @@ import java.time.LocalDate
 
 private val PRESET_HEIGHT = 36.dp
 internal const val PRESETS_PER_ROW = 3
+
+/** 프리셋 [count]개가 차지하는 높이(줄마다 칩 + 아래 틈). 격자처럼 남는 높이를 계산해야 하는 본문이 뺀다. */
+internal fun presetLinesHeight(count: Int): Dp = (PRESET_HEIGHT + 3.dp) * ((count + PRESETS_PER_ROW - 1) / PRESETS_PER_ROW)
 
 /** 프리셋 이름 칩들(한 줄에 3개, 최대 5개라 두 줄까지). 칩 너비는 줄마다 같고 남는 자리는 비운다. */
 @Composable

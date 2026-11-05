@@ -48,6 +48,8 @@ internal data class LayoutWidgetState(
     val nowMillis: Long,
     /** 집계 타일의 '이번 주' 시작 요일(앱 설정, 기본 일요일). */
     val weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+    /** 캘린더 보기 칸이 쓰는 설정·공휴일(Phase 12a). */
+    val calendar: CalendarInfo = CalendarInfo(weekStart),
 ) {
     /** 저장된 탭 번호가 탭 수를 넘으면(탭을 줄인 뒤) 마지막 탭으로 읽는다. */
     val activeIndex: Int get() = config.lastTab.coerceIn(0, (layout.items.size - 1).coerceAtLeast(0))
@@ -67,7 +69,7 @@ internal data class LayoutWidgetState(
     }
 
     /** 칸 하나를 [ViewPane]이 그릴 값으로. 칸의 보기가 곧 위젯의 보기다. */
-    fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis)
+    fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis, calendar)
 }
 
 /** 칸마다 같은 그리기 값. [fontScale]은 시스템 글꼴 배율, [staticRows]는 설정 화면 미리보기용([PaneSpec]). */
@@ -141,6 +143,7 @@ class LayoutWidget : GlanceAppWidget() {
         val initialSettings = deps.settings().settings.first()
         // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령). 타일의 보기도 함께.
         val initialBoards = boardsOf(deps, WidgetLayout.parse(initialConfig.layoutJson).boardIds()).first()
+        val initialCalendar = if (initialBoards.values.any { it?.drawsCalendar() == true }) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
@@ -148,7 +151,8 @@ class LayoutWidget : GlanceAppWidget() {
             val boards by remember(layout) { boardsOf(deps, layout.boardIds()) }.collectAsState(initialBoards)
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
-            LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart), fontScale ?: SystemFontScale.current(context))
+            val calendar = CalendarSession.info(deps, initialCalendar, config, boards.values.any { it?.drawsCalendar() == true })
+            LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart, calendar), fontScale ?: SystemFontScale.current(context))
         }
     }
 

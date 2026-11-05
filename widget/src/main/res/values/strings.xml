@@ -232,6 +232,10 @@
     <string name="widget_config_form_unavailable">이 보기를 아직 읽어 오지 못했습니다. 앱에서 동기화한 뒤 다시 여세요</string>
     <string name="view_widget_undo">방금 바꾼 것 되돌리기</string>
     <string name="view_widget_more">+%1$d 더 보기</string>
+    <string name="view_calendar_today_empty">오늘 일정이 없어요</string>
+    <string name="view_calendar_title_back">%1$s, 오늘로 돌아가기</string>
+    <string name="view_calendar_partial">일부만 보여요</string>
+    <string name="view_calendar_partial_description">일정이 많아 일부만 받았습니다</string>
     <string name="view_widget_more_plus">%1$d+ 더 보기</string>
     <string name="view_widget_more_unknown">더 보기</string>
     <string name="view_widget_board_none">없음</string>
