@@ -38,6 +38,7 @@
     <string name="settings_delete_confirm_title">DB 등록을 삭제할까요?</string>
     <string name="settings_delete_confirm_body">이 앱에 저장된 %1$s 일정만 지웁니다. 노션 원본은 바뀌지 않습니다.</string>
     <string name="settings_delete">삭제</string>
+    <string name="settings_source_enabled">%1$s 사용</string>
     <string name="settings_cancel">취소</string>
     <string name="settings_section_general">일반</string>
     <string name="settings_week_start">주 시작 요일</string>

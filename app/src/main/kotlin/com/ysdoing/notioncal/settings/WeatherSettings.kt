@@ -46,6 +46,7 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.weather.Region
 import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
 import com.ysdoing.notioncal.core.data.weather.WeatherStatus
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
 import java.time.format.DateTimeFormatter
 
@@ -85,19 +86,12 @@ fun WeatherSection(settings: AppSettings, status: WeatherStatus, actions: Weathe
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_weather))
-                Text(stringResource(R.string.settings_weather_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(
-                checked = settings.weatherEnabled,
-                onCheckedChange = { on ->
-                    actions.onEnable(on)
-                    if (on && settings.weatherPlace == null) picking = true // 위치를 먼저 고른다
-                },
-                modifier = Modifier.testTag("weatherSwitch"),
-            )
+        SwitchRow(
+            stringResource(R.string.settings_weather), settings.weatherEnabled,
+            modifier = Modifier.testTag("weatherSwitch"), note = stringResource(R.string.settings_weather_note),
+        ) { on ->
+            actions.onEnable(on)
+            if (on && settings.weatherPlace == null) picking = true // 위치를 먼저 고른다
         }
         if (!settings.weatherEnabled) return@Column
 
@@ -130,10 +124,7 @@ fun WeatherSection(settings: AppSettings, status: WeatherStatus, actions: Weathe
         if (settings.weatherLocationMode == WeatherLocationMode.REGION) {
             OutlinedButton(onClick = { picking = true }) { Text(stringResource(R.string.settings_weather_pick_region)) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings_weather_month_cells), Modifier.weight(1f))
-            Switch(checked = settings.weatherMonthCellIcons, onCheckedChange = actions.onMonthCells)
-        }
+        SwitchRow(stringResource(R.string.settings_weather_month_cells), settings.weatherMonthCellIcons, onChange = actions.onMonthCells)
         status.fetchedAt?.let {
             Text(
                 stringResource(R.string.settings_weather_fetched, it.atZone(APP_ZONE).format(fetchedFormat)),

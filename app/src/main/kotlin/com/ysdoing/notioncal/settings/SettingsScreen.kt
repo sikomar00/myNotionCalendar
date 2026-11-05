@@ -50,6 +50,8 @@ import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.sourceKind
+import com.ysdoing.notioncal.core.designsystem.RadioRow
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.sync.ConnectionResult
 import java.time.DayOfWeek
 import androidx.compose.ui.semantics.contentDescription
@@ -132,40 +134,10 @@ fun SettingsRoute(
                         ) { Text(stringResource(label), maxLines = 1) }
                     }
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_hide_done))
-                    Text(
-                        stringResource(R.string.settings_hide_done_off),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = settings.hideDone, onCheckedChange = viewModel::setHideDone)
-            }
+            SwitchRow(stringResource(R.string.settings_hide_done), settings.hideDone, note = stringResource(R.string.settings_hide_done_off), onChange = viewModel::setHideDone)
             HolidaySetting(settings.showHolidays, onChange = viewModel::setShowHolidays)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_week_numbers))
-                    Text(
-                        stringResource(R.string.settings_week_numbers_note),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = settings.showWeekNumbers, onCheckedChange = viewModel::setShowWeekNumbers)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_dynamic_color))
-                    Text(
-                        stringResource(R.string.settings_dynamic_color_note),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = settings.dynamicColor, onCheckedChange = viewModel::setDynamicColor)
-            }
+            SwitchRow(stringResource(R.string.settings_week_numbers), settings.showWeekNumbers, note = stringResource(R.string.settings_week_numbers_note), onChange = viewModel::setShowWeekNumbers)
+            SwitchRow(stringResource(R.string.settings_dynamic_color), settings.dynamicColor, note = stringResource(R.string.settings_dynamic_color_note), onChange = viewModel::setDynamicColor)
 
             Text(stringResource(R.string.settings_sync_interval))
             SingleChoiceSegmentedButtonRow {
@@ -190,10 +162,7 @@ fun SettingsRoute(
                 Text(stringResource(R.string.settings_default_database))
                 val current = settings.defaultDataSourceId?.takeIf { id -> enabled.any { it.dataSourceId == id } } ?: enabled.first().dataSourceId
                 enabled.forEach { source ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = source.dataSourceId == current, onClick = { viewModel.setDefaultDataSource(source.dataSourceId) })
-                        Text(source.name)
-                    }
+                    RadioRow(source.name, source.dataSourceId == current) { viewModel.setDefaultDataSource(source.dataSourceId) }
                 }
             }
 
@@ -357,25 +326,12 @@ private fun HolidaySetting(show: Boolean, onChange: (Boolean) -> Unit) {
     }
     // 권한을 앱 설정에서 거둬 갔으면 꺼진 것으로 보인다.
     val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.settings_holidays))
-            Text(
-                stringResource(R.string.settings_holidays_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    SwitchRow(stringResource(R.string.settings_holidays), show && granted, note = stringResource(R.string.settings_holidays_note)) { on ->
+        when {
+            !on -> onChange(false)
+            granted -> onChange(true)
+            else -> launcher.launch(Manifest.permission.READ_CALENDAR)
         }
-        Switch(
-            checked = show && granted,
-            onCheckedChange = { on ->
-                when {
-                    !on -> onChange(false)
-                    granted -> onChange(true)
-                    else -> launcher.launch(Manifest.permission.READ_CALENDAR)
-                }
-            },
-        )
     }
     if (denied && !granted) {
         Text(

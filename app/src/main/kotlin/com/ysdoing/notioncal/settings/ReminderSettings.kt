@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.app.NotificationManagerCompat
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.reminders.notificationPermissionGranted
 import androidx.compose.ui.unit.dp
 
@@ -79,25 +80,12 @@ internal fun ReminderSection(
         denied = !ok
         if (ok) onEnable(true)
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.settings_reminders))
-            Text(
-                stringResource(R.string.settings_reminders_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    SwitchRow(stringResource(R.string.settings_reminders), enabled && granted, note = stringResource(R.string.settings_reminders_note)) { on ->
+        when {
+            !on -> onEnable(false)
+            granted -> onEnable(true)
+            else -> launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        Switch(
-            checked = enabled && granted,
-            onCheckedChange = { on ->
-                when {
-                    !on -> onEnable(false)
-                    granted -> onEnable(true)
-                    else -> launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            },
-        )
     }
     if (denied && !granted) {
         Text(

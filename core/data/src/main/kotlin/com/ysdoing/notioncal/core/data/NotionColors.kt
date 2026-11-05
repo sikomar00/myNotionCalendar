@@ -23,6 +23,17 @@ object NotionColors {
 
     private val byName = palette.toMap()
 
+    /** 색 견본 낭독용 한글 이름(부록 A-14). 격자 20색 모두 이름이 다르다. */
+    private val namesKo = mapOf(
+        "#787774" to "기본", "#9B9A97" to "회색", "#A27763" to "갈색", "#D9730D" to "주황", "#DFAB01" to "노랑",
+        "#0F7B6C" to "초록", "#0B6E99" to "파랑", "#6940A5" to "보라", "#AD1A72" to "분홍", "#E03E3E" to "빨강",
+        "#2D9CDB" to "밝은 파랑", "#56CCF2" to "하늘색", "#27AE60" to "선명한 초록", "#6FCF97" to "연두", "#F2C94C" to "연한 노랑",
+        "#F2994A" to "연한 주황", "#EB5757" to "연한 빨강", "#BB6BD9" to "연한 보라", "#9B51E0" to "진한 보라", "#4F4F4F" to "짙은 회색",
+    )
+
+    /** [hex]("#RRGGBB", 대소문자 무관)의 한글 색 이름. 격자에 없는 색은 '사용자 색'. */
+    fun nameKo(hex: String): String = namesKo[hex.uppercase()] ?: "사용자 색"
+
     /** #191919의 상대 휘도. */
     private const val DARK_TEXT_LUMINANCE = 0.0097
 

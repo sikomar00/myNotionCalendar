@@ -56,6 +56,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.sync.CompanionInspection
 import com.ysdoing.notioncal.core.sync.CompanionResult
@@ -317,17 +318,7 @@ private fun LedgerFields(ui: AddDatabaseUi, inspection: DatabaseInspection, view
             allowNone = false,
         ) { it?.let(viewModel::setBudgetGroup) }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.add_db_ledger_spend_negative))
-            Text(
-                stringResource(R.string.add_db_ledger_spend_negative_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = part.spendNegative, onCheckedChange = viewModel::setSpendNegative)
-    }
+    SwitchRow(stringResource(R.string.add_db_ledger_spend_negative), part.spendNegative, note = stringResource(R.string.add_db_ledger_spend_negative_note), onChange = viewModel::setSpendNegative)
 }
 
 /** 예산·카테고리 마스터 한 줄: 찾았으면 이름, 못 찾았으면 링크 칸 + 조회. */
@@ -368,7 +359,7 @@ private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
                     .size(48.dp)
                     .clip(CircleShape)
                     .selectable(selected = selected, role = Role.RadioButton) { onSelect(hex) }
-                    .semantics { contentDescription = name },
+                    .semantics { contentDescription = NotionColors.nameKo(hex) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
