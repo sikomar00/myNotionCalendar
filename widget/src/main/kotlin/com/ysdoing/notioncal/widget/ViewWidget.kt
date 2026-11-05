@@ -320,6 +320,8 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
         ViewEmpty(board, state.config.appWidgetId, m, palette)
         return
     }
+    // 차트 보기: 그릴 수 있으면 차트로(Phase 12b), 못 그리는 설정이면 한 줄 안내 뒤에 아래 표·목록으로 이어 그린다.
+    if (board.type == "chart" && ChartOrNote(board, size, spec, ViewLook(m, palette), lines + presetLinesHeight(presets.size))) return
     // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
     val look = ViewLook(m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT)
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).

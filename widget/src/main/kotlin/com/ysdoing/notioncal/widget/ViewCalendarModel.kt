@@ -100,16 +100,16 @@ private val MIN_STRIP = 44.dp
 internal fun calendarLayoutFor(board: ViewBoard, size: DpSize, spec: PaneSpec, m: ViewMetrics, aboveHeight: Dp): CalendarLayout? {
     if (!board.drawsCalendar()) return null
     val total = spec.height ?: (size.height - VIEW_PADDING_V * 2)
-    val body = calendarBodyHeight(total, progressOf(board, size) != null, m, aboveHeight)
+    val body = paneBodyHeight(total, progressOf(board, size) != null, m, aboveHeight)
     val layout = calendarLayout(sizeStep(size), size.width - PADDING_H * 2, body)
     return layout.takeIf { it.grid.height >= (if (it.mode == CalendarMode.MONTH) MIN_MONTH_GRID else MIN_STRIP) }
 }
 
 /**
- * 머리줄 아래 캘린더가 쓰는 높이. [total]은 단일 위젯이면 위젯 높이에서 위아래 여백을 뺀 값, 탭·섹션 칸이면 그 칸의 높이다.
+ * 머리줄 아래 본문(캘린더·차트)이 쓰는 높이. [total]은 단일 위젯이면 위젯 높이에서 위아래 여백을 뺀 값, 탭·섹션 칸이면 그 칸의 높이다.
  * 머리 높이는 [ViewHeader]와 같은 조건(부제가 보일 때만 더 높다)으로 정하고, [linesHeight]는 상태·되돌리기·프리셋 줄이다.
  */
-internal fun calendarBodyHeight(total: Dp, subtitleShown: Boolean, m: ViewMetrics, linesHeight: Dp): Dp =
+internal fun paneBodyHeight(total: Dp, subtitleShown: Boolean, m: ViewMetrics, linesHeight: Dp): Dp =
     (total - (if (subtitleShown) m.headerWithSub else m.header) - linesHeight).coerceAtLeast(0.dp)
 
 /**

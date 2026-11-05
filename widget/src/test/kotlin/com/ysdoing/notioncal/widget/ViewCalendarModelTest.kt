@@ -68,13 +68,13 @@ class ViewCalendarModelTest {
     fun aBodyTooShortForAnythingNeverGoesNegative() {
         assertEquals(0.dp, calendarLayout(SizeStep.LARGE, 300.dp, 20.dp).grid.height)
         assertEquals(0.dp, calendarLayout(SizeStep.WIDE, 300.dp, (-5).dp).listHeight)
-        assertEquals(0.dp, calendarBodyHeight(30.dp, subtitleShown = false, m = metrics, linesHeight = 50.dp))
+        assertEquals(0.dp, paneBodyHeight(30.dp, subtitleShown = false, m = metrics, linesHeight = 50.dp))
     }
 
     @Test
     fun theBodyIsWhatIsLeftBelowTheHeaderAndTheLinesAboveIt() {
-        assertEquals(300.dp - metrics.header - 36.dp, calendarBodyHeight(300.dp, subtitleShown = false, m = metrics, linesHeight = 36.dp))
-        assertEquals(300.dp - metrics.headerWithSub, calendarBodyHeight(300.dp, subtitleShown = true, m = metrics, linesHeight = 0.dp))
+        assertEquals(300.dp - metrics.header - 36.dp, paneBodyHeight(300.dp, subtitleShown = false, m = metrics, linesHeight = 36.dp))
+        assertEquals(300.dp - metrics.headerWithSub, paneBodyHeight(300.dp, subtitleShown = true, m = metrics, linesHeight = 0.dp))
     }
 
     @Test

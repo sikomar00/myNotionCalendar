@@ -1,9 +1,6 @@
 package com.ysdoing.notioncal.widget
 
-import android.app.Activity
 import android.content.Context
-import android.view.View
-import android.widget.FrameLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -23,7 +20,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -93,35 +89,7 @@ class ViewCalendarRemoteViewsTest {
     private fun state(board: ViewBoard, config: WidgetConfig = WidgetConfig(1, viewId = "v1"), info: CalendarInfo = CalendarInfo()) =
         ViewWidgetState(board, config, now, info)
 
-    private suspend fun renderView(size: DpSize, content: @Composable () -> Unit): View {
-        val remoteViews = GlanceRemoteViews().compose(context, size) { content() }.remoteViews
-        // 스크린샷 도구가 Activity에 붙은 View를 요구한다. 제목 표시줄 없는 Activity에 위젯 크기 그대로 붙인다.
-        val activity = Robolectric.buildActivity(Activity::class.java).create().get()
-        activity.setTheme(android.R.style.Theme_Material_Light_NoActionBar)
-        val density = activity.resources.displayMetrics.density
-        val w = (size.width.value * density).toInt()
-        val h = (size.height.value * density).toInt()
-        val widget = FrameLayout(activity)
-        widget.addView(remoteViews.apply(activity, widget))
-        val root = FrameLayout(activity)
-        root.addView(widget, FrameLayout.LayoutParams(w, h))
-        activity.setContentView(root)
-        widget.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
-        widget.layout(0, 0, w, h)
-        return widget
-    }
-
-    private suspend fun render(size: DpSize, state: ViewWidgetState) = renderView(size) { ViewWidgetContent(state) }
-
-    // Glance 한도 500 중 쓰는 상한: 어림이 틀려도 남는 여유 20개.
-    private val MAX_IDS = 480
-
-    /** Glance가 쓴 view id의 개수(glance_view_id_NNN의 가장 큰 번호 + 1). 한도는 500(000~499)이다. */
-    private fun glanceIdsUsed(view: View): Int {
-        val own = runCatching { view.resources.getResourceEntryName(view.id) }.getOrNull()?.removePrefix("glance_view_id_")?.toIntOrNull()?.plus(1) ?: 0
-        val children = (view as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).maxOfOrNull { glanceIdsUsed(g.getChildAt(it)) } } ?: 0
-        return maxOf(own, children)
-    }
+    private suspend fun render(size: DpSize, state: ViewWidgetState) = renderRemoteViews(context, size) { ViewWidgetContent(state) }
 
     @Test
     fun translatesInEverySizeAndSetting() = runTest(timeout = 3.minutes) {
@@ -156,7 +124,7 @@ class ViewCalendarRemoteViewsTest {
             parcel.recycle()
             val ids = glanceIdsUsed(render(size, state(dense, WidgetConfig(1, maxPerCell = 6, viewId = "v1"))))
             println("VIEWCAL_PARCEL ${size.width}x${size.height} = $bytes bytes, $ids view ids")
-            assertTrue("$size uses $ids of 500 Glance view ids", ids <= MAX_IDS)
+            assertTrue("$size uses $ids of 500 Glance view ids", ids <= GLANCE_VIEW_ID_BUDGET)
             assertTrue("$size RemoteViews $bytes bytes", bytes < 400_000)
         }
     }
@@ -171,7 +139,7 @@ class ViewCalendarRemoteViewsTest {
         for (size in listOf(large, full, DpSize(358.dp, 640.dp), DpSize(411.dp, 800.dp))) {
             for (font in listOf(70, 100, 150)) {
                 val ids = glanceIdsUsed(render(size, state(saturated, WidgetConfig(1, fontScale = font, viewId = "v1"), info)))
-                if (ids > MAX_IDS) failures += "${size.width}x${size.height} font=$font uses $ids view ids"
+                if (ids > GLANCE_VIEW_ID_BUDGET) failures += "${size.width}x${size.height} font=$font uses $ids view ids"
             }
         }
         assertTrue(failures.joinToString(System.lineSeparator()), failures.isEmpty())

@@ -233,6 +233,8 @@
     <string name="view_widget_undo">방금 바꾼 것 되돌리기</string>
     <string name="view_widget_more">+%1$d 더 보기</string>
     <string name="view_calendar_today_empty">오늘 일정이 없어요</string>
+    <string name="view_chart_partial">일부 행만 반영</string>
+    <string name="view_chart_unsupported">이 차트 설정은 아직 그리지 못해 목록으로 보여요</string>
     <string name="view_calendar_title_back">%1$s, 오늘로 돌아가기</string>
     <string name="view_calendar_partial">일부만 보여요</string>
     <string name="view_calendar_partial_description">일정이 많아 일부만 받았습니다</string>
