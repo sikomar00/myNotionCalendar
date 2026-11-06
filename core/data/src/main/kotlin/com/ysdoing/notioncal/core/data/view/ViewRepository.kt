@@ -1,10 +1,12 @@
 package com.ysdoing.notioncal.core.data.view
 
 import com.ysdoing.notioncal.core.data.WidgetRefresher
+import com.ysdoing.notioncal.core.data.db.SentWriteEntity
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.db.ViewDao
+import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
@@ -47,6 +49,11 @@ data class ViewBoard(
     val pendingPageIds: Set<String> = emptySet(),
     /** 노션에 아직 만들러 보내지 않은 새 항목의 날짜(Phase 11h '하루 한 줄' 가드, [takenDates]). */
     val pendingCreateDates: Set<LocalDate> = emptySet(),
+    /**
+     * 노션에 보낸 바꿈 중 행의 값이 아직 그 값인 것의 보낸 시각(Phase 12c). 보낸 뒤 [ViewWriter.SENT_UNDO_WINDOW_MS] 안이면 위젯이
+     * '보낸 변경 되돌리기'를 준다([sentUndoableAt]). 그 뒤에 사용자가 같은 칸을 또 바꿨다면 되돌릴 것이 아니라 빠진다.
+     */
+    val sentUndoAt: List<Long> = emptyList(),
 ) {
     private val filter: ViewFilter by lazy { ViewFilter.parse(filterJson) }
 
@@ -58,6 +65,9 @@ data class ViewBoard(
 
     /** [now]에 되돌릴 수 있는 쓰기 수. 전송 시각이 되면(같거나 지나면) 보낼 쓰기라 되돌릴 수 없다. */
     fun undoableAt(now: Long): Int = pendingSendAfter.count { it > now }
+
+    /** [now]에 되돌릴 수 있는 보낸 변경 수(보낸 뒤 [ViewWriter.SENT_UNDO_WINDOW_MS] 안). */
+    fun sentUndoableAt(now: Long): Int = sentUndoAt.count { it >= now - ViewWriter.SENT_UNDO_WINDOW_MS }
 
     /** 새 항목을 만들 수 있다(제목 속성을 안다). 위젯 '+'와 입력 시트가 이것으로 정한다. */
     val canCreate: Boolean get() = columnInfo.any { it.type == "title" }
@@ -104,7 +114,10 @@ class ViewRepository @Inject constructor(
 
     /** 등록하지 않았거나 지워졌으면 null. */
     fun observe(viewId: String): Flow<ViewBoard?> =
-        combine(dao.observe(viewId), dao.observeRows(viewId), dao.observePendingSendAfter(viewId), dao.observePendingPageIds(viewId), dao.observePendingCreateValues(viewId)) { view, rows, pending, pendingPages, creates ->
+        combine(
+            dao.observe(viewId), dao.observeRows(viewId), combine(dao.observePendingSendAfter(viewId), dao.observeSent(viewId)) { pending, sent -> pending to sent },
+            dao.observePendingPageIds(viewId), dao.observePendingCreateValues(viewId),
+        ) { view, rows, (pending, sent), pendingPages, creates ->
             view?.let {
                 ViewBoard(
                     viewId = it.viewId,
@@ -121,9 +134,14 @@ class ViewRepository @Inject constructor(
                     filterJson = it.filterJson,
                     pendingPageIds = pendingPages.toSet(),
                     pendingCreateDates = creates.mapNotNull { ViewJson.parseCreate(it)?.date?.dateOrNull() }.toSet(),
+                    sentUndoAt = sent.filter { s -> stillSent(rows, s) }.map { s -> s.sentAt },
                 )
             }
         }
+
+    /** 보낸 바꿈 [sent]의 칸이 아직 보낸 값이면(그 뒤에 또 바뀌지 않았으면) true. */
+    private fun stillSent(rows: List<ViewRowEntity>, sent: SentWriteEntity): Boolean =
+        rows.firstOrNull { it.pageId == sent.pageId }?.let { ViewJson.valueText(ViewJson.typed(it.typed)[sent.propId]) == sent.sentValue } == true
 
     suspend fun remove(viewId: String) {
         dao.remove(viewId)

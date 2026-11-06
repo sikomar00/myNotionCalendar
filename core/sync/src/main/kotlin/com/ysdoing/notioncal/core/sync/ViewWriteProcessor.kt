@@ -1,10 +1,12 @@
 package com.ysdoing.notioncal.core.sync
 
 import com.ysdoing.notioncal.core.data.IoDispatcher
+import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
+import com.ysdoing.notioncal.core.data.db.SentWriteEntity
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_TRASH
 import com.ysdoing.notioncal.core.data.db.ViewWriteEntity
@@ -12,6 +14,7 @@ import com.ysdoing.notioncal.core.data.view.FilterMatch
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.data.view.ViewJson
+import com.ysdoing.notioncal.core.data.view.ViewWriter
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionReader
@@ -52,6 +55,7 @@ class ViewWriteProcessor @Inject constructor(
     private val widgets: WidgetRefresher,
     private val clock: Clock,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val requester: OutboxRequester = OutboxRequester.None,
 ) {
     private val mutex = Mutex()
     private val dao get() = db.viewDao()
@@ -78,6 +82,8 @@ class ViewWriteProcessor @Inject constructor(
         var sent = 0
         var dropped = 0
         var retryError: NotionError? = null
+        // 되돌릴 수 있는 시간이 지난 보낸 기록은 지우고, 위젯의 '보낸 변경 되돌리기' 줄도 이때 사라지게 다시 그린다.
+        val expired = dao.deleteSentBefore(clock.millis() - ViewWriter.SENT_UNDO_WINDOW_MS)
         while (true) {
             val write = dao.firstDueWrite(clock.millis()) ?: break // 지연 중인 쓰기(sendAfter가 아직 안 됨)는 남겨 둔다
             val result = try {
@@ -94,6 +100,7 @@ class ViewWriteProcessor @Inject constructor(
             when (result) {
                 SendResult.SENT -> {
                     dao.deleteWriteById(write.id)
+                    logSent(write)
                     sent++
                     if (write.propType == VIEW_WRITE_CREATE) refresh += write.viewId // 새 행이 위젯에 나타나게
                     else if (write.propType != VIEW_WRITE_TRASH && leavesFilter(write)) refresh += write.viewId // 바뀐 행이 필터에서 빠져 위젯에서 사라지게(IX-06)
@@ -111,8 +118,23 @@ class ViewWriteProcessor @Inject constructor(
                 }
             }
         }
-        if (sent + dropped > 0 && refresh.isEmpty()) widgets.requestUpdate() // 다시 받을 보기가 있으면 process()가 받은 뒤 그린다
+        if ((sent + dropped > 0 || expired > 0) && refresh.isEmpty()) widgets.requestUpdate() // 다시 받을 보기가 있으면 process()가 받은 뒤 그린다
         return Drain(ViewWriteOutcome(sent, dropped, dao.pendingWriteCount(), retryError), refresh)
+    }
+
+    /**
+     * 속성 바꿈을 보냈으면 이전 값(기준값, 비어 있었으면 null)과 보낸 값을 기록하고(새 항목·휴지통은 되돌리지 않는다) 되돌릴 수 있는 시간이 끝날 때 처리기를 다시 깨운다
+     * (그때 기록을 지우고 위젯의 되돌리기 줄을 거둔다. 깨우기는 다른 요청에 밀릴 수 있어 줄이 다음 갱신까지 남을 수 있다 — 눌러도 아무 일도 없다).
+     */
+    private suspend fun logSent(write: ViewWriteEntity) {
+        if (write.propType == VIEW_WRITE_CREATE || write.propType == VIEW_WRITE_TRASH) return
+        dao.insertSent(
+            SentWriteEntity(
+                viewId = write.viewId, pageId = write.pageId, propId = write.propId, propType = write.propType,
+                priorValue = write.baseValue, sentValue = write.value, sentAt = clock.millis(), batchId = write.batchId,
+            ),
+        )
+        requester.requestAfter(ViewWriter.SENT_UNDO_WINDOW_MS + EXPIRY_SLACK_MS)
     }
 
     /**
@@ -216,5 +238,8 @@ class ViewWriteProcessor @Inject constructor(
     private companion object {
         /** 이만큼 실패하면 버린다(15분 주기로 약 2시간 반). */
         const val MAX_ATTEMPTS = 10
+
+        /** 보낸 기록이 지나는 시각의 깨우기에 더하는 여유(보낸 시각 + 창이 막 지난 뒤에 지우게). */
+        const val EXPIRY_SLACK_MS = 1_000L
     }
 }

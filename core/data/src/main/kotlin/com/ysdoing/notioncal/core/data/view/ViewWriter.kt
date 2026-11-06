@@ -234,6 +234,32 @@ class ViewWriter @Inject constructor(
         return row.copy(cells = cells.joinToString(VIEW_CELL_SEPARATOR), typed = ViewJson.encodeTyped(restored))
     }
 
+    /**
+     * 위젯 '되돌리기' 줄: 지연 중인 쓰기가 있으면 그것을([undoPending]), 없으면 보낸 지 [SENT_UNDO_WINDOW_MS] 안의 가장 최근 변경 묶음을([undoSent]) 되돌린다.
+     * 되돌린 수를 돌려준다.
+     */
+    suspend fun undo(viewId: String): Int = undoPending(viewId).takeIf { it > 0 } ?: undoSent(viewId)
+
+    /**
+     * 이미 보낸 변경 되돌리기(Phase 12c IX-05 후반): 가장 최근에 보낸 한 묶음(같은 액션이 만든 쓰기들, 묶음이 아니면 쓰기 하나)의 각 칸에 **반대 쓰기**를 쌓는다.
+     * 칸이 아직 보낸 값일 때만 되돌린다(그 뒤에 또 바꿨다면 건드리지 않는다). 기준값은 보낸 값이라 처리기가 보내기 직전에 노션 값과 견주어,
+     * 그 사이 노션에서 바뀌었으면 충돌로 기록하고 노션 값을 남긴다. 비울 수 없는 상태 칸은 이전 값이 없으면 건너뛴다. 되돌린 칸 수를 돌려준다.
+     * shortcut: 노션 자동화가 이 변경 때문에 만든 부수 효과(다른 속성)는 되돌리지 못한다.
+     */
+    suspend fun undoSent(viewId: String): Int {
+        val recent = dao.sentSince(viewId, clock.millis() - SENT_UNDO_WINDOW_MS)
+        val newest = recent.firstOrNull() ?: return 0
+        val batch = recent.filter { if (newest.batchId != 0L) it.batchId == newest.batchId else it.id == newest.id }
+        val undone = batch.count { sent ->
+            val prior = ViewJson.parseValue(sent.priorValue) ?: return@count false
+            change(viewId, sent.pageId, sent.propId, sent.propType) { column, current, _ ->
+                prior.takeIf { ViewJson.valueText(current) == sent.sentValue && column.accepts(it) }
+            }
+        }
+        dao.deleteSent(batch.map { it.id })
+        return undone
+    }
+
     private fun sendAfterOf(sendDelayMs: Long): Long = if (sendDelayMs > 0) clock.millis() + sendDelayMs else 0
 
     /** 바로 보낼 수 있으면 처리기를 깨우고, 지연이 있으면 그 시각에 깨우도록 요청한다(그 전에는 처리기가 이 쓰기를 건너뛴다). */
@@ -242,6 +268,9 @@ class ViewWriter @Inject constructor(
     companion object {
         /** 위젯 즉시 동작의 전송 지연(IX-05). 이 동안 연타는 한 번의 전송으로 합쳐지고(IX-03) 되돌릴 수 있다. */
         const val UNDO_WINDOW_MS = 4_000L
+
+        /** 보낸 뒤에도 '보낸 변경 되돌리기'를 줄 시간(2분, Phase 12c). 처리기는 이보다 오래된 보낸 기록을 지운다. */
+        const val SENT_UNDO_WINDOW_MS = 120_000L
     }
 }
 

@@ -247,6 +247,25 @@ abstract class ViewDao {
     @Query("DELETE FROM view_writes WHERE id = :id")
     abstract suspend fun deleteWriteById(id: Long)
 
+    /** 보낸 바꿈을 기록한다(Phase 12c, 4초 뒤 되돌리기). 처리기가 보낸 직후 부른다. */
+    @Insert
+    abstract suspend fun insertSent(sent: SentWriteEntity)
+
+    /** 한 보기에서 [since] 이후에 보낸 기록, 최근 것부터. */
+    @Query("SELECT * FROM sent_writes WHERE viewId = :viewId AND sentAt >= :since ORDER BY sentAt DESC, id DESC")
+    abstract suspend fun sentSince(viewId: String, since: Long): List<SentWriteEntity>
+
+    /** 한 보기의 보낸 기록(되돌릴 수 있는 시간은 세는 쪽이 지금과 견준다). 지난 것은 처리기가 지운다. */
+    @Query("SELECT * FROM sent_writes WHERE viewId = :viewId")
+    abstract fun observeSent(viewId: String): Flow<List<SentWriteEntity>>
+
+    /** 되돌릴 수 있는 시간이 지난 기록을 지우고 지운 수를 돌려준다. */
+    @Query("DELETE FROM sent_writes WHERE sentAt < :before")
+    abstract suspend fun deleteSentBefore(before: Long): Int
+
+    @Query("DELETE FROM sent_writes WHERE id IN (:ids)")
+    abstract suspend fun deleteSent(ids: List<Long>)
+
     @Query("UPDATE view_writes SET attempts = attempts + 1, lastError = :error WHERE id = :id")
     abstract suspend fun markWriteFailed(id: Long, error: String)
 
