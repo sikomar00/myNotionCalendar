@@ -335,6 +335,12 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
         CalendarBody(board, state, ViewLook(m, palette, actionWidgetId = actionWidgetId), calendar)
         return
     }
+    // 타임라인(Phase 12e): 막대 줄. 행이 없어도 창을 그려 ‹ ›로 다른 기간을 볼 수 있다. 자리가 없으면(2×2·낮은 칸) 아래 표·목록으로 대신 그린다.
+    val timeline = timelineLayoutFor(board, state, size, spec, m, lines + presetLinesHeight(presets.size))
+    if (timeline != null) {
+        TimelineBody(board, timeline, state, ViewLook(m, palette, actionWidgetId = actionWidgetId))
+        return
+    }
     if (board.rows.isEmpty()) {
         ViewEmpty(board, state.config.appWidgetId, m, palette)
         return
@@ -425,14 +431,14 @@ class ViewWidget : GlanceAppWidget() {
         val deps = WidgetDependencies.from(context)
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialBoard = initialConfig.viewId?.let { deps.views().observe(it).first() }
-        val initialCalendar = if (initialBoard?.drawsCalendar() == true) CalendarSession.load(deps, initialConfig) else CalendarInfo()
+        val initialCalendar = if (initialBoard?.needsCalendarInfo() == true) CalendarSession.load(deps, initialConfig) else CalendarInfo()
         val initialCoverVersion = deps.covers().version.value // 읽기 전에 정해 그 사이에 받아진 표지가 다시 읽히게 한다
         val initialCovers = CoverSession.load(deps, listOf(initialBoard))
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val board by remember(config.viewId) { config.viewId?.let { deps.views().observe(it) } ?: flowOf(null) }
                 .collectAsState(initialBoard)
-            val calendar = CalendarSession.info(deps, initialCalendar, config, board?.drawsCalendar() == true)
+            val calendar = CalendarSession.info(deps, initialCalendar, config, board?.needsCalendarInfo() == true)
             val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, listOf(initialBoard), listOf(board))
             val fontScale by SystemFontScale.flow.collectAsState()
             ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar, covers), fontScale ?: SystemFontScale.current(context))

@@ -157,7 +157,7 @@ class LayoutWidget : GlanceAppWidget() {
         val initialSettings = deps.settings().settings.first()
         // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령). 타일의 보기도 함께.
         val initialBoards = boardsOf(deps, WidgetLayout.parse(initialConfig.layoutJson).boardIds()).first()
-        val initialCalendar = if (initialBoards.values.any { it?.drawsCalendar() == true }) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
+        val initialCalendar = if (initialBoards.values.any { it?.needsCalendarInfo() == true }) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
         val initialLayout = WidgetLayout.parse(initialConfig.layoutJson)
         val initialDrawn = drawnBoards(initialLayout, initialConfig.lastTab, initialBoards)
         val initialCoverVersion = deps.covers().version.value // 읽기 전에 정해 그 사이에 받아진 표지가 다시 읽히게 한다
@@ -169,7 +169,7 @@ class LayoutWidget : GlanceAppWidget() {
             val boards by remember(layout) { boardsOf(deps, layout.boardIds()) }.collectAsState(initialBoards)
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
-            val calendar = CalendarSession.info(deps, initialCalendar, config, boards.values.any { it?.drawsCalendar() == true })
+            val calendar = CalendarSession.info(deps, initialCalendar, config, boards.values.any { it?.needsCalendarInfo() == true })
             val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, initialDrawn, drawnBoards(layout, config.lastTab, boards))
             LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart, calendar, covers), fontScale ?: SystemFontScale.current(context))
         }
