@@ -66,7 +66,7 @@ internal fun ViewAction.withoutChange(index: Int): ViewAction = copy(changes = c
 
 /** 저장할 수 있는 액션: 정리하고도 남고(이름·변경), 숫자 값은 숫자다. 아니면 null이라 '저장'을 막는다. 새 액션의 번호는 담을 때 붙으니 비어 있어도 된다. */
 internal fun ViewAction.complete(columns: List<ViewColumn>): ViewAction? {
-    val numbersOk = changes.all { change -> change.op != ActionOp.SET || columns.firstOrNull { it.id == change.propId }?.type != "number" || change.value.trim().toDoubleOrNull() != null }
+    val numbersOk = changes.all { change -> change.op != ActionOp.SET || columns.firstOrNull { it.id == change.propId }?.type != "number" || ViewActions.parseNumber(change.value) != null }
     return copy(id = id.ifEmpty { "new" }).normalized()?.takeIf { numbersOk }?.copy(id = id)
 }
 
@@ -201,7 +201,7 @@ private fun ValueChoice(change: ActionChange, column: ViewColumn, replace: (Acti
             value = change.value,
             onValueChange = { replace(change.copy(value = it.take(NUMBER_MAX_CHARS))) },
             label = { Text(stringResource(R.string.widget_action_form_number)) },
-            isError = change.value.trim().toDoubleOrNull() == null,
+            isError = ViewActions.parseNumber(change.value) == null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),

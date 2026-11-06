@@ -25,7 +25,7 @@ data class ViewAction(val id: String, val viewId: String, val name: String, val 
     /** 읽을 때 앞뒤 공백·뜻 없는 변경을 바로잡는다. 번호·보기·이름이 비었거나 남는 변경이 없으면 null(버린다). */
     fun normalized(): ViewAction? {
         val kept = changes.mapNotNull { it.normalized() }.distinctBy { it.propId }.take(ViewActions.CHANGE_LIMIT)
-        val cleanName = name.trim().take(ViewActions.NAME_MAX)
+        val cleanName = name.trim().let { if (it.codePointCount(0, it.length) <= ViewActions.NAME_MAX) it else it.substring(0, it.offsetByCodePoints(0, ViewActions.NAME_MAX)) }
         if (id.isBlank() || viewId.isBlank() || cleanName.isEmpty() || kept.isEmpty()) return null
         return copy(id = id.trim(), viewId = viewId.trim(), name = cleanName, changes = kept)
     }
@@ -48,6 +48,9 @@ object ViewActions {
     const val NAME_MAX = 12
     const val MAX_DAYS = 365
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** 액션의 숫자 글자 → 숫자. 읽을 수 없거나 NaN·무한대면 null(큐에 넣을 수 없는 값을 막는다). */
+    fun parseNumber(text: String): Double? = text.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
 
     /** 빈 글자·깨진 글자는 빈 목록이다. 깨진 액션만 버리고 번호가 겹치면 앞의 것만, [LIMIT]개까지 남긴다. */
     fun parse(text: String): List<ViewAction> {

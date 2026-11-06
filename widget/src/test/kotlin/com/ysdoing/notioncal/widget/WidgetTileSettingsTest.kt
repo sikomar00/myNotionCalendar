@@ -54,6 +54,14 @@ class WidgetTileSettingsTest {
     }
 
     @Test
+    fun changingTheViewWhileEditingKeepsTheTileIdNameAndColorSoSavingReplacesItInsteadOfAddingACopy() {
+        val tile = com.ysdoing.notioncal.core.data.view.AggTile("t3", "v1", AggFn.COUNT, label = "식비", color = "blue")
+        val moved = TileDraft.from(tile).withView("v2", columns)
+        assertEquals(listOf("t3", "식비", "blue", "v2"), listOf(moved.editingId, moved.label, moved.color, moved.viewId))
+        assertEquals("t3", moved.toTile()!!.id)
+    }
+
+    @Test
     fun anUnknownColorIsDroppedSoOnlyTheNotionPaletteIsStored() {
         assertEquals("", TileDraft().withView("v1", columns).copy(color = "neon").toTile()!!.color)
         assertEquals("green", TileDraft().withView("v1", columns).copy(color = " green ").toTile()!!.color)

@@ -20,9 +20,6 @@ data class TypedDate(val start: String, val end: String? = null, val timeZone: S
 
     fun endDay(): LocalDate? = end?.let { LocalDate.parse(it.substringBefore('T')) }
 
-    /** 시작에 시각이 있다(시간 일정). 없으면 종일이다. */
-    val isTimed: Boolean get() = 'T' in start
-
     fun startTime(): LocalTime? = timeOf(start)
 
     fun endTime(): LocalTime? = end?.let(::timeOf)
@@ -80,9 +77,6 @@ data class TypedDate(val start: String, val end: String? = null, val timeZone: S
             val start = text("start") ?: return null
             return TypedDate(start, text("end"), text("time_zone"))
         }
-
-        /** 오늘(앱 시간대) 하루짜리 종일 날짜. */
-        fun today(): TypedDate = TypedDate(LocalDate.now(APP_ZONE).toString())
 
         /** 날짜 글자의 날짜 부분만 바꾸고 시간 부분(`T…`)은 그대로 둔다. */
         private fun String.withDay(day: LocalDate): String = if ('T' in this) day.toString() + substring(indexOf('T')) else day.toString()

@@ -31,6 +31,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import javax.inject.Inject
 
@@ -57,12 +58,13 @@ class ViewRowViewModel @Inject constructor(
 
     /** 바꾼 속성마다 쓰기를 쌓는다. 하나라도 못 쌓으면 false. 화면이 닫혀도 쌓는 일은 끝까지 한다. */
     suspend fun save(viewId: String, pageId: String, changes: Map<String, JsonElement>): Boolean = viewModelScope.async {
-        changes.map { (propId, value) -> writer.set(viewId, pageId, propId, value) }.all { it }
+        writer.setAll(viewId, pageId, changes)
     }.await()
 
     /** 이 위젯 설정에 만들어 둔 이 보기의 액션 버튼(Phase 12c IX-07). 위젯 번호가 없으면(위젯이 아닌 곳에서 연 시트) 없다. */
-    suspend fun actions(appWidgetId: Int, viewId: String): List<ViewAction> =
+    suspend fun actions(appWidgetId: Int, viewId: String): List<ViewAction> = withContext(io) {
         if (appWidgetId <= 0) emptyList() else ViewActions.forView(ViewActions.parse(widgetConfigs.get(appWidgetId).actionsJson), viewId)
+    }
 
     /** 액션을 이 행에 적용한다(쓰기 큐에 쌓을 뿐이고 4초 안에 위젯에서 되돌릴 수 있다). 화면이 닫혀도 쌓는 일은 끝까지 한다. */
     suspend fun apply(viewId: String, pageId: String, action: ViewAction): Boolean = viewModelScope.async { writer.applyAction(viewId, pageId, action) }.await()

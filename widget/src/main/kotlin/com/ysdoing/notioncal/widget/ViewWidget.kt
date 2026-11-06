@@ -311,6 +311,9 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     val paneHeight = spec.height?.let { (it - lines).coerceAtLeast(0.dp) }
     val size = LocalSize.current
     val step = sizeStep(size)
+    // 이 보기의 액션 버튼(IX-07): 행 시트가 위젯 설정에서 읽도록 위젯 번호를 알리고, 2×2보다 넓으면 첫 액션을 행 옆에 둔다.
+    val actions = ViewActions.forView(ViewActions.parse(state.config.actionsJson), board.viewId)
+    val actionWidgetId = if (actions.isEmpty()) 0 else state.config.appWidgetId
     // 프리셋 줄(IX-04): 새 항목을 만들 수 있는 보기에서, 2×2보다 넓을 때만 둔다.
     val presets = ViewPresets.parse(state.config.presetsJson).takeIf { spec.presets && board.canCreate && step != SizeStep.COMPACT }.orEmpty()
     if (presets.isNotEmpty()) ViewPresetLine(board.viewId, presets, palette, m.subSp * m.spFactor)
@@ -319,7 +322,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 캘린더는 행이 없어도 격자를 그린다(날짜 칸을 눌러 새 항목을 만든다). 격자가 읽힐 높이가 없으면 아래 표·목록으로 대체한다.
     val calendar = calendarLayoutFor(board, size, spec, m, lines + presetLinesHeight(presets.size))
     if (calendar != null) {
-        CalendarBody(board, state, ViewLook(m, palette), calendar)
+        CalendarBody(board, state, ViewLook(m, palette, actionWidgetId = actionWidgetId), calendar)
         return
     }
     if (board.rows.isEmpty()) {
@@ -329,10 +332,9 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 차트 보기: 그릴 수 있으면 차트로(Phase 12b), 못 그리는 설정이면 한 줄 안내 뒤에 아래 표·목록으로 이어 그린다.
     if (board.type == "chart" && ChartOrNote(board, size, spec, ViewLook(m, palette), lines + presetLinesHeight(presets.size))) return
     // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
-    val actions = ViewActions.forView(ViewActions.parse(state.config.actionsJson), board.viewId)
     val look = ViewLook(
         m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT,
-        actionWidgetId = if (actions.isEmpty()) 0 else state.config.appWidgetId, rowAction = actions.firstOrNull()?.takeIf { step != SizeStep.COMPACT },
+        actionWidgetId = actionWidgetId, rowAction = actions.firstOrNull()?.takeIf { step != SizeStep.COMPACT },
     )
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null

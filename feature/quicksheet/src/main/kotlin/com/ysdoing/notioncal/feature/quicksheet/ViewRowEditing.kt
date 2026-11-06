@@ -1,7 +1,8 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
-import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.NumberFormats
 import com.ysdoing.notioncal.core.data.view.TypedDate
+import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
 import kotlinx.serialization.json.JsonArray
@@ -81,5 +82,4 @@ internal fun parseNumber(text: String): NumberInput {
 }
 
 /** 12.0 → "12", 12.5 → "12.5" */
-internal fun formatNumber(value: Double): String =
-    if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) value.toLong().toString() else value.toString()
+internal fun formatNumber(value: Double): String = NumberFormats.format(value, "")

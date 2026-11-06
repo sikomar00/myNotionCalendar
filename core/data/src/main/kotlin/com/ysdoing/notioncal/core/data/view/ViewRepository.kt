@@ -1,12 +1,10 @@
 package com.ysdoing.notioncal.core.data.view
 
 import com.ysdoing.notioncal.core.data.WidgetRefresher
-import com.ysdoing.notioncal.core.data.db.SentWriteEntity
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_UNSUPPORTED
 import com.ysdoing.notioncal.core.data.db.ViewDao
-import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
@@ -134,14 +132,10 @@ class ViewRepository @Inject constructor(
                     filterJson = it.filterJson,
                     pendingPageIds = pendingPages.toSet(),
                     pendingCreateDates = creates.mapNotNull { ViewJson.parseCreate(it)?.date?.dateOrNull() }.toSet(),
-                    sentUndoAt = sent.filter { s -> stillSent(rows, s) }.map { s -> s.sentAt },
+                    sentUndoAt = sent.filter { s -> s.holdsIn(rows.firstOrNull { r -> r.pageId == s.pageId }) }.map { s -> s.sentAt },
                 )
             }
         }
-
-    /** 보낸 바꿈 [sent]의 칸이 아직 보낸 값이면(그 뒤에 또 바뀌지 않았으면) true. */
-    private fun stillSent(rows: List<ViewRowEntity>, sent: SentWriteEntity): Boolean =
-        rows.firstOrNull { it.pageId == sent.pageId }?.let { ViewJson.valueText(ViewJson.typed(it.typed)[sent.propId]) == sent.sentValue } == true
 
     suspend fun remove(viewId: String) {
         dao.remove(viewId)

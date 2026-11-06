@@ -82,6 +82,22 @@ class ViewWriterUndoSentTest {
     }
 
     @Test
+    fun aNewerRecordWhoseCellChangedSinceIsSkippedSoTheFirstTapStillUndoesSomething() = runTest {
+        sentLog("pg", "number", "12.0", "40.0", ago = 20_000) // 로컬 40.0: 아직 보낸 값
+        sentLog("dn", "checkbox", "false", "false", ago = 5_000) // 더 최근이지만 로컬은 true: 그 뒤에 또 바뀌었다
+        assertEquals(1, writer.undoSent("v1"))
+        assertEquals(listOf("pg"), queued().map { it[0] })
+    }
+
+    @Test
+    fun theUndoWritesCarryTheUndoBatchSoTheProcessorDoesNotLogThemAgain() = runTest {
+        sentLog("pg", "number", "12.0", "40.0")
+        writer.undoSent("v1")
+        val batch = db.query("SELECT batchId FROM view_writes", null).use { c -> c.moveToFirst(); c.getLong(0) }
+        assertEquals(ViewWriter.UNDO_BATCH_ID, batch)
+    }
+
+    @Test
     fun anOldLogOrACellChangedSinceIsLeftAlone() = runTest {
         sentLog("pg", "number", "12.0", "40.0", ago = ViewWriter.SENT_UNDO_WINDOW_MS + 1)
         assertEquals(0, writer.undoSent("v1")) // 창이 지났다

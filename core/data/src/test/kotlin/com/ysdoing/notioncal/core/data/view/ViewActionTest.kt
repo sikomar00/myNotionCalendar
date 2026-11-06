@@ -33,6 +33,21 @@ class ViewActionTest {
     }
 
     @Test
+    fun aNameIsCutByCodePointsSoAnEmojiIsNeverSplit() {
+        val name = "🔥".repeat(ViewActions.NAME_MAX + 3)
+        val cut = ViewAction("a1", "v1", name, listOf(ActionChange("wh", ActionOp.TODAY))).normalized()!!.name
+        assertEquals(ViewActions.NAME_MAX, cut.codePointCount(0, cut.length))
+        assertEquals("🔥".repeat(ViewActions.NAME_MAX), cut)
+    }
+
+    @Test
+    fun numberTextMustBeFinite() {
+        assertEquals(40.0, ViewActions.parseNumber(" 40 "))
+        assertEquals(-1.5, ViewActions.parseNumber("-1.5"))
+        listOf("", "abc", "NaN", "Infinity", "-Infinity", "1e999").forEach { assertNull(it, ViewActions.parseNumber(it)) }
+    }
+
+    @Test
     fun theListRoundTripsThroughJsonAndBrokenInputReadsAsEmpty() {
         val list = listOf(action(), action("a2", "완료로", "v1", done, ActionChange("dn", ActionOp.SET, "true")))
         assertEquals(list, ViewActions.parse(ViewActions.encode(list)))

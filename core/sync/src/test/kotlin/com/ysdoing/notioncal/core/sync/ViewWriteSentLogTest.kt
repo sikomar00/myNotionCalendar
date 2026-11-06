@@ -51,7 +51,6 @@ class ViewWriteSentLogTest {
         override fun instant() = now
     }
     private val sent = mutableListOf<Pair<String, JsonObject>>()
-    private val wakes = mutableListOf<Long>()
     private var widgetUpdates = 0
 
     private val schema: DataSourceDto = NotionJson.decodeFromString(
@@ -88,10 +87,7 @@ class ViewWriteSentLogTest {
         override suspend fun view(viewId: String) = ViewDto(id = viewId, name = "할 일", type = "table")
         override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int) = emptyList<PageDto>()
     }
-    private val requester = object : OutboxRequester {
-        override fun request() = Unit
-        override fun requestAfter(delayMs: Long) { wakes += delayMs }
-    }
+    private val requester = OutboxRequester.None
     private val coverDir = java.nio.file.Files.createTempDirectory("covers").toFile()
 
     @Before
@@ -113,18 +109,17 @@ class ViewWriteSentLogTest {
 
     private fun processor(): ViewWriteProcessor {
         val views = ViewSync(viewReader, db.viewDao(), { widgetUpdates++ }, clock, CoverSync(CoverStore(coverDir), CoverDownload { null }))
-        return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined, requester)
+        return ViewWriteProcessor(notionReader, notionWriter, db, views, { widgetUpdates++ }, clock, Dispatchers.Unconfined)
     }
 
     private suspend fun logs() = db.viewDao().sentSince("v1", 0)
 
     @Test
-    fun aSentPropertyChangeIsLoggedWithItsPriorValueAndSchedulesTheExpiryWake() = runTest {
+    fun aSentPropertyChangeIsLoggedWithItsPriorValue() = runTest {
         writer.set("v1", "p1", "pg", JsonPrimitive(40.0))
         processor().process()
         val log = logs().single()
         assertEquals(listOf("pg", "12.0", "40.0", now.toEpochMilli()), listOf(log.propId, log.priorValue, log.sentValue, log.sentAt))
-        assertTrue(wakes.last() > ViewWriter.SENT_UNDO_WINDOW_MS) // 창이 끝난 직후에 깨운다
     }
 
     @Test
@@ -184,6 +179,21 @@ class ViewWriteSentLogTest {
         processor().process()
         val last = sent.last().second
         assertEquals(JsonPrimitive(12.0), (last["Pages"] as JsonObject)["number"]) // 이전 값으로 돌아갔다
+    }
+
+    @Test
+    fun theReverseWritesOfAnUndoAreNotLoggedSoNoRedoLineAppears() = runTest {
+        val action = ViewAction("a1", "v1", "끝", listOf(ActionChange("dn", ActionOp.SET, "true"), ActionChange("pg", ActionOp.SET, "40")))
+        writer.applyAction("v1", "p1", action)
+        now = now.plusSeconds(5)
+        processor().process()
+        val before = sent.size
+        remoteDone = true
+        remotePages = 40.0
+        assertEquals(2, writer.undoSent("v1")) // 한 묶음의 두 칸을 함께
+        processor().process()
+        assertEquals(before + 2, sent.size) // 되돌림 쓰기 둘이 나갔다
+        assertEquals(emptyList<Any>(), logs()) // 되돌림은 기록하지 않는다
     }
 
     @Test

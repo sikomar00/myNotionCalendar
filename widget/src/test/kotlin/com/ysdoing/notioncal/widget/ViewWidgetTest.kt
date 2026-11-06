@@ -831,6 +831,18 @@ class ViewWidgetTest {
     }
 
     @Test
+    fun aBoardCardOpensTheRowSheetWithTheWidgetNumberWhenTheViewHasActions() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        val actions = com.ysdoing.notioncal.core.data.view.ViewActions.encode(
+            listOf(com.ysdoing.notioncal.core.data.view.ViewAction("a1", "v1", "완료로", listOf(com.ysdoing.notioncal.core.data.view.ActionChange("st", com.ysdoing.notioncal.core.data.view.ActionOp.SET, "o3")))),
+        )
+        val withActions = boardView(3, 0, "o1").let { it.copy(config = it.config.copy(actionsJson = actions)) }
+        provideComposable { ViewWidgetContent(withActions, systemFontScale = 1f) }
+        onAllNodes(hasTestTag("boardCard"))[0].assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "p0", appWidgetId = 1)))
+    }
+
+    @Test
     fun moreGroupsThanColumnsAreReachedWithTheArrows() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(large)

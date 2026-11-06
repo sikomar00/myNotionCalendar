@@ -1,7 +1,6 @@
 package com.ysdoing.notioncal.core.sync
 
 import com.ysdoing.notioncal.core.data.IoDispatcher
-import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
@@ -55,7 +54,6 @@ class ViewWriteProcessor @Inject constructor(
     private val widgets: WidgetRefresher,
     private val clock: Clock,
     @IoDispatcher private val io: CoroutineDispatcher,
-    private val requester: OutboxRequester = OutboxRequester.None,
 ) {
     private val mutex = Mutex()
     private val dao get() = db.viewDao()
@@ -123,18 +121,18 @@ class ViewWriteProcessor @Inject constructor(
     }
 
     /**
-     * 속성 바꿈을 보냈으면 이전 값(기준값, 비어 있었으면 null)과 보낸 값을 기록하고(새 항목·휴지통은 되돌리지 않는다) 되돌릴 수 있는 시간이 끝날 때 처리기를 다시 깨운다
-     * (그때 기록을 지우고 위젯의 되돌리기 줄을 거둔다. 깨우기는 다른 요청에 밀릴 수 있어 줄이 다음 갱신까지 남을 수 있다 — 눌러도 아무 일도 없다).
+     * 속성 바꿈을 보냈으면 이전 값(기준값, 비어 있었으면 null)과 보낸 값을 기록한다. 새 항목·휴지통과 되돌리는 쓰기([ViewWriter.UNDO_BATCH_ID])는 기록하지 않는다.
+     * 기록은 다음 처리 때 지우고 위젯을 다시 그린다(2분 뒤 줄을 거둔다). 그 시각에 맞춘 깨우기는 두지 않는다: 지연 전송 깨우기와 같은 작업 이름을 갈아 끼워
+     * 4초 지연 쓰기의 전송을 늦출 수 있어서다. 그래서 줄은 만료 뒤 다음 위젯 갱신까지 남을 수 있고, 눌러도 아무 일 없이 사라진다.
      */
     private suspend fun logSent(write: ViewWriteEntity) {
-        if (write.propType == VIEW_WRITE_CREATE || write.propType == VIEW_WRITE_TRASH) return
+        if (write.propType == VIEW_WRITE_CREATE || write.propType == VIEW_WRITE_TRASH || write.batchId == ViewWriter.UNDO_BATCH_ID) return
         dao.insertSent(
             SentWriteEntity(
                 viewId = write.viewId, pageId = write.pageId, propId = write.propId, propType = write.propType,
                 priorValue = write.baseValue, sentValue = write.value, sentAt = clock.millis(), batchId = write.batchId,
             ),
         )
-        requester.requestAfter(ViewWriter.SENT_UNDO_WINDOW_MS + EXPIRY_SLACK_MS)
     }
 
     /**
@@ -238,8 +236,5 @@ class ViewWriteProcessor @Inject constructor(
     private companion object {
         /** 이만큼 실패하면 버린다(15분 주기로 약 2시간 반). */
         const val MAX_ATTEMPTS = 10
-
-        /** 보낸 기록이 지나는 시각의 깨우기에 더하는 여유(보낸 시각 + 창이 막 지난 뒤에 지우게). */
-        const val EXPIRY_SLACK_MS = 1_000L
     }
 }

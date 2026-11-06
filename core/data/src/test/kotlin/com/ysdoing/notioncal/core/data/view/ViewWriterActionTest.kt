@@ -116,14 +116,32 @@ class ViewWriterActionTest {
     }
 
     @Test
-    fun aChangeThatDoesNotFitTheColumnFailsTheActionButOthersStillApply() = runTest {
+    fun anActionThatCannotFullyApplyWritesNothingSoARetryDoesNotShiftTheDateTwice() = runTest {
         seed(date("2026-11-04"))
-        val partial = action(ActionChange("st", ActionOp.SET, "gone"), ActionChange("dn", ActionOp.SET, "true"))
-        assertFalse(writer.applyAction("v1", "p1", partial)) // 없는 옵션
-        assertEquals(listOf("dn"), queued().map { it[0] })
+        val partial = action(ActionChange("wh", ActionOp.SHIFT_DAYS, days = 1), ActionChange("st", ActionOp.SET, "gone"))
+        assertFalse(writer.applyAction("v1", "p1", partial)) // 상태 옵션이 지워졌다
+        assertTrue(queued().isEmpty())
+        assertEquals("2026-11-04", TypedDate.parse(typedNow()["wh"])!!.start) // 날짜도 그대로다
         assertFalse(writer.applyAction("v1", "p1", action(ActionChange("zzz", ActionOp.SET, "x")))) // 없는 속성
         assertFalse(writer.applyAction("v1", "p1", action(ActionChange("dn", ActionOp.SHIFT_DAYS, days = 1)))) // 날짜가 아닌 속성
         assertFalse(writer.applyAction("v1", "gone", action(ActionChange("dn", ActionOp.SET, "true")))) // 없는 행
+    }
+
+    @Test
+    fun aNumberThatIsNotFiniteCannotBeWritten() = runTest {
+        seed(date("2026-11-04"))
+        listOf("NaN", "Infinity", "-Infinity", "1e999", "12abc").forEach { text ->
+            assertFalse(text, writer.applyAction("v1", "p1", action(ActionChange("pg", ActionOp.SET, text))))
+        }
+        assertTrue(queued().isEmpty())
+    }
+
+    @Test
+    fun savingSeveralPropertiesFromTheSheetSharesOneBatch() = runTest {
+        seed(date("2026-11-04"))
+        assertTrue(writer.setAll("v1", "p1", mapOf("dn" to JsonPrimitive(true), "pg" to JsonPrimitive(40.0))))
+        assertEquals(setOf(clock.millis()), queued().map { it[2] }.toSet())
+        assertEquals(2, queued().size)
     }
 
     @Test

@@ -104,9 +104,9 @@ internal fun TileDraft.withKind(kind: TileKind, columns: List<ViewColumn>): Tile
     return copy(kind = kind, goalText = "", color = "", groupProp = group).withFn(donutFn, columns)
 }
 
-/** 보기를 고르면 그 보기의 열로 다시 시작한다(개수부터). 고른 종류는 그대로 둔다. */
+/** 보기를 고르면 그 보기의 열로 다시 시작한다(개수부터). 고치는 중인 타일 번호와 이름·색·종류는 보기와 상관없는 고름이라 그대로 둔다. */
 internal fun TileDraft.withView(viewId: String, columns: List<ViewColumn>): TileDraft =
-    TileDraft(viewId = viewId).withFn(AggFn.COUNT, columns).let { if (kind == TileKind.DONUT) it.withKind(kind, columns) else it }
+    TileDraft(viewId = viewId, label = label, color = color, editingId = editingId).withFn(AggFn.COUNT, columns).let { if (kind == TileKind.DONUT) it.withKind(kind, columns) else it }
 
 private val COLOR_CHOICES = listOf(
     "" to R.string.layout_tile_color_default, "gray" to R.string.layout_tile_color_gray, "brown" to R.string.layout_tile_color_brown, "orange" to R.string.layout_tile_color_orange,

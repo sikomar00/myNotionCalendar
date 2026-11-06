@@ -6,6 +6,7 @@ import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.EventDao
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
+import com.ysdoing.notioncal.core.data.db.SentWriteEntity
 import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
@@ -62,6 +63,18 @@ class ViewWriter @Inject constructor(
         change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray(), sendDelayMs = sendDelayMs) { column, _, _ ->
             blankToNull(column, value).takeIf { column.accepts(it) }
         }
+
+    /**
+     * 한 행의 속성 여러 개를 한 묶음으로 쓴다(행 편집 시트 저장). 같은 묶음 번호라 보낸 뒤 되돌릴 때 한꺼번에 되돌아간다. 하나라도 못 쓰면 false다.
+     */
+    suspend fun setAll(viewId: String, pageId: String, values: Map<String, JsonElement>): Boolean {
+        val batch = clock.millis()
+        return values.map { (propId, value) ->
+            change(viewId, pageId, propId, *ViewColumn.WRITABLE_TYPES.toTypedArray(), batchId = batch) { column, _, _ ->
+                blankToNull(column, value).takeIf { column.accepts(it) }
+            }
+        }.all { it }
+    }
 
     /** URL·이메일·전화의 공백 글자는 비우기다(노션이 빈 글자를 거부하고, 로컬과 노션의 비어 있음이 어긋나지 않게). */
     private fun blankToNull(column: ViewColumn, value: JsonElement): JsonElement =
@@ -150,15 +163,27 @@ class ViewWriter @Inject constructor(
 
     /**
      * 액션 버튼(Phase 12c IX-07): [action]의 변경을 이 행에 차례로 적용한다. 날짜 연산은 변경마다 그 순간 값에서 계산하고, 변경들은 같은 묶음 번호를 달고
-     * 위젯 즉시 동작처럼 [UNDO_WINDOW_MS] 뒤에 보내져 그 안에 되돌릴 수 있다(변경마다 한 트랜잭션이라 일부만 적용될 수 있다). 모두 적용됐을 때만 true.
+     * 위젯 즉시 동작처럼 [UNDO_WINDOW_MS] 뒤에 보내져 그 안에 되돌릴 수 있다. 하나라도 적용할 수 없으면(없는 행·속성, 맞지 않는 값) 아무것도 쓰지 않고 false다
+     * (다시 눌렀을 때 '하루 뒤로' 같은 상대 변경이 두 번 먹지 않게 먼저 모두 확인한다).
      */
     suspend fun applyAction(viewId: String, pageId: String, action: ViewAction): Boolean {
+        if (!canApply(viewId, pageId, action)) return false
         val batch = clock.millis()
         val today = LocalDate.now(clock.withZone(APP_ZONE))
         return action.changes.map { step ->
             val types = if (step.op == ActionOp.SET) ViewColumn.WRITABLE_TYPES.toTypedArray() else arrayOf("date")
             change(viewId, pageId, step.propId, *types, sendDelayMs = UNDO_WINDOW_MS, batchId = batch) { column, current, _ -> actionValue(step, column, current, today) }
         }.all { it }
+    }
+
+    /** 액션의 모든 변경이 이 행에 적용될 수 있는가: 행과 속성이 있고, 종류가 맞고, 쓸 값이 열에 맞는다. */
+    private suspend fun canApply(viewId: String, pageId: String, action: ViewAction): Boolean {
+        val columns = ViewJson.columns(dao.snapshot(viewId)?.columnInfo.orEmpty())
+        if (dao.row(viewId, pageId) == null) return false
+        return action.changes.all { step ->
+            val column = columns.firstOrNull { it.id == step.propId } ?: return@all false
+            if (step.op == ActionOp.SET) column.writable && setValueOf(column, step.value)?.let(column::accepts) == true else column.type == "date"
+        }
     }
 
     private fun actionValue(change: ActionChange, column: ViewColumn, current: JsonElement?, today: LocalDate): JsonElement? = when (change.op) {
@@ -170,7 +195,7 @@ class ViewWriter @Inject constructor(
     /** 액션의 글자 값을 열 종류에 맞는 JSON으로(체크박스 true/false, 숫자, 그 밖은 글자·옵션 ID). 숫자가 아닌 숫자 글자는 null. */
     private fun setValueOf(column: ViewColumn, text: String): JsonElement? = when (column.type) {
         "checkbox" -> JsonPrimitive(text == "true")
-        "number" -> text.toDoubleOrNull()?.let(::JsonPrimitive)
+        "number" -> ViewActions.parseNumber(text)?.let(::JsonPrimitive)
         else -> JsonPrimitive(text)
     }
 
@@ -241,18 +266,19 @@ class ViewWriter @Inject constructor(
     suspend fun undo(viewId: String): Int = undoPending(viewId).takeIf { it > 0 } ?: undoSent(viewId)
 
     /**
-     * 이미 보낸 변경 되돌리기(Phase 12c IX-05 후반): 가장 최근에 보낸 한 묶음(같은 액션이 만든 쓰기들, 묶음이 아니면 쓰기 하나)의 각 칸에 **반대 쓰기**를 쌓는다.
-     * 칸이 아직 보낸 값일 때만 되돌린다(그 뒤에 또 바꿨다면 건드리지 않는다). 기준값은 보낸 값이라 처리기가 보내기 직전에 노션 값과 견주어,
-     * 그 사이 노션에서 바뀌었으면 충돌로 기록하고 노션 값을 남긴다. 비울 수 없는 상태 칸은 이전 값이 없으면 건너뛴다. 되돌린 칸 수를 돌려준다.
+     * 이미 보낸 변경 되돌리기(Phase 12c IX-05 후반): 가장 최근에 보낸 한 묶음(같은 액션·같은 시트 저장이 만든 쓰기들, 묶음이 아니면 쓰기 하나)의 각 칸에 **반대 쓰기**를 쌓는다.
+     * 칸이 아직 보낸 값인 기록만 대상이다(그 뒤에 또 바꿨다면 건드리지 않는다, 위젯 줄이 세는 것과 같다). 기준값은 보낸 값이라 처리기가 보내기 직전에 노션 값과 견주어,
+     * 그 사이 노션에서 바뀌었으면 충돌로 기록하고 노션 값을 남긴다. 비울 수 없는 상태 칸은 이전 값이 없으면 건너뛴다. 되돌리는 쓰기는 [UNDO_BATCH_ID]라 다시 기록되지 않는다
+     * (다시 되돌리기로 이어지지 않는다). 되돌린 칸 수를 돌려준다.
      * shortcut: 노션 자동화가 이 변경 때문에 만든 부수 효과(다른 속성)는 되돌리지 못한다.
      */
     suspend fun undoSent(viewId: String): Int {
-        val recent = dao.sentSince(viewId, clock.millis() - SENT_UNDO_WINDOW_MS)
+        val recent = dao.sentSince(viewId, clock.millis() - SENT_UNDO_WINDOW_MS).filter { it.holdsIn(dao.row(viewId, it.pageId)) }
         val newest = recent.firstOrNull() ?: return 0
         val batch = recent.filter { if (newest.batchId != 0L) it.batchId == newest.batchId else it.id == newest.id }
         val undone = batch.count { sent ->
             val prior = ViewJson.parseValue(sent.priorValue) ?: return@count false
-            change(viewId, sent.pageId, sent.propId, sent.propType) { column, current, _ ->
+            change(viewId, sent.pageId, sent.propId, sent.propType, batchId = UNDO_BATCH_ID) { column, current, _ ->
                 prior.takeIf { ViewJson.valueText(current) == sent.sentValue && column.accepts(it) }
             }
         }
@@ -271,7 +297,14 @@ class ViewWriter @Inject constructor(
 
         /** 보낸 뒤에도 '보낸 변경 되돌리기'를 줄 시간(2분, Phase 12c). 처리기는 이보다 오래된 보낸 기록을 지운다. */
         const val SENT_UNDO_WINDOW_MS = 120_000L
+
+        /** 보낸 변경을 되돌리는 쓰기가 다는 묶음 번호. 처리기는 이 쓰기를 보낸 기록에 남기지 않는다. */
+        const val UNDO_BATCH_ID = -1L
     }
 }
 
 private val BLANK_IS_EMPTY = setOf("url", "email", "phone_number")
+
+/** 보낸 바꿈의 칸이 [row]에서 아직 보낸 값인가(그 뒤에 또 바뀌지 않았나). 행이 없으면 false. 위젯 줄과 [ViewWriter.undoSent]가 같은 판정을 쓴다. */
+internal fun SentWriteEntity.holdsIn(row: ViewRowEntity?): Boolean =
+    row != null && ViewJson.valueText(ViewJson.typed(row.typed)[propId]) == sentValue

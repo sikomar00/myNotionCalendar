@@ -3,9 +3,7 @@ package com.ysdoing.notioncal.core.data.view
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalTime
@@ -61,8 +59,8 @@ class TypedDateTest {
         assertEquals(LocalDate.of(2026, 11, 4), TypedDate("2026-11-04T09:00:00.000$seoul").startDay())
         assertEquals(LocalDate.of(2026, 11, 4), TypedDate("2026-11-04").startDay())
         val timed = TypedDate("2026-11-04T09:30:00.000$seoul", "2026-11-04T11:00:00.000Z")
-        assertEquals(listOf(true, LocalTime.of(9, 30), LocalTime.of(11, 0)), listOf(timed.isTimed, timed.startTime(), timed.endTime()))
-        assertEquals(listOf(false, null, null), TypedDate("2026-11-04", "2026-11-06").let { listOf(it.isTimed, it.startTime(), it.endTime()) })
+        assertEquals(listOf(LocalTime.of(9, 30), LocalTime.of(11, 0)), listOf(timed.startTime(), timed.endTime()))
+        assertEquals(listOf(null, null), TypedDate("2026-11-04", "2026-11-06").let { listOf(it.startTime(), it.endTime()) })
         assertEquals(LocalTime.of(9, 0), TypedDate("2026-11-04T09:00:00").startTime()) // 오프셋 없는 글자(시간대는 따로)
     }
 
@@ -103,7 +101,7 @@ class TypedDateTest {
         assertEquals(TypedDate("2026-11-04"), TypedDate("2026-11-04T09:00:00.000$seoul", "2026-11-04T10:00:00.000$seoul", "Asia/Seoul").asAllDay())
         assertEquals(TypedDate("2026-11-04", "2026-11-06"), TypedDate("2026-11-04T09:00:00.000$seoul", "2026-11-06T18:00:00.000$seoul").asAllDay())
         assertEquals(TypedDate("2026-11-04", "2026-11-06"), TypedDate("2026-11-04", "2026-11-06").asAllDay()) // 이미 종일이면 그대로
-        assertFalse(TypedDate("2026-11-04T09:00:00.000$seoul").asAllDay().isTimed)
+        assertNull(TypedDate("2026-11-04T09:00:00.000$seoul").asAllDay().startTime())
     }
 
     // --- 며칠씩 옮기기(IX-07 '내일로')
@@ -130,13 +128,5 @@ class TypedDateTest {
         assertEquals("2026-11-04", TypedDate("2026-11-04").shiftedDays(0).start)
         assertEquals("2026-11-11", TypedDate("2026-11-04T23:30:00.000$seoul").shiftedDays(7).start.substringBefore('T')) // 자정 직전 시각도 날짜만 옮겨 시각이 밀리지 않는다
         assertEquals("23:30", TypedDate("2026-11-04T23:30:00.000$seoul").shiftedDays(7).startTime().toString())
-    }
-
-    @Test
-    fun todayIsTheAppZonesDateAsAnAllDayValue() {
-        val today = TypedDate.today()
-        assertFalse(today.isTimed)
-        assertNull(today.end)
-        assertTrue(today.startDay() == java.time.LocalDate.now(com.ysdoing.notioncal.core.data.APP_ZONE))
     }
 }

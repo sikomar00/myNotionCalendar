@@ -124,7 +124,7 @@ private fun TodayRow(board: ViewBoard, event: CalendarEvent, today: LocalDate, l
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
         Row(
             GlanceModifier.fillMaxWidth().height(look.m.tableRow).tile(look.palette).padding(horizontal = 6.dp)
-                .clickable(actionStartActivity(viewRowIntent(context, board.viewId, event.pageId))).semantics { testTag = "calendarToday" },
+                .clickable(actionStartActivity(viewRowIntent(context, board.viewId, event.pageId, look.actionWidgetId))).semantics { testTag = "calendarToday" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(GlanceModifier.size(6.dp).cornerRadius(3.dp).background(ColorProvider(Color(NotionColors.argb(event.colorHex))))) {}
