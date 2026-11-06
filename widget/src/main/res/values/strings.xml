@@ -163,6 +163,7 @@
     <string name="layout_tile_period_month">이번 달</string>
     <string name="layout_tile_view_default">보기</string>
     <string name="layout_tile_prop_default">속성</string>
+    <string name="view_row_action_description">%1$s, 이 행에 적용</string>
     <string name="layout_donut_by">%1$s별</string>
     <string name="layout_tile_form_kind">종류</string>
     <string name="layout_tile_kind_value">값</string>

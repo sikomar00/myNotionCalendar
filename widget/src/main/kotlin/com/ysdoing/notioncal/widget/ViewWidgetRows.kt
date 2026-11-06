@@ -36,6 +36,7 @@ import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.data.view.ViewAction
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewChoice
 import com.ysdoing.notioncal.core.data.view.ViewColumn
@@ -67,6 +68,10 @@ internal class ViewLook(
     val palette: WidgetPalette,
     val numberStep: Double = 1.0,
     val stepNumbers: Boolean = false,
+    /** 이 보기에 액션 버튼이 있으면 그 위젯 번호(행 시트가 목록을 읽는다), 없으면 0. */
+    val actionWidgetId: Int = 0,
+    /** 행 옆에 둘 첫 액션(2×2보다 넓고 액션이 있을 때만). */
+    val rowAction: ViewAction? = null,
     private val leaving: Boolean = false,
 ) {
     // IX-06 필터에서 빠지는 행은 연한 색 + 취소선이다(색만이 아니라 취소선으로도 구분, A11Y-03).
@@ -78,7 +83,7 @@ internal class ViewLook(
     val pillSp = m.subSp * m.spFactor
 
     /** 같은 설정의 '빠지는 중' 모양. */
-    fun asLeaving() = ViewLook(m, palette, numberStep, stepNumbers, leaving = true)
+    fun asLeaving() = ViewLook(m, palette, numberStep, stepNumbers, actionWidgetId, rowAction, leaving = true)
 }
 
 internal enum class StatusTone { NEUTRAL, ACTIVE, DONE }
@@ -120,7 +125,8 @@ internal fun rowAction(row: ViewRow): Action? = row.url.takeIf { it.isNotBlank()
 }
 
 /** 행을 누르면 그 행의 편집 시트를 연다(ED-01). 주소가 없는 행도 고칠 수 있다. */
-internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow): Action = actionStartActivity(viewRowIntent(context, viewId, row.pageId))
+internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow, appWidgetId: Int = 0): Action =
+    actionStartActivity(viewRowIntent(context, viewId, row.pageId, appWidgetId))
 
 /**
  * [tableColumns]가 null이면 목록(제목 + 둘째 줄), 아니면 그 열 수의 표. 크기 단계의 밀도표대로 [cap]행까지만 그리고, 넘으면(또는 노션에 행이 더 있으면)
@@ -130,7 +136,7 @@ internal fun rowSheetAction(context: Context, viewId: String, row: ViewRow): Act
 internal fun ViewRows(board: ViewBoard, tableColumns: Int?, cap: Int, look: ViewLook, staticRows: Boolean, paneHeight: Dp? = null) {
     // 눌러 바꿀 칸이 보이면(보이지 않는 그룹·필터 열은 세지 않는다) 행을 [TAP_ROW_MIN] 이상으로 높인다. 숫자 − + 는 표에서만 그려진다. 보드 단위로 한 번만 정한다.
     val tall = board.columns.indices.any { board.tappableAt(it) != null } ||
-        (tableColumns != null && look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" })
+        (tableColumns != null && look.stepNumbers && board.columns.indices.any { board.columnAt(it)?.type == "number" }) || look.rowAction != null
     // 탭·섹션의 한 칸이면 그 칸의 높이에 들어가는 행 수로도 줄인다(나머지는 '더 보기'). 칸이 낮아 0행이어도 목록이라 밀어 볼 수 있으니 한 행은 둔다.
     val shown = board.rows.take(paneHeight?.let { maxOf(1, minOf(cap, paneRowLimit(it, look.m, tableColumns != null, tall))) } ?: cap)
     if (staticRows) {
@@ -159,22 +165,23 @@ private fun ViewRowItem(board: ViewBoard, row: ViewRow, tableColumns: Int?, look
     val height = if (tall) maxOf(base, TAP_ROW_MIN) else base
     val leaving = board.isLeaving(row)
     val rowLook = if (leaving) look.asLeaving() else look
-    val tile = rowModifier(board.viewId, row, height, look.palette, if (leaving) "viewRowLeaving" else "viewRow")
+    val tile = rowModifier(board.viewId, row, height, look, if (leaving) "viewRowLeaving" else "viewRow")
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
         if (tableColumns != null) ViewTableRow(board, row, tableColumns, tile, height, rowLook) else ViewListRow(board, row, tile, height, rowLook)
     }
 }
 
 @Composable
-private fun rowModifier(viewId: String, row: ViewRow, height: Dp, palette: WidgetPalette, tag: String): GlanceModifier {
-    val base = GlanceModifier.fillMaxWidth().height(height).tile(palette)
-    return base.clickable(rowSheetAction(LocalContext.current, viewId, row)).padding(horizontal = TILE_PADDING_H).semantics { testTag = tag }
+private fun rowModifier(viewId: String, row: ViewRow, height: Dp, look: ViewLook, tag: String): GlanceModifier {
+    val base = GlanceModifier.fillMaxWidth().height(height).tile(look.palette)
+    return base.clickable(rowSheetAction(LocalContext.current, viewId, row, look.actionWidgetId)).padding(horizontal = TILE_PADDING_H).semantics { testTag = tag }
 }
 
 @Composable
 private fun ViewTableRow(board: ViewBoard, row: ViewRow, columns: Int, modifier: GlanceModifier, height: Dp, look: ViewLook) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         for (i in 0 until columns) ViewCell(board, row, i, look, GlanceModifier.defaultWeight(), height)
+        RowActionChip(look, board.viewId, row, height)
     }
 }
 
@@ -192,6 +199,7 @@ private fun ViewListRow(board: ViewBoard, row: ViewRow, modifier: GlanceModifier
             Text(row.cells.firstOrNull().orEmpty(), style = look.title, maxLines = 1)
             if (second != null) ViewCell(board, row, second, look, GlanceModifier.fillMaxWidth(), height / 2, secondLine = true)
         }
+        RowActionChip(look, board.viewId, row, height)
     }
 }
 

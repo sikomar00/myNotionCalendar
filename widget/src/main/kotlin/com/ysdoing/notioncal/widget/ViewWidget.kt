@@ -29,10 +29,12 @@ import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
+import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
@@ -42,6 +44,7 @@ import androidx.glance.text.TextStyle
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.ViewActions
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.ViewPreset
@@ -207,14 +210,16 @@ internal fun presetFrom(data: Intent?): ViewPreset? {
 
 /**
  * 행 편집 시트 열기(ED-01, 행 탭). 행마다 다른 data URI를 달아 PendingIntent가 위젯의 행끼리 서로 덮지 않게 한다
- * (:widget은 :feature에 의존하지 않아 action 문자열로 연다).
+ * (:widget은 :feature에 의존하지 않아 action 문자열로 연다). [appWidgetId]는 이 보기에 액션 버튼이 있을 때만 싣는다(시트가 위젯 설정에서
+ * 액션을 읽는다). 위젯마다 액션이 달라 URI에도 넣어 두 위젯의 같은 행이 서로의 PendingIntent를 덮지 않게 한다.
  */
-internal fun viewRowIntent(context: Context, viewId: String, pageId: String): Intent =
+internal fun viewRowIntent(context: Context, viewId: String, pageId: String, appWidgetId: Int = 0): Intent =
     Intent(AppIntents.ACTION_VIEW_ROW)
         .setPackage(context.packageName)
-        .setData("notioncal://view/row/$viewId/$pageId".toUri())
+        .setData((if (appWidgetId > 0) "notioncal://view/row/$viewId/$pageId?widget=$appWidgetId" else "notioncal://view/row/$viewId/$pageId").toUri())
         .putExtra(AppIntents.EXTRA_VIEW_ID, viewId)
         .putExtra(AppIntents.EXTRA_PAGE_ID, pageId)
+        .apply { if (appWidgetId > 0) putExtra(AppIntents.EXTRA_APPWIDGET_ID, appWidgetId) }
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
 
 /** 선택 시트 열기(IX-02, 선택지 4개 이상 select 탭). 칸마다 다른 data URI를 달아 PendingIntent가 서로 덮지 않게 한다. */
@@ -323,7 +328,11 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 차트 보기: 그릴 수 있으면 차트로(Phase 12b), 못 그리는 설정이면 한 줄 안내 뒤에 아래 표·목록으로 이어 그린다.
     if (board.type == "chart" && ChartOrNote(board, size, spec, ViewLook(m, palette), lines + presetLinesHeight(presets.size))) return
     // 숫자 − + 단계 버튼은 2×2보다 넓을 때만 둔다(좁으면 자리가 없어 행을 눌러 시트에서 고친다).
-    val look = ViewLook(m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT)
+    val actions = ViewActions.forView(ViewActions.parse(state.config.actionsJson), board.viewId)
+    val look = ViewLook(
+        m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT,
+        actionWidgetId = if (actions.isEmpty()) 0 else state.config.appWidgetId, rowAction = actions.firstOrNull()?.takeIf { step != SizeStep.COMPACT },
+    )
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
@@ -335,7 +344,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     }
     val columns = tableColumnCount(size.width, board.columns.size)
     val tableColumns = columns.takeIf { size.width >= TABLE_MIN_WIDTH && it > 1 }
-    if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette)
+    if (tableColumns != null) ViewTableHeader(board, tableColumns, m, palette, trailing = look.rowAction?.let { rowActionWidth(it, look) } ?: 0.dp)
     ViewRows(board, tableColumns, rowCap(step), look, spec.staticRows, paneHeight)
 }
 
@@ -366,7 +375,7 @@ internal fun ViewStatusLine(board: ViewBoard, appWidgetId: Int, nowMillis: Long,
 }
 
 @Composable
-private fun ViewTableHeader(board: ViewBoard, count: Int, m: ViewMetrics, palette: WidgetPalette) {
+private fun ViewTableHeader(board: ViewBoard, count: Int, m: ViewMetrics, palette: WidgetPalette, trailing: Dp = 0.dp) {
     Row(GlanceModifier.fillMaxWidth().height(m.tableHeader).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         board.columns.take(count).forEachIndexed { i, name ->
             val isCheck = board.tappableAt(i)?.type == "checkbox"
@@ -377,6 +386,7 @@ private fun ViewTableHeader(board: ViewBoard, count: Int, m: ViewMetrics, palett
                 maxLines = 1,
             )
         }
+        if (trailing > 0.dp) Spacer(GlanceModifier.width(trailing)) // 행 옆 액션 칩 자리(열 머리와 칸이 어긋나지 않게)
     }
 }
 
