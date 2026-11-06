@@ -100,11 +100,7 @@ private fun ViewList(result: ViewListResult.Ok, busyId: String?, onRegister: (Vi
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(view.name.ifBlank { stringResource(R.string.add_view_untitled) })
-                val note = when {
-                    !view.supported -> stringResource(R.string.add_view_unsupported)
-                    view.shownAsList -> stringResource(R.string.add_view_as_list, view.type.orEmpty())
-                    else -> view.type.orEmpty()
-                }
+                val note = if (view.supported) view.type.orEmpty() else stringResource(R.string.add_view_unsupported)
                 Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             when {

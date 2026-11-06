@@ -177,8 +177,8 @@ class ViewSync @Inject constructor(
         val columns = visibleColumns(configured, titleName)
         // group_by는 표·목록도 갖지만 열로 나눠 그리는 것은 보드뿐이다. 그 밖의 보기에 숨은 선택 열을 넣으면 눌림 열로 세어져 모든 행이 높아진다.
         val groupConfig = view.configuration?.raw?.takeIf { view.type == "board" }
-        // 캘린더는 date_property_id 속성(숨겨도)의 날짜로 월 격자를 그린다.
-        val dateConfig = view.configuration?.raw?.takeIf { view.type == "calendar" }
+        // 캘린더·타임라인은 date_property_id 속성(숨겨도)의 날짜로 월 격자·막대를 그린다.
+        val dateConfig = view.configuration?.raw?.takeIf { view.type == "calendar" || view.type == "timeline" }
         // 차트는 x축·y축·값 속성(숨겨도)의 값으로 폰에서 묶고 집계한다.
         val chartConfig = view.configuration?.raw?.takeIf { view.type == "chart" }
         // 보기 필터(보기 필터 + 빠른 필터)는 폰에서 항목이 필터에서 빠지는지 판정하려고 저장한다(IX-06). 필터가 가리키는 속성은 숨겨져 있어도 값을 남긴다.

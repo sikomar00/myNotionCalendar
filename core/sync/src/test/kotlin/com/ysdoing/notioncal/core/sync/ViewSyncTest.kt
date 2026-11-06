@@ -436,6 +436,23 @@ class ViewSyncTest {
     }
 
     @Test
+    fun aTimelineViewKeepsItsHiddenDatePropertyLikeACalendarDoes() = runTest {
+        schema = Json { ignoreUnknownKeys = true }.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{
+                "Name":{"id":"title","name":"Name","type":"title"},
+                "When":{"id":"wh","name":"When","type":"date"}}}""",
+        )
+        viewProperties = listOf(ViewPropertyDto("title", "Name"))
+        viewType = "timeline"
+        viewRaw = Json.parseToJsonElement("""{"type":"timeline","date_property_id":"wh","preference":{"zoom_level":"week"}}""").jsonObject
+        register("v1")
+        sync().syncAll()
+        val columns = ViewJson.columns(db.viewDao().all().single().columnInfo)
+        assertEquals(listOf("Name" to "", "When" to ViewColumn.ROLE_DATE), columns.map { it.name to it.role }) // 숨겨져도 값이 남는 열
+    }
+
+    @Test
     fun theDatePropertyIdIsTaggedOnAVisibleColumnAddedWhenHiddenAndIgnoredWhenNotADate() {
         val schema = Json { ignoreUnknownKeys = true }.decodeFromString(
             DataSourceDto.serializer(),
