@@ -1,5 +1,8 @@
 package com.ysdoing.notioncal.core.sync
 
+import com.ysdoing.notioncal.core.data.view.CoverKind
+import com.ysdoing.notioncal.core.data.view.GalleryConfig
+import com.ysdoing.notioncal.core.notion.dto.PageDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -41,6 +44,49 @@ class ViewExtrasTest {
         assertEquals("", coverUrlOf(props("""{"Title":{"type":"title","title":[]}}""")))
         // http 주소는 받지 않는다(https만)
         assertEquals("", coverUrlOf(props("""{"cover":{"type":"files","files":[{"type":"external","external":{"url":"http://x.example/a.jpg"}}]}}""")))
+    }
+
+    // --- Phase 12d 갤러리: 보기가 정한 표지 출처 → 페이지 표지 → 휴리스틱
+
+    private fun page(properties: String, cover: String? = null) = PageDto(
+        id = "p1", lastEditedTime = "2026-11-06T00:00:00.000Z",
+        properties = Json.parseToJsonElement(properties).jsonObject,
+        cover = cover?.let { Json.parseToJsonElement(it).jsonObject },
+    )
+
+    private val files = """{"사진":{"id":"cv","type":"files","files":[{"type":"external","external":{"url":"https://x.example/prop.jpg"}}]},
+        "표지":{"id":"other","type":"files","files":[{"type":"external","external":{"url":"https://x.example/heuristic.jpg"}}]}}"""
+    private val pageCover = """{"type":"external","external":{"url":"https://x.example/page.jpg"}}"""
+
+    @Test
+    fun aGalleryPropertyCoverBeatsThePageCoverAndTheHeuristicAndIsFoundByPropertyId() {
+        val gallery = GalleryConfig(CoverKind.PROPERTY, "cv")
+        assertEquals("https://x.example/prop.jpg", coverUrlOf(page(files, pageCover), gallery))
+    }
+
+    @Test
+    fun withoutThePropertyFileTheSourcesFallBackInOrder() {
+        val gallery = GalleryConfig(CoverKind.PROPERTY, "cv")
+        val noProp = """{"표지":{"id":"other","type":"files","files":[{"type":"external","external":{"url":"https://x.example/heuristic.jpg"}}]}}"""
+        assertEquals("https://x.example/page.jpg", coverUrlOf(page(noProp, pageCover), gallery)) // 속성에 파일 없음 → 페이지 표지
+        assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(noProp), gallery)) // 페이지 표지도 없음 → 휴리스틱
+        assertEquals("", coverUrlOf(page("""{"Name":{"type":"title","title":[]}}"""), gallery))
+    }
+
+    @Test
+    fun theAutoAndPageCoverSourcesUseThePageCoverFirstAndNoneMeansNoCover() {
+        assertEquals("https://x.example/page.jpg", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.AUTO)))
+        assertEquals("https://x.example/page.jpg", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.PAGE_COVER)))
+        assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(files), GalleryConfig(CoverKind.AUTO))) // 페이지 표지가 없으면 휴리스틱(이름에 표지가 든 파일 속성)
+        assertEquals("", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.NONE))) // 노션에서 표지를 껐다
+    }
+
+    @Test
+    fun aNotionHostedPageCoverIsReadAndAnInsecureOneIsNot() {
+        val hosted = """{"type":"file","file":{"url":"https://prod-files.example/c.png?X-Amz-Expires=3600","expiry_time":"2026-11-06T06:00:00Z"}}"""
+        assertEquals("https://prod-files.example/c.png?X-Amz-Expires=3600", coverUrlOf(page("{}", hosted), GalleryConfig()))
+        assertEquals("", coverUrlOf(page("{}", """{"type":"external","external":{"url":"http://x.example/c.jpg"}}"""), GalleryConfig()))
+        assertEquals("", coverUrlOf(page("{}", """{"type":"emoji"}"""), GalleryConfig()))
     }
 
     @Test

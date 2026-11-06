@@ -142,6 +142,8 @@ data class PageDto(
     val properties: JsonObject = JsonObject(emptyMap()),
     /** 소속 data source(DD-01: 캐시에 없는 고정 일정을 받을 때 어느 DB 매핑을 쓸지). */
     val parent: PageParentDto? = null,
+    /** 노션 페이지 표지(`{"type":"external"|"file", …}`, 없으면 null). 갤러리 카드의 표지 출처 중 하나다(Phase 12d). */
+    val cover: JsonObject? = null,
 )
 
 @Serializable

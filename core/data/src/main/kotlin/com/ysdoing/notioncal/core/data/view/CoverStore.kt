@@ -81,11 +81,17 @@ class CoverStore(
     private fun failureMarker(url: String) = File(dir, "${keyOf(url)}.fail")
 
     companion object {
-        /** 표지 파일 전체 합계 상한(한 장 20~40KB라 수백 장 분량). */
-        const val MAX_TOTAL_BYTES = 8L * 1024 * 1024
+        /** 표지 파일 전체 합계 상한(PF-12 50MB, 한 장 20~40KB라 천 장 넘는 분량). 넘으면 오래된 것부터 지운다. */
+        const val MAX_TOTAL_BYTES = 50L * 1024 * 1024
 
         /** 한 보기에서 받는 표지 수 상한. 책 위젯이 한꺼번에 그리는 수와 같다(위젯이 그리지 않는 표지는 받지 않는다). */
         const val MAX_COVERS_PER_VIEW = 6
+
+        /** 갤러리 보기에서 받는 표지 수 상한(Phase 12d, 3×3 카드). */
+        const val MAX_GALLERY_COVERS = 9
+
+        /** [viewType] 보기에서 받을 표지 수: 갤러리는 [MAX_GALLERY_COVERS], 그 밖은 [MAX_COVERS_PER_VIEW]. */
+        fun coverLimit(viewType: String?): Int = if (viewType == "gallery") MAX_GALLERY_COVERS else MAX_COVERS_PER_VIEW
 
         const val PRUNE_GRACE_MILLIS = 10 * 60 * 1000L
         const val FAILURE_RETRY_MILLIS = 6 * 60 * 60 * 1000L

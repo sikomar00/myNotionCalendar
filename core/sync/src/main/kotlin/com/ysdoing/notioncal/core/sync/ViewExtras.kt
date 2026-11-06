@@ -1,8 +1,11 @@
 package com.ysdoing.notioncal.core.sync
 
+import com.ysdoing.notioncal.core.data.view.CoverKind
+import com.ysdoing.notioncal.core.data.view.GalleryConfig
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
+import com.ysdoing.notioncal.core.notion.dto.PageDto
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -31,9 +34,28 @@ internal fun coverUrlOf(properties: Map<String, JsonElement>): String {
     return chosen?.second.orEmpty()
 }
 
-private fun firstFileUrl(files: JsonElement?): String {
-    val first = (files as? JsonArray)?.firstOrNull() as? JsonObject ?: return ""
-    val holder = (first[first.type()] as? JsonObject) ?: return ""
+/**
+ * 갤러리 보기의 행 표지 주소(Phase 12d VR-GAL): 보기 설정이 고른 파일 속성 → 노션 페이지 표지 → 기존 휴리스틱([coverUrlOf]) 순이다.
+ * 설정이 '표지 없음'이면 빈 글자다. 앞 출처에 파일이 없거나 https가 아니면 다음 출처로 넘어간다.
+ */
+internal fun coverUrlOf(page: PageDto, gallery: GalleryConfig): String {
+    if (gallery.cover == CoverKind.NONE) return ""
+    val byProperty = if (gallery.cover == CoverKind.PROPERTY) propertyFileUrl(page.properties, gallery.coverProp) else ""
+    return byProperty.ifEmpty { holderUrl(page.cover) }.ifEmpty { coverUrlOf(page.properties) }
+}
+
+/** 속성 ID([propertyId])가 같은 파일 속성의 첫 파일 주소. 페이지 속성 값에는 `id`가 들어 있어 스키마 없이 찾는다. */
+private fun propertyFileUrl(properties: Map<String, JsonElement>, propertyId: String): String {
+    val value = properties.values.firstOrNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull == propertyId } as? JsonObject ?: return ""
+    return if (value.type() == "files") firstFileUrl(value["files"]) else ""
+}
+
+private fun firstFileUrl(files: JsonElement?): String = holderUrl((files as? JsonArray)?.firstOrNull() as? JsonObject)
+
+/** `{"type":"external","external":{"url":…}}`꼴(파일 항목·페이지 표지 공통)에서 https 주소를 꺼낸다. 아니면 빈 글자. */
+private fun holderUrl(item: JsonObject?): String {
+    item ?: return ""
+    val holder = (item[item.type()] as? JsonObject) ?: return ""
     return (holder["url"] as? JsonPrimitive)?.contentOrNull.orEmpty().takeIf { it.startsWith("https://") }.orEmpty()
 }
 

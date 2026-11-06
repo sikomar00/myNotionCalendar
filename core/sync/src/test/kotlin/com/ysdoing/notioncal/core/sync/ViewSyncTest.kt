@@ -697,6 +697,52 @@ class ViewSyncTest {
         assertEquals(0f, rows[1].progress)
     }
 
+    private fun galleryPage(id: String, cover: String?, propertyCover: String?) = PageDto(
+        id = id, url = "https://notion.so/$id", lastEditedTime = "2026-11-06T00:00:00.000Z",
+        properties = Json.parseToJsonElement(
+            """{"Name":{"type":"title","title":[{"plain_text":"카드 $id"}]},
+                "사진":{"id":"cv","type":"files","files":[${if (propertyCover == null) "" else """{"type":"external","external":{"url":"$propertyCover"}}"""}]}}""",
+        ).jsonObject,
+        cover = cover?.let { Json.parseToJsonElement("""{"type":"external","external":{"url":"$it"}}""").jsonObject },
+    )
+
+    @Test
+    fun aGalleryViewReadsTheCoverFromItsConfiguredPropertyThenThePageCover() = runTest {
+        viewType = "gallery"
+        viewRaw = Json.parseToJsonElement("""{"type":"gallery","cover":{"type":"property","property_id":"cv"}}""").jsonObject
+        register("g1")
+        rowPages = listOf(galleryPage("c1", "https://img.example/page1.jpg", "https://img.example/prop1.jpg"), galleryPage("c2", "https://img.example/page2.jpg", null))
+        sync().syncAll()
+        val rows = db.viewDao().observeRows("g1").first()
+        assertEquals(listOf("https://img.example/prop1.jpg", "https://img.example/page2.jpg"), rows.map { it.coverUrl })
+    }
+
+    @Test
+    fun aNonGalleryViewKeepsTheFilePropertyHeuristicAndIgnoresThePageCover() = runTest {
+        viewType = "table"
+        register("t1")
+        rowPages = listOf(galleryPage("c1", "https://img.example/page1.jpg", "https://img.example/prop1.jpg"), galleryPage("c2", "https://img.example/page2.jpg", null))
+        sync().syncAll()
+        assertEquals(listOf("https://img.example/prop1.jpg", ""), db.viewDao().observeRows("t1").first().map { it.coverUrl })
+    }
+
+    @Test
+    fun aGalleryDownloadsUpToNineCoversWhileOtherViewsStopAtSix() = runTest {
+        coverBytes = byteArrayOf(1, 2, 3)
+        viewType = "gallery"
+        register("g1")
+        rowPages = (1..12).map { galleryPage("c$it", "https://img.example/$it.jpg", null) }
+        sync().syncAll()
+        assertEquals((1..9).map { "https://img.example/$it.jpg" }.toSet(), coverRequests.toSet())
+        coverRequests.clear()
+        db.viewDao().remove("g1")
+        viewType = "table"
+        register("t1")
+        rowPages = (1..12).map { galleryPage("c$it", null, "https://img.example/t$it.jpg") }
+        sync().syncAll()
+        assertEquals(6, coverRequests.size)
+    }
+
     private val bookSchema = Json { ignoreUnknownKeys = true }.decodeFromString(
         DataSourceDto.serializer(),
         """{"id":"ds","properties":{

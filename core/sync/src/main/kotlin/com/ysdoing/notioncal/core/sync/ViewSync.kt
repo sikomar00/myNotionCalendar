@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.SourceSchemaEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.view.CoverStore
+import com.ysdoing.notioncal.core.data.view.GalleryConfig
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewFilter
 import com.ysdoing.notioncal.core.data.view.ViewJson
@@ -79,7 +80,8 @@ class ViewSync @Inject constructor(
 
     /** 저장된 행의 앞쪽 표지를 받는다. 시간이 [COVER_PHASE_MILLIS]를 넘으면 그만두고 나머지는 다음 동기화에 맡긴다. 새로 받은 표지가 있으면 true. */
     private suspend fun fetchCovers(viewIds: Collection<String>): Boolean {
-        val urls = viewIds.flatMap { dao.coverUrls(it, CoverStore.MAX_COVERS_PER_VIEW) }
+        val types = dao.all().associate { it.viewId to it.viewType }
+        val urls = viewIds.flatMap { dao.coverUrls(it, CoverStore.coverLimit(types[it])) }
         return withTimeoutOrNull(COVER_PHASE_MILLIS) { covers.fetch(urls) } ?: false
     }
 
@@ -198,10 +200,12 @@ class ViewSync @Inject constructor(
             filterJson = filterJson,
             rowsComplete = !fetched.hasMore,
         )
+        // 갤러리는 보기가 정한 표지 출처(속성·페이지 표지)를 따르고, 책 위젯 같은 다른 보기는 파일 속성 휴리스틱만 쓴다.
+        val gallery = GalleryConfig.parse(view.configuration?.raw).takeIf { view.type == "gallery" }
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { name -> cellText(writable.firstOrNull { it.name == name }, page.properties[name] as? JsonObject) }
             val typed = writable.filter { it.writable }.associate { it.id to typedValue(it, page.properties[it.name] as? JsonObject) }
-            ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed), coverUrlOf(page.properties), progressOf(page.properties))
+            ViewRowEntity(registered.viewId, i, page.id, page.url, cells, ViewJson.encodeTyped(typed), gallery?.let { coverUrlOf(page, it) } ?: coverUrlOf(page.properties), progressOf(page.properties))
         }
         return meta to rows
     }

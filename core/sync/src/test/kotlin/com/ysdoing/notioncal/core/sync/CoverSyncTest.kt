@@ -244,6 +244,14 @@ class CoverSyncTest {
     }
 
     @Test
+    fun theDefaultCacheCapIsFiftyMegabytesAndGalleriesGetMoreCoversThanOtherViews() {
+        assertEquals(50L * 1024 * 1024, CoverStore.MAX_TOTAL_BYTES)
+        assertEquals(9, CoverStore.coverLimit("gallery"))
+        assertEquals(6, CoverStore.coverLimit("table"))
+        assertEquals(6, CoverStore.coverLimit(null))
+    }
+
+    @Test
     fun storeEnforcesTheTotalSizeCapDroppingOldestFirst() {
         val store = CoverStore(dir, maxTotalBytes = 2500, pruneGraceMillis = 0)
         listOf("1", "2", "3").forEachIndexed { i, id ->
