@@ -13,13 +13,14 @@ import javax.inject.Singleton
 
 /** 보기 하나. [type]이 null이면 설정을 읽지 못한 보기다(9-A: 일부 보기는 `GET /views/{id}`가 400). */
 data class ViewOption(val viewId: String, val name: String, val type: String?, val registered: Boolean) {
-    /** VW-05 table·list는 그대로, chart는 차트로, 나머지 지원 종류는 평평한 목록으로 보여 준다. */
+    /** VW-05 table·list는 그대로, chart·board·calendar·gallery는 각자의 그림으로(자리가 없으면 목록으로 대신), 나머지 지원 종류는 평평한 목록으로 보여 준다. */
     val supported: Boolean get() = type in SUPPORTED_TYPES
 
-    /** 노션의 보기 배치(보드 열·달력 칸 등)를 못 그리고 목록으로 보여 주는 종류. */
-    val shownAsList: Boolean get() = supported && type != "table" && type != "list" && type != "chart"
+    /** 노션의 보기 배치를 못 그리고 목록으로 보여 주는 종류(지금은 타임라인). */
+    val shownAsList: Boolean get() = supported && type !in DRAWN_TYPES
 
     private companion object {
+        val DRAWN_TYPES = setOf("table", "list", "chart", "board", "calendar", "gallery")
         val SUPPORTED_TYPES = setOf("table", "list", "board", "gallery", "timeline", "calendar", "chart")
     }
 }

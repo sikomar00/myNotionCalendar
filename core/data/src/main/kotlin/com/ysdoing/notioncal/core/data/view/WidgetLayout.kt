@@ -14,7 +14,13 @@ enum class LayoutMode(val limit: Int) {
 
 /** 배치의 항목 하나: 보기와, 탭 이름([label], 비면 보기 이름), 섹션 높이 비율([weight] 1~3). */
 @Serializable
-data class LayoutItem(val viewId: String, val label: String = "", val weight: Int = 1) {
+data class LayoutItem(
+    val viewId: String,
+    val label: String = "",
+    val weight: Int = 1,
+    /** 갤러리 카드가 별점(★) 글자로 그릴 속성 ID(Phase 12d RC-05 레시피가 정한다). 없으면 빈 글자. */
+    val ratingProp: String = "",
+) {
     /** 탭·섹션 머리에 쓸 이름. 이름 없는 보기도 노션에서 허용되니 마지막은 '보기'다. */
     fun title(viewName: String): String = label.ifBlank { viewName }.ifBlank { DEFAULT_TITLE }
 
@@ -116,7 +122,7 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
             val raw = runCatching { json.decodeFromJsonElement(serializer(), JsonObject(root - "tiles")) }.getOrNull() ?: return WidgetLayout()
             val seen = HashSet<String>()
             val items = raw.items
-                .map { it.copy(viewId = it.viewId.trim(), label = it.label.trim(), weight = it.weight.coerceIn(WEIGHT_RANGE)) }
+                .map { it.copy(viewId = it.viewId.trim(), label = it.label.trim(), weight = it.weight.coerceIn(WEIGHT_RANGE), ratingProp = it.ratingProp.trim()) }
                 .filter { it.viewId.isNotEmpty() && seen.add(it.viewId) }
             val tiles = (root["tiles"] as? JsonArray).orEmpty()
                 .mapNotNull { runCatching { json.decodeFromJsonElement(AggTile.serializer(), it) }.getOrNull()?.normalized() }

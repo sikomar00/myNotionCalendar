@@ -225,4 +225,16 @@ class WidgetLayoutTest {
         assertEquals(listOf("a", "b", "v1"), sections.boardIds())
         assertEquals(listOf("a", "b"), sections.withMode(LayoutMode.TABS).boardIds()) // 탭에서는 타일을 그리지 않으니 읽지도 않는다
     }
+
+    // --- Phase 12d: 갤러리 카드의 별점 속성은 배치 항목이 가진다
+
+    @Test
+    fun anItemsRatingPropRoundTripsDefaultsToEmptyAndSurvivesEdits() {
+        val layout = WidgetLayout(LayoutMode.SINGLE, listOf(LayoutItem("g1", ratingProp = " r "))).let { WidgetLayout.parse(WidgetLayout.encode(it)) }
+        assertEquals("r", layout.items.single().ratingProp) // 읽을 때 앞뒤 공백을 뗀다
+        assertEquals("", WidgetLayout.parse("""{"mode":"TABS","items":[{"viewId":"v1"}]}""").items.single().ratingProp) // 옛 JSON
+        val edited = WidgetLayout(LayoutMode.TABS, listOf(LayoutItem("a", ratingProp = "r"), LayoutItem("b"))).withLabel("a", "책").withWeight("a", 2).move("a", 1)
+        assertEquals(listOf("b", "a"), edited.items.map { it.viewId })
+        assertEquals("r", edited.items.first { it.viewId == "a" }.ratingProp)
+    }
 }

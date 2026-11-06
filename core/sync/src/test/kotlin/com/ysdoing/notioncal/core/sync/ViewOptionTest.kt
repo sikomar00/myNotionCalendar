@@ -23,11 +23,13 @@ class ViewOptionTest {
     }
 
     @Test
-    fun otherSupportedKindsAreShownAsList() {
-        listOf("board", "gallery", "timeline", "calendar").forEach {
+    fun boardCalendarAndGalleryHaveTheirOwnDrawingAndOnlyTheTimelineIsShownAsAList() {
+        listOf("board", "gallery", "calendar").forEach {
             assertEquals(true, option(it).supported)
-            assertEquals(true, option(it).shownAsList)
+            assertEquals(false, option(it).shownAsList)
         }
+        assertEquals(true, option("timeline").supported)
+        assertEquals(true, option("timeline").shownAsList)
     }
 
     @Test
