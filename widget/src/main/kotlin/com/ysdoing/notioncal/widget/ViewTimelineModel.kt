@@ -12,7 +12,6 @@ import com.ysdoing.notioncal.core.data.view.ViewBoard
 
 // Phase 12e VR-TML: 타임라인 보기를 막대 줄로 그린다. 이 파일은 순수 계산(창·줄 수)이고 그리기는 ViewTimelineBody.kt다.
 
-internal val TIMELINE_NAV_HEIGHT = 40.dp
 private val TIMELINE_ROW_GAP = 4.dp
 
 /** Glance Column 자식 10개 안: 이동 줄 + 날짜 눈금 + 막대 줄 7개 + 더 보기 = 10. */
@@ -51,7 +50,7 @@ internal fun timelineLayoutFor(board: ViewBoard, state: ViewWidgetState, size: D
     val total = pane.height ?: (size.height - VIEW_PADDING_V * 2)
     val body = paneBodyHeight(total, progressOf(board, size) != null, m, aboveHeight)
     val rowHeight = m.tableRow + TIMELINE_ROW_GAP
-    fun rowsFit(available: Dp): Int = minOf(TIMELINE_MAX_ROWS, ((available - TIMELINE_NAV_HEIGHT - m.tableHeader) / rowHeight).toInt())
+    fun rowsFit(available: Dp): Int = minOf(TIMELINE_MAX_ROWS, ((available - NAV_HEIGHT - m.tableHeader) / rowHeight).toInt())
     var rows = rowsFit(body)
     if (all.size > rows || !board.rowsComplete) rows = rowsFit(body - MORE_HEIGHT)
     if (rows < 1) return null

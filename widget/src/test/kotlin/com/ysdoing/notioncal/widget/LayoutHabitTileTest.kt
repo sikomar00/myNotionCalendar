@@ -9,6 +9,7 @@ import androidx.glance.appwidget.testing.unit.hasRunCallbackClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasTestTag
+import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.ysdoing.notioncal.core.data.WidgetConfig
@@ -21,6 +22,7 @@ import com.ysdoing.notioncal.core.data.view.AggPeriod
 import com.ysdoing.notioncal.core.data.view.AggTile
 import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.TileKind
+import com.ysdoing.notioncal.core.data.db.VIEW_ERROR_NOT_FOUND
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
@@ -163,11 +165,11 @@ class LayoutHabitTileTest {
         setAppWidgetSize(full)
         provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1", "c2"))), systemFontScale = 1f) }
         val todayCheck = hasRunCallbackClickAction<HabitCheckAction>(
-            actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PropKey to "c2", HabitCheckAction.DayKey to today.toEpochDay()),
+            actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PropKey to "c2", HabitCheckAction.DayKey to today.toEpochDay(), HabitCheckAction.DateKey to "d"),
         )
         onNode(hasContentDescriptionEqualTo("독서, 오늘, 안 함")).assert(todayCheck)
         val yesterday = hasRunCallbackClickAction<HabitCheckAction>(
-            actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PropKey to "c1", HabitCheckAction.DayKey to today.minusDays(1).toEpochDay()),
+            actionParametersOf(ViewCellAction.ViewKey to "v1", ViewCellAction.PropKey to "c1", HabitCheckAction.DayKey to today.minusDays(1).toEpochDay(), HabitCheckAction.DateKey to "d"),
         )
         onAllNodes(hasTestTag("layoutHabitCell"))[5].assert(yesterday) // 운동 줄의 마지막 지난날(어제)
     }
@@ -188,6 +190,36 @@ class LayoutHabitTileTest {
         provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1")), boards = mapOf("v1" to null), items = emptyList()), systemFontScale = 1f) }
         onNode(hasTestTag("layoutHabitNote")).assertExists()
         onAllNodes(hasTestTag("layoutHabitCell")).assertCountEquals(0)
+    }
+
+    @Test
+    fun aPartlyReceivedBoardSaysSoOnTheGridHeader() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(full)
+        // 100행 상한에 걸려 일부만 받았다: 못 받은 날은 비어 보이니 그렇다고 알린다(눌러서 같은 날 페이지가 또 생기지 않게 사용자가 알 수 있다).
+        val partial = mapOf("v1" to board().copy(rowsComplete = false))
+        provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1")), boards = partial), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("일부만 계산")).assertExists()
+        onAllNodes(hasTestTag("layoutHabitToday")).assertCountEquals(1)
+    }
+
+    @Test
+    fun aViewThatIsGoneOrUnsupportedSaysSoInsteadOfBlamingTheHabitProperty() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(full)
+        val gone = mapOf("v1" to board().copy(lastError = VIEW_ERROR_NOT_FOUND))
+        provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1")), boards = gone, items = emptyList()), systemFontScale = 1f) }
+        onNode(hasTestTag("layoutHabitNote")).assertExists()
+        onAllNodes(hasTextEqualTo("습관 속성을 찾을 수 없어요")).assertCountEquals(0)
+        onNode(hasTextEqualTo(context.getString(R.string.view_widget_not_found))).assertExists()
+    }
+
+    @Test
+    fun aTileThatHasNoRoomAtAllShowsAHintInsteadOfABlankWidget() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(compact)
+        provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1")), items = emptyList()), systemFontScale = 1f) }
+        onNode(hasTestTag("layoutTilesTooSmall")).assertExists()
     }
 
     // --- 변환·기준 이미지

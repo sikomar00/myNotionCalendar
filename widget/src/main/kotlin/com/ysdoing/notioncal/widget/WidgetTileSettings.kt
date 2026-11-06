@@ -186,83 +186,114 @@ internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout,
  * 추가·수정 양식: 보기 → 종류 → (도넛이면 분류 속성 · 해빗 격자면 습관) → 함수 → 속성 → 날짜 속성·기간 → (값이면 목표값) → 이름 → (값이면 색).
  * 도넛·해빗 격자 타일은 위젯에 하나씩이라 [taken]에 든 종류는 고르지 못한다. [onDone]은 만든 타일(취소면 null)을 받는다.
  */
+/** 양식 한 번 그리는 데 함께 쓰는 값: 고치는 중인 [draft]와 그 보기의 [columns], 바꿀 때 부르는 [onChange]. */
+private class TileFormScope(val draft: TileDraft, val columns: List<ViewColumn>, val onChange: (TileDraft) -> Unit) {
+    val donut get() = draft.kind == TileKind.DONUT
+    val habits get() = draft.kind == TileKind.HABITS
+}
+
 @Composable
 private fun TileForm(draft: TileDraft, views: List<ViewSnapshotEntity>, columnsOf: Map<String, List<ViewColumn>>, taken: Set<TileKind>, onChange: (TileDraft) -> Unit, onDone: (AggTile?) -> Unit) {
-    val columns = columnsOf[draft.viewId].orEmpty()
-    val dates = dateChoices(columns)
+    val form = TileFormScope(draft, columnsOf[draft.viewId].orEmpty(), onChange)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ConfigSection(stringResource(R.string.layout_tile_form_view))
         views.forEach { view ->
             RadioRow(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, draft.viewId == view.viewId) { onChange(draft.withView(view.viewId, columnsOf[view.viewId].orEmpty())) }
         }
-        val donut = draft.kind == TileKind.DONUT
-        val habits = draft.kind == TileKind.HABITS
-        ConfigSection(stringResource(R.string.layout_tile_form_kind))
-        ChoiceChips(KIND_CHOICES.filter { it.first !in taken || it.first == draft.kind }, draft.kind) { onChange(draft.withKind(it, columns)) }
-        if (TileKind.DONUT in taken && draft.kind != TileKind.DONUT) ConfigNote(stringResource(R.string.layout_tile_donut_limit))
-        if (TileKind.HABITS in taken && draft.kind != TileKind.HABITS) ConfigNote(stringResource(R.string.layout_tile_habits_limit))
-        if (habits) {
-            ConfigSection(stringResource(R.string.layout_tile_form_habits))
-            val checks = habitChoices(columns)
-            if (checks.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_habits))
-            checks.forEach { CheckboxRow(it.name, it.id in draft.habitProps) { _ -> onChange(draft.toggleHabit(it.id)) } }
-        }
-        if (donut) {
-            ConfigSection(stringResource(R.string.layout_tile_form_group))
-            val groups = groupChoices(columns)
-            if (groups.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_group))
-            groups.forEach { RadioRow(it.name, draft.groupProp == it.id) { onChange(draft.copy(groupProp = it.id)) } }
-        }
-        if (!habits) {
-            ConfigSection(stringResource(R.string.layout_tile_form_fn))
-            ChoiceChips(AggFn.entries.filter { !donut || it == AggFn.COUNT || it == AggFn.SUM }.map { it to fnName(it) }, draft.fn) { onChange(draft.withFn(it, columns)) }
-        }
-        if (!habits && draft.fn.needsProperty) {
-            ConfigSection(stringResource(R.string.layout_tile_form_prop))
-            val props = propertyChoices(draft.fn, columns)
-            if (props.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_prop))
-            props.forEach { RadioRow(it.name, draft.propId == it.id) { onChange(draft.copy(propId = it.id)) } }
-        }
-        if (dates.size > 1) {
-            ConfigSection(stringResource(R.string.layout_tile_form_date))
-            dates.forEach { RadioRow(it.name, draft.dateProp == it.id) { onChange(draft.copy(dateProp = it.id)) } }
-        }
-        if (habits) {
-            if (dates.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_date))
-        } else if (draft.fn == AggFn.STREAK) {
-            ConfigNote(stringResource(if (dates.isEmpty()) R.string.layout_tile_no_date else R.string.layout_tile_streak_note))
-        } else if (dates.isNotEmpty()) {
-            ConfigSection(stringResource(R.string.layout_tile_form_period))
-            ChoiceChips(PERIOD_CHOICES, draft.period) { onChange(draft.copy(period = it)) }
-        }
-        if (!donut && !habits) {
-            OutlinedTextField(
-                value = draft.goalText,
-                onValueChange = { onChange(draft.copy(goalText = it.take(12))) },
-                label = { Text(stringResource(R.string.layout_tile_form_goal)) },
-                supportingText = { Text(stringResource(if (draft.goalInvalid) R.string.layout_tile_form_goal_invalid else R.string.layout_tile_form_goal_hint)) },
-                isError = draft.goalInvalid,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        OutlinedTextField(
-            value = draft.label,
-            onValueChange = { onChange(draft.copy(label = it.takeCodePoints(TILE_LABEL_MAX))) },
-            label = { Text(stringResource(R.string.layout_tile_form_label)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (!donut && !habits) {
-            ConfigSection(stringResource(R.string.layout_tile_form_color))
-            ChoiceChips(COLOR_CHOICES, draft.color) { onChange(draft.copy(color = it)) }
-        }
+        TileKindFields(form, taken)
+        TileValueFields(form)
+        TileDateFields(form)
+        TileLabelFields(form)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { onDone(null) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.layout_tile_cancel)) }
             Button(onClick = { onDone(draft.toTile()) }, enabled = draft.toTile() != null, modifier = Modifier.weight(1f)) {
                 Text(stringResource(if (draft.editingId.isEmpty()) R.string.layout_tile_confirm else R.string.layout_tile_save))
             }
         }
+    }
+}
+
+/** 종류 칩, 그 종류가 위젯에 하나뿐이라 못 고르는 안내, 도넛의 분류 속성·해빗 격자의 습관 고르기. */
+@Composable
+private fun TileKindFields(form: TileFormScope, taken: Set<TileKind>) {
+    val draft = form.draft
+    ConfigSection(stringResource(R.string.layout_tile_form_kind))
+    ChoiceChips(KIND_CHOICES.filter { it.first !in taken || it.first == draft.kind }, draft.kind) { form.onChange(draft.withKind(it, form.columns)) }
+    if (TileKind.DONUT in taken && !form.donut) ConfigNote(stringResource(R.string.layout_tile_donut_limit))
+    if (TileKind.HABITS in taken && !form.habits) ConfigNote(stringResource(R.string.layout_tile_habits_limit))
+    if (form.habits) {
+        ConfigSection(stringResource(R.string.layout_tile_form_habits))
+        val checks = habitChoices(form.columns)
+        if (checks.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_habits))
+        checks.forEach { CheckboxRow(it.name, it.id in draft.habitProps) { _ -> form.onChange(draft.toggleHabit(it.id)) } }
+    }
+    if (form.donut) {
+        ConfigSection(stringResource(R.string.layout_tile_form_group))
+        val groups = groupChoices(form.columns)
+        if (groups.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_group))
+        groups.forEach { RadioRow(it.name, draft.groupProp == it.id) { form.onChange(draft.copy(groupProp = it.id)) } }
+    }
+}
+
+/** 값 타일의 함수·속성 고르기(해빗 격자는 습관만 있어 없다). */
+@Composable
+private fun TileValueFields(form: TileFormScope) {
+    val draft = form.draft
+    if (form.habits) return
+    ConfigSection(stringResource(R.string.layout_tile_form_fn))
+    ChoiceChips(AggFn.entries.filter { !form.donut || it == AggFn.COUNT || it == AggFn.SUM }.map { it to fnName(it) }, draft.fn) { form.onChange(draft.withFn(it, form.columns)) }
+    if (!draft.fn.needsProperty) return
+    ConfigSection(stringResource(R.string.layout_tile_form_prop))
+    val props = propertyChoices(draft.fn, form.columns)
+    if (props.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_prop))
+    props.forEach { RadioRow(it.name, draft.propId == it.id) { form.onChange(draft.copy(propId = it.id)) } }
+}
+
+/** 날짜 속성(둘 이상일 때)과 기간(값 타일), 연속 달성일·해빗 격자는 날짜 속성이 필요하다는 안내. */
+@Composable
+private fun TileDateFields(form: TileFormScope) {
+    val draft = form.draft
+    val dates = dateChoices(form.columns)
+    if (dates.size > 1) {
+        ConfigSection(stringResource(R.string.layout_tile_form_date))
+        dates.forEach { RadioRow(it.name, draft.dateProp == it.id) { form.onChange(draft.copy(dateProp = it.id)) } }
+    }
+    when {
+        form.habits -> if (dates.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_date))
+        draft.fn == AggFn.STREAK -> ConfigNote(stringResource(if (dates.isEmpty()) R.string.layout_tile_no_date else R.string.layout_tile_streak_note))
+        dates.isNotEmpty() -> {
+            ConfigSection(stringResource(R.string.layout_tile_form_period))
+            ChoiceChips(PERIOD_CHOICES, draft.period) { form.onChange(draft.copy(period = it)) }
+        }
+    }
+}
+
+/** 목표값(값 타일), 이름, 색(값 타일). */
+@Composable
+private fun TileLabelFields(form: TileFormScope) {
+    val draft = form.draft
+    val plain = !form.donut && !form.habits
+    if (plain) {
+        OutlinedTextField(
+            value = draft.goalText,
+            onValueChange = { form.onChange(draft.copy(goalText = it.take(12))) },
+            label = { Text(stringResource(R.string.layout_tile_form_goal)) },
+            supportingText = { Text(stringResource(if (draft.goalInvalid) R.string.layout_tile_form_goal_invalid else R.string.layout_tile_form_goal_hint)) },
+            isError = draft.goalInvalid,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    OutlinedTextField(
+        value = draft.label,
+        onValueChange = { form.onChange(draft.copy(label = it.takeCodePoints(TILE_LABEL_MAX))) },
+        label = { Text(stringResource(R.string.layout_tile_form_label)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (plain) {
+        ConfigSection(stringResource(R.string.layout_tile_form_color))
+        ChoiceChips(COLOR_CHOICES, draft.color) { form.onChange(draft.copy(color = it)) }
     }
 }

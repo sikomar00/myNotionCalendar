@@ -83,7 +83,7 @@ class ViewTimelineTest {
         setContext(context)
         setAppWidgetSize(large)
         provideComposable { ViewWidgetContent(state(), systemFontScale = 1f) }
-        onNode(hasTestTag("timelineBar").and(hasContentDescriptionEqualTo("기획"))).assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "a", 0)))
+        onNode(hasTestTag("timelineBar").and(hasContentDescriptionEqualTo("기획, 1/11 – 1/13"))).assert(hasStartActivityClickAction(viewRowIntent(context, "v1", "a", 0)))
     }
 
     @Test
@@ -92,7 +92,7 @@ class ViewTimelineTest {
         setAppWidgetSize(large)
         val rows = listOf(row("x", "긴 일", "2027-01-05", "2027-01-20"))
         provideComposable { ViewWidgetContent(state(timeline(rows)), systemFontScale = 1f) }
-        onNode(hasTestTag("timelineBar").and(hasContentDescriptionEqualTo("‹ 긴 일 ›"))).assertExists() // 창 앞뒤로 이어진다(색 아닌 글자로도 알린다)
+        onNode(hasTestTag("timelineBar").and(hasContentDescriptionEqualTo("긴 일, 1/5 – 1/20"))).assertExists() // 창 앞뒤로 이어진다(색 아닌 글자로도 알린다)
     }
 
     @Test

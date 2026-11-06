@@ -71,7 +71,12 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
         LayoutMode.SINGLE -> Unit
     }
     if (layout.mode != LayoutMode.SINGLE && layout.items.isNotEmpty()) {
-        ConfigSection(stringResource(if (layout.mode == LayoutMode.TABS) R.string.layout_config_order_tabs else R.string.layout_config_order_sections))
+        val order = when (layout.mode) {
+            LayoutMode.TABS -> R.string.layout_config_order_tabs
+            LayoutMode.MERGED -> R.string.layout_config_order_merged
+            else -> R.string.layout_config_order_sections
+        }
+        ConfigSection(stringResource(order))
         layout.items.forEachIndexed { index, item ->
             // 이름 없는 보기도 노션에서 허용된다. 등록 목록에 없을 때만 '지워진 보기'다.
             val name = views.firstOrNull { it.viewId == item.viewId }?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)

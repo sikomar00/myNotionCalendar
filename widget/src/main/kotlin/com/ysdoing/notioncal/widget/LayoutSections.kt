@@ -50,13 +50,16 @@ internal fun LayoutSectionsBody(state: LayoutWidgetState, look: LayoutLook, size
         state.layout.tiles.any { it.kind == TileKind.DONUT } -> STRIP_DONUT_SHARE
         else -> STRIP_MAX_SHARE
     }
-    var strip = cells?.let { planTileStrip(it, look.metrics, size, room = if (items.isEmpty()) body else body * share) }
+    // 높이가 0인 띠(해빗 격자가 2×2라 건너뛰어진 경우처럼 그릴 것이 없다)는 없는 것으로 본다: 빈 띠가 틈만 차지하지 않게.
+    fun planned(room: Dp) = cells?.let { planTileStrip(it, look.metrics, size, room) }?.takeIf { it.height > 0.dp }
+    var strip = planned(if (items.isEmpty()) body else body * share)
     val rest = (body - (strip?.let { it.height + if (items.isEmpty()) 0.dp else SECTION_GAP } ?: 0.dp)).coerceAtLeast(0.dp)
     // 타일 줄을 그리고 남은 높이에 보기 섹션이 읽히게 못 들어가면 섹션을 빼고 타일 줄이 남는 높이를 쓴다(읽을 수 없는 조각을 그리지 않는다).
     val sectionsFit = items.isNotEmpty() && rest >= min
-    if (cells != null && items.isNotEmpty() && !sectionsFit) strip = planTileStrip(cells, look.metrics, size, room = body)
+    if (cells != null && items.isNotEmpty() && !sectionsFit) strip = planned(body)
     val heights = if (strip != null && !sectionsFit) emptyList() else sectionHeights(rest, items.map { it.weight }, SECTION_GAP, min)
     Column(GlanceModifier.fillMaxSize().padding(horizontal = PADDING_H, vertical = VIEW_PADDING_V)) {
+        if (strip == null && heights.isEmpty()) ViewNote(R.string.layout_tiles_too_small, state.config.appWidgetId, look.metrics, look.palette, tag = "layoutTilesTooSmall")
         if (strip != null) {
             TileStrip(strip, look, size.width - PADDING_H * 2)
             if (heights.isNotEmpty()) Spacer(GlanceModifier.height(SECTION_GAP))

@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.widget
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,7 @@ import androidx.glance.text.TextAlign
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.view.TimelineBar
 import com.ysdoing.notioncal.core.data.view.TimelineZoom
@@ -71,14 +73,14 @@ private fun TimelineNav(layout: TimelineLayout, offset: Int, partial: Boolean, l
         context.getString(R.string.view_calendar_partial_description).takeIf { partial },
     ).joinToString(", ")
     val m = look.m
-    Row(GlanceModifier.fillMaxWidth().height(TIMELINE_NAV_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        val titleModifier = GlanceModifier.defaultWeight().height(TIMELINE_NAV_HEIGHT).padding(start = 4.dp).let { if (atToday) it else it.clickable(navAction(0)) }
+    Row(GlanceModifier.fillMaxWidth().height(NAV_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+        val titleModifier = GlanceModifier.defaultWeight().height(NAV_HEIGHT).padding(start = 4.dp).let { if (atToday) it else it.clickable(navAction(0)) }
         Row(titleModifier.semantics { contentDescription = description; testTag = "timelineTitle" }, verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = TextStyle(color = look.palette.text, fontSize = (m.headerSp * m.spFactor).sp, fontWeight = FontWeight.Bold), maxLines = 1)
             if (partial) Text(context.getString(R.string.view_calendar_partial), modifier = GlanceModifier.padding(start = 6.dp), style = look.sub, maxLines = 1)
         }
-        WidgetIconButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "timelinePrev", navAction(-1), look.palette, visual = 28.dp, height = TIMELINE_NAV_HEIGHT)
-        WidgetIconButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "timelineNext", navAction(+1), look.palette, visual = 28.dp, height = TIMELINE_NAV_HEIGHT)
+        WidgetIconButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "timelinePrev", navAction(-1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
+        WidgetIconButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "timelineNext", navAction(+1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
     }
 }
 
@@ -117,6 +119,13 @@ private fun TimelineEmpty(layout: TimelineLayout, look: ViewLook) {
     }
 }
 
+/** 일정 기간 글자: 하루면 '1/15', 여러 날이면 '1/15 – 1/17'. */
+private fun rangeText(context: Context, event: CalendarEvent): String {
+    val (first, last) = event.startDate to event.lastDate
+    return if (first == last) context.getString(R.string.view_timeline_bar_day, first.monthValue, first.dayOfMonth)
+    else context.getString(R.string.view_timeline_bar_range, first.monthValue, first.dayOfMonth, last.monthValue, last.dayOfMonth)
+}
+
 /**
  * 막대 한 줄: 시작 칸 앞의 빈칸 + 일정 색 옅은 막대. 제목은 막대가 [LABEL_INSIDE_MIN]보다 넓을 때만 안에 쓰고, 좁으면 넓은 쪽 옆에 쓴다
  * (월 확대의 하루짜리 막대가 '…'만 남지 않게). 창 밖으로 이어지면 '‹'·'›'를 붙이고, 완료는 더 옅게 + 취소선이다. 줄 어디를 눌러도 그 행의 편집 시트다.
@@ -130,6 +139,8 @@ private fun TimelineBarRow(board: ViewBoard, bar: TimelineBar, layout: TimelineL
         textDecoration = if (event.done) TextDecoration.LineThrough else null,
     )
     val label = (if (bar.continuesBefore) "‹ " else "") + event.title + (if (bar.continuesAfter) " ›" else "")
+    // 낭독은 색·옅기·취소선에 기대지 않고 기간과 완료를 글자로 읽어 준다(A11Y-03).
+    val description = listOfNotNull(event.title, rangeText(context, event), context.getString(R.string.view_timeline_bar_done).takeIf { event.done }).joinToString(", ")
     val before = layout.cellWidth * bar.startCol
     val width = layout.cellWidth * bar.span
     val after = layout.cellWidth * layout.window.days - before - width
@@ -139,7 +150,7 @@ private fun TimelineBarRow(board: ViewBoard, bar: TimelineBar, layout: TimelineL
     Row(
         GlanceModifier.fillMaxWidth().height(layout.rowHeight).padding(vertical = 2.dp)
             .clickable(actionStartActivity(viewRowIntent(context, board.viewId, event.pageId, look.actionWidgetId)))
-            .semantics { contentDescription = label; testTag = "timelineBar" },
+            .semantics { contentDescription = description; testTag = "timelineBar" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val labelOnLeft = !inside && before > after
