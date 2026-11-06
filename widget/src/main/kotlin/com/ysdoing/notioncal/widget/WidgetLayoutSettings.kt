@@ -22,9 +22,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.view.LayoutItem
 import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewJson
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import com.ysdoing.notioncal.core.designsystem.CheckboxRow
+import com.ysdoing.notioncal.core.designsystem.RadioRow
 
 private const val TAB_NAME_MAX = 20
 
@@ -39,10 +43,14 @@ internal fun String.takeCodePoints(max: Int): String = if (codePointCount(0, len
 internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
     val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
     // 마지막으로 본 탭은 번호라서, 탭을 빼거나 옮기면 같은 보기를 가리키도록 번호를 다시 맞춘다.
+    val columnsOf = remember(views) { views.associate { it.viewId to ViewJson.columns(it.columnInfo) } }
     val set = { new: WidgetLayout -> onChange(config.copy(layoutJson = WidgetLayout.encode(new), lastTab = new.tabIndexAfter(layout, config.lastTab))) }
     ConfigSection(stringResource(R.string.layout_config_mode))
     ChoiceChips(
-        listOf(LayoutMode.SINGLE to R.string.layout_config_mode_single, LayoutMode.TABS to R.string.layout_config_mode_tabs, LayoutMode.SECTIONS to R.string.layout_config_mode_sections),
+        listOf(
+            LayoutMode.SINGLE to R.string.layout_config_mode_single, LayoutMode.TABS to R.string.layout_config_mode_tabs,
+            LayoutMode.SECTIONS to R.string.layout_config_mode_sections, LayoutMode.MERGED to R.string.layout_config_mode_merged,
+        ),
         layout.mode,
     ) { set(layout.withMode(it)) }
     ConfigSection(stringResource(R.string.layout_config_views))
@@ -59,6 +67,7 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
             ConfigNote(stringResource(R.string.layout_config_limit_sections, LayoutMode.SECTIONS.limit - if (tileRow) 1 else 0))
             if (tileRow) ConfigNote(stringResource(R.string.layout_config_limit_tile_row))
         }
+        LayoutMode.MERGED -> ConfigNote(stringResource(R.string.layout_config_limit_merged, LayoutMode.MERGED.limit))
         LayoutMode.SINGLE -> Unit
     }
     if (layout.mode != LayoutMode.SINGLE && layout.items.isNotEmpty()) {
@@ -67,6 +76,7 @@ internal fun LayoutSettings(views: List<ViewSnapshotEntity>, config: WidgetConfi
             // 이름 없는 보기도 노션에서 허용된다. 등록 목록에 없을 때만 '지워진 보기'다.
             val name = views.firstOrNull { it.viewId == item.viewId }?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)
             LayoutItemEditor(name, index, layout, set)
+            if (layout.mode == LayoutMode.MERGED) MergedSourceEditor(layout.items[index], columnsOf[layout.items[index].viewId].orEmpty(), layout, set)
         }
     }
     if (layout.mode == LayoutMode.SECTIONS) TileSettings(views, layout, set)
@@ -101,9 +111,27 @@ private fun LayoutItemEditor(name: String, index: Int, layout: WidgetLayout, set
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-        } else {
+        } else if (layout.mode == LayoutMode.SECTIONS) {
             Text(stringResource(R.string.layout_config_weight), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ChoiceChips(WidgetLayout.WEIGHT_RANGE.map { it to null }, item.weight) { set(layout.withWeight(viewId, it)) }
         }
+    }
+}
+
+/**
+ * 합쳐 보기의 소스 하나: 일정이 읽을 날짜 속성(날짜 속성이 둘 이상일 때만 고른다, 하나뿐이면 보기의 기본이다)과 일정 색.
+ * 새 항목의 날짜는 늘 보기의 기본 날짜 속성에 들어가니, 기준을 바꿔도 날짜 칸으로 만드는 항목의 위치는 그대로다.
+ */
+@Composable
+private fun MergedSourceEditor(item: LayoutItem, columns: List<ViewColumn>, layout: WidgetLayout, set: (WidgetLayout) -> Unit) {
+    val dates = dateChoices(columns)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (dates.size > 1) {
+            Text(stringResource(R.string.layout_merged_date), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            RadioRow(stringResource(R.string.layout_merged_date_default), item.dateProp.isEmpty()) { set(layout.withDateProp(item.viewId, "")) }
+            dates.forEach { column -> RadioRow(column.name, item.dateProp == column.id) { set(layout.withDateProp(item.viewId, column.id)) } }
+        }
+        Text(stringResource(R.string.layout_merged_color), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ChoiceChips(COLOR_CHOICES, item.color) { set(layout.withColor(item.viewId, it)) }
     }
 }

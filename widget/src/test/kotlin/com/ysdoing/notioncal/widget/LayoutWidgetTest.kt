@@ -416,5 +416,6 @@ class LayoutWidgetTest {
         val sections = tabs.copy(mode = com.ysdoing.notioncal.core.data.view.LayoutMode.SECTIONS)
         assertEquals(listOf("a", "b", null), drawnBoards(sections, lastTab = 1, boards = boards).map { it?.viewId })
         assertEquals(emptyList<Any>(), drawnBoards(com.ysdoing.notioncal.core.data.view.WidgetLayout(), 0, boards))
+        assertEquals(emptyList<Any>(), drawnBoards(tabs.copy(mode = com.ysdoing.notioncal.core.data.view.LayoutMode.MERGED), 0, boards)) // 합쳐 보기는 표지를 그리지 않아 표지 예산을 쓰지 않는다
     }
 }

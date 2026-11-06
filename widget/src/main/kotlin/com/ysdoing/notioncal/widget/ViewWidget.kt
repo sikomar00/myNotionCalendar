@@ -332,7 +332,7 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
     // 캘린더는 행이 없어도 격자를 그린다(날짜 칸을 눌러 새 항목을 만든다). 격자가 읽힐 높이가 없으면 아래 표·목록으로 대체한다.
     val calendar = calendarLayoutFor(board, size, spec, m, lines + presetLinesHeight(presets.size))
     if (calendar != null) {
-        CalendarBody(board, state, ViewLook(m, palette, actionWidgetId = actionWidgetId), calendar)
+        CalendarBody(board.calendarSource(state.config.appWidgetId), state, ViewLook(m, palette, actionWidgetId = actionWidgetId), calendar)
         return
     }
     // 타임라인(Phase 12e): 막대 줄. 행이 없어도 창을 그려 ‹ ›로 다른 기간을 볼 수 있다. 자리가 없으면(2×2·낮은 칸) 아래 표·목록으로 대신 그린다.

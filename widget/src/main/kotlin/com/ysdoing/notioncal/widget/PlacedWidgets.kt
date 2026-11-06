@@ -35,6 +35,7 @@ private fun layoutSummary(context: Context, config: WidgetConfig, viewNames: Map
         layout.items.isEmpty() -> null
         layout.mode == LayoutMode.TABS -> context.getString(R.string.placed_layout_tabs, layout.items.size, names)
         layout.mode == LayoutMode.SECTIONS -> context.getString(R.string.placed_layout_sections, layout.items.size, names)
+        layout.mode == LayoutMode.MERGED -> context.getString(R.string.placed_layout_merged, layout.items.size, names)
         else -> names
     }
     return listOfNotNull(body, tiles?.let { context.getString(R.string.placed_layout_tiles, it) }).joinToString(" · ")

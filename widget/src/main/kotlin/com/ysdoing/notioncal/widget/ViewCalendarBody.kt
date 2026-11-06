@@ -34,7 +34,6 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.calendar.chipLabel
 import com.ysdoing.notioncal.core.data.calendar.gridStart
-import com.ysdoing.notioncal.core.data.view.ViewBoard
 import java.time.LocalDate
 
 // Phase 12a VR-CAL: 캘린더 보기를 월 격자로 그린다. 격자·날짜 칸은 v1 월 위젯의 WeekRow를 그대로 쓰고(같은 일정이면 같은 노드),
@@ -45,26 +44,26 @@ import java.time.LocalDate
  * [layout]대로 캘린더 본문(머리줄 아래)을 그린다. 일정이 많아 Glance 뷰 한도(500개)에 가까우면 칸당 줄 수를 줄인다([fitLanes]).
  */
 @Composable
-internal fun CalendarBody(board: ViewBoard, state: ViewWidgetState, look: ViewLook, layout: CalendarLayout) {
+internal fun CalendarBody(source: CalendarSource, state: ViewWidgetState, look: ViewLook, layout: CalendarLayout) {
     val context = LocalContext.current
-    val ui = calendarUi(board, state, layout.mode)
+    val ui = calendarUi(source.events, state, layout.mode)
     val weeks = if (layout.mode == CalendarMode.MONTH) (0 until WEEKS).map { gridStart(ui.month, ui.weekStart).plusWeeks(it.toLong()) } else listOf(weekStartOf(ui.today, ui.weekStart))
     val metrics = fitLanes(weeks, ui.events, WidgetMetrics.of(LocalSize.current, state.config, look.m.systemFontScale, ui.showWeekNumbers, layout.grid))
-    val dayAction = dayActionFor(context, board, state.config.appWidgetId)
+    val dayAction = dayActionFor(context, source)
     Column(GlanceModifier.fillMaxWidth()) {
-        if (layout.mode == CalendarMode.MONTH) CalendarNav(ui, !board.rowsComplete, layout, look)
+        if (layout.mode == CalendarMode.MONTH) CalendarNav(ui, !source.complete, layout, look)
         WeekdayRow(ui.weekStart, metrics, look.palette)
         weeks.forEach { WeekRow(it, ui, metrics, look.palette, context, dayAction) }
-        if (layout.mode == CalendarMode.WEEK) TodayList(board, ui, layout.listHeight, look)
+        if (layout.mode == CalendarMode.WEEK) TodayList(source, ui, layout.listHeight, look)
     }
 }
 
 private const val WEEKS = 6
 
 /** 날짜 칸: 새 항목을 만들 수 있는 보기면 그 날짜로 새 항목 시트, 아니면 뷰어(그날 일정 보기는 v1 일정 DB의 시트라 쓰지 않는다). */
-private fun dayActionFor(context: Context, board: ViewBoard, appWidgetId: Int): (LocalDate) -> Action =
-    if (board.canCreate) { date -> actionStartActivity(viewAddIntent(context, board.viewId, appWidgetId, date)) }
-    else { _ -> actionStartActivity(viewerIntent(context, board.viewId)) }
+private fun dayActionFor(context: Context, source: CalendarSource): (LocalDate) -> Action =
+    source.createViewId?.let { viewId -> { date: LocalDate -> actionStartActivity(viewAddIntent(context, viewId, source.widgetId, date)) } }
+        ?: { _: LocalDate -> actionStartActivity(viewerIntent(context, source.viewerViewId)) }
 
 /** 월 이동 줄: 달 제목(다른 달이면 눌러 오늘로) + ‹ ›. 일정을 일부만 받았으면(100행 상한) 제목 옆에 알린다(2×2는 자리가 없어 접근성 설명으로만). */
 @Composable
@@ -96,7 +95,7 @@ private fun CalendarNav(ui: WidgetUiState, partial: Boolean, layout: CalendarLay
 
 /** 4×2: 이번 주 한 줄 아래에 오늘 일정을 한 줄씩. 일정이 없으면 한 줄 안내, 넘치면 '+N 더 보기'(뷰어). */
 @Composable
-private fun TodayList(board: ViewBoard, ui: WidgetUiState, height: Dp, look: ViewLook) {
+private fun TodayList(source: CalendarSource, ui: WidgetUiState, height: Dp, look: ViewLook) {
     val context = LocalContext.current
     val today = eventsOn(ui.events, ui.today)
     val rowHeight = look.m.tableRow + ROW_GAP * 2
@@ -106,14 +105,14 @@ private fun TodayList(board: ViewBoard, ui: WidgetUiState, height: Dp, look: Vie
         }
         return
     }
-    val shown = todayRowLimit(height, rowHeight, today.size, board.rowsComplete)
-    today.take(shown).forEach { TodayRow(board, it, ui.today, look) }
-    val more = moreOf(today.size, shown, complete = board.rowsComplete)
-    if (more != null) MoreLine(moreText(context, more), board.viewId, look)
+    val shown = todayRowLimit(height, rowHeight, today.size, source.complete)
+    today.take(shown).forEach { TodayRow(it, ui.today, look) }
+    val more = moreOf(today.size, shown, complete = source.complete)
+    if (more != null) MoreLine(moreText(context, more), source.viewerViewId, look)
 }
 
 @Composable
-private fun TodayRow(board: ViewBoard, event: CalendarEvent, today: LocalDate, look: ViewLook) {
+private fun TodayRow(event: CalendarEvent, today: LocalDate, look: ViewLook) {
     val context = LocalContext.current
     val style = TextStyle(
         color = if (event.done) look.palette.subtle else look.palette.text, fontSize = (look.m.titleSp * look.m.spFactor).sp,
@@ -124,7 +123,7 @@ private fun TodayRow(board: ViewBoard, event: CalendarEvent, today: LocalDate, l
     Box(GlanceModifier.fillMaxWidth().padding(vertical = ROW_GAP)) {
         Row(
             GlanceModifier.fillMaxWidth().height(look.m.tableRow).tile(look.palette).padding(horizontal = 6.dp)
-                .clickable(actionStartActivity(viewRowIntent(context, board.viewId, event.pageId, look.actionWidgetId))).semantics { testTag = "calendarToday" },
+                .clickable(actionStartActivity(viewRowIntent(context, event.dataSourceId, event.pageId, look.actionWidgetId))).semantics { testTag = "calendarToday" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(GlanceModifier.size(6.dp).cornerRadius(3.dp).background(ColorProvider(Color(NotionColors.argb(event.colorHex))))) {}

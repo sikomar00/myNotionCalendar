@@ -30,6 +30,12 @@ class PlacedWidgetsTest {
     }
 
     @Test
+    fun aMergedLayoutNamesItsSources() {
+        val merged = WidgetLayout(LayoutMode.MERGED).add("a")!!.add("b")!!
+        assertEquals("합쳐 보기 2개: 할 일, 독서", summary(LayoutWidgetReceiver::class.java, config(merged)))
+    }
+
+    @Test
     fun aSectionLayoutNamesItsSectionsAndCountsTheTiles() {
         val sections = WidgetLayout(LayoutMode.SECTIONS).add("a")!!.add("b")!!
         assertEquals("섹션 2개: 할 일, 독서", summary(LayoutWidgetReceiver::class.java, config(sections)))

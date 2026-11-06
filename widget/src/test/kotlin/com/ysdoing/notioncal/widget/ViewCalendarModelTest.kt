@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.CalendarRows
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import org.junit.Assert.assertEquals
@@ -151,7 +152,7 @@ class ViewCalendarModelTest {
         )
         val board = ViewBoard("v1", "일정", "calendar", listOf("이름"), listOf(row), now, null, columns)
         val info = CalendarInfo(DayOfWeek.MONDAY, true, mapOf(LocalDate.of(2027, 1, 1) to "신정"))
-        val ui = calendarUi(board, ViewWidgetState(board, WidgetConfig(1, monthOffset = 1, viewId = "v1"), now, info), CalendarMode.MONTH)
+        val ui = calendarUi(CalendarRows.events(board), ViewWidgetState(board, WidgetConfig(1, monthOffset = 1, viewId = "v1"), now, info), CalendarMode.MONTH)
         assertEquals(YearMonth.of(2027, 2), ui.month)
         assertEquals(today, ui.today)
         assertEquals(listOf(DayOfWeek.MONDAY, true, "신정"), listOf(ui.weekStart, ui.showWeekNumbers, ui.holidays[LocalDate.of(2027, 1, 1)]))
@@ -161,8 +162,8 @@ class ViewCalendarModelTest {
     @Test
     fun theWeekShapeDoesNotDimDaysOfTheNextMonthButTheMonthGridDoes() {
         val board = ViewBoard("v", "보기", "calendar", emptyList(), emptyList(), now, null, listOf(ViewColumn("t", "이름", "title"), ViewColumn("d", "날짜", "date")))
-        assertTrue(calendarUi(board, state(), CalendarMode.MONTH).dimOutsideMonth)
-        assertFalse(calendarUi(board, state(), CalendarMode.WEEK).dimOutsideMonth)
+        assertTrue(calendarUi(CalendarRows.events(board), state(), CalendarMode.MONTH).dimOutsideMonth)
+        assertFalse(calendarUi(CalendarRows.events(board), state(), CalendarMode.WEEK).dimOutsideMonth)
     }
 
     private fun calendarBoard(type: String = "calendar") =

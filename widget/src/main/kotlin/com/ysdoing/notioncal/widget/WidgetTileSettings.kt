@@ -126,7 +126,7 @@ internal fun TileDraft.withKind(kind: TileKind, columns: List<ViewColumn>): Tile
 internal fun TileDraft.withView(viewId: String, columns: List<ViewColumn>): TileDraft =
     TileDraft(viewId = viewId, label = label, color = color, editingId = editingId).withFn(AggFn.COUNT, columns).let { if (kind != TileKind.AGG) it.withKind(kind, columns) else it }
 
-private val COLOR_CHOICES = listOf(
+internal val COLOR_CHOICES = listOf(
     "" to R.string.layout_tile_color_default, "gray" to R.string.layout_tile_color_gray, "brown" to R.string.layout_tile_color_brown, "orange" to R.string.layout_tile_color_orange,
     "yellow" to R.string.layout_tile_color_yellow, "green" to R.string.layout_tile_color_green, "blue" to R.string.layout_tile_color_blue, "purple" to R.string.layout_tile_color_purple,
     "pink" to R.string.layout_tile_color_pink, "red" to R.string.layout_tile_color_red,

@@ -80,8 +80,16 @@ internal data class LayoutWidgetState(
     fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis, calendar, covers, item.ratingProp)
 }
 
-/** 지금 그려지는 칸의 보기들: 탭 배치는 고른 탭 하나, 단일·섹션은 모든 칸. 표지는 이 보기들의 것만 읽는다(숨은 탭의 표지로 예산을 쓰지 않는다). */
+/** 주 시작 요일·공휴일을 읽어야 하는 배치: 합쳐 보기이거나, 캘린더·타임라인 보기가 든 배치. 그런 보기가 없는 위젯은 읽지 않는다. */
+internal fun WidgetLayout.needsCalendarInfo(boards: Map<String, ViewBoard?>): Boolean =
+    mode == LayoutMode.MERGED || boards.values.any { it?.needsCalendarInfo() == true }
+
+/**
+ * 지금 그려지는 칸의 보기들: 탭 배치는 고른 탭 하나, 단일·섹션은 모든 칸, 합쳐 보기는 표지를 그리지 않으니 없다.
+ * 표지는 이 보기들의 것만 읽는다(숨은 탭의 표지로 예산을 쓰지 않는다).
+ */
 internal fun drawnBoards(layout: WidgetLayout, lastTab: Int, boards: Map<String, ViewBoard?>): List<ViewBoard?> {
+    if (layout.mode == LayoutMode.MERGED) return emptyList()
     val items = if (layout.mode == LayoutMode.TABS) listOfNotNull(layout.items.getOrNull(lastTab.coerceIn(0, (layout.items.size - 1).coerceAtLeast(0)))) else layout.items
     return items.map { boards[it.viewId] }
 }
@@ -111,6 +119,7 @@ internal fun LayoutWidgetContent(
             }
             state.layout.mode == LayoutMode.TABS -> LayoutTabsBody(state, look, size)
             state.layout.mode == LayoutMode.SECTIONS -> LayoutSectionsBody(state, look, size)
+            state.layout.mode == LayoutMode.MERGED -> LayoutMergedBody(state, look, size)
             else -> LayoutPane(state, state.layout.items.first(), look, size, PaneSpec(look.staticRows), weighted = false)
         }
     }
@@ -156,9 +165,9 @@ class LayoutWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialSettings = deps.settings().settings.first()
         // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령). 타일의 보기도 함께.
-        val initialBoards = boardsOf(deps, WidgetLayout.parse(initialConfig.layoutJson).boardIds()).first()
-        val initialCalendar = if (initialBoards.values.any { it?.needsCalendarInfo() == true }) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
         val initialLayout = WidgetLayout.parse(initialConfig.layoutJson)
+        val initialBoards = boardsOf(deps, initialLayout.boardIds()).first()
+        val initialCalendar = if (initialLayout.needsCalendarInfo(initialBoards)) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
         val initialDrawn = drawnBoards(initialLayout, initialConfig.lastTab, initialBoards)
         val initialCoverVersion = deps.covers().version.value // 읽기 전에 정해 그 사이에 받아진 표지가 다시 읽히게 한다
         val initialCovers = CoverSession.load(deps, initialDrawn)
@@ -169,7 +178,7 @@ class LayoutWidget : GlanceAppWidget() {
             val boards by remember(layout) { boardsOf(deps, layout.boardIds()) }.collectAsState(initialBoards)
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
-            val calendar = CalendarSession.info(deps, initialCalendar, config, boards.values.any { it?.needsCalendarInfo() == true })
+            val calendar = CalendarSession.info(deps, initialCalendar, config, layout.needsCalendarInfo(boards))
             val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, initialDrawn, drawnBoards(layout, config.lastTab, boards))
             LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart, calendar, covers), fontScale ?: SystemFontScale.current(context))
         }

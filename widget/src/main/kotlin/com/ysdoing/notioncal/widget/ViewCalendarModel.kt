@@ -41,12 +41,20 @@ internal fun calendarMonth(state: ViewWidgetState, mode: CalendarMode): YearMont
 /** 캘린더로 그릴 수 있는 보기: 종류가 캘린더이고 날짜 열을 알 때. 아니면 지금처럼 표·목록으로 그린다. */
 internal fun ViewBoard.drawsCalendar(): Boolean = type == "calendar" && dateColumn != null
 
-/** v1 월 위젯의 [WidgetUiState]와 같은 모양으로 보기의 일정을 담는다. 그러면 같은 일정은 같은 격자 노드가 된다. */
-internal fun calendarUi(board: ViewBoard, state: ViewWidgetState, mode: CalendarMode) = WidgetUiState(
+/**
+ * 월 격자 캘린더가 그리는 일정과 눌렀을 때 갈 곳. 캘린더 보기 하나(보기 위젯)와 합쳐 보기(Phase 12e, 여러 보기의 일정)가 같은 그림을 쓴다.
+ * [createViewId]는 날짜 칸이 새 항목 시트를 열 보기(없으면 [viewerViewId]의 뷰어), [widgetId]는 그 시트가 입력 양식을 읽을 위젯 번호(없으면 0)다.
+ */
+internal class CalendarSource(val events: List<CalendarEvent>, val complete: Boolean, val createViewId: String?, val viewerViewId: String, val widgetId: Int = 0)
+
+internal fun ViewBoard.calendarSource(widgetId: Int) = CalendarSource(CalendarRows.events(this), rowsComplete, viewId.takeIf { canCreate }, viewId, widgetId)
+
+/** v1 월 위젯의 [WidgetUiState]와 같은 모양으로 일정을 담는다. 그러면 같은 일정은 같은 격자 노드가 된다. */
+internal fun calendarUi(events: List<CalendarEvent>, state: ViewWidgetState, mode: CalendarMode) = WidgetUiState(
     month = calendarMonth(state, mode),
     today = calendarToday(state),
     weekStart = state.calendar.weekStart,
-    events = CalendarRows.events(board),
+    events = events,
     config = state.config,
     holidays = state.calendar.holidays,
     showWeekNumbers = state.calendar.showWeekNumbers,
@@ -97,10 +105,13 @@ private val MIN_STRIP = 44.dp
  * 이 보기를 캘린더로 그릴 배치. 캘린더 보기가 아니거나, 격자가 읽힐 높이가 없으면(상태·되돌리기 줄이 높이를 먹은 150dp 2×2, 낮은 탭·섹션 칸) null이고
  * 그때는 표·목록으로 대체한다. [spec]은 탭·섹션 칸이면 그 칸의 높이를, [aboveHeight]는 머리줄 아래 이미 그려진 줄(상태·되돌리기·프리셋)의 높이를 준다.
  */
-internal fun calendarLayoutFor(board: ViewBoard, size: DpSize, spec: PaneSpec, m: ViewMetrics, aboveHeight: Dp): CalendarLayout? {
-    if (!board.drawsCalendar()) return null
+internal fun calendarLayoutFor(board: ViewBoard, size: DpSize, spec: PaneSpec, m: ViewMetrics, aboveHeight: Dp): CalendarLayout? =
+    if (board.drawsCalendar()) calendarLayoutIn(size, spec, m, aboveHeight, progressOf(board, size) != null) else null
+
+/** [calendarLayoutFor]에서 보기를 뺀 계산: 머리에 부제가 보이는지([subtitleShown])만 받는다. 합쳐 보기는 부제가 없다. */
+internal fun calendarLayoutIn(size: DpSize, spec: PaneSpec, m: ViewMetrics, aboveHeight: Dp, subtitleShown: Boolean): CalendarLayout? {
     val total = spec.height ?: (size.height - VIEW_PADDING_V * 2)
-    val body = paneBodyHeight(total, progressOf(board, size) != null, m, aboveHeight)
+    val body = paneBodyHeight(total, subtitleShown, m, aboveHeight)
     val layout = calendarLayout(sizeStep(size), size.width - PADDING_H * 2, body)
     return layout.takeIf { it.grid.height >= (if (it.mode == CalendarMode.MONTH) MIN_MONTH_GRID else MIN_STRIP) }
 }

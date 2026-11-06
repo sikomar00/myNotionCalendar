@@ -125,6 +125,7 @@
     <string name="placed_view_untitled">이름 없는 보기</string>
     <string name="placed_layout_tabs">탭 %1$d개: %2$s</string>
     <string name="placed_layout_sections">섹션 %1$d개: %2$s</string>
+    <string name="placed_layout_merged">합쳐 보기 %1$d개: %2$s</string>
     <string name="placed_layout_tiles">집계 타일 %1$d개</string>
     <string name="layout_widget_label">노션 위젯</string>
     <string name="layout_widget_description">등록한 노션 보기를 하나로, 또는 탭·섹션(위아래로 쌓기)으로 묶어 한 위젯에 보여줍니다. 탭을 바꾸면 마지막으로 본 탭을 기억합니다</string>
@@ -135,6 +136,14 @@
     <string name="layout_config_mode_single">보기 하나</string>
     <string name="layout_config_mode_tabs">탭</string>
     <string name="layout_config_mode_sections">섹션</string>
+    <string name="layout_config_mode_merged">합쳐 보기</string>
+    <string name="layout_config_limit_merged">보기를 최대 %1$d개까지 한 달력에 합쳐요. 날짜 속성이 있는 보기만 일정으로 나와요. 월 격자 달력만 지원해요</string>
+    <string name="layout_merged_date">기준 날짜 속성</string>
+    <string name="layout_merged_date_default">보기의 기본 날짜 속성</string>
+    <string name="layout_merged_color">일정 색</string>
+    <string name="layout_merged_title">합쳐 보기</string>
+    <string name="layout_merged_header_description">합쳐 보기: %1$s, 눌러서 새로고침</string>
+    <string name="layout_merged_too_small">위젯을 키우면 합친 달력이 보여요</string>
     <string name="layout_config_views">담을 보기</string>
     <string name="layout_config_limit_tabs">탭은 최대 %1$d개까지 담을 수 있어요</string>
     <string name="layout_config_limit_sections">섹션은 최대 %1$d개까지 담을 수 있어요. 위젯이 작으면 앞쪽 섹션만 보여요</string>
