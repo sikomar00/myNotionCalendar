@@ -13,6 +13,7 @@ import androidx.glance.appwidget.GlanceRemoteViews
 import androidx.glance.appwidget.testing.unit.hasRunCallbackClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasTestTag
+import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
@@ -63,6 +64,17 @@ class TabbedWidgetTest {
             .assert(hasRunCallbackClickAction<TabAction>(actionParametersOf(TabAction.TabKey to WidgetTab.HABIT.name)))
         onNode(hasTestTag("tab_CALENDAR"))
             .assert(hasRunCallbackClickAction<TabAction>(actionParametersOf(TabAction.TabKey to WidgetTab.CALENDAR.name)))
+    }
+
+    @Test
+    fun tabLabelsAreWordsWithoutEmojiAndStillDescribeTheSelection() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 380.dp))
+        provideComposable { Tabbed(WidgetTab.CALENDAR) }
+        // 이모지(📅✅💰)는 기기 글꼴마다 모양이 달라 아이콘으로 바꿨다. 글자는 낱말만 남는다.
+        listOf("일정", "습관", "가계부").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTestTag("tab_CALENDAR")).assert(hasContentDescriptionEqualTo("일정, 선택됨"))
+        onNode(hasTestTag("tab_HABIT")).assert(hasContentDescriptionEqualTo("습관"))
     }
 
     @Test

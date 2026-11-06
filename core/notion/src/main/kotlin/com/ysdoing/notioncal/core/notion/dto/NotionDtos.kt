@@ -100,7 +100,30 @@ data class PropertySchemaDto(
     val status: StatusSchemaDto? = null,
     @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
     val relation: RelationSchemaDto? = null,
+    /** CN-02: 스키마 전체 저장용(숫자 형식·수식·롤업·ID 설정). 위젯·편집 시트가 속성을 알려고 쓴다. */
+    val number: NumberSchemaDto? = null,
+    val formula: FormulaSchemaDto? = null,
+    val rollup: RollupSchemaDto? = null,
+    @SerialName("unique_id") val uniqueId: UniqueIdSchemaDto? = null,
 )
+
+@Serializable
+data class NumberSchemaDto(val format: String? = null)
+
+@Serializable
+data class FormulaSchemaDto(val expression: String? = null)
+
+@Serializable
+data class RollupSchemaDto(
+    @SerialName("relation_property_name") val relationPropertyName: String? = null,
+    @SerialName("relation_property_id") val relationPropertyId: String? = null,
+    @SerialName("rollup_property_name") val rollupPropertyName: String? = null,
+    @SerialName("rollup_property_id") val rollupPropertyId: String? = null,
+    val function: String? = null,
+)
+
+@Serializable
+data class UniqueIdSchemaDto(val prefix: String? = null)
 
 @Serializable
 data class DataSourceDto(
@@ -119,6 +142,8 @@ data class PageDto(
     val properties: JsonObject = JsonObject(emptyMap()),
     /** 소속 data source(DD-01: 캐시에 없는 고정 일정을 받을 때 어느 DB 매핑을 쓸지). */
     val parent: PageParentDto? = null,
+    /** 노션 페이지 표지(`{"type":"external"|"file", …}`, 없으면 null). 갤러리 카드의 표지 출처 중 하나다(Phase 12d). */
+    val cover: JsonObject? = null,
 )
 
 @Serializable

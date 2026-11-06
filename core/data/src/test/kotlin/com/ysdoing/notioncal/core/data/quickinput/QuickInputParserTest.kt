@@ -112,4 +112,21 @@ class QuickInputParserTest {
         assertEquals(false, QuickInputParser.parse("장보기", today).hasSchedule)
         assertEquals(true, QuickInputParser.parse("내일 장보기", today).hasSchedule)
     }
+
+    @Test
+    fun withTimeOffLeavesTheTimeWordsInTheTitle() {
+        val parsed = QuickInputParser.parse("내일 3시 회의", today, withTime = false)
+        assertEquals("3시 회의", parsed.title)
+        assertEquals(LocalDate.of(2026, 10, 15), parsed.date)
+        assertEquals(null, parsed.start)
+        val range = QuickInputParser.parse("모레 오전 10시~11시 치과", today, withTime = false)
+        assertEquals("오전 10시~11시 치과", range.title)
+        assertEquals(null, range.start)
+        assertEquals(null, range.end)
+    }
+
+    @Test
+    fun withTimeOnIsTheDefaultAndUnchanged() {
+        assertEquals(QuickInputParser.parse("내일 3시 회의", today), QuickInputParser.parse("내일 3시 회의", today, withTime = true))
+    }
 }

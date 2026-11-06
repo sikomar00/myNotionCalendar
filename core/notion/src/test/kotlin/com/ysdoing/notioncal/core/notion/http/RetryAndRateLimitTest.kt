@@ -45,6 +45,22 @@ class RetryAndRateLimitTest {
     }.build()
 
     @Test
+    fun theRequestCounterCountsEveryAttemptIncludingRetries() = runTest {
+        // PF-11: 한 주기의 요청 수 = 노션으로 나간 요청 전부(429 재시도 포함). 한도(분당 180)는 시도마다 소비된다.
+        val counter = RequestCounter()
+        val counted = NotionClient(
+            createNotionApi(server.url("/"), { "t" }, retry = retry, bucket = TokenBucket(clock = time, sleeper = time), socketTag = null, counter = counter),
+            NotionJson,
+        )
+        server.enqueue(response(200))
+        server.enqueue(response(429, "Retry-After" to "1"))
+        server.enqueue(response(200))
+        counted.dataSource("ds1")
+        counted.dataSource("ds2") // 429 한 번 + 재시도 성공 = 요청 2개
+        assertEquals(3L, counter.total)
+    }
+
+    @Test
     fun retryAfterHeaderIsHonoured() = runTest {
         // §12 필수 시나리오: 429(Retry-After: 2) 응답 후 2초 뒤 재시도해 성공한다.
         server.enqueue(response(429, "Retry-After" to "2"))

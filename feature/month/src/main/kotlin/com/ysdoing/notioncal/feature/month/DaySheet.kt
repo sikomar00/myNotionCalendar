@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
 
 /**
  * MV-04 날짜 시트: 그날 목록에서 체크·편집·추가. 위젯 퀵 시트와 같은 [QuickSheetContent]를 쓴다.
- * 앱 안에서는 날짜를 훑어보는 경우가 많아 키보드를 자동으로 띄우지 않는다.
+ * 앱 안에서는 날짜를 훑어보는 경우가 많아 키보드를 자동으로 띄우지 않는다. 다만 새 일정(+ 버튼)은 바로 입력하므로 띄운다.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +34,7 @@ fun DaySheet(start: QuickSheetStart, onDismiss: () -> Unit) {
             start = start,
             viewModel = hiltViewModel(key = "day-sheet"),
             onFinished = onDismiss,
-            autoFocus = false,
+            autoFocus = start is QuickSheetStart.Add,
             bottomInset = navBottom,
             modifier = Modifier.fillMaxHeight(SHEET_HEIGHT),
         )

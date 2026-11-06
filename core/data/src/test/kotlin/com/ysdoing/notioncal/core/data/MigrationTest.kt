@@ -408,4 +408,193 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v13 → v14(보기 행 쓰기): 기존 보기·행은 그대로이고 새 열은 비어 있으며, 보내지 않은 바꿈 큐를 쓸 수 있다. */
+    @Test
+    fun v13ToV14AddsViewWriteInfoAndQueue() = runTest {
+        helper.createDatabase(13).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells) VALUES ('v1', 0, 'pg', 'https://n', '첫째')")
+        }
+        helper.runMigrationsAndValidate(14).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            assertEquals("", dao.snapshot("v1")!!.columnInfo)
+            val row = dao.row("v1", "pg")!!
+            assertEquals("첫째", row.cells)
+            assertEquals("", row.typed)
+            val write = com.ysdoing.notioncal.core.data.db.ViewWriteEntity(
+                viewId = "v1", pageId = "pg", dataSourceId = "ds1", propId = "dn", propType = "checkbox", value = "true", createdAt = 1,
+            )
+            dao.enqueue(row.copy(typed = "{}"), write)
+            assertEquals(1, dao.pendingWriteCount())
+            assertEquals("true", dao.firstWrite()!!.value)
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v14 → v15(책 위젯 M5): 기존 행은 그대로이고 표지 주소는 빈 글자·읽은 비율은 null이며, 새 값을 쓸 수 있다. */
+    @Test
+    fun v14ToV15AddsCoverUrlAndProgress() = runTest {
+        helper.createDatabase(14).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '읽는 중', 'gallery', '제목', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells, typed) VALUES ('v1', 0, 'pg', 'https://n', '책', '{}')")
+        }
+        helper.runMigrationsAndValidate(15).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            val row = dao.row("v1", "pg")!!
+            assertEquals(listOf("책", "{}", "", null), listOf(row.cells, row.typed, row.coverUrl, row.progress))
+            dao.upsert(dao.snapshot("v1")!!)
+            dao.replace(dao.snapshot("v1")!!, listOf(row.copy(coverUrl = "https://img/1.jpg", progress = 0.4f)))
+            assertEquals(listOf("https://img/1.jpg", 0.4f), dao.row("v1", "pg")!!.let { listOf(it.coverUrl, it.progress) })
+            assertEquals(listOf("https://img/1.jpg"), dao.coverUrls())
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v15 → v16(Phase 10 기반): 기존 데이터는 그대로이고 새 열은 기본값, 새 표와 인덱스를 쓸 수 있다. */
+    @Test
+    fun v15ToV16AddsSchemaCacheBaseValueRequestCountAndPageIndex() = runTest {
+        helper.createDatabase(15).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '읽는 중', 'gallery', '제목', 5)")
+            db.execSQL("INSERT INTO view_rows (viewId, position, pageId, url, cells, typed, coverUrl, progress) VALUES ('v1', 0, 'pg', 'https://n', '책', '{}', 'https://img/1.jpg', 0.12)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts) VALUES ('v1', 'pg', 'ds1', 'ing', 'number', '40.0', 7, 2)")
+            db.execSQL("INSERT INTO sync_log (at, trigger, result, durationMs, pulled, pushed, error) VALUES (9, 'PERIODIC', 'OK', 120, 3, 1, NULL)")
+        }
+        helper.runMigrationsAndValidate(16).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.viewDao()
+            val row = dao.row("v1", "pg")!!
+            assertEquals(listOf("https://img/1.jpg", 0.12f), listOf(row.coverUrl, row.progress)) // 표지·읽은 비율 보존
+            val write = dao.firstWrite()!!
+            assertEquals(listOf("40.0", 2, null), listOf(write.value, write.attempts, write.baseValue)) // 대기 중인 쓰기 보존
+            assertEquals(0, db.syncLogDao().recent(5).single().requests)
+            assertEquals(listOf("v1"), dao.viewsContaining("pg"))
+            dao.upsertSchema(com.ysdoing.notioncal.core.data.db.SourceSchemaEntity("ds1", "{\"id\":\"ds1\"}", 1))
+            assertEquals("{\"id\":\"ds1\"}", dao.schema("ds1")!!.schemaJson)
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v16 → v17(Phase 11a): 보기 설정 원본·행 완전 여부·보드 열 넘김 위치 열은 기본값이고 기존 데이터는 그대로다. */
+    @Test
+    fun v16ToV17AddsViewConfigRowsCompleteAndViewPage() = runTest {
+        helper.createDatabase(16).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '보드', 'board', '이름', 5)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1')")
+        }
+        helper.runMigrationsAndValidate(17).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val view = db.viewDao().snapshot("v1")!!
+            assertEquals(listOf("보드", "", true), listOf(view.name, view.viewConfig, view.rowsComplete))
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf("v1", 0), listOf(widget.viewId, widget.viewPage))
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v17 → v18(Phase 11c): 전송 지연(sendAfter)·보기 필터 원본·숫자 ± 단계값·프리셋 열은 기본값이고, 대기 중인 쓰기는 지연 없이 그대로 나간다. */
+    @Test
+    fun v17ToV18AddsSendAfterFilterJsonNumberStepAndPresets() = runTest {
+        helper.createDatabase(17).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts) VALUES ('v1', 'p1', 'ds1', 'dn', 'checkbox', 'true', 9, 1)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1')")
+        }
+        helper.runMigrationsAndValidate(18).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val write = db.viewDao().firstDueWrite(now = 10)!!
+            assertEquals(listOf("true", 1, 0L), listOf(write.value, write.attempts, write.sendAfter)) // 옛 쓰기는 바로 보낼 수 있다
+            assertEquals("", db.viewDao().snapshot("v1")!!.filterJson)
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf(1.0, ""), listOf(widget.numberStep, widget.presetsJson))
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v18 → v19(Phase 11d): 위젯 배치(layoutJson)와 마지막으로 본 탭(lastTab) 열은 기본값이고 기존 위젯 설정은 그대로다. */
+    @Test
+    fun v18ToV19AddsLayoutJsonAndLastTab() = runTest {
+        helper.createDatabase(18).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson) VALUES (7, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]')")
+        }
+        helper.runMigrationsAndValidate(19).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(7)!!
+            assertEquals(listOf("v1", 5.0, "[]"), listOf(widget.viewId, widget.numberStep, widget.presetsJson)) // 기존 설정 보존
+            assertEquals(listOf("", 0), listOf(widget.layoutJson, widget.lastTab))
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v19 → v20(Phase 11g): 입력 양식(formJson) 열은 기본값(빈 글자)이고 기존 위젯 설정·배치는 그대로다. */
+    @Test
+    fun v19ToV20AddsFormJson() = runTest {
+        helper.createDatabase(19).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab) VALUES (8, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '{\"mode\":\"TABS\"}', 2)")
+        }
+        helper.runMigrationsAndValidate(20).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(8)!!
+            assertEquals(listOf("v1", "{\"mode\":\"TABS\"}", 2), listOf(widget.viewId, widget.layoutJson, widget.lastTab)) // 기존 설정 보존
+            assertEquals("", widget.formJson)
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v20 → v21(Phase 12c): 액션 목록(actionsJson)·쓰기 묶음(batchId)은 기본값이고, 보낸 기록(sent_writes) 표가 생기며, 기존 설정·쓰기는 그대로다. */
+    @Test
+    fun v20ToV21AddsActionsJsonBatchIdAndSentWrites() = runTest {
+        helper.createDatabase(20).use { db ->
+            db.execSQL("INSERT INTO view_snapshots (viewId, dataSourceId, name, viewType, columns, syncedAt) VALUES ('v1', 'ds1', '할 일', 'table', '이름', 5)")
+            db.execSQL("INSERT INTO view_writes (viewId, pageId, dataSourceId, propId, propType, value, createdAt, attempts, sendAfter) VALUES ('v1', 'p1', 'ds1', 'dn', 'checkbox', 'true', 9, 1, 12)")
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab, formJson) VALUES (9, 0, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '', 0, '{\"v1\":{}}')")
+        }
+        helper.runMigrationsAndValidate(21).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val write = db.viewDao().firstDueWrite(now = 100)!!
+            assertEquals(listOf("true", 12L, 0L), listOf(write.value, write.sendAfter, write.batchId)) // 옛 쓰기는 묶음이 아니다
+            val widget = db.widgetConfigDao().get(9)!!
+            assertEquals(listOf("v1", "{\"v1\":{}}", ""), listOf(widget.viewId, widget.formJson, widget.actionsJson)) // 기존 설정 보존
+            db.query("SELECT COUNT(*) FROM sent_writes", null).use { c ->
+                c.moveToFirst()
+                assertEquals(0, c.getInt(0)) // 표가 있고 비어 있다
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v21 → v22(Phase 12 마무리): 타임라인 이동량(timelineOffset)은 기본값 0이고 기존 위젯 설정(달 이동량 포함)은 그대로다. */
+    @Test
+    fun v21ToV22AddsTimelineOffset() = runTest {
+        helper.createDatabase(21).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab, formJson, actionsJson) VALUES (10, 3, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '{\"mode\":\"TABS\"}', 1, '', '[]')")
+        }
+        helper.runMigrationsAndValidate(22).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(10)!!
+            assertEquals(listOf(3, "v1", 1), listOf(widget.monthOffset, widget.viewId, widget.lastTab)) // 기존 설정 보존
+            assertEquals(0, widget.timelineOffset)
+        } finally {
+            db.close()
+        }
+    }
 }

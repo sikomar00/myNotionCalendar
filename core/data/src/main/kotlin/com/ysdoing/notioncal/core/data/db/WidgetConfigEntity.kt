@@ -39,6 +39,22 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "0") val showWeather: Boolean = false,
     /** VW-04 보기 위젯이 보여 줄 등록한 보기(v13). */
     val viewId: String? = null,
+    /** v17(Phase 11a): 보드 위젯이 보여 주는 첫 열의 위치(‹ ›로 넘긴다). 다른 위젯은 쓰지 않는다. */
+    @ColumnInfo(defaultValue = "0") val viewPage: Int = 0,
+    /** v18(Phase 11c IX-03): 숫자 ± 한 번에 더하고 빼는 값. */
+    @ColumnInfo(defaultValue = "1.0") val numberStep: Double = 1.0,
+    /** v18(Phase 11c AD-05): 프리셋 목록(JSON, 위젯당 최대 5개). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val presetsJson: String = "",
+    /** v19(Phase 11d WL-01): 위젯 배치(`WidgetLayout` JSON: 단일·탭·섹션과 보기 목록). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val layoutJson: String = "",
+    /** v19(WL-02): 탭 배치에서 마지막으로 본 탭 번호(위젯마다 기억). */
+    @ColumnInfo(defaultValue = "0") val lastTab: Int = 0,
+    /** v20(Phase 11g AD-02): 보기별 새 항목 입력 양식(`InputForms` JSON: 보기 ID → 속성·순서·기본값·날짜 칩). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val formJson: String = "",
+    /** v21(Phase 12c IX-07): 액션 버튼 목록(`ViewActions` JSON, 위젯당 최대 5개). 없으면 빈 글자. */
+    @ColumnInfo(defaultValue = "") val actionsJson: String = "",
+    /** v22: 타임라인 보기가 보는 창의 이동량(주 또는 달 단위). 캘린더의 [monthOffset](달)과 단위가 달라 따로 둔다. */
+    @ColumnInfo(defaultValue = "0") val timelineOffset: Int = 0,
 )
 
 @Dao

@@ -15,11 +15,14 @@ import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.applying
 import com.ysdoing.notioncal.core.data.db.ConflictEntity
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.data.db.OutboxEntity
 import com.ysdoing.notioncal.core.data.parseColorOptions
 import com.ysdoing.notioncal.core.data.toEntity
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import com.ysdoing.notioncal.core.notion.NotionException
 import com.ysdoing.notioncal.core.notion.NotionReader
 import com.ysdoing.notioncal.core.notion.NotionWriter
@@ -45,7 +48,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** 한 번 처리한 결과. [retryError]가 있으면 일시 오류로 멈춘 것이라 나중에 다시 실행한다. */
-data class OutboxOutcome(val sent: Int, val remaining: Int, val retryError: NotionError?)
+data class OutboxOutcome(
+    val sent: Int,
+    val remaining: Int,
+    val retryError: NotionError?,
+    /** 이번에 노션에 보낸 페이지(생성은 만들어진 진짜 id). */
+    val sentPageIds: Set<String> = emptySet(),
+    /** 새 페이지를 만든 소스. 만든 페이지는 어느 보기 행에도 아직 없어 소스의 보기를 다시 받는다(SY-06). */
+    val createdInSources: Set<String> = emptySet(),
+)
 
 /**
  * 아웃박스 작업을 노션에 보낸다(NS-04, NS-05, PRD §8.5-5·6·8).
@@ -63,6 +74,7 @@ class OutboxProcessor @Inject constructor(
     private val clock: Clock,
     private val widgetRefresher: WidgetRefresher,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val requests: RequestCounter = RequestCounter(),
 ) {
     private val mutex = Mutex()
     private val outbox get() = db.outboxDao()
@@ -71,7 +83,11 @@ class OutboxProcessor @Inject constructor(
     suspend fun process(): OutboxOutcome = withContext(io) {
         mutex.withLock {
             val schemas = HashMap<String, DataSourceDto>()
+            val startedAt = clock.millis()
+            val requestsBefore = requests.total
             var sent = 0
+            val sentPages = LinkedHashSet<String>()
+            val createdSources = LinkedHashSet<String>()
             var retryError: NotionError? = null
             while (true) {
                 val row = outbox.all().firstOrNull() ?: break
@@ -92,55 +108,119 @@ class OutboxProcessor @Inject constructor(
                     val mapper = NotionPageMapper(mapping, schema)
                     val encoder = PropertyEncoder(mapping, source.doneOption, source.undoneOption, schema)
                     when (OutboxOp.valueOf(row.op)) {
-                        OutboxOp.CREATE -> create(row, source, mapper, encoder)
-                        OutboxOp.UPDATE -> update(row, source, mapper, encoder)
-                        OutboxOp.TRASH -> trash(row)
+                        OutboxOp.CREATE -> {
+                            sentPages += create(row, source, mapper, encoder)
+                            createdSources += source.dataSourceId
+                        }
+                        OutboxOp.UPDATE -> {
+                            update(row, source, mapper, encoder)
+                            sentPages += row.pageId
+                        }
+                        OutboxOp.TRASH -> {
+                            trash(row)
+                            sentPages += row.pageId
+                        }
                     }
                     sent++
                 } catch (e: NotionException) {
                     if (e.error is NotionError.Validation) {
                         reject(row, source)
                     } else {
-                        outbox.update(row.copy(attempts = row.attempts + 1, lastError = e.error::class.simpleName))
+                        if (row.op != OutboxOp.CREATE.name) outbox.markAttempt(row.id)
+                        outbox.markError(row.id, e.error::class.simpleName)
                         retryError = e.error
                         break
                     }
                 }
             }
             if (sent > 0) widgetRefresher.requestUpdate()
-            OutboxOutcome(sent, outbox.all().size, retryError)
+            if (sent > 0 || retryError != null) logCycle(startedAt, requestsBefore, sent, retryError)
+            OutboxOutcome(sent, outbox.all().size, retryError, sentPages, createdSources)
         }
     }
 
-    private suspend fun create(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder) {
+    /** PF-11·SY-04: 이번 아웃박스 주기의 보낸 수와 요청 수를 sync_log에 남긴다(헤더의 '마지막 동기화'에는 쓰이지 않는 종류). */
+    private suspend fun logCycle(startedAt: Long, requestsBefore: Long, sent: Int, error: NotionError?) {
+        db.syncLogDao().record(
+            SyncLogEntity(
+                at = clock.millis(), trigger = SYNC_LOG_OUTBOX, result = if (error == null) "OK" else "ERROR",
+                durationMs = clock.millis() - startedAt, pulled = 0, pushed = sent, error = error?.let { it::class.simpleName },
+                requests = (requests.total - requestsBefore).toInt(),
+            ),
+        )
+    }
+
+    /** 노션에 만들어진 진짜 페이지 id를 돌려준다. */
+    private suspend fun create(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder): String {
         val change = decodeChange(row.changes)
-        // §8.5-8: 지난번 생성이 시간 초과·서버 오류로 끝났다면 실제로는 만들어졌을 수 있다. 다시 보내기 전에 찾아본다.
-        val title = change.title
-        val existing = if (row.attempts > 0 && title != null) findCreated(row, source, title) else null
-        val page = existing ?: writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
-        db.withTransaction {
-            // HB-02: 보내는 사이 사용자가 지웠다(EventWriter.trash가 잠금 밖에서 임시 행과 이 작업을 지움). 만들어진 페이지를
-            // 반영하면 체크가 되살아나므로 반영하지 않고 휴지통 작업을 대신 쌓는다(같은 실행에서 이어 보낸다).
-            if (outbox.get(row.id) == null) {
-                outbox.insert(
-                    OutboxEntity(
-                        pageId = page.id, dataSourceId = source.dataSourceId, op = OutboxOp.TRASH.name, changes = "{}",
-                        baseValues = null, baseLastEdited = null, createdAt = clock.millis(),
-                    ),
-                )
-                return@withTransaction
-            }
-            events.renamePage(row.pageId, page.id)
-            outbox.renamePage(row.pageId, page.id)
-            outbox.delete(row.id)
-            applyServerPage(page.id, mapper.map(page).event, source)
+        // 지난 시도에서 실제로 보낸 내용(없으면 지금 내용). 끊긴 생성을 찾을 때와, 그 뒤에 고친 것을 가를 때 쓴다.
+        val lastSent = row.baseValues?.let(::decodeChange) ?: change
+        // §8.5-8: 지난번 생성이 시간 초과·취소로 끝났다면 실제로는 만들어졌을 수 있다. 다시 보내기 전에 찾아본다.
+        val existing = if (row.attempts > 0) findCreated(row, source, mapper, lastSent) else null
+        val page = existing ?: run {
+            // 응답을 못 받고 끊겨도 노션이 이미 만들었을 수 있다: 시도를 세고 보낸 내용을 남겨 다음에 먼저 찾아본다(SY-08 ②).
+            outbox.markSending(row.id, OutboxJson.encodeToString(EventChange.serializer(), change))
+            writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
         }
+        val sentNow = if (existing != null) lastSent else change
+        db.withTransaction { finishCreate(row, page, sentNow, source, mapper) }
+        return page.id
     }
 
-    private suspend fun findCreated(row: OutboxEntity, source: DataSourceEntity, title: String): PageDto? {
+    private suspend fun finishCreate(row: OutboxEntity, page: PageDto, sent: EventChange, source: DataSourceEntity, mapper: NotionPageMapper) {
+        // HB-02: 보내는 사이 사용자가 지웠다(EventWriter.trash가 잠금 밖에서 임시 행과 이 작업을 지움). 만들어진 페이지를
+        // 반영하면 체크가 되살아나므로 반영하지 않고 휴지통 작업을 대신 쌓는다(같은 실행에서 이어 보낸다).
+        val current = outbox.get(row.id)
+        if (current == null) {
+            outbox.insert(
+                OutboxEntity(
+                    pageId = page.id, dataSourceId = source.dataSourceId, op = OutboxOp.TRASH.name, changes = "{}",
+                    baseValues = null, baseLastEdited = null, createdAt = clock.millis(),
+                ),
+            )
+            return
+        }
+        // 동기화가 이미 이 페이지를 받아 뒀다면(끊긴 생성 뒤 같은 실행의 읽기) 그 행이 진짜이니 임시 일정만 지운다(키 충돌 방지).
+        if (page.id != row.pageId && events.get(page.id) != null) events.delete(listOf(row.pageId)) else events.renamePage(row.pageId, page.id)
+        outbox.renamePage(row.pageId, page.id)
+        outbox.delete(row.id)
+        val created = mapper.map(page).event
+        // SY-08 ③: 보낸 뒤에 합쳐진 편집은 만들어진 페이지에 UPDATE로 이어 보낸다(지우면 유실된다). 기준값은 보낸 값이라, 그 사이
+        // 노션에서 같은 필드를 고쳤다면 충돌로 가려진다(노션 값 우선).
+        val edit = decodeChange(current.changes).changedFrom(sent)
+        if (!edit.isEmpty) queueEdit(page.id, source, edit, sent.restrictedTo(edit))
+        applyServerPage(page.id, created, source)
+    }
+
+    private suspend fun queueEdit(pageId: String, source: DataSourceEntity, edit: EventChange, base: EventChange) {
+        outbox.insert(
+            OutboxEntity(
+                pageId = pageId, dataSourceId = source.dataSourceId, op = OutboxOp.UPDATE.name,
+                changes = OutboxJson.encodeToString(EventChange.serializer(), edit),
+                baseValues = OutboxJson.encodeToString(EventChange.serializer(), base), baseLastEdited = null, createdAt = clock.millis(),
+            ),
+        )
+    }
+
+    /**
+     * 끊긴 생성이 이미 노션에 만들어졌는지 찾아본다: 보냈던 제목·날짜와 같은 페이지. 그 사이 로컬에서 제목을 고쳤어도 보낸 제목으로 찾는다.
+     * 같은 제목·날짜로 먼저 만든 다른 일정의 페이지를 피하려고 아직 로컬에 없는 페이지를 먼저 쓰고, 동기화가 이미 받아 둔 페이지도 후보다.
+     * 이 조회는 미리 해 보는 확인일 뿐이라 노션이 거부(400)해도 못 찾은 것으로 보고 생성을 계속한다(shortcut: 그러면 중복이 생길 수
+     * 있다. 사용자의 새 일정을 잃는 것보다 낫다고 보았다).
+     */
+    private suspend fun findCreated(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, sent: EventChange): PageDto? {
+        val title = sent.title ?: return null
         val since = Instant.ofEpochMilli(row.createdAt).minus(CREATE_LOOKBACK)
-        return reader.queryAll(source.dataSourceId, QueryFilters.createdWithTitle(source.titlePropId, title.trim(), since))
-            .pages.firstOrNull { !it.inTrash }
+        val found = try {
+            reader.queryAll(source.dataSourceId, QueryFilters.createdWithTitle(source.titlePropId, title.trim(), since))
+        } catch (e: NotionException) {
+            if (e.error is NotionError.Validation) return null else throw e
+        }
+        val sentDate = sent.date?.startDate
+        // shortcut: 후보가 모두 이미 로컬에 있으면(동기화가 받아 둔 페이지) 그중 하나를 이 작업의 것으로 본다. 같은 제목·날짜로 1분 안에
+        // 둘을 만들고 둘째가 끊기면 둘째를 만들지 않는다(조용히 합쳐짐). 끊긴 생성이 동기화에 먼저 읽힌 흔한 경우의 중복을 막는 쪽을 택했다.
+        val candidates = found.pages.filter { !it.inTrash && (sentDate == null || mapper.map(it).event?.startDate?.toString() == sentDate) }
+        return candidates.firstOrNull { events.get(it.id) == null } ?: candidates.firstOrNull()
     }
 
     private suspend fun update(row: OutboxEntity, source: DataSourceEntity, mapper: NotionPageMapper, encoder: PropertyEncoder) {
@@ -238,7 +318,10 @@ class OutboxProcessor @Inject constructor(
 
     /** 노션 응답으로 로컬 일정을 맞춘다. 같은 페이지에 남은 작업이 있으면 그 변경을 다시 얹는다. */
     private suspend fun applyServerPage(pageId: String, remote: RemoteEvent?, source: DataSourceEntity) {
-        val remaining = outbox.all().filter { it.pageId == pageId && it.op != OutboxOp.TRASH.name }
+        // SY-08 ①: 같은 페이지의 삭제가 줄 서 있으면 앞선 편집의 응답이 지운 일정을 로컬에 되살리지 않는다.
+        val queued = outbox.all().filter { it.pageId == pageId }
+        if (queued.any { it.op == OutboxOp.TRASH.name }) return
+        val remaining = queued
         if (remote == null) {
             if (remaining.isEmpty()) events.delete(listOf(pageId))
             return
@@ -292,7 +375,8 @@ internal enum class ChangeField {
 /** 내가 바꾼 필드 중 노션에서도 기준값과 달라진 필드. */
 internal fun conflictingFields(change: EventChange, base: EventChange, remote: EventChange): List<ChangeField> =
     ChangeField.entries.filter { field ->
-        field.valueOf(change) != null && field.valueOf(remote) != field.valueOf(base)
+        // 노션 값이 이미 내 값과 같으면(끊기기 전에 노션이 받은 편집을 재시도) 충돌이 아니다.
+        field.valueOf(change) != null && field.valueOf(remote) != field.valueOf(base) && field.valueOf(remote) != field.valueOf(change)
     }
 
 /** 서버 일정에서 [change]와 같은 필드만 같은 모양으로 꺼낸다. */
@@ -308,7 +392,10 @@ internal fun RemoteEvent.valuesFor(change: EventChange) = EventChange(
 
 /** EX-07: 내가 바꾼 추가 속성 중 노션에서도 기준값과 달라진 것(속성 ID). */
 internal fun conflictingProps(change: EventChange, base: EventChange, remote: EventChange): List<String> =
-    change.props.orEmpty().keys.filter { id -> (remote.props?.get(id) ?: PropValue()) != (base.props?.get(id) ?: PropValue()) }
+    change.props.orEmpty().keys.filter { id ->
+        val now = remote.props?.get(id) ?: PropValue()
+        now != (base.props?.get(id) ?: PropValue()) && now != change.props?.get(id)
+    }
 
 private fun PropValue.describe(): String =
     optionIds?.joinToString(",") ?: number?.toString() ?: text.orEmpty()
@@ -338,4 +425,26 @@ internal fun EventChange.toPageWrite(catalog: List<ExtraProp> = emptyList()) = P
             manual = tx.manual,
         )
     },
+)
+
+/** [edit]에 든 필드만 남긴다(그 필드의 기준값으로 쓰려고). */
+private fun EventChange.restrictedTo(edit: EventChange) = EventChange(
+    title = title.takeIf { edit.title != null },
+    date = date.takeIf { edit.date != null },
+    done = done.takeIf { edit.done != null },
+    select = select.takeIf { edit.select != null },
+    props = props?.filterKeys { edit.props?.containsKey(it) == true },
+    link = link.takeIf { edit.link != null },
+    ledger = ledger.takeIf { edit.ledger != null },
+)
+
+/** [old]와 다른 필드만 남긴다(생성을 보낸 뒤 고친 것만 이어 보내려고). */
+private fun EventChange.changedFrom(old: EventChange) = EventChange(
+    title = title.takeIf { it != old.title },
+    date = date.takeIf { it != old.date },
+    done = done.takeIf { it != old.done },
+    select = select.takeIf { it != old.select },
+    props = props?.filter { (id, value) -> old.props?.get(id) != value }?.takeIf { it.isNotEmpty() },
+    link = link.takeIf { it != old.link },
+    ledger = ledger.takeIf { it != old.ledger },
 )

@@ -38,6 +38,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
@@ -100,11 +101,15 @@ class TabbedWidget : GlanceAppWidget() {
         fun contentSize(size: DpSize, config: WidgetConfig, systemFontScale: Float): DpSize =
             DpSize(size.width, (size.height - tabRowHeight(config, systemFontScale)).coerceAtLeast(0.dp))
 
+        /** 탭 글자 크기(sp). 시스템 글꼴은 상한에서 자른 만큼 sp를 되돌린다(위젯 글자는 시스템 배율을 또 곱해 그려진다). */
+        fun tabFontSp(config: WidgetConfig, systemFontScale: Float): Float =
+            TAB_FONT * config.fontScale / 100f * minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE) / systemFontScale
+
         internal const val TAB_FONT = 12f
     }
 }
 
-/** 통합 위젯 틀: 탭 줄 + 고른 탭 내용. 탭 줄 자식은 3개(📅·✅·💰). */
+/** 통합 위젯 틀: 탭 줄 + 고른 탭 내용. 탭 줄 자식은 3개(일정·습관·가계부). */
 @Composable
 fun TabbedWidgetContent(
     config: WidgetConfig,
@@ -115,8 +120,7 @@ fun TabbedWidgetContent(
     val palette = WidgetPalette.of(config.theme, config.opacity, context)
     val size = LocalSize.current
     val tabHeight = TabbedWidget.tabRowHeight(config, systemFontScale)
-    val textScale = minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
-    val fontSp = TabbedWidget.TAB_FONT * config.fontScale / 100f * textScale / systemFontScale
+    val fontSp = TabbedWidget.tabFontSp(config, systemFontScale)
     Column(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background),
@@ -133,7 +137,7 @@ fun TabbedWidgetContent(
     }
 }
 
-/** 탭 버튼. 고른 탭은 굵은 먹색 + 강조색 막대(선택 상태라 강조색을 쓴다). */
+/** 탭 버튼: 벡터 아이콘 + 글자(이모지는 기기 글꼴마다 모양이 달라 쓰지 않는다). 고른 탭은 굵은 먹색 + 강조색 막대(선택 상태라 강조색을 쓴다). */
 @Composable
 private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fontSp: Float, palette: WidgetPalette) {
     val context = LocalContext.current
@@ -144,6 +148,12 @@ private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fo
             WidgetTab.LEDGER -> R.string.tabbed_widget_tab_ledger
         },
     )
+    val icon = when (tab) {
+        WidgetTab.CALENDAR -> R.drawable.ic_widget_calendar
+        WidgetTab.HABIT -> R.drawable.ic_widget_habit
+        WidgetTab.LEDGER -> R.drawable.ic_widget_wallet
+    }
+    val color = if (selected) palette.text else palette.subtle
     Column(
         modifier = GlanceModifier
             .defaultWeight()
@@ -156,17 +166,19 @@ private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fo
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(top = 6.dp),
-            style = TextStyle(
-                color = if (selected) palette.text else palette.subtle,
-                fontSize = fontSp.sp,
-                fontWeight = if (selected) FontWeight.Bold else null,
-                textAlign = TextAlign.Center,
-            ),
-            maxLines = 1,
-        )
+        Row(
+            GlanceModifier.fillMaxWidth().defaultWeight().padding(top = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WidgetIcon(icon, color, (fontSp * 1.3f).dp)
+            Spacer(GlanceModifier.width(4.dp))
+            Text(
+                text = label,
+                style = TextStyle(color = color, fontSize = fontSp.sp, fontWeight = if (selected) FontWeight.Bold else null, textAlign = TextAlign.Center),
+                maxLines = 1,
+            )
+        }
         if (selected) {
             Box(GlanceModifier.fillMaxWidth().height(2.dp).padding(horizontal = 16.dp)) {
                 Box(GlanceModifier.fillMaxSize().cornerRadius(1.dp).background(palette.accent)) {}

@@ -41,6 +41,9 @@ data class CalendarEvent(
     val showsEmphasis: Boolean get() = emphasized && !done
 
     val lastDate: LocalDate get() = endDate ?: startDate
+
+    /** [date]가 이 일정이 걸친 날(시작일~끝날)인가. */
+    fun occursOn(date: LocalDate): Boolean = !startDate.isAfter(date) && !lastDate.isBefore(date)
     val isMultiDay: Boolean get() = endDate != null && endDate.isAfter(startDate)
 }
 

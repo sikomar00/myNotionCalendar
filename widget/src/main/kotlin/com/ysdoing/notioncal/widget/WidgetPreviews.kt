@@ -23,6 +23,9 @@ import com.ysdoing.notioncal.core.data.ledger.LedgerTx
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
+import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -37,7 +40,7 @@ object WidgetPreviews {
     val MONTH_SIZE = DpSize(358.dp, 380.dp)
     val AGENDA_SIZE = DpSize(358.dp, 152.dp)
     val SPLIT_SIZE = DpSize(358.dp, 168.dp)
-    val HABIT_SIZE = DpSize(358.dp, 168.dp)
+    val HABIT_SIZE = DpSize(358.dp, 216.dp)
 
     private const val TAG = "NotionCalWidget"
 
@@ -109,12 +112,47 @@ object WidgetPreviews {
     }
 
     /** 예시 보기(VW-03). 개인 데이터가 아니다. */
-    fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
+    internal fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
         val rows = listOf("장보기" to "집", "보고서 제출" to "일", "운동" to "건강").mapIndexed { i, (title, tag) ->
             com.ysdoing.notioncal.core.data.view.ViewRow("preview-$i", "", listOf(title, tag, "10/2${i + 1}"))
         }
         val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "할 일", "table", listOf("이름", "분류", "날짜"), rows, now, null)
         return ViewWidgetState(board, WidgetConfig(0, viewId = "preview"), now)
+    }
+
+    /** 노션 위젯(WL-01) 미리보기: 예시 보기 둘을 탭으로(개인 데이터가 아니다). */
+    internal fun layoutState(now: Long = System.currentTimeMillis()): LayoutWidgetState {
+        val layout = WidgetLayout(LayoutMode.TABS).add("preview")!!.add("preview-2")!!
+        return layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("preview" to "할 일", "preview-2" to "독서"), now)
+    }
+
+    /**
+     * 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기).
+     * 집계 타일은 값이 있어야 뜻이 있어 [boards](등록한 보기의 실제 행, 사용자 본인의 설정 화면이라 보여도 된다)로 계산하고, 칸도 있으면 같은 행을 쓴다.
+     */
+    internal fun layoutPreview(
+        config: WidgetConfig,
+        names: Map<String, String>,
+        now: Long = System.currentTimeMillis(),
+        boards: Map<String, ViewBoard?> = emptyMap(),
+        weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+        showWeekNumbers: Boolean = false,
+    ): LayoutWidgetState {
+        val layout = WidgetLayout.parse(config.layoutJson)
+        val sample = viewState(now).board!!
+        // 같은 보기는 칸이든 타일이든 같은 행을 쓴다(실제 행이 없으면 칸만 예시 행).
+        val panes = layout.items.associate { it.viewId to (boards[it.viewId] ?: sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty())) }
+        val tiles = layout.tiles.mapNotNull { tile -> boards[tile.viewId]?.let { tile.viewId to it } }.toMap()
+        return LayoutWidgetState(config, layout, tiles + panes, now, weekStart, CalendarInfo(weekStart, showWeekNumbers))
+    }
+
+    /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */
+    internal fun bookState(now: Long = System.currentTimeMillis()): BookWidgetState {
+        val rows = listOf("예시 책 하나" to 0.35f, "예시 책 둘" to 0.8f).mapIndexed { i, (title, progress) ->
+            com.ysdoing.notioncal.core.data.view.ViewRow("preview-book-$i", "", listOf(title), "", progress)
+        }
+        val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "읽는 중", "gallery", listOf("제목"), rows, now, null)
+        return BookWidgetState(board, WidgetConfig(0, viewId = "preview"), Covers.EMPTY, now)
     }
 
     /**
@@ -135,6 +173,8 @@ object WidgetPreviews {
             runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
             runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(LayoutWidgetReceiver::class) }.getOrNull(),
+            runCatching { manager.setWidgetPreviews(BookWidgetReceiver::class) }.getOrNull(),
         )
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }

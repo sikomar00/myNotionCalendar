@@ -3,31 +3,18 @@ package com.ysdoing.notioncal.core.sync
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** VW-05 보기 종류: table·list는 그대로, board·gallery·timeline·calendar는 목록으로 표시, 나머지는 고를 수 없다. */
+/** VW-05 보기 종류: table·list는 그대로, chart·board·gallery·timeline·calendar는 위젯이 각자의 그림으로 그리고, 나머지는 고를 수 없다. */
 class ViewOptionTest {
     private fun option(type: String?) = ViewOption("v", "이름", type, registered = false)
 
     @Test
-    fun tableAndListAreShownAsTheyAre() {
-        listOf("table", "list").forEach {
-            assertEquals(true, option(it).supported)
-            assertEquals(false, option(it).shownAsList)
-        }
+    fun everyViewKindTheWidgetDrawsCanBeChosen() {
+        // 표·목록·차트·보드·갤러리·캘린더·타임라인 모두 각자의 그림이 있다(못 그리는 설정이면 위젯이 알아서 목록으로 대체한다).
+        listOf("table", "list", "chart", "board", "gallery", "calendar", "timeline").forEach { assertEquals(it, true, option(it).supported) }
     }
 
     @Test
-    fun otherSupportedKindsAreShownAsList() {
-        listOf("board", "gallery", "timeline", "calendar").forEach {
-            assertEquals(true, option(it).supported)
-            assertEquals(true, option(it).shownAsList)
-        }
-    }
-
-    @Test
-    fun dashboardsFormsChartsMapsAndUnreadableViewsCannotBeChosen() {
-        listOf("dashboard", "form", "chart", "map", "feed", "brand_new", null).forEach {
-            assertEquals(false, option(it).supported)
-            assertEquals(false, option(it).shownAsList)
-        }
+    fun dashboardsFormsMapsAndUnreadableViewsCannotBeChosen() {
+        listOf("dashboard", "form", "map", "feed", "brand_new", null).forEach { assertEquals(false, option(it).supported) }
     }
 }

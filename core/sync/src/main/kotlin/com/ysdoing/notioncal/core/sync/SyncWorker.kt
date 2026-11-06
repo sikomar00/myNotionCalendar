@@ -16,16 +16,21 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.ysdoing.notioncal.core.data.SYNC_LOG_VIEWS
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncScheduleInfo
 import com.ysdoing.notioncal.core.data.SyncTrigger
+import com.ysdoing.notioncal.core.data.db.SyncLogDao
+import com.ysdoing.notioncal.core.data.db.SyncLogEntity
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import java.time.Clock
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,8 +41,12 @@ class SyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val engine: NotionSyncEngine,
     private val outbox: OutboxProcessor,
+    private val viewWrites: ViewWriteProcessor,
     private val mirror: PhoneCalendarMirror,
     private val views: ViewSync,
+    private val syncLog: SyncLogDao,
+    private val clock: Clock,
+    private val requests: RequestCounter,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -45,16 +54,24 @@ class SyncWorker @AssistedInject constructor(
             ?: SyncTrigger.APP_OPEN
         // 보내지 않은 쓰기를 먼저 보낸 뒤 읽는다. 실패해도 읽기는 진행한다(작업은 남아 다음에 다시 보낸다).
         outbox.process()
+        // M3: 위젯에서 바꾼 보기 행도 읽기 전에 보낸다(읽기가 노션의 이전 값으로 덮지 않게).
+        val writeOutcome = viewWrites.process()
         val outcome = engine.sync(trigger, inputData.getString(KEY_DATA_SOURCE))
         // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
         mirror.refreshIfEnabled()
         // VW-01: 등록한 노션 보기 스냅샷도 같은 주기에 맞춘다(실패해도 위 결과에 영향 없음).
+        val viewsStartedAt = clock.millis()
+        val viewsBefore = requests.total
         views.syncAll()
+        // PF-11: 보기 주기의 요청 수를 남긴다(보기 수 × 쪽 수만큼 늘어난다). 실패는 보기마다 view_snapshots에 남아 여기서는 OK로 적는다.
+        syncLog.record(
+            SyncLogEntity(
+                at = clock.millis(), trigger = SYNC_LOG_VIEWS, result = "OK", durationMs = clock.millis() - viewsStartedAt,
+                pulled = 0, pushed = 0, error = null, requests = (requests.total - viewsBefore).toInt(),
+            ),
+        )
         // 연결·서버 문제는 WorkManager 백오프로 다시 시도한다. 토큰·공유 문제는 사용자가 고쳐야 하므로 끝낸다.
-        return when (outcome.error) {
-            NotionError.Network, NotionError.RateLimited, is NotionError.Server -> Result.retry()
-            else -> Result.success()
-        }
+        return if (outcome.error.isRetryable() || writeOutcome.retryError.isRetryable()) Result.retry() else Result.success()
     }
 
     companion object {
@@ -63,21 +80,27 @@ class SyncWorker @AssistedInject constructor(
     }
 }
 
+private fun NotionError?.isRetryable() = this == NotionError.Network || this == NotionError.RateLimited || this is NotionError.Server
+
 /** NS-04: 아웃박스를 비운다. 네트워크가 없으면 CONNECTED 조건으로 기다렸다가 연결되면 실행된다(NS-06 네트워크 복구). */
 @HiltWorker
 class OutboxWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val processor: OutboxProcessor,
+    private val viewWrites: ViewWriteProcessor,
+    private val views: ViewSync,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val outcome = processor.process()
-        return when (outcome.retryError) {
-            null -> Result.success()
-            // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
-            NotionError.Unauthorized, NotionError.NotShared -> Result.success()
-            else -> Result.retry()
-        }
+        val viewOutcome = viewWrites.process()
+        // SY-06: 보낸 일정이 든 보기(와 새로 만든 페이지가 들어갈 보기)를 바로 다시 받는다. 위젯에서 바꾼 보기 행을 먼저 보낸 뒤라
+        // 그 보기도 받는다. 연결이 안 되면 다음 동기화가 한다.
+        if (outcome.retryError == null) views.syncContaining(outcome.sentPageIds, outcome.createdInSources)
+        val errors = listOfNotNull(outcome.retryError, viewOutcome.retryError)
+        // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
+        // 둘 중 하나라도 일시 오류면 다시 시도한다(한쪽 오류가 다른 쪽 재시도를 가리지 않게).
+        return if (errors.all { it == NotionError.Unauthorized || it == NotionError.NotShared }) Result.success() else Result.retry()
     }
 }
 
@@ -119,14 +142,21 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /** 아웃박스 전송 요청(EventWriter가 쓰기 직후 부른다). 실행 중이면 뒤에 이어 붙여 새로 쌓인 작업도 보낸다. */
-    fun requestOutbox() {
-        val request = OneTimeWorkRequestBuilder<OutboxWorker>()
+    /**
+     * 아웃박스 전송 요청(EventWriter가 쓰기 직후 부른다). 실행 중이면 뒤에 이어 붙여 새로 쌓인 작업도 보낸다.
+     * [delayMs]가 있으면(Phase 11c 지연 쓰기의 전송 시각) 별도 이름의 작업을 그만큼 미뤄 건다. 같은 이름이라 연타하면 마지막 시각 하나만 남고,
+     * 즉시 요청이 지연 뒤에 줄 서지 않는다. 지연이 늦어져도 쓰기는 큐에 남아 다음 실행(앱 열기·주기 동기화) 때 나간다.
+     */
+    fun requestOutbox(delayMs: Long = 0) {
+        val builder = OneTimeWorkRequestBuilder<OutboxWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
             .addTag(TAG)
-            .build()
-        workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+        if (delayMs > 0) {
+            workManager.enqueueUniqueWork(OUTBOX_DELAYED_NAME, ExistingWorkPolicy.REPLACE, builder.setInitialDelay(delayMs + DELAY_SLACK_MS, TimeUnit.MILLISECONDS).build())
+        } else {
+            workManager.enqueueUniqueWork(OUTBOX_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
+        }
     }
 
     /** S25-04: 예약된 주기 작업의 다음 실행 시각. 삼성 절전 상태에 따라 실제 실행은 늦어질 수 있다. */
@@ -143,6 +173,10 @@ class SyncScheduler @Inject constructor(@ApplicationContext private val context:
     private companion object {
         const val UNIQUE_NAME = "notion-sync"
         const val OUTBOX_NAME = "notion-outbox"
+        const val OUTBOX_DELAYED_NAME = "notion-outbox-delayed"
+
+        /** 지연 쓰기의 전송 시각에 딱 맞추면 시계 오차로 시각보다 조금 일찍 돌아 그 쓰기를 건너뛴다. 그만큼 늦춰 건다. */
+        const val DELAY_SLACK_MS = 500L
         const val PERIODIC_NAME = "notion-sync-periodic"
         const val TAG = "notion-sync"
     }

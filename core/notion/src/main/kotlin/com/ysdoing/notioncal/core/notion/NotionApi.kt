@@ -11,6 +11,8 @@ import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
 import com.ysdoing.notioncal.core.notion.dto.ViewDto
 import com.ysdoing.notioncal.core.notion.dto.ViewListDto
+import com.ysdoing.notioncal.core.notion.dto.ViewQueryDto
+import com.ysdoing.notioncal.core.notion.dto.ViewQueryRequestDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.PATCH
@@ -47,10 +49,25 @@ interface NotionApi {
     suspend fun updatePage(@Path("id") pageId: String, @Body body: UpdatePageDto): PageDto
 
     @GET("v1/views")
-    suspend fun views(@Query("data_source_id") dataSourceId: String, @Query("page_size") pageSize: Int = 100): ViewListDto
+    suspend fun views(
+        @Query("data_source_id") dataSourceId: String,
+        @Query("page_size") pageSize: Int = 100,
+        @Query("start_cursor") startCursor: String? = null,
+    ): ViewListDto
 
     @GET("v1/views/{id}")
     suspend fun view(@Path("id") viewId: String): ViewDto
+
+    @POST("v1/views/{id}/queries")
+    suspend fun createViewQuery(@Path("id") viewId: String, @Body body: ViewQueryRequestDto): ViewQueryDto
+
+    @GET("v1/views/{viewId}/queries/{queryId}")
+    suspend fun viewQueryPage(
+        @Path("viewId") viewId: String,
+        @Path("queryId") queryId: String,
+        @Query("start_cursor") startCursor: String?,
+        @Query("page_size") pageSize: Int = 100,
+    ): ViewQueryDto
 
     @POST("v1/data_sources/{id}/query")
     suspend fun query(@Path("id") dataSourceId: String, @Body body: QueryRequestDto): QueryResponseDto

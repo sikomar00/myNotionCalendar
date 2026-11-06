@@ -34,9 +34,22 @@ interface SyncScheduleInfo {
     }
 }
 
+/**
+ * sync_log에 남기는 아웃박스·보기 주기 줄의 종류(PF-11 요청 수). 일정 동기화 줄(trigger = [SyncTrigger] 이름)과 달리 헤더의 '마지막 동기화'·
+ * '마지막 실패'에는 쓰이지 않고 진단 목록·내보내기에만 남는다.
+ */
+const val SYNC_LOG_OUTBOX = "OUTBOX"
+const val SYNC_LOG_VIEWS = "VIEW_SYNC"
+
 /** NS-04: 아웃박스에 쌓인 쓰기를 노션으로 보내 달라는 요청. 구현은 :core:sync(OutboxWorker). */
 fun interface OutboxRequester {
     fun request()
+
+    /**
+     * [delayMs] 뒤에 한 번 보내 달라고 요청한다(Phase 11c: 지연 중인 쓰기의 전송 시각에 처리기를 깨운다). 지연을 모르는 구현은 바로 요청한다 —
+     * 지연 중인 쓰기는 처리기가 보내지 않으므로 해롭지 않다.
+     */
+    fun requestAfter(delayMs: Long) = request()
 
     companion object {
         val None = OutboxRequester { }
@@ -66,4 +79,25 @@ object AppIntents {
 
     /** LD-07 가계부 빠른 입력(위젯 '+'·날짜 탭, 💰 탭). EXTRA_DATE로 날짜를 넘긴다. */
     const val ACTION_LEDGER_INPUT = "com.ysdoing.notioncal.action.LEDGER_INPUT"
+
+    /** Phase 11c 노션 보기 위젯의 행 편집 시트(행 탭). EXTRA_VIEW_ID = 보기 ID, EXTRA_PAGE_ID = 행(페이지) ID */
+    const val ACTION_VIEW_ROW = "com.ysdoing.notioncal.action.VIEW_ROW"
+
+    /** Phase 11c 노션 보기 위젯의 선택 시트(선택지 4개 이상 select 탭). EXTRA_VIEW_ID·EXTRA_PAGE_ID·EXTRA_PROP_ID */
+    const val ACTION_VIEW_CHOICE = "com.ysdoing.notioncal.action.VIEW_CHOICE"
+    const val EXTRA_PROP_ID = "com.ysdoing.notioncal.extra.PROP_ID"
+
+    /** 위젯 ID(Phase 11c: 새 항목 시트에서 이 위젯의 프리셋으로 저장하려고 위젯 '+'가 싣는다). 없으면 프리셋 저장 버튼을 숨긴다. */
+    const val EXTRA_APPWIDGET_ID = "com.ysdoing.notioncal.extra.APPWIDGET_ID"
+
+    /** VW-08 노션 보기 위젯의 새 항목 입력 시트. EXTRA_VIEW_ID = 보기 ID */
+    const val ACTION_VIEW_ADD = "com.ysdoing.notioncal.action.VIEW_ADD"
+    const val EXTRA_VIEW_ID = "com.ysdoing.notioncal.extra.VIEW_ID"
+
+    /** Phase 11g AD-05: 새 항목 시트를 '프리셋 만들기'로 연다(항목은 만들지 않고 프리셋만 저장). 위젯 편집 화면이 EXTRA_APPWIDGET_ID와 함께 싣는다. */
+    const val EXTRA_PRESET_ONLY = "com.ysdoing.notioncal.extra.PRESET_ONLY"
+
+    /** 프리셋 만들기 시트가 편집 화면에 돌려주는 결과: 프리셋 이름과 값 묶음(`ViewJson.encodeTyped` 글자). */
+    const val EXTRA_PRESET_NAME = "com.ysdoing.notioncal.extra.PRESET_NAME"
+    const val EXTRA_PRESET_PROPS = "com.ysdoing.notioncal.extra.PRESET_PROPS"
 }

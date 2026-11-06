@@ -39,11 +39,11 @@ class MonthGridDragTest {
     private val moves = mutableListOf<Pair<String, Long>>()
     private val clicks = mutableListOf<LocalDate>()
 
-    private fun show() {
+    private fun show(weekNumbers: Boolean = false) {
         compose.setContent {
             MaterialTheme {
                 MonthGrid(
-                    MonthGridState(YearMonth.of(2026, 10), DayOfWeek.SUNDAY, LocalDate.of(2026, 10, 13), listOf(study, trip)),
+                    MonthGridState(YearMonth.of(2026, 10), DayOfWeek.SUNDAY, LocalDate.of(2026, 10, 13), listOf(study, trip), showWeekNumbers = weekNumbers),
                     onDayClick = { clicks += it },
                     onMove = { e, days -> moves += e.pageId to days },
                 )
@@ -99,6 +99,30 @@ class MonthGridDragTest {
         // TalkBack 동작(semantics onClick)도 같은 날짜를 연다.
         compose.onNodeWithContentDescription("10월 16일", substring = true).performClick()
         assertEquals(LocalDate.of(2026, 10, 16), clicks.last())
+    }
+
+    @Test
+    fun dragAndTapStayAccurateWithWeekNumberColumn() {
+        show(weekNumbers = true)
+        // 주차 열만큼 칸이 밀려도 놓은 칸 계산과 탭 날짜가 어긋나지 않는다.
+        dragFrom(centerOfText("영어 스터디"), centerOfDay(10, 16))
+        assertEquals(listOf("1" to 3L), moves)
+        compose.onRoot().performTouchInput { click(centerOfDay(10, 15)) }
+        assertEquals(listOf(LocalDate.of(2026, 10, 15)), clicks)
+    }
+
+    @Test
+    fun weekNumbersShowOnlyWhenEnabled() {
+        show()
+        compose.onNodeWithContentDescription("40주").assertDoesNotExist()
+        compose.onNodeWithContentDescription("45주").assertDoesNotExist()
+    }
+
+    @Test
+    fun weekNumberColumnListsEachWeekOfTheGrid() {
+        show(weekNumbers = true)
+        // 2026년 10월 일요일 시작 달력의 여섯 주는 40~45주(9/27 주가 40주).
+        (40..45).forEach { compose.onNodeWithContentDescription("${it}주").assertExists() }
     }
 
     @Test

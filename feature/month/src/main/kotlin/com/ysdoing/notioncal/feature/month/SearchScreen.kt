@@ -212,7 +212,7 @@ private fun SearchRow(event: CalendarEvent, onPick: (CalendarEvent) -> Unit) {
             Spacer(Modifier.size(10.dp).clip(CircleShape).background(color))
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).alpha(if (event.done) 0.55f else 1f)) {
+        Column(Modifier.weight(1f).alpha(barTextAlpha(event))) {
             Text(
                 event.title.ifBlank { stringResource(R.string.search_untitled) },
                 modifier = Modifier.emphasisPill(event),

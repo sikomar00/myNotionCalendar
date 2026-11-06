@@ -26,6 +26,16 @@ class DeepLinksTest {
     }
 
     @Test
+    fun parsesTheViewerLinkTheWidgetMoreRowOpens() {
+        // Phase 11a VR-02: 위젯의 '+N 더 보기'가 연다. 보기 ID 하나만 받는다.
+        assertEquals(DeepLink.View("1c2d3e4f-0000-4000-8000-0123456789ab"), DeepLinks.parse("notioncal://view/1c2d3e4f-0000-4000-8000-0123456789ab"))
+        listOf("notioncal://view", "notioncal://view/", "notioncal://view/a/b", "notioncal://view/add/v1", "notioncal://view/v1?x=1")
+            .forEach { assertNull(it, DeepLinks.parse(it)) } // 'view/add/<id>'는 새 항목 시트 인텐트가 쓰는 data URI다
+        // 내보낸 액티비티라 아무 앱·웹이 보낼 수 있다. 경로 문자가 섞인 ID는 내비게이션 경로를 깨므로 거른다.
+        listOf("notioncal://view/%3Fx", "notioncal://view/%23", "notioncal://view/a%20b", "notioncal://view/%7Bid%7D").forEach { assertNull(it, DeepLinks.parse(it)) }
+    }
+
+    @Test
     fun ignoresOtherShapes() {
         listOf(
             null, "", "https://today", "notioncal://unknown", "notioncal://date/2026-13-01", "notioncal://date",

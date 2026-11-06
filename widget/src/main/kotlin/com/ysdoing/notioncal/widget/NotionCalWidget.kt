@@ -120,6 +120,7 @@ class NotionCalWidget : GlanceAppWidget() {
             },
             config = config,
             sync = sync,
+            showWeekNumbers = settings.showWeekNumbers,
         )
     }
 }

@@ -148,6 +148,8 @@ data class SyncLogEntity(
     val pushed: Int,
     /** NotionError 종류 이름(예: "Unauthorized"). */
     val error: String?,
+    /** v16(PF-11): 이 주기에 노션으로 보낸 요청 수. 0이면 세지 않았다. */
+    @ColumnInfo(defaultValue = "0") val requests: Int = 0,
 )
 
 /** EX-02 공휴일(PRD §10 holidays). 폰의 공휴일 캘린더에서 복사한다. 날짜 하나에 이름 하나. */

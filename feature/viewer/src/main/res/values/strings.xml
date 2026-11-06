@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="viewer_title_fallback">보기</string>
+    <string name="viewer_back">뒤로</string>
+    <string name="viewer_loading">불러오는 중</string>
+    <string name="viewer_missing">이 보기를 찾을 수 없어요. 설정에서 보기를 다시 등록해 주세요.</string>
+    <string name="viewer_empty">표시할 행이 없어요</string>
+    <string name="viewer_count">%1$d행</string>
+    <string name="viewer_count_incomplete">처음 %1$d행만 받았어요. 노션에 행이 더 있어요</string>
+    <string name="viewer_open_failed">노션 페이지를 열 수 없어요</string>
+    <string name="viewer_row_description">%1$s, 편집</string>
+</resources>

@@ -5,12 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
@@ -44,24 +42,20 @@ import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
-import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.weather.WeatherDay
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
-import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 import com.ysdoing.notioncal.core.data.calendar.gridStart
+import com.ysdoing.notioncal.core.data.calendar.weekNumber
 import kotlinx.coroutines.flow.first
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
-import java.time.temporal.WeekFields
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
@@ -152,9 +146,6 @@ class SplitWidget : GlanceAppWidget() {
             holidays = holidays,
         )
 
-        /** 그 주 첫날 기준 주차. 주 시작 요일 설정을 따르고, 1월 1일이 든 주가 1주차다(2026년 10월 = 40~45주). */
-        fun weekNumber(weekFirstDay: LocalDate, weekStart: DayOfWeek): Int =
-            weekFirstDay.get(WeekFields.of(weekStart, 1).weekOfWeekBasedYear())
     }
 }
 
@@ -296,7 +287,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
             if (showWeek) {
                 val todayRow = state.today.minusDays(((state.today.dayOfWeek.value - state.weekStart.value + 7) % 7).toLong())
                 Text(
-                    text = context.getString(R.string.split_widget_week, SplitWidget.weekNumber(todayRow, state.weekStart)),
+                    text = context.getString(R.string.split_widget_week, weekNumber(todayRow, state.weekStart)),
                     modifier = GlanceModifier.padding(start = 6.dp).semantics { testTag = "splitWeek" },
                     style = TextStyle(color = palette.subtle, fontSize = (metrics.titleFontSp * 0.65f).sp),
                     maxLines = 1,
@@ -321,7 +312,7 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
             val first = start.plusWeeks(week.toLong())
             Row(GlanceModifier.fillMaxWidth().height(metrics.rowHeight), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = SplitWidget.weekNumber(first, state.weekStart).toString(),
+                    text = weekNumber(first, state.weekStart).toString(),
                     modifier = GlanceModifier.width(metrics.weekNumberWidth).semantics { testTag = "splitWeekNumber" },
                     style = TextStyle(color = palette.subtle, fontSize = metrics.weekNumberFontSp.sp, textAlign = TextAlign.Start),
                     maxLines = 1,
@@ -389,7 +380,7 @@ private fun DayList(state: SplitUiState, metrics: SplitMetrics, palette: WidgetP
             }
         }
         // 마지막 일정이 '+' 버튼에 가리지 않게 아래 여백을 둔다.
-        item(itemId = Long.MIN_VALUE) { Spacer(GlanceModifier.height(ADD_BUTTON_SIZE)) }
+        item(itemId = Long.MIN_VALUE) { Spacer(GlanceModifier.height(TAP_TARGET)) }
     }
 }
 
@@ -428,28 +419,12 @@ private fun DayHeader(date: LocalDate, holiday: String?, metrics: SplitMetrics, 
     }
 }
 
-/** 터치 영역 48dp(A11Y-02) 안의 둥근 '+'. */
-private val ADD_BUTTON_SIZE = 48.dp
-
-/** WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다. 일정 목록 오른쪽 아래에 겹친다. */
+/** WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다. 일정 목록 오른쪽 아래에 겹친다(공통 [WidgetIconButton], 눌림 48dp). */
 @Composable
 private fun AddButton(today: LocalDate, palette: WidgetPalette) {
     val context = LocalContext.current
-    Box(
-        modifier = GlanceModifier
-            .size(ADD_BUTTON_SIZE)
-            .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, today)))
-            .semantics {
-                contentDescription = context.getString(R.string.widget_add)
-                testTag = "add"
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = GlanceModifier.size(40.dp).cornerRadius(20.dp).background(palette.accent),
-            contentAlignment = Alignment.Center,
-        ) {
-            WidgetIcon(R.drawable.ic_widget_add, palette.todayText, 24.dp)
-        }
-    }
+    WidgetIconButton(
+        R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
+        actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, today)), palette, style = IconButtonStyle.FILLED, visual = 40.dp,
+    )
 }

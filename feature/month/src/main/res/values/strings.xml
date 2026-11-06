@@ -3,6 +3,11 @@
     <string name="month_title">%1$d년 %2$d월</string>
     <string name="month_today">오늘</string>
     <string name="month_settings">설정</string>
+    <string name="month_menu">메뉴</string>
+    <string name="month_menu_filter_active">메뉴, 필터 적용 중</string>
+    <string name="month_add_event">새 일정</string>
+    <string name="month_drawer_views">보기</string>
+    <string name="month_week_number_a11y">%1$d주</string>
     <string name="month_pick_title">연·월 선택</string>
     <string name="month_pick_prev_year">이전 해</string>
     <string name="month_pick_next_year">다음 해</string>

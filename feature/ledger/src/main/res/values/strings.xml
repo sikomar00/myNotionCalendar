@@ -6,6 +6,11 @@
     <string name="ledger_prev">이전 달</string>
     <string name="ledger_next">다음 달</string>
     <string name="ledger_month_spend">%1$d월 지출</string>
+    <string name="ledger_month_income">%1$d월 수입</string>
+    <string name="ledger_no_spend">%1$d월 무지출</string>
+    <string name="ledger_no_spend_days">총 %1$d일</string>
+    <string name="ledger_day_no_spend">무지출</string>
+    <string name="ledger_week_total_a11y">주 합계 지출 %1$s, 수입 %2$s</string>
     <string name="ledger_as_of">%1$d/%2$d까지 반영</string>
     <string name="ledger_as_of_none">가져온 거래 없음</string>
     <string name="ledger_week_left">이번 주 %1$s 남음 · %2$d일</string>
@@ -52,7 +57,6 @@
     <string name="ledger_entry_planned">예정</string>
     <string name="ledger_entry_manual">앱입력</string>
     <string name="ledger_stat_planned">예정</string>
-    <string name="ledger_stat_income">수입</string>
     <string name="ledger_stat_budget">월 예산</string>
     <string name="ledger_stat_left">월 예산 남음</string>
     <string name="ledger_stat_over">월 예산 초과</string>

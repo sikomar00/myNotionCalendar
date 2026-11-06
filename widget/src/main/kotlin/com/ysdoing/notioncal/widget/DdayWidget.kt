@@ -177,7 +177,7 @@ fun DdayWidgetContent(
             outer.clickable(actionStartActivity(ddayScreenIntent(context))).semantics { testTag = "dday" },
             contentAlignment = Alignment.Center,
         ) {
-            Text(context.getString(R.string.dday_widget_empty), style = TextStyle(color = palette.subtle, fontSize = 11.sp, textAlign = TextAlign.Center), maxLines = 2)
+            Text(context.getString(R.string.dday_widget_empty), style = TextStyle(color = palette.subtle, fontSize = (11f * ddaySpFactor(systemFontScale)).sp, textAlign = TextAlign.Center), maxLines = 2)
         }
         return
     }
@@ -217,7 +217,16 @@ fun DdayWidgetContent(
 }
 
 /** DD-05 목록 줄 치수. 줄 높이는 표기·제목·날짜 글자 칸에서 정한다(글꼴 최대에서 잘림 0). */
-internal data class DdayListMetrics(val rowHeight: Dp, val headerHeight: Dp, val labelWidth: Dp, val labelSp: Float, val titleSp: Float, val dateSp: Float) {
+internal data class DdayListMetrics(
+    val rowHeight: Dp,
+    val headerHeight: Dp,
+    val labelWidth: Dp,
+    val labelSp: Float,
+    val titleSp: Float,
+    val dateSp: Float,
+    val headerSp: Float,
+    val emptySp: Float,
+) {
     companion object {
         fun of(config: WidgetConfig, systemFontScale: Float): DdayListMetrics {
             val scale = config.fontScale / 100f
@@ -234,10 +243,15 @@ internal data class DdayListMetrics(val rowHeight: Dp, val headerHeight: Dp, val
                 labelSp = label * spFactor,
                 titleSp = title * spFactor,
                 dateSp = date * spFactor,
+                headerSp = 13f * spFactor,
+                emptySp = 12f * spFactor,
             )
         }
     }
 }
+
+/** 시스템 글꼴이 상한([WidgetMetrics.MAX_SYSTEM_TEXT_SCALE])을 넘는 만큼 sp를 되돌리는 값(위젯 글자는 시스템 배율을 또 곱해 그려진다). */
+internal fun ddaySpFactor(systemFontScale: Float): Float = minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE) / systemFontScale
 
 /** DD-05 디데이 목록 위젯(2×2 이상): 가까운 순 스크롤. 줄 → 편집 시트, '+' → 디데이 화면, 비면 안내. */
 @Composable
@@ -252,29 +266,25 @@ fun DdayListWidgetContent(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background).padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
-        Row(GlanceModifier.fillMaxWidth().height(m.headerHeight), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                context.getString(R.string.dday_widget_title),
-                modifier = GlanceModifier.defaultWeight(),
-                style = TextStyle(color = palette.text, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
+        // 머리(공통 [WidgetHeader]) + 채운 '+'(눌림 폭 48dp). 빈 목록은 글꼴 상한을 지키는 안내 + 행동 버튼.
+        WidgetHeader(
+            icon = R.drawable.ic_widget_calendar,
+            title = context.getString(R.string.dday_widget_title),
+            subtitle = null,
+            palette = palette,
+            height = m.headerHeight,
+            titleSp = m.headerSp,
+            subSp = m.dateSp,
+        ) {
+            WidgetIconButton(
+                R.drawable.ic_widget_add, context.getString(R.string.dday_widget_add), "ddayAdd", actionStartActivity(ddayScreenIntent(context)), palette,
+                style = IconButtonStyle.FILLED, visual = 32.dp, height = m.headerHeight,
             )
-            val add = context.getString(R.string.dday_widget_add)
-            Box(
-                GlanceModifier.width(40.dp).height(m.headerHeight).clickable(actionStartActivity(ddayScreenIntent(context))).semantics {
-                    contentDescription = add
-                    testTag = "ddayAdd"
-                },
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                WidgetIcon(R.drawable.ic_widget_add, palette.accent, 22.dp)
-            }
         }
         if (state.ddays.isEmpty()) {
-            Text(
-                context.getString(R.string.dday_widget_list_empty),
-                modifier = GlanceModifier.fillMaxWidth().padding(top = 8.dp),
-                style = TextStyle(color = palette.subtle, fontSize = 12.sp),
+            WidgetEmpty(
+                R.drawable.ic_widget_calendar, context.getString(R.string.dday_widget_list_empty), palette, m.emptySp,
+                ctaText = context.getString(R.string.dday_widget_add), ctaAction = actionStartActivity(ddayScreenIntent(context)), ctaTag = "ddayEmpty",
             )
             return@Column
         }

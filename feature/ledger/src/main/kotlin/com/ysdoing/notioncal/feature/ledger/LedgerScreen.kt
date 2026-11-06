@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import com.ysdoing.notioncal.core.data.ledger.DuplicateGroup
@@ -68,7 +70,12 @@ import kotlin.math.abs
  * 날짜를 누르면 그리드 아래에 그 날 거래 목록을 보이고, '거래 추가'·'이 날 추가'는 LD-07 입력 시트를 연다.
  */
 @Composable
-fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltViewModel()) {
+fun LedgerRoute(
+    onOpenSettings: () -> Unit,
+    /** 가계부를 아직 등록하지 않았을 때 '설정에서 등록' 버튼이 여는 설정(데이터베이스 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenDatabaseSettings: () -> Unit = onOpenSettings,
+    viewModel: LedgerViewModel = hiltViewModel(),
+) {
     val board by viewModel.board.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val openInput: (LocalDate) -> Unit = { date -> context.startActivity(ledgerInputIntent(context, date)) }
@@ -80,6 +87,7 @@ fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltVie
         board = board,
         actions = LedgerActions(
             onOpenSettings = onOpenSettings,
+            onOpenDatabaseSettings = onOpenDatabaseSettings,
             onShiftMonth = viewModel::shiftMonth,
             onResolve = viewModel::resolveDuplicates,
             onKeepBoth = viewModel::keepBoth,
@@ -93,6 +101,7 @@ fun LedgerRoute(onOpenSettings: () -> Unit, viewModel: LedgerViewModel = hiltVie
 /** 화면 동작 묶음(테스트에서 바꿔 끼운다). */
 data class LedgerActions(
     val onOpenSettings: () -> Unit = {},
+    val onOpenDatabaseSettings: () -> Unit = onOpenSettings,
     val onShiftMonth: (Long) -> Unit = {},
     val onResolve: (DuplicateGroup) -> Unit = {},
     val onKeepBoth: (DuplicateGroup) -> Unit = {},
@@ -125,14 +134,14 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
     ) { padding ->
         when {
             board == null -> Unit
-            !board.registered -> EmptyLedger(actions.onOpenSettings, Modifier.padding(padding))
+            !board.registered -> EmptyLedger(actions.onOpenDatabaseSettings, Modifier.padding(padding))
             else -> {
                 // 고른 날(처음은 오늘). 달을 바꾸면 그 달 안에 오늘이 있을 때만 오늘을 고른다.
                 var selected by rememberSaveable(board.month) { mutableStateOf(board.today.takeIf { YearMonth.from(it) == board.month }) }
                 val listState = rememberLazyListState()
                 val scope = rememberCoroutineScope()
                 val s = board.summary
-                val gridIndex = 3 + listOf(s.duplicates, s.needsReview, s.matchedManual).count { it.isNotEmpty() }
+                val gridIndex = 3 + (if (s.noSpendDays != null) 1 else 0) + listOf(s.duplicates, s.needsReview, s.matchedManual).count { it.isNotEmpty() }
                 LazyColumn(
                     Modifier.padding(padding).fillMaxSize().testTag("ledgerList"),
                     state = listState,
@@ -141,6 +150,7 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
                     item { MonthNav(board.month, actions.onShiftMonth) }
                     item { Summary(board) }
                     item { WeekBudget(board) }
+                    s.noSpendDays?.let { days -> item { NoSpend(board.month, days.size) } }
                     if (s.duplicates.isNotEmpty()) item { Duplicates(s.duplicates, actions) }
                     if (s.needsReview.isNotEmpty()) item { Review(s.needsReview, actions) }
                     if (s.matchedManual.isNotEmpty()) item { Matched(s.matchedManual.map { it.first }, actions) }
@@ -186,7 +196,7 @@ private fun MonthNav(month: YearMonth, onShift: (Long) -> Unit) {
 }
 
 /**
- * LD-03 위쪽: 이번 달 지출(크게)과 '10/8까지 반영', 아래 세 칸(예정·수입·월 예산). 칸은 라벨 위·값 아래로 나눠
+ * LD-03 위쪽: 이번 달 지출(크게)과 '10/8까지 반영', 지출 아래 수입 한 줄, 그 아래 두 칸(예정·월 예산). 칸은 라벨 위·값 아래로 나눠
  * 가운뎃점으로 잇지 않는다(DESIGN.md). 예산을 넘으면 라벨이 '월 예산 초과'로 바뀌고 경고색(색만으로 구분하지 않음).
  */
 @Composable
@@ -208,10 +218,19 @@ private fun Summary(board: LedgerBoard) {
             )
         }
         Text(MoneyFormat.full(s.monthSpend), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        // 뱅크샐러드처럼 지출 아래에 수입을 한 줄 더 둔다(수입은 초록 '+').
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ledger_month_income, board.month.monthValue),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(MoneyFormat.signed(s.monthIncome, full = true), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = incomeColor())
+        }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
             Stat(stringResource(R.string.ledger_stat_planned), MoneyFormat.short(s.monthPlanned), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
-            Stat(stringResource(R.string.ledger_stat_income), "+" + MoneyFormat.short(s.monthIncome), incomeColor(), Modifier.weight(1f))
             val remaining = s.monthRemaining
             when {
                 remaining == null -> Stat(stringResource(R.string.ledger_stat_budget), stringResource(R.string.ledger_stat_none), MaterialTheme.colorScheme.onSurfaceVariant, Modifier.weight(1f))
@@ -259,6 +278,26 @@ private fun WeekBudget(board: LedgerBoard) {
                 )
             }
         }
+    }
+}
+
+/** LD-15 '10월 무지출 총 N일'. 이 달 거래를 알 수 없으면(noSpendDays가 null) 호출하지 않는다. */
+@Composable
+private fun NoSpend(month: YearMonth, count: Int) {
+    val title = stringResource(R.string.ledger_no_spend, month.monthValue)
+    val days = stringResource(R.string.ledger_no_spend_days, count)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag("ledgerNoSpend")
+            .clearAndSetSemantics { contentDescription = "$title $days" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurfaceVariant))
+        Text(title, modifier = Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.bodyMedium)
+        Text(days, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
     }
 }
 

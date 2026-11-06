@@ -71,7 +71,9 @@ class HabitWidgetTest {
         onAllNodes(hasTestTag("habitRow")).assertCountEquals(5)
         onAllNodes(hasTestTag("habitToday")).assertCountEquals(5)
         onAllNodes(hasTestTag("habitCell")).assertCountEquals(0)
-        onNode(hasTextEqualTo("습관 5/5")).assertExists()
+        onNode(hasTextEqualTo("오늘 5/5 완료")).assertExists() // 머리 부제(2×2는 히어로가 없다)
+        onAllNodes(hasTestTag("habitHero")).assertCountEquals(0)
+        onAllNodes(hasTestTag("habitRefresh")).assertCountEquals(0)
         // 오늘 칸을 누르면 그 습관의 오늘을 토글한다.
         onNode(hasTestTag("habitToday").and(hasContentDescriptionEqualTo("명상, 오늘, 함")))
             .assert(hasRunCallbackClickAction<HabitToggleAction>(actionParametersOf(HabitToggleAction.HabitKey to "h1", HabitToggleAction.DayKey to today.toEpochDay())))
@@ -115,7 +117,7 @@ class HabitWidgetTest {
         onAllNodes(hasTestTag("habitRow")).assertCountEquals(8)
         for (size in listOf(SMALL, MEDIUM, LARGE)) {
             val m = HabitMetrics.of(size, config, systemFontScale = 2f)
-            assertTrue(m.toString(), m.rowHeight.value >= m.nameFontSp * 2f * WidgetMetrics.TEXT_BOX)
+            assertTrue(m.toString(), m.rowHeight.value >= m.nameFontSp * (if (m.showMessage) 2f else 1f) * WidgetMetrics.TEXT_BOX)
             assertTrue(m.toString(), m.headerHeight.value >= m.headerFontSp * 2f * WidgetMetrics.TEXT_BOX)
         }
     }
@@ -126,5 +128,53 @@ class HabitWidgetTest {
         setAppWidgetSize(MEDIUM)
         provideComposable { HabitWidgetContent(HabitWidgetState(HabitBoard(today, emptyList()), WidgetConfig(1), DayOfWeek.SUNDAY), systemFontScale = 1f) }
         onNode(hasTestTag("habitEmpty")).assert(hasClickAction())
+    }
+
+    @Test
+    fun largeShowsHeroAndStreakPills() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { HabitWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("habitHero")).assert(hasContentDescriptionEqualTo("오늘 습관 5개 중 5개 완료"))
+        // 매일 습관 중 2일 이상 이어 가는 것만 알약을 단다(1일째는 연속이 아니다, 주 목표 습관은 n/목표로 보인다).
+        listOf("연속 2일", "연속 3일", "연속 4일").forEach { onNode(hasTextEqualTo(it)).assertExists() }
+        onNode(hasTextEqualTo("연속 1일")).assertDoesNotExist()
+        onNode(hasTestTag("habitRefresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun streakPillIsLeftOutWhereTheNameColumnCannotHoldIt() {
+        // 알약(약 76dp)이 이름 칸에 안 들어가는 좁은 위젯은 알약을 그리지 않아 중간에서 잘리지 않는다.
+        fun shows(size: DpSize) = HabitMetrics.of(size, WidgetConfig(1), 1f).showMessage
+        assertTrue(shows(LARGE))
+        assertTrue(!shows(MEDIUM)) // 밀도 우선: 4×2·2×2는 알약 줄을 두지 않는다
+        assertTrue(!shows(SMALL))
+        assertTrue(!shows(DpSize(250.dp, 380.dp))) // 4×4여도 이름 칸이 좁으면 뺀다
+    }
+
+    @Test
+    fun mediumHasRefreshButNoHero() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(MEDIUM)
+        provideComposable { HabitWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("habitRefresh")).assertExists()
+        onAllNodes(hasTestTag("habitHero")).assertCountEquals(0)
+    }
+
+    /** 밀도 우선: 4×2·2×2 습관 줄은 36dp 이하(한 줄 + 원형 칸), 알약 두 줄이 있는 4×4도 46dp 이하다. 눌림 폭은 2×2에서 48dp. */
+    @Test
+    fun rowsStayCompactForDensity() {
+        assertTrue(HabitMetrics.of(SMALL, WidgetConfig(1), 1f).rowHeight.value <= 36f)
+        assertTrue(HabitMetrics.of(MEDIUM, WidgetConfig(1), 1f).rowHeight.value <= 36f)
+        assertTrue(HabitMetrics.of(LARGE, WidgetConfig(1), 1f).rowHeight.value <= 46f)
+        assertTrue(HabitMetrics.of(SMALL, WidgetConfig(1), 1f).cellWidth.value >= 48f)
+    }
+
+    @Test
+    fun emptyBoardOffersToOpenTheHabitTab() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(MEDIUM)
+        provideComposable { HabitWidgetContent(HabitWidgetState(HabitBoard(today, emptyList()), WidgetConfig(1), DayOfWeek.SUNDAY), systemFontScale = 1f) }
+        onNode(hasContentDescriptionEqualTo("습관 보기")).assertExists()
     }
 }

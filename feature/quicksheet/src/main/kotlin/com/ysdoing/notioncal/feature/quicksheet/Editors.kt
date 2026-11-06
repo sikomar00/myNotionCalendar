@@ -1,22 +1,19 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,7 +43,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -65,6 +60,7 @@ import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.SelectValue
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.designsystem.CheckboxRow
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -147,7 +143,7 @@ fun AddForm(
                 value = title,
                 onValueChange = { title = it },
                 modifier = Modifier.weight(1f).focusRequester(focus),
-                placeholder = { Text(stringResource(R.string.qs_title_hint)) },
+                label = { Text(stringResource(R.string.qs_title_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
@@ -218,8 +214,9 @@ fun DayList(
         )
         return
     }
-    LazyColumn(modifier.heightIn(max = 360.dp)) {
-        items(events, key = { it.pageId }) { event ->
+    // 시트 전체가 스크롤하므로 목록은 따로 스크롤하지 않는다(UX-09, A-10).
+    Column(modifier) {
+        events.forEach { event ->
             val toggleLabel = stringResource(R.string.qs_toggle_done, event.title)
             Row(
                 Modifier.fillMaxWidth().clickable { onOpen(event) }.padding(vertical = 2.dp),
@@ -326,14 +323,7 @@ fun EventEditorForm(
             DateChip(date) { date = it }
             TimeChip(time) { time = it }
         }
-        // 글자를 눌러도 체크되도록 줄 전체를 토글로 만든다(터치 영역 확대).
-        Row(
-            Modifier.toggleable(value = done, role = Role.Checkbox, onValueChange = { done = it }),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = done, onCheckedChange = null)
-            Text(stringResource(R.string.qs_done), Modifier.padding(start = 8.dp, end = 12.dp))
-        }
+        CheckboxRow(stringResource(R.string.qs_done), done) { done = it } // 글자도 눌리고 줄이 48dp 이상(A-4)
         if (item.colorOptions.isNotEmpty()) {
             // 추가 속성(예: Pri.)처럼 색 기준 속성(예: Ctgr)도 이름을 붙인다.
             item.colorPropName?.let { name ->
@@ -368,8 +358,9 @@ fun EventEditorForm(
                 modifier = Modifier.testTag("ddayPin"),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
+        // ED-03·UX-08: 저장은 폭 전체 주 버튼, 열기·삭제는 아래 줄(줄바꿈)에 떨어뜨리고 삭제는 error 색이다(A-7).
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 val dateChanged = date != event.startDate || time != originalTime
                 onSave(
                     EventChange(
@@ -381,13 +372,15 @@ fun EventEditorForm(
                     ),
                 )
             }) { Text(stringResource(R.string.qs_save)) }
-            if (event.url.isNotBlank()) {
-                OutlinedButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, event.url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Text(stringResource(R.string.qs_open_in_notion)) }
-            }
-            TextButton(onClick = { confirmDelete = true }) {
-                Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (event.url.isNotBlank()) {
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, event.url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }) { Text(stringResource(R.string.qs_open_in_notion)) }
+                }
+                TextButton(onClick = { confirmDelete = true }) {
+                    Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
@@ -400,7 +393,7 @@ fun EventEditorForm(
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text(stringResource(R.string.qs_delete)) }
+                }) { Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error) } // A-13
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.qs_cancel)) } },
         )

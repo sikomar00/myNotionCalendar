@@ -28,6 +28,10 @@ object SyncModule {
             }
         }
 
+    /** M5 표지 내려받기: 노션 클라이언트(토큰 헤더·재시도 인터셉터)와 **다른** 클라이언트([coverHttpClient]). */
+    @Provides
+    fun provideCoverDownload(): CoverDownload = CoverDownloader(client = coverHttpClient(), scale = { CoverScaler.scale(it) })
+
     @Provides
     fun provideSyncRequester(scheduler: SyncScheduler): SyncRequester = scheduler
 
@@ -35,5 +39,9 @@ object SyncModule {
     fun provideSyncScheduleInfo(scheduler: SyncScheduler): SyncScheduleInfo = scheduler
 
     @Provides
-    fun provideOutboxRequester(scheduler: SyncScheduler): OutboxRequester = OutboxRequester { scheduler.requestOutbox() }
+    fun provideOutboxRequester(scheduler: SyncScheduler): OutboxRequester = object : OutboxRequester {
+        override fun request() = scheduler.requestOutbox()
+
+        override fun requestAfter(delayMs: Long) = scheduler.requestOutbox(delayMs)
+    }
 }

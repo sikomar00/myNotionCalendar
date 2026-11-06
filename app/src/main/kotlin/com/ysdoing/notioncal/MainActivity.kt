@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     /** EX-12 `notioncal://dday`(디데이 목록 위젯 '+' 포함): 설정의 디데이 화면을 연다. */
     private var openDday by mutableStateOf(false)
+    private var openView by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // targetSdk 37은 엣지 투 엣지가 기본이므로 인셋은 Scaffold로 처리한다(S25-08).
@@ -88,6 +89,8 @@ class MainActivity : ComponentActivity() {
                         onOpenTabHandled = { openTab = null },
                         openDday = openDday,
                         onOpenDdayHandled = { openDday = false },
+                        openView = openView,
+                        onOpenViewHandled = { openView = null },
                     )
                 }
             }
@@ -132,6 +135,7 @@ class MainActivity : ComponentActivity() {
             DeepLink.Ledger -> openTab = HomeTab.LEDGER
             is DeepLink.Date -> openDate = link.date
             DeepLink.Dday -> openDday = true
+            is DeepLink.View -> openView = link.viewId
             null -> Unit
         }
     }

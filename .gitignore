@@ -25,6 +25,11 @@ out/
 google-services.json
 sentry.properties
 
+# 개인 일정·프로필 사진·가계부 금액이 든 이미지(커밋 금지)
+Refs/
+docs/slides/
+docs/shots/vw9*.png
+
 # OS
 .DS_Store
 Thumbs.db

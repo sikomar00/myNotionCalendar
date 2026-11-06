@@ -10,6 +10,7 @@ import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
 import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
 import com.ysdoing.notioncal.core.notion.dto.ViewDto
+import com.ysdoing.notioncal.core.notion.dto.ViewQueryRequestDto
 import dagger.Lazy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -74,12 +75,55 @@ class NotionClient @Inject constructor(
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }
 
-    override suspend fun viewIds(dataSourceId: String): List<String> = call { api.views(dataSourceId) }.results.map { it.id }
+    /** CN-03: 보기 목록을 끝까지 받는다(100개씩 나뉘어 온다). */
+    override suspend fun viewIds(dataSourceId: String): List<String> {
+        val ids = mutableListOf<String>()
+        var cursor: String? = null
+        do {
+            val page = call { api.views(dataSourceId, startCursor = cursor) }
+            ids += page.results.map { it.id }
+            cursor = if (page.hasMore) page.nextCursor else null
+        } while (cursor != null)
+        return ids
+    }
 
     override suspend fun view(viewId: String): ViewDto = call { api.view(viewId) }
 
-    override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int): List<PageDto> =
-        call { api.query(dataSourceId, QueryRequestDto(filter = viewFilter(view), sorts = view.sorts, pageSize = limit)) }.results
+    /**
+     * 보기 쿼리 결과의 페이지 id(앞에서 [limit]개). 결과는 15분 뒤 만료되어 쪽을 넘기다 404가 나면 처음부터 한 번 다시 만든다.
+     * 보기가 지워졌거나 공유가 풀렸어도 404라, 다시 만들어도 404이면 그 오류를 그대로 던진다.
+     */
+    override suspend fun viewQueryIds(viewId: String, limit: Int): ViewQueryIds {
+        for (attempt in 0..1) {
+            try {
+                return readViewQuery(viewId, limit)
+            } catch (e: NotionException) {
+                if (e.error != NotionError.NotShared || attempt == 1) throw e
+            }
+        }
+        error("unreachable")
+    }
+
+    private suspend fun readViewQuery(viewId: String, limit: Int): ViewQueryIds {
+        var page = call { api.createViewQuery(viewId, ViewQueryRequestDto(pageSize = limit.coerceIn(1, 100))) }
+        val ids = page.results.map { it.id }.toMutableList()
+        var complete = page.requestStatus?.type != "incomplete"
+        while (page.hasMore && ids.size < limit && page.nextCursor != null) {
+            page = call { api.viewQueryPage(viewId, page.id, page.nextCursor) }
+            ids += page.results.map { it.id }
+            if (page.requestStatus?.type == "incomplete") complete = false
+        }
+        return ViewQueryIds(ids.take(limit), complete)
+    }
+
+    override suspend fun schema(dataSourceId: String): DataSourceDto = dataSource(dataSourceId)
+
+    override suspend fun rows(dataSourceId: String, view: ViewDto, limit: Int): List<PageDto> = viewRows(dataSourceId, view, limit).pages
+
+    override suspend fun viewRows(dataSourceId: String, view: ViewDto, limit: Int): ViewRows {
+        val response = call { api.query(dataSourceId, QueryRequestDto(filter = viewFilter(view), sorts = view.sorts, pageSize = limit.coerceIn(1, 100))) }
+        return ViewRows(response.results, response.hasMore)
+    }
 
     override suspend fun pageOrNull(pageId: String): PageDto? = try {
         call { api.page(pageId) }

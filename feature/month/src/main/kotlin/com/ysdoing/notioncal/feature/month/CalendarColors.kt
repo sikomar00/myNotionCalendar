@@ -7,6 +7,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
+import com.ysdoing.notioncal.core.data.DesignTokens
 import java.time.DayOfWeek
 
 /*
@@ -17,10 +18,10 @@ import java.time.DayOfWeek
 /** 오늘 표시: 칠한 네모. 앱 아이콘(오늘 칸 체크)·위젯과 같은 모양으로 앱의 정체성을 맞춘다. */
 internal val TodayShape = RoundedCornerShape(6.dp)
 
-private val SundayDark = Color(0xFFFF6B6B)
-private val SundayLight = Color(0xFFC62828)
-private val SaturdayDark = Color(0xFF5B9BF8)
-private val SaturdayLight = Color(0xFF1565C0)
+private val SundayDark = Color(DesignTokens.Dark.SUNDAY)
+private val SundayLight = Color(DesignTokens.Light.SUNDAY)
+private val SaturdayDark = Color(DesignTokens.Dark.SATURDAY)
+private val SaturdayLight = Color(DesignTokens.Light.SATURDAY)
 
 /** 지금 화면 배경이 어두운지(Material You·다크 모드 모두 surface 색으로 판단). */
 @Composable

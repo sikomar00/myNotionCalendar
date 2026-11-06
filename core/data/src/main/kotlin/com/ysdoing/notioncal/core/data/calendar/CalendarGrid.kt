@@ -7,6 +7,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
+import java.time.temporal.WeekFields
 
 // 앱 월 화면과 위젯이 같은 그리드·표시 규칙을 쓰도록 :core:data에 둔다(위젯은 :feature 모듈에 의존할 수 없음).
 
@@ -15,6 +16,10 @@ fun gridStart(month: YearMonth, weekStart: DayOfWeek): LocalDate =
     month.atDay(1).with(TemporalAdjusters.previousOrSame(weekStart))
 
 const val GRID_DAYS = 42L
+
+/** 그 주 첫날 기준 주차. 주 시작 요일 설정을 따르고, 1월 1일이 든 주가 1주차다(2026년 10월 일요일 시작 = 40~45주). */
+fun weekNumber(weekFirstDay: LocalDate, weekStart: DayOfWeek): Int =
+    weekFirstDay.get(WeekFields.of(weekStart, 1).weekOfWeekBasedYear())
 
 private val chipTimeFormat = DateTimeFormatter.ofPattern("H:mm")
 

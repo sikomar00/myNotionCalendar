@@ -14,21 +14,15 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +30,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
@@ -43,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -56,6 +50,7 @@ import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -68,12 +63,13 @@ private const val CENTER_PAGE = PAGE_COUNT / 2
 /** 오늘 버튼·위젯 날짜·검색 결과로 특정 날짜로 가라는 요청. 같은 날짜를 다시 눌러도 움직이게 순번을 둔다. */
 data class CalendarJump(val date: LocalDate, val seq: Int)
 
-/** 날짜 시트로 열 내용(그날 목록 또는 일정 편집). 회전·프로세스 복원 뒤에도 남게 글자로 저장한다. */
-private val SheetSaver = Saver<QuickSheetStart?, String>(
+/** 날짜 시트로 열 내용(그날 목록, 일정 편집, 새 일정). 회전·프로세스 복원 뒤에도 남게 글자로 저장한다. */
+internal val SheetSaver = Saver<QuickSheetStart?, String>(
     save = { start ->
         when (start) {
             is QuickSheetStart.Day -> "day:${start.date}"
             is QuickSheetStart.Edit -> "edit:${start.pageId}"
+            is QuickSheetStart.Add -> "add:${start.date}"
             else -> ""
         }
     },
@@ -81,6 +77,7 @@ private val SheetSaver = Saver<QuickSheetStart?, String>(
         when {
             saved.startsWith("day:") -> QuickSheetStart.Day(LocalDate.parse(saved.removePrefix("day:")))
             saved.startsWith("edit:") -> QuickSheetStart.Edit(saved.removePrefix("edit:"))
+            saved.startsWith("add:") -> QuickSheetStart.Add(LocalDate.parse(saved.removePrefix("add:")))
             else -> null
         }
     },
@@ -94,6 +91,10 @@ private val SheetSaver = Saver<QuickSheetStart?, String>(
 @Composable
 fun MonthRoute(
     onOpenSettings: () -> Unit,
+    /** ST-04 인증 오류 배너가 여는 설정(연결 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenConnectionSettings: () -> Unit = onOpenSettings,
+    /** ST-04 공유 안 됨 배너가 여는 설정(데이터베이스 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenDatabaseSettings: () -> Unit = onOpenSettings,
     openDate: LocalDate? = null,
     /** MV-10 검색 화면 열기. */
     onOpenSearch: () -> Unit = {},
@@ -129,6 +130,8 @@ fun MonthRoute(
     }
     var sheet by rememberSaveable(stateSaver = SheetSaver) { mutableStateOf<QuickSheetStart?>(null) }
     var picking by rememberSaveable { mutableStateOf(false) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     // MV-08: 제스처 중에는 화면 상태만 바꾸고, 손을 떼면 저장한다.
     val savedZoom = settings?.zoomPercent ?: CalendarZoom.DEFAULT
     var zoomPercent by remember(savedZoom) { mutableFloatStateOf(savedZoom.toFloat()) }
@@ -142,78 +145,88 @@ fun MonthRoute(
         onOpenDateHandled()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    // 제목은 먹색(색은 일정에만, 파랑은 '오늘'·보기 같은 동작에만).
-                    TextButton(
-                        onClick = { if (view == CalendarView.MONTH) picking = true },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-                    ) {
-                        Text(
-                            title(view, focus, shownStart),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                        )
-                    }
+    // ☰로만 열고(스와이프로 열면 월 넘김 가로 페이저와 겹친다), 열려 있을 때만 밀어서 닫을 수 있다.
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            MonthDrawerContent(
+                view = view,
+                filterActive = filter.isActive,
+                onSelectView = { selected ->
+                    viewModel.setView(selected)
+                    scope.launch { drawerState.close() }
                 },
-                actions = {
-                    TextButton(onClick = { jumpTo(today) }) { Text(stringResource(R.string.month_today)) }
-                    ViewMenu(view, onSelect = viewModel::setView)
-                    IconButton(onClick = onOpenSearch) {
-                        Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.search_title))
-                    }
-                    IconButton(onClick = { filtering = true }) {
-                        Icon(
-                            FilterIcon,
-                            contentDescription = stringResource(if (filter.isActive) R.string.filter_active else R.string.filter_title),
-                            tint = if (filter.isActive) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                        )
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.month_settings))
-                    }
+                onFilter = {
+                    filtering = true
+                    scope.launch { drawerState.close() }
+                },
+                onSettings = {
+                    scope.launch { drawerState.close() }
+                    onOpenSettings()
                 },
             )
         },
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            SyncStatusLine(header, weather, today)
-            Banner(header, onOpenSettings)
-            WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
-            SchemaBanner(header.schemaAlerts, onReconnect = onReconnect, onAcknowledge = viewModel::acknowledgeSchema)
-            topBanner()
-            PullToRefreshBox(
-                isRefreshing = header.syncing,
-                onRefresh = viewModel::refresh,
-                modifier = Modifier.weight(1f).pinchToZoom(
-                    onZoom = { factor -> zoomPercent = CalendarZoom.clamp(zoomPercent * factor) },
-                    onEnd = { viewModel.saveZoom(zoomPercent) },
-                ),
-            ) {
-                val openDay = { date: LocalDate -> sheet = QuickSheetStart.Day(date) }
-                val openEvent = { event: CalendarEvent -> sheet = QuickSheetStart.Edit(event.pageId) }
-                when (view) {
-                    CalendarView.MONTH -> MonthPager(
-                        initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                        viewModel = viewModel, ready = settings != null, zoom = zoom,
-                        onFocusChange = { focus = it }, onDayClick = openDay,
-                    )
-                    CalendarView.WEEK, CalendarView.THREE_DAY -> key(view) {
-                        PeriodPager(
-                            view = view, initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
-                            viewModel = viewModel, zoom = zoom,
-                            onFocusChange = { focus = it }, onShownChange = { shownStart = it },
-                            onDayClick = openDay, onEventClick = openEvent,
+    ) {
+        Scaffold(
+            topBar = {
+                MonthTopBar(
+                    title = title(view, focus, shownStart),
+                    pickable = view == CalendarView.MONTH,
+                    filterActive = filter.isActive,
+                    today = today,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onPickMonth = { picking = true },
+                    onSearch = onOpenSearch,
+                    onToday = { jumpTo(today) },
+                )
+            },
+            floatingActionButton = {
+                FloatingActionButton(
+                    onClick = { sheet = QuickSheetStart.Add(focus) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.month_add_event))
+                }
+            },
+        ) { padding ->
+            Column(Modifier.padding(padding).fillMaxSize()) {
+                SyncStatusLine(header, weather, today)
+                Banner(header, BannerActions(onOpenSettings, onOpenConnectionSettings, onOpenDatabaseSettings))
+                WriteIssuesBanner(header, onAcknowledge = viewModel::acknowledgeConflicts)
+                SchemaBanner(header.schemaAlerts, onReconnect = onReconnect, onAcknowledge = viewModel::acknowledgeSchema)
+                topBanner()
+                PullToRefreshBox(
+                    isRefreshing = header.syncing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.weight(1f).pinchToZoom(
+                        onZoom = { factor -> zoomPercent = CalendarZoom.clamp(zoomPercent * factor) },
+                        onEnd = { viewModel.saveZoom(zoomPercent) },
+                    ),
+                ) {
+                    val openDay = { date: LocalDate -> sheet = QuickSheetStart.Day(date) }
+                    val openEvent = { event: CalendarEvent -> sheet = QuickSheetStart.Edit(event.pageId) }
+                    when (view) {
+                        CalendarView.MONTH -> MonthPager(
+                            initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
+                            viewModel = viewModel, ready = settings != null, zoom = zoom, showWeekNumbers = settings?.showWeekNumbers ?: false,
+                            onFocusChange = { focus = it }, onDayClick = openDay,
+                        )
+                        CalendarView.WEEK, CalendarView.THREE_DAY -> key(view) {
+                            PeriodPager(
+                                view = view, initialFocus = focus, focus = focus, jump = jump, today = today, weekStart = weekStart,
+                                viewModel = viewModel, zoom = zoom,
+                                onFocusChange = { focus = it }, onShownChange = { shownStart = it },
+                                onDayClick = openDay, onEventClick = openEvent,
+                            )
+                        }
+                        CalendarView.AGENDA -> AgendaView(
+                            initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, holidays = viewModel::holidaysBetween,
+                            weather = weather,
+                            onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
                         )
                     }
-                    CalendarView.AGENDA -> AgendaView(
-                        initialFocus = focus, jump = jump, today = today, events = viewModel::eventsBetween, holidays = viewModel::holidaysBetween,
-                        weather = weather,
-                        onDayClick = openDay, onEventClick = openEvent, onFocusChange = { focus = it }, textScale = zoom,
-                    )
                 }
             }
         }
@@ -237,7 +250,7 @@ fun MonthRoute(
 
 @Composable
 internal fun title(view: CalendarView, focus: LocalDate, shownStart: LocalDate?): String = when (view) {
-    // 목록 보기도 맨 위 날짜의 연·월을 보인다(보기 이름은 오른쪽 '목록 ▾'에 있다).
+    // 목록 보기도 맨 위 날짜의 연·월을 보인다(보기 이름은 ☰ 서랍에 있다).
     CalendarView.MONTH, CalendarView.AGENDA -> stringResource(R.string.month_title, focus.year, focus.monthValue)
     else -> {
         val start = shownStart ?: focus
@@ -250,26 +263,7 @@ internal fun title(view: CalendarView, focus: LocalDate, shownStart: LocalDate?)
     }
 }
 
-/** MV-06 보기 바꾸기 메뉴. 버튼에는 지금 보기 이름을 보여 준다. */
-@Composable
-private fun ViewMenu(view: CalendarView, onSelect: (CalendarView) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    TextButton(onClick = { open = true }) { Text(stringResource(viewLabel(view)) + " ▾") }
-    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-        CalendarView.entries.forEach { option ->
-            DropdownMenuItem(
-                text = { Text(stringResource(viewLabel(option))) },
-                onClick = {
-                    open = false
-                    onSelect(option)
-                },
-                trailingIcon = { if (option == view) Icon(Icons.Filled.Check, contentDescription = null) },
-            )
-        }
-    }
-}
-
-private fun viewLabel(view: CalendarView) = when (view) {
+internal fun viewLabel(view: CalendarView) = when (view) {
     CalendarView.MONTH -> R.string.view_month
     CalendarView.WEEK -> R.string.view_week
     CalendarView.THREE_DAY -> R.string.view_three_day
@@ -287,6 +281,7 @@ private fun MonthPager(
     viewModel: MonthViewModel,
     ready: Boolean,
     zoom: Float,
+    showWeekNumbers: Boolean,
     onFocusChange: (LocalDate) -> Unit,
     onDayClick: (LocalDate) -> Unit,
 ) {
@@ -323,7 +318,7 @@ private fun MonthPager(
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 TextZoom(zoom) {
                     MonthGrid(
-                        state = MonthGridState(month, weekStart, today, visible, holidays, weather),
+                        state = MonthGridState(month, weekStart, today, visible, holidays, weather, showWeekNumbers),
                         onDayClick = onDayClick,
                         onMove = viewModel::move,
                         modifier = Modifier.fillMaxWidth().height(height),

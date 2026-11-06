@@ -1,7 +1,5 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +7,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -24,15 +21,17 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.ysdoing.notioncal.core.designsystem.toggleRow
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -63,10 +62,10 @@ internal fun ChipScrollRow(content: @Composable () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DateChip(date: LocalDate, endDate: LocalDate? = null, onPick: (LocalDate) -> Unit) {
+internal fun DateChip(date: LocalDate, endDate: LocalDate? = null, label: String? = null, onPick: (LocalDate) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val label = endDate?.let { "${date.format(dateFormat)} – ${it.format(dateFormat)}" } ?: date.format(dateFormat)
-    AssistChip(onClick = { open = true }, label = { Text(label) })
+    val text = label ?: endDate?.let { "${date.format(dateFormat)} – ${it.format(dateFormat)}" } ?: date.format(dateFormat)
+    AssistChip(onClick = { open = true }, label = { Text(text) })
     if (open) {
         // DatePicker는 UTC 자정 기준 epoch ms를 쓴다(기기 시간대와 무관하게 날짜가 밀리지 않게, NS-07).
         val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
@@ -108,7 +107,7 @@ internal fun TimeChip(time: TimeRange?, onChange: (TimeRange?) -> Unit) {
         Row(
             Modifier
                 .clip(RoundedCornerShape(8.dp))
-                .toggleable(value = allDay, role = Role.Switch) { on ->
+                .toggleRow(allDay) { on -> // 줄 전체가 눌리고 최소 48dp(A-4)
                     onChange(if (on) null else TimeRange(LocalTime.of(9, 0), LocalTime.of(10, 0)))
                 }
                 .padding(start = 8.dp, end = 4.dp),

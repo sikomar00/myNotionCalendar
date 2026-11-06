@@ -1,0 +1,299 @@
+package com.ysdoing.notioncal.widget
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
+import com.ysdoing.notioncal.core.data.view.AggFn
+import com.ysdoing.notioncal.core.data.view.AggPeriod
+import com.ysdoing.notioncal.core.data.view.AggTile
+import com.ysdoing.notioncal.core.data.view.TileKind
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import com.ysdoing.notioncal.core.data.view.ViewJson
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import com.ysdoing.notioncal.core.designsystem.CheckboxRow
+import com.ysdoing.notioncal.core.designsystem.RadioRow
+
+private const val TILE_LABEL_MAX = 20
+
+/** 함수에 쓸 수 있는 속성(개수는 속성이 필요 없다). */
+internal fun propertyChoices(fn: AggFn, columns: List<ViewColumn>): List<ViewColumn> = if (fn.needsProperty) columns.filter { fn.accepts(it) } else emptyList()
+
+/** 도넛 타일이 묶을 수 있는 분류 속성(선택·상태·다중 선택). */
+internal fun groupChoices(columns: List<ViewColumn>): List<ViewColumn> = columns.filter { it.type in GROUP_TYPES }
+
+private val GROUP_TYPES = setOf("select", "status", "multi_select")
+
+/** 해빗 격자가 그릴 수 있는 습관: 체크박스 속성. */
+internal fun habitChoices(columns: List<ViewColumn>): List<ViewColumn> = columns.filter { it.type == "checkbox" }
+
+/** 기간·연속 달성일의 기준이 될 수 있는 날짜 속성. */
+internal fun dateChoices(columns: List<ViewColumn>): List<ViewColumn> = columns.filter { it.type == "date" }
+
+/** 타일 양식에 입력 중인 값. [goalText]는 글자 그대로(쉼표 허용), 잘못된 목표는 '목표 없음'으로 본다. [editingId]가 있으면 그 타일을 고치는 중이다(없으면 새 타일). */
+internal data class TileDraft(
+    val viewId: String = "",
+    val fn: AggFn = AggFn.COUNT,
+    val propId: String = "",
+    val dateProp: String = "",
+    val period: AggPeriod = AggPeriod.ALL,
+    val goalText: String = "",
+    val label: String = "",
+    val color: String = "",
+    val editingId: String = "",
+    val kind: TileKind = TileKind.AGG,
+    val groupProp: String = "",
+    val habitProps: List<String> = emptyList(),
+) {
+    /** 목표를 적었는데 읽을 수 없거나 0 이하다(비워 두면 목표 없음이라 문제 없다). */
+    val goalInvalid: Boolean get() = goalText.isNotBlank() && parseGoal(goalText)?.takeIf { it > 0 } == null
+
+    /** 지금 값으로 만든 타일. 필요한 것(보기·속성·연속 달성일의 날짜 속성)이 없거나 목표가 잘못이면 null이라 '추가'를 막는다. 번호는 담을 때 붙는다. */
+    fun toTile(): AggTile? = if (goalInvalid) null else AggTile(editingId.ifEmpty { "t" }, viewId, fn, propId, dateProp, period, parseGoal(goalText), label, color, kind, groupProp, habitProps).normalized()
+
+    companion object {
+        /** 만들어 둔 [tile]을 고치는 양식으로. 목표는 글자로 되돌린다(정수면 소수점 없이). */
+        fun from(tile: AggTile): TileDraft = TileDraft(
+            tile.viewId, tile.fn, tile.propId, tile.dateProp, tile.period,
+            goalText = tile.goal?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() }.orEmpty(), label = tile.label, color = tile.color, editingId = tile.id,
+            kind = tile.kind, groupProp = tile.groupProp, habitProps = tile.habitProps,
+        )
+    }
+}
+
+private val THOUSANDS = Regex("""\d{1,3}(,\d{3})+(\.\d+)?""")
+
+/** 목표 글자 → 숫자. 끝의 %는 떼고, '1,500'은 천 단위 쉼표로, 그 밖의 쉼표('1,5')는 소수점으로 읽는다. 읽을 수 없으면 null. */
+internal fun parseGoal(text: String): Double? {
+    val t = text.trim().removeSuffix("%").trim()
+    if (t.isEmpty()) return null
+    return (if (THOUSANDS.matches(t)) t.replace(",", "") else t.replace(',', '.')).toDoubleOrNull()?.takeIf { it.isFinite() }
+}
+
+/** 함수를 바꾸면 고른 속성이 맞지 않을 때만 맞는 첫 속성으로 바꾸고, 날짜 속성은 비어 있을 때만 첫 날짜 속성으로 채운다. */
+internal fun TileDraft.withFn(fn: AggFn, columns: List<ViewColumn>): TileDraft {
+    val props = propertyChoices(fn, columns)
+    // 고른 속성이 새 함수에도 맞으면 그대로 둔다(합계에서 평균으로 바꿔도 같은 열).
+    return copy(fn = fn, propId = props.firstOrNull { it.id == propId }?.id ?: props.firstOrNull()?.id.orEmpty(), dateProp = dateProp.ifEmpty { dateChoices(columns).firstOrNull()?.id.orEmpty() })
+}
+
+/** 해빗 격자의 습관을 고르거나 푼다. 이미 [AggTile.MAX_HABITS]개면 더하지 않는다. */
+internal fun TileDraft.toggleHabit(propId: String): TileDraft {
+    val next = if (propId in habitProps) habitProps - propId else if (habitProps.size < AggTile.MAX_HABITS) habitProps + propId else habitProps
+    return copy(habitProps = next)
+}
+
+/**
+ * 종류를 바꾼다. 도넛은 함수가 개수·합계뿐이고 목표·색이 없으며 분류 속성이 있어야 한다(고른 것이 맞으면 두고, 아니면 첫 분류 속성). 값 타일로 돌아가면 분류·습관을 비운다.
+ * 해빗 격자는 함수·목표·색·기간이 없고 날짜 속성(없으면 첫 날짜 속성)과 습관(고른 것이 맞으면 두고, 아니면 첫 체크박스 [AggTile.MAX_HABITS]개)이 있어야 한다.
+ */
+internal fun TileDraft.withKind(kind: TileKind, columns: List<ViewColumn>): TileDraft {
+    if (kind == TileKind.AGG) return copy(kind = kind, groupProp = "", habitProps = emptyList())
+    if (kind == TileKind.HABITS) {
+        val checks = habitChoices(columns).map { it.id }
+        val habits = habitProps.filter { it in checks }.ifEmpty { checks.take(AggTile.MAX_HABITS) }
+        val date = dateProp.takeIf { id -> dateChoices(columns).any { it.id == id } } ?: dateChoices(columns).firstOrNull()?.id.orEmpty()
+        return copy(kind = kind, fn = AggFn.COUNT, propId = "", period = AggPeriod.ALL, goalText = "", color = "", groupProp = "", habitProps = habits, dateProp = date)
+    }
+    val groups = groupChoices(columns)
+    val group = groups.firstOrNull { it.id == groupProp }?.id ?: groups.firstOrNull()?.id.orEmpty()
+    val donutFn = if (fn == AggFn.SUM) AggFn.SUM else AggFn.COUNT
+    return copy(kind = kind, goalText = "", color = "", groupProp = group, habitProps = emptyList()).withFn(donutFn, columns)
+}
+
+/** 보기를 고르면 그 보기의 열로 다시 시작한다(개수부터). 고치는 중인 타일 번호와 이름·색·종류는 보기와 상관없는 고름이라 그대로 둔다. */
+internal fun TileDraft.withView(viewId: String, columns: List<ViewColumn>): TileDraft =
+    TileDraft(viewId = viewId, label = label, color = color, editingId = editingId).withFn(AggFn.COUNT, columns).let { if (kind != TileKind.AGG) it.withKind(kind, columns) else it }
+
+internal val COLOR_CHOICES = listOf(
+    "" to R.string.layout_tile_color_default, "gray" to R.string.layout_tile_color_gray, "brown" to R.string.layout_tile_color_brown, "orange" to R.string.layout_tile_color_orange,
+    "yellow" to R.string.layout_tile_color_yellow, "green" to R.string.layout_tile_color_green, "blue" to R.string.layout_tile_color_blue, "purple" to R.string.layout_tile_color_purple,
+    "pink" to R.string.layout_tile_color_pink, "red" to R.string.layout_tile_color_red,
+)
+
+private val KIND_CHOICES = listOf(TileKind.AGG to R.string.layout_tile_kind_value, TileKind.DONUT to R.string.layout_tile_kind_donut, TileKind.HABITS to R.string.layout_tile_kind_habits)
+
+private val PERIOD_CHOICES = listOf(
+    AggPeriod.ALL to R.string.layout_tile_period_all,
+    AggPeriod.TODAY to R.string.layout_tile_period_today,
+    AggPeriod.THIS_WEEK to R.string.layout_tile_period_week,
+    AggPeriod.THIS_MONTH to R.string.layout_tile_period_month,
+)
+
+/**
+ * Phase 11e AG-01·02 집계 타일 구역(섹션 배치에서만): 만든 타일 목록과 수정·삭제, 타일 추가 양식(수정도 같은 양식, Phase 12c).
+ * 속성 목록은 등록한 보기의 열 정보에서 오고, 규칙(함수에 맞는 속성·상한)은 [AggFn.accepts]·[WidgetLayout.addTile]이 맡는다.
+ */
+@Composable
+internal fun TileSettings(views: List<ViewSnapshotEntity>, layout: WidgetLayout, set: (WidgetLayout) -> Unit) {
+    val context = LocalContext.current
+    val columnsOf = remember(views) { views.associate { it.viewId to ViewJson.columns(it.columnInfo) } }
+    var draft by remember { mutableStateOf<TileDraft?>(null) }
+    ConfigSection(stringResource(R.string.layout_tile_config_title))
+    ConfigNote(stringResource(R.string.layout_tile_config_note, WidgetLayout.TILE_LIMIT))
+    layout.tiles.forEach { tile ->
+        val view = views.firstOrNull { it.viewId == tile.viewId }
+        val name = tileLabel(context, tile, view?.name, columnsOf[tile.viewId].orEmpty())
+        val remove = stringResource(R.string.layout_tile_delete_description, name)
+        val edit = stringResource(R.string.layout_tile_edit_description, name)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.layout_tile_summary, name, view?.name?.ifBlank { stringResource(R.string.widget_config_view_untitled) } ?: stringResource(R.string.layout_config_gone)), Modifier.weight(1f))
+            TextButton(onClick = { draft = TileDraft.from(tile) }, modifier = Modifier.semantics { contentDescription = edit }) { Text(stringResource(R.string.layout_tile_edit)) }
+            TextButton(onClick = { set(layout.removeTile(tile.id)) }, modifier = Modifier.semantics { contentDescription = remove }) {
+                Text(stringResource(R.string.layout_config_remove), color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+    val editing = draft
+    if (editing != null) {
+        // 도넛·해빗 격자는 위젯에 하나씩이라, 다른 타일이 이미 그 종류면 고를 수 없다.
+        val taken = layout.tiles.filter { it.kind != TileKind.AGG && it.id != editing.editingId }.map { it.kind }.toSet()
+        TileForm(editing, views, columnsOf, taken, onChange = { draft = it }) { tile ->
+            if (tile != null) (if (editing.editingId.isEmpty()) layout.addTile(tile) else layout.replaceTile(editing.editingId, tile)).let { it?.let(set) }
+            draft = null
+        }
+        return
+    }
+    val canAdd = layout.addTile(AggTile("t", "v")) != null
+    TextButton(onClick = { views.firstOrNull()?.let { draft = TileDraft().withView(it.viewId, columnsOf[it.viewId].orEmpty()) } }, enabled = views.isNotEmpty() && canAdd) {
+        Text(stringResource(R.string.layout_tile_add))
+    }
+    if (!canAdd) ConfigNote(stringResource(R.string.layout_tile_limit, WidgetLayout.TILE_LIMIT))
+}
+
+/**
+ * 추가·수정 양식: 보기 → 종류 → (도넛이면 분류 속성 · 해빗 격자면 습관) → 함수 → 속성 → 날짜 속성·기간 → (값이면 목표값) → 이름 → (값이면 색).
+ * 도넛·해빗 격자 타일은 위젯에 하나씩이라 [taken]에 든 종류는 고르지 못한다. [onDone]은 만든 타일(취소면 null)을 받는다.
+ */
+/** 양식 한 번 그리는 데 함께 쓰는 값: 고치는 중인 [draft]와 그 보기의 [columns], 바꿀 때 부르는 [onChange]. */
+private class TileFormScope(val draft: TileDraft, val columns: List<ViewColumn>, val onChange: (TileDraft) -> Unit) {
+    val donut get() = draft.kind == TileKind.DONUT
+    val habits get() = draft.kind == TileKind.HABITS
+}
+
+@Composable
+private fun TileForm(draft: TileDraft, views: List<ViewSnapshotEntity>, columnsOf: Map<String, List<ViewColumn>>, taken: Set<TileKind>, onChange: (TileDraft) -> Unit, onDone: (AggTile?) -> Unit) {
+    val form = TileFormScope(draft, columnsOf[draft.viewId].orEmpty(), onChange)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ConfigSection(stringResource(R.string.layout_tile_form_view))
+        views.forEach { view ->
+            RadioRow(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, draft.viewId == view.viewId) { onChange(draft.withView(view.viewId, columnsOf[view.viewId].orEmpty())) }
+        }
+        TileKindFields(form, taken)
+        TileValueFields(form)
+        TileDateFields(form)
+        TileLabelFields(form)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onDone(null) }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.layout_tile_cancel)) }
+            Button(onClick = { onDone(draft.toTile()) }, enabled = draft.toTile() != null, modifier = Modifier.weight(1f)) {
+                Text(stringResource(if (draft.editingId.isEmpty()) R.string.layout_tile_confirm else R.string.layout_tile_save))
+            }
+        }
+    }
+}
+
+/** 종류 칩, 그 종류가 위젯에 하나뿐이라 못 고르는 안내, 도넛의 분류 속성·해빗 격자의 습관 고르기. */
+@Composable
+private fun TileKindFields(form: TileFormScope, taken: Set<TileKind>) {
+    val draft = form.draft
+    ConfigSection(stringResource(R.string.layout_tile_form_kind))
+    ChoiceChips(KIND_CHOICES.filter { it.first !in taken || it.first == draft.kind }, draft.kind) { form.onChange(draft.withKind(it, form.columns)) }
+    if (TileKind.DONUT in taken && !form.donut) ConfigNote(stringResource(R.string.layout_tile_donut_limit))
+    if (TileKind.HABITS in taken && !form.habits) ConfigNote(stringResource(R.string.layout_tile_habits_limit))
+    if (form.habits) {
+        ConfigSection(stringResource(R.string.layout_tile_form_habits))
+        val checks = habitChoices(form.columns)
+        if (checks.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_habits))
+        checks.forEach { CheckboxRow(it.name, it.id in draft.habitProps) { _ -> form.onChange(draft.toggleHabit(it.id)) } }
+    }
+    if (form.donut) {
+        ConfigSection(stringResource(R.string.layout_tile_form_group))
+        val groups = groupChoices(form.columns)
+        if (groups.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_group))
+        groups.forEach { RadioRow(it.name, draft.groupProp == it.id) { form.onChange(draft.copy(groupProp = it.id)) } }
+    }
+}
+
+/** 값 타일의 함수·속성 고르기(해빗 격자는 습관만 있어 없다). */
+@Composable
+private fun TileValueFields(form: TileFormScope) {
+    val draft = form.draft
+    if (form.habits) return
+    ConfigSection(stringResource(R.string.layout_tile_form_fn))
+    ChoiceChips(AggFn.entries.filter { !form.donut || it == AggFn.COUNT || it == AggFn.SUM }.map { it to fnName(it) }, draft.fn) { form.onChange(draft.withFn(it, form.columns)) }
+    if (!draft.fn.needsProperty) return
+    ConfigSection(stringResource(R.string.layout_tile_form_prop))
+    val props = propertyChoices(draft.fn, form.columns)
+    if (props.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_prop))
+    props.forEach { RadioRow(it.name, draft.propId == it.id) { form.onChange(draft.copy(propId = it.id)) } }
+}
+
+/** 날짜 속성(둘 이상일 때)과 기간(값 타일), 연속 달성일·해빗 격자는 날짜 속성이 필요하다는 안내. */
+@Composable
+private fun TileDateFields(form: TileFormScope) {
+    val draft = form.draft
+    val dates = dateChoices(form.columns)
+    if (dates.size > 1) {
+        ConfigSection(stringResource(R.string.layout_tile_form_date))
+        dates.forEach { RadioRow(it.name, draft.dateProp == it.id) { form.onChange(draft.copy(dateProp = it.id)) } }
+    }
+    when {
+        form.habits -> if (dates.isEmpty()) ConfigNote(stringResource(R.string.layout_tile_no_date))
+        draft.fn == AggFn.STREAK -> ConfigNote(stringResource(if (dates.isEmpty()) R.string.layout_tile_no_date else R.string.layout_tile_streak_note))
+        dates.isNotEmpty() -> {
+            ConfigSection(stringResource(R.string.layout_tile_form_period))
+            ChoiceChips(PERIOD_CHOICES, draft.period) { form.onChange(draft.copy(period = it)) }
+        }
+    }
+}
+
+/** 목표값(값 타일), 이름, 색(값 타일). */
+@Composable
+private fun TileLabelFields(form: TileFormScope) {
+    val draft = form.draft
+    val plain = !form.donut && !form.habits
+    if (plain) {
+        OutlinedTextField(
+            value = draft.goalText,
+            onValueChange = { form.onChange(draft.copy(goalText = it.take(12))) },
+            label = { Text(stringResource(R.string.layout_tile_form_goal)) },
+            supportingText = { Text(stringResource(if (draft.goalInvalid) R.string.layout_tile_form_goal_invalid else R.string.layout_tile_form_goal_hint)) },
+            isError = draft.goalInvalid,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    OutlinedTextField(
+        value = draft.label,
+        onValueChange = { form.onChange(draft.copy(label = it.takeCodePoints(TILE_LABEL_MAX))) },
+        label = { Text(stringResource(R.string.layout_tile_form_label)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    if (plain) {
+        ConfigSection(stringResource(R.string.layout_tile_form_color))
+        ChoiceChips(COLOR_CHOICES, draft.color) { form.onChange(draft.copy(color = it)) }
+    }
+}
