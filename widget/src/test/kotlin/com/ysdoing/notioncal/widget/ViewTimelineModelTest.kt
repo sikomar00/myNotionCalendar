@@ -42,7 +42,7 @@ class ViewTimelineModelTest {
         ViewBoard("v1", "계획", type, listOf("이름", "기간"), rows, now, null, columns, viewConfig = config, rowsComplete = complete)
 
     private fun state(board: ViewBoard, offset: Int = 0, weekStart: DayOfWeek = DayOfWeek.SUNDAY) =
-        ViewWidgetState(board, WidgetConfig(1, monthOffset = offset, viewId = "v1"), now, CalendarInfo(weekStart))
+        ViewWidgetState(board, WidgetConfig(1, timelineOffset = offset, viewId = "v1"), now, CalendarInfo(weekStart))
 
     private fun layout(board: ViewBoard, size: DpSize, state: ViewWidgetState = state(board), height: androidx.compose.ui.unit.Dp? = null) =
         timelineLayoutFor(board, state, size, PaneSpec(height = height), metrics, 0.dp)

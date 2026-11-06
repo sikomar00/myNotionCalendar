@@ -14,7 +14,7 @@ class WidgetConfigPartsTest {
     @Test
     fun resetLookRestoresAppearanceButKeepsWhatTheWidgetPointsAt() {
         val configured = WidgetConfig(
-            7, monthOffset = 2, dataSourceIds = setOf("a"), theme = WidgetTheme.DARK, opacity = 40, fontScale = 120, maxPerCell = 3,
+            7, monthOffset = 2, timelineOffset = 4, dataSourceIds = setOf("a"), theme = WidgetTheme.DARK, opacity = 40, fontScale = 120, maxPerCell = 3,
             lineSpacing = LineSpacing.WIDE, hideDone = true, selectedTab = WidgetTab.HABIT, hideAmounts = true, ddayPageId = "d", showWeather = true, viewId = "v",
             viewPage = 2, numberStep = 10.0, presetsJson = "[{\"name\":\"점심\"}]", layoutJson = "{\"mode\":\"TABS\"}", lastTab = 3,
             formJson = "{\"v1\":{}}", actionsJson = "[{\"id\":\"a1\"}]",
@@ -22,7 +22,7 @@ class WidgetConfigPartsTest {
         // 모양은 기본값(숫자 ± 단계값 포함), 고른 대상(보기·디데이)·보고 있는 달·탭·보드 위치와 사용자가 만든 프리셋은 그대로다.
         assertEquals(
             WidgetConfig(
-                7, monthOffset = 2, selectedTab = WidgetTab.HABIT, ddayPageId = "d", viewId = "v", viewPage = 2, presetsJson = "[{\"name\":\"점심\"}]",
+                7, monthOffset = 2, timelineOffset = 4, selectedTab = WidgetTab.HABIT, ddayPageId = "d", viewId = "v", viewPage = 2, presetsJson = "[{\"name\":\"점심\"}]",
                 layoutJson = "{\"mode\":\"TABS\"}", lastTab = 3, // 배치와 보고 있는 탭도 모양이 아니다
                 formJson = "{\"v1\":{}}", actionsJson = "[{\"id\":\"a1\"}]", // 입력 양식·액션 버튼도 모양이 아니다
             ),

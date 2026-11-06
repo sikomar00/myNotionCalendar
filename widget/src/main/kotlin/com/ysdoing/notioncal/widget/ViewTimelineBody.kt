@@ -53,7 +53,7 @@ private val LABEL_GAP = 4.dp
 internal fun TimelineBody(board: ViewBoard, layout: TimelineLayout, state: ViewWidgetState, look: ViewLook) {
     val context = LocalContext.current
     Column(GlanceModifier.fillMaxWidth()) {
-        TimelineNav(layout, state.config.monthOffset, !board.rowsComplete, look)
+        TimelineNav(layout, state.config.timelineOffset, !board.rowsComplete, look)
         TimelineAxis(layout, calendarToday(state), look)
         if (layout.bars.isEmpty()) TimelineEmpty(layout, look) else layout.bars.forEach { TimelineBarRow(board, it, layout, look) }
         layout.more?.let { MoreLine(moreText(context, it), board.viewId, look) }
@@ -74,13 +74,17 @@ private fun TimelineNav(layout: TimelineLayout, offset: Int, partial: Boolean, l
     ).joinToString(", ")
     val m = look.m
     Row(GlanceModifier.fillMaxWidth().height(NAV_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
-        val titleModifier = GlanceModifier.defaultWeight().height(NAV_HEIGHT).padding(start = 4.dp).let { if (atToday) it else it.clickable(navAction(0)) }
+        val titleModifier = GlanceModifier.defaultWeight().height(NAV_HEIGHT).padding(start = 4.dp).let { if (atToday) it else it.clickable(timelineNavAction(0)) }
         Row(titleModifier.semantics { contentDescription = description; testTag = "timelineTitle" }, verticalAlignment = Alignment.CenterVertically) {
             Text(title, style = TextStyle(color = look.palette.text, fontSize = (m.headerSp * m.spFactor).sp, fontWeight = FontWeight.Bold), maxLines = 1)
             if (partial) Text(context.getString(R.string.view_calendar_partial), modifier = GlanceModifier.padding(start = 6.dp), style = look.sub, maxLines = 1)
         }
-        WidgetIconButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "timelinePrev", navAction(-1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
-        WidgetIconButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "timelineNext", navAction(+1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
+        // ‹ ›는 주 확대에서는 한 주, 월 확대에서는 한 달을 옮기니 낭독도 그렇게 읽는다.
+        val weekly = layout.zoom != TimelineZoom.MONTH
+        val prev = context.getString(if (weekly) R.string.view_timeline_prev_week else R.string.widget_prev)
+        val next = context.getString(if (weekly) R.string.view_timeline_next_week else R.string.widget_next)
+        WidgetIconButton(R.drawable.ic_widget_prev, prev, "timelinePrev", timelineNavAction(-1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
+        WidgetIconButton(R.drawable.ic_widget_next, next, "timelineNext", timelineNavAction(+1), look.palette, visual = 28.dp, height = NAV_HEIGHT)
     }
 }
 

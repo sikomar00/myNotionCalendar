@@ -80,7 +80,7 @@ class ViewTimelineRemoteViewsTest {
     fun translatesInEverySizeAndSettingWithinGlancesLimits() = runTest(timeout = 3.minutes) {
         val configs = listOf(
             WidgetConfig(1, viewId = "v1"), WidgetConfig(1, fontScale = 70, viewId = "v1"), WidgetConfig(1, fontScale = 150, viewId = "v1"),
-            WidgetConfig(1, theme = WidgetTheme.DARK, opacity = 0, viewId = "v1"), WidgetConfig(1, monthOffset = 1, viewId = "v1"),
+            WidgetConfig(1, theme = WidgetTheme.DARK, opacity = 0, viewId = "v1"), WidgetConfig(1, timelineOffset = 1, viewId = "v1"),
         )
         val failures = mutableListOf<String>()
         for (size in listOf(compact, wide, large, full, DpSize(180.dp, 400.dp), DpSize(400.dp, 180.dp)) + stockSizes) {
@@ -90,7 +90,7 @@ class ViewTimelineRemoteViewsTest {
                     runCatching {
                         val ids = glanceIdsUsed(render(size, state(board, config)))
                         check(ids <= GLANCE_VIEW_ID_BUDGET) { "uses $ids view ids" }
-                    }.onFailure { failures += "$name ${size.width}x${size.height} font=${config.fontScale} theme=${config.theme} offset=${config.monthOffset}: ${it.message}" }
+                    }.onFailure { failures += "$name ${size.width}x${size.height} font=${config.fontScale} theme=${config.theme} offset=${config.timelineOffset}: ${it.message}" }
                 }
             }
         }

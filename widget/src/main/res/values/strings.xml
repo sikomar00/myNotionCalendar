@@ -302,6 +302,8 @@
     <string name="view_chart_unsupported">이 차트 설정은 아직 그리지 못해 목록으로 보여요</string>
     <string name="view_calendar_title_back">%1$s, 오늘로 돌아가기</string>
     <string name="view_timeline_week_title">%1$d/%2$d – %3$d/%4$d</string>
+    <string name="view_timeline_prev_week">이전 주</string>
+    <string name="view_timeline_next_week">다음 주</string>
     <string name="view_timeline_empty">이 기간에 일정이 없어요</string>
     <string name="view_calendar_partial">일부만 보여요</string>
     <string name="view_calendar_partial_description">일정이 많아 일부만 받았습니다</string>

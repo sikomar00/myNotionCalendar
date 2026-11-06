@@ -12,9 +12,11 @@ import androidx.glance.testing.unit.hasTestTag
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.LayoutMode
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.ViewRow
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Test
@@ -73,6 +75,7 @@ class ViewTimelineTest {
         setAppWidgetSize(full)
         provideComposable { ViewWidgetContent(state(), systemFontScale = 1f) }
         onNode(hasTestTag("timelineTitle").and(hasContentDescriptionEqualTo("2027년 1월"))).assertExists()
+        onNode(hasTestTag("timelinePrev").and(hasContentDescriptionEqualTo("이전 달"))).assertExists() // 월 확대의 ‹ ›는 한 달
         onNode(hasTextEqualTo("8")).assertExists() // 7일 간격의 눈금: 1·8·15·22·29
         onNode(hasTextEqualTo("29")).assertExists()
         onAllNodes(hasTestTag("timelineBar")).assertCountEquals(4) // 월 창에는 1월 1~5일의 '지난 일'도 든다
@@ -99,13 +102,43 @@ class ViewTimelineTest {
     fun theArrowsMoveTheWindowAndAnotherWindowsTitleReturnsToToday() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(large)
-        provideComposable { ViewWidgetContent(state(config = WidgetConfig(1, monthOffset = 1, viewId = "v1")), systemFontScale = 1f) }
-        onNode(hasTestTag("timelinePrev")).assert(hasRunCallbackClickAction<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to -1)))
-        onNode(hasTestTag("timelineNext")).assert(hasRunCallbackClickAction<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 1)))
+        provideComposable { ViewWidgetContent(state(config = WidgetConfig(1, timelineOffset = 1, viewId = "v1")), systemFontScale = 1f) }
+        // 타임라인의 이동은 캘린더의 달 이동(MonthNavAction)이 아니라 자기 이동량을 옮기는 TimelineNavAction이다.
+        onNode(hasTestTag("timelinePrev")).assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to -1)))
+        onNode(hasTestTag("timelineNext")).assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 1)))
         onNode(hasTestTag("timelineTitle").and(hasContentDescriptionEqualTo("1/17 – 1/23, 오늘로 돌아가기")))
-            .assert(hasRunCallbackClickAction<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 0)))
+            .assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 0)))
+        // 주 확대의 ‹ ›는 한 주를 옮기니 그렇게 읽는다.
+        onNode(hasTestTag("timelinePrev").and(hasContentDescriptionEqualTo("이전 주"))).assertExists()
+        onNode(hasTestTag("timelineNext").and(hasContentDescriptionEqualTo("다음 주"))).assertExists()
         onNode(hasTestTag("timelineEmpty")).assertExists() // 그 주에는 일정이 없다
         onAllNodes(hasTestTag("timelineBar")).assertCountEquals(0)
+    }
+
+    // 한 위젯(탭)에 캘린더와 타임라인: 달 이동량 3(→ 4월)과 타임라인 이동량 1(→ 다음 주)이 서로 섞이지 않는다.
+    private val mixedLayout = WidgetLayout(LayoutMode.TABS).add("c1")!!.add("t1")!!
+
+    private fun mixedTab(index: Int): LayoutWidgetState {
+        val calendar = ViewBoard("c1", "일정", "calendar", listOf("이름", "기간"), plan, now, null, listOf(title, date))
+        val boards = mapOf("c1" to calendar, "t1" to timeline().copy(viewId = "t1"))
+        return LayoutWidgetState(WidgetConfig(1, monthOffset = 3, timelineOffset = 1, lastTab = index), mixedLayout, boards, now, DayOfWeek.SUNDAY, CalendarInfo(DayOfWeek.SUNDAY))
+    }
+
+    @Test
+    fun inAMixedWidgetTheCalendarTabFollowsTheMonthOffset() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { LayoutWidgetContent(mixedTab(0), systemFontScale = 1f) }
+        onNode(hasTestTag("calendarTitle").and(hasContentDescriptionEqualTo("2027년 4월, 오늘로 돌아가기"))).assertExists()
+        onNode(hasTestTag("calendarPrev")).assert(hasRunCallbackClickAction<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to -1))) // 캘린더는 기존 그대로
+    }
+
+    @Test
+    fun inAMixedWidgetTheTimelineTabFollowsItsOwnOffset() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(large)
+        provideComposable { LayoutWidgetContent(mixedTab(1), systemFontScale = 1f) }
+        onNode(hasTestTag("timelineTitle").and(hasContentDescriptionEqualTo("1/17 – 1/23, 오늘로 돌아가기"))).assertExists() // 달 이동량 3은 쓰지 않는다
     }
 
     @Test
