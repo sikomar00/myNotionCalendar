@@ -72,16 +72,15 @@ class ViewSync @Inject constructor(
         }
         if (changed) widgets.requestUpdate()
         // 표지는 위젯을 먼저 갱신한 뒤에 받는다(데이터가 바뀌면 즉시 갱신, 느린 이미지 서버가 동기화를 붙잡지 않게). 새로 받았으면 한 번 더 갱신한다.
-        val saved = fetchCovers(dao.all().map { it.viewId })
+        val saved = fetchCovers(dao.all())
         // 표지 파일은 등록한 모든 보기의 주소를 모아 정리한다(보기 하나만 보고 지우면 다른 보기의 표지가 사라진다).
         covers.prune(dao.coverUrls())
         if (saved) widgets.requestUpdate()
     }
 
     /** 저장된 행의 앞쪽 표지를 받는다. 시간이 [COVER_PHASE_MILLIS]를 넘으면 그만두고 나머지는 다음 동기화에 맡긴다. 새로 받은 표지가 있으면 true. */
-    private suspend fun fetchCovers(viewIds: Collection<String>): Boolean {
-        val types = dao.all().associate { it.viewId to it.viewType }
-        val urls = viewIds.flatMap { dao.coverUrls(it, CoverStore.coverLimit(types[it])) }
+    private suspend fun fetchCovers(views: Collection<ViewSnapshotEntity>): Boolean {
+        val urls = views.flatMap { dao.coverUrls(it.viewId, CoverStore.coverLimit(it.viewType)) }
         return withTimeoutOrNull(COVER_PHASE_MILLIS) { covers.fetch(urls) } ?: false
     }
 
@@ -114,7 +113,7 @@ class ViewSync @Inject constructor(
         val registered = dao.all().firstOrNull { it.viewId == viewId } ?: return
         syncOne(registered, schemas)
         widgets.requestUpdate()
-        if (fetchCovers(listOf(viewId))) widgets.requestUpdate()
+        if (fetchCovers(dao.all().filter { it.viewId == viewId })) widgets.requestUpdate()
     }
 
     /** 보기 하나를 받아 스냅샷을 바꾼다. 실패하면 이전 스냅샷을 두고 오류만 남기며, 노션 오류는 돌려준다(성공이거나 예상 밖 예외면 null). */
@@ -200,7 +199,7 @@ class ViewSync @Inject constructor(
             filterJson = filterJson,
             rowsComplete = !fetched.hasMore,
         )
-        // 갤러리는 보기가 정한 표지 출처(속성·페이지 표지)를 따르고, 책 위젯 같은 다른 보기는 파일 속성 휴리스틱만 쓴다.
+        // 갤러리는 보기가 정한 표지 출처(속성·페이지 표지)를 따른다(정하지 않았으면 기존 휴리스틱이 먼저라 같은 주소를 읽는 책 위젯이 바뀌지 않는다). 다른 보기는 휴리스틱만 쓴다.
         val gallery = GalleryConfig.parse(view.configuration?.raw).takeIf { view.type == "gallery" }
         val rows = pages.mapIndexed { i, page ->
             val cells = columns.joinToString(VIEW_CELL_SEPARATOR) { name -> cellText(writable.firstOrNull { it.name == name }, page.properties[name] as? JsonObject) }

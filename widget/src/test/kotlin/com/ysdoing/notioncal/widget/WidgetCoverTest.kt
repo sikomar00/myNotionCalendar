@@ -86,6 +86,15 @@ class WidgetCoverTest {
     }
 
     @Test
+    fun theCoverCountPerGalleryDividesTheNineAndNeverDropsBelowThree() {
+        assertEquals(9, CoverBudget.galleryCoversPerBoard(1))
+        assertEquals(4, CoverBudget.galleryCoversPerBoard(2))
+        assertEquals(3, CoverBudget.galleryCoversPerBoard(3))
+        assertEquals(3, CoverBudget.galleryCoversPerBoard(5)) // 보기당 최소 3장
+        assertEquals(9, CoverBudget.galleryCoversPerBoard(0))
+    }
+
+    @Test
     fun loadGalleryShrinksEachCoverIntoTheGalleryBudgetAndReadsAtMostNine() {
         val store = CoverStore(dir)
         val rows = (1..12).map { ViewRow("p$it", "", listOf("카드 $it"), "https://img.example/$it.jpg") }

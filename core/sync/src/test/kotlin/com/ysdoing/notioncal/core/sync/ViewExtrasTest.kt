@@ -65,20 +65,33 @@ class ViewExtrasTest {
     }
 
     @Test
-    fun withoutThePropertyFileTheSourcesFallBackInOrder() {
+    fun aPropertyThatIsMissingFromThePageFallsBackToThePageCoverThenTheHeuristic() {
         val gallery = GalleryConfig(CoverKind.PROPERTY, "cv")
         val noProp = """{"표지":{"id":"other","type":"files","files":[{"type":"external","external":{"url":"https://x.example/heuristic.jpg"}}]}}"""
-        assertEquals("https://x.example/page.jpg", coverUrlOf(page(noProp, pageCover), gallery)) // 속성에 파일 없음 → 페이지 표지
+        assertEquals("https://x.example/page.jpg", coverUrlOf(page(noProp, pageCover), gallery)) // 속성이 없다(지워짐) → 페이지 표지
         assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(noProp), gallery)) // 페이지 표지도 없음 → 휴리스틱
         assertEquals("", coverUrlOf(page("""{"Name":{"type":"title","title":[]}}"""), gallery))
     }
 
     @Test
-    fun theAutoAndPageCoverSourcesUseThePageCoverFirstAndNoneMeansNoCover() {
-        assertEquals("https://x.example/page.jpg", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.AUTO)))
+    fun aConfiguredPropertyThatIsEmptyOnARowGivesNoCoverInsteadOfAnUnrelatedFile() {
+        // 노션도 그 카드에는 표지를 보이지 않으니 다른 파일 속성(첨부 등)·페이지 표지로 대신하지 않는다.
+        val emptyPoster = """{"사진":{"id":"cv","type":"files","files":[]},"첨부":{"id":"att","type":"files","files":[{"type":"external","external":{"url":"https://x.example/doc.pdf"}}]}}"""
+        assertEquals("", coverUrlOf(page(emptyPoster, pageCover), GalleryConfig(CoverKind.PROPERTY, "cv")))
+    }
+
+    @Test
+    fun thePageCoverSourceUsesThePageCoverFirstAndNoneMeansNoCover() {
         assertEquals("https://x.example/page.jpg", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.PAGE_COVER)))
-        assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(files), GalleryConfig(CoverKind.AUTO))) // 페이지 표지가 없으면 휴리스틱(이름에 표지가 든 파일 속성)
+        assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(files), GalleryConfig(CoverKind.PAGE_COVER))) // 페이지 표지가 없으면 휴리스틱
         assertEquals("", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.NONE))) // 노션에서 표지를 껐다
+    }
+
+    @Test
+    fun anUnspecifiedSourceKeepsTheHeuristicFirstSoTheBookWidgetIsNotChanged() {
+        // 같은 coverUrl을 책 위젯도 읽는다: 설정이 없거나 모르는 값이면 기존처럼 이름이 표지 같은 파일 속성이 먼저다.
+        assertEquals("https://x.example/heuristic.jpg", coverUrlOf(page(files, pageCover), GalleryConfig(CoverKind.AUTO)))
+        assertEquals("https://x.example/page.jpg", coverUrlOf(page("{}", pageCover), GalleryConfig(CoverKind.AUTO))) // 파일이 없을 때만 페이지 표지
     }
 
     @Test

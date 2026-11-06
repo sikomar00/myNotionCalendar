@@ -35,18 +35,23 @@ internal fun coverUrlOf(properties: Map<String, JsonElement>): String {
 }
 
 /**
- * 갤러리 보기의 행 표지 주소(Phase 12d VR-GAL): 보기 설정이 고른 파일 속성 → 노션 페이지 표지 → 기존 휴리스틱([coverUrlOf]) 순이다.
- * 설정이 '표지 없음'이면 빈 글자다. 앞 출처에 파일이 없거나 https가 아니면 다음 출처로 넘어간다.
+ * 갤러리 보기의 행 표지 주소(Phase 12d VR-GAL). 같은 주소를 책 위젯도 읽으니 보기 설정이 없거나 모르는 값([CoverKind.AUTO])이면 기존 규칙([coverUrlOf]의 이름
+ * 휴리스틱)을 먼저 지키고 없을 때만 노션 페이지 표지를 쓴다. 그 밖에는 노션이 보이는 대로다:
+ * - 표지 없음: 빈 글자(노션 갤러리가 표지를 끈 것).
+ * - 파일 속성: 그 속성의 첫 파일, 속성이 비어 있으면 빈 글자(노션도 그 카드에 표지를 안 보인다). 속성 자체를 찾지 못하면(지워짐) 페이지 표지 → 휴리스틱.
+ * - 페이지 표지: 페이지 표지, 없으면 휴리스틱.
+ * 파일이 https가 아니면 없는 것으로 본다.
  */
-internal fun coverUrlOf(page: PageDto, gallery: GalleryConfig): String {
-    if (gallery.cover == CoverKind.NONE) return ""
-    val byProperty = if (gallery.cover == CoverKind.PROPERTY) propertyFileUrl(page.properties, gallery.coverProp) else ""
-    return byProperty.ifEmpty { holderUrl(page.cover) }.ifEmpty { coverUrlOf(page.properties) }
+internal fun coverUrlOf(page: PageDto, gallery: GalleryConfig): String = when (gallery.cover) {
+    CoverKind.NONE -> ""
+    CoverKind.PROPERTY -> propertyFileUrl(page.properties, gallery.coverProp) ?: holderUrl(page.cover).ifEmpty { coverUrlOf(page.properties) }
+    CoverKind.PAGE_COVER -> holderUrl(page.cover).ifEmpty { coverUrlOf(page.properties) }
+    CoverKind.AUTO -> coverUrlOf(page.properties).ifEmpty { holderUrl(page.cover) }
 }
 
-/** 속성 ID([propertyId])가 같은 파일 속성의 첫 파일 주소. 페이지 속성 값에는 `id`가 들어 있어 스키마 없이 찾는다. */
-private fun propertyFileUrl(properties: Map<String, JsonElement>, propertyId: String): String {
-    val value = properties.values.firstOrNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull == propertyId } as? JsonObject ?: return ""
+/** 속성 ID([propertyId])가 같은 파일 속성의 첫 파일 주소(비어 있으면 빈 글자). 그 속성이 없으면 null. 페이지 속성 값에는 `id`가 들어 있어 스키마 없이 찾는다. */
+private fun propertyFileUrl(properties: Map<String, JsonElement>, propertyId: String): String? {
+    val value = properties.values.firstOrNull { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.contentOrNull == propertyId } as? JsonObject ?: return null
     return if (value.type() == "files") firstFileUrl(value["files"]) else ""
 }
 

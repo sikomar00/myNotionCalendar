@@ -28,9 +28,12 @@ import com.ysdoing.notioncal.core.data.view.ViewRow
 
 private val COVER_CORNER = 6.dp
 
+/** 카드를 그릴 때 쓰는 값: 보기 설정, 표지 묶음, 별점 속성. */
+internal class GalleryDraw(val config: GalleryConfig, val covers: Covers, val ratingProp: String)
+
 /** 갤러리 격자. Column(줄들 + 틈 + 더 보기)과 Row(카드 + 틈)라 Glance 자식 10개 한도 안이다(열 4 × 줄 2, 열 2 × 줄 4가 최대). */
 @Composable
-internal fun GalleryBody(board: ViewBoard, layout: GalleryLayout, config: GalleryConfig, covers: Covers, ratingProp: String, look: ViewLook) {
+internal fun GalleryBody(board: ViewBoard, layout: GalleryLayout, draw: GalleryDraw, look: ViewLook) {
     val context = LocalContext.current
     val shown = board.rows.take(layout.cards)
     Column(GlanceModifier.fillMaxWidth()) {
@@ -39,7 +42,7 @@ internal fun GalleryBody(board: ViewBoard, layout: GalleryLayout, config: Galler
             Row(GlanceModifier.fillMaxWidth()) {
                 cards.forEachIndexed { i, row ->
                     if (i > 0) Spacer(GlanceModifier.width(GALLERY_GAP))
-                    GalleryCard(board, row, layout, config, covers, ratingProp, look)
+                    GalleryCard(board, row, layout, draw, look)
                 }
             }
         }
@@ -48,10 +51,10 @@ internal fun GalleryBody(board: ViewBoard, layout: GalleryLayout, config: Galler
 }
 
 @Composable
-private fun GalleryCard(board: ViewBoard, row: ViewRow, layout: GalleryLayout, config: GalleryConfig, covers: Covers, ratingProp: String, look: ViewLook) {
+private fun GalleryCard(board: ViewBoard, row: ViewRow, layout: GalleryLayout, draw: GalleryDraw, look: ViewLook) {
     val context = LocalContext.current
-    val caption = galleryCaption(board, row, layout.propLines, ratingProp)
-    val hasCover = covers.has(row.pageId)
+    val caption = galleryCaption(board, row, layout.propLines, draw.ratingProp)
+    val hasCover = draw.covers.has(row.pageId)
     val frame = GlanceModifier.size(layout.cardWidth, layout.coverHeight).tile(look.palette)
     Column(
         GlanceModifier.width(layout.cardWidth)
@@ -63,7 +66,7 @@ private fun GalleryCard(board: ViewBoard, row: ViewRow, layout: GalleryLayout, c
     ) {
         // 맞춤(fit)일 때 이미지 둘레와 표지 없는 카드는 이 타일 바탕이 보인다.
         Box(if (hasCover) frame else frame.semantics { testTag = "galleryNoCover" }, contentAlignment = Alignment.Center) {
-            covers.Draw(row.pageId, layout.cardWidth, layout.coverHeight, COVER_CORNER, config.fit)
+            draw.covers.Draw(row.pageId, layout.cardWidth, layout.coverHeight, COVER_CORNER, draw.config.fit)
         }
         Text(caption.title, modifier = GlanceModifier.fillMaxWidth().padding(top = 4.dp), style = look.title, maxLines = 1)
         caption.lines.forEach { Text(it, modifier = GlanceModifier.fillMaxWidth(), style = look.sub, maxLines = 1) }

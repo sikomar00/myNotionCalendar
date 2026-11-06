@@ -18,7 +18,7 @@ data class LayoutItem(
     val viewId: String,
     val label: String = "",
     val weight: Int = 1,
-    /** 갤러리 카드가 별점(★) 글자로 그릴 속성 ID(Phase 12d RC-05 레시피가 정한다). 없으면 빈 글자. */
+    /** 갤러리 카드가 별점(★) 글자로 그릴 속성 ID(Phase 12d RC-05 레시피가 정한다, 보기에 보이는 속성이어야 값이 온다). 없으면 빈 글자. */
     val ratingProp: String = "",
 ) {
     /** 탭·섹션 머리에 쓸 이름. 이름 없는 보기도 노션에서 허용되니 마지막은 '보기'다. */

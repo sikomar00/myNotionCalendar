@@ -64,7 +64,7 @@ class ViewGalleryModelTest {
     fun cardsNeverExceedNineAndEveryRowIsFullWidth() {
         for (size in listOf(wide, large, full, DpSize(411.dp, 800.dp), DpSize(358.dp, 640.dp))) {
             val l = layout(board(), size)!!
-            assertTrue("$size ${l.cards}장", l.cards in 1..GALLERY_COVER_CAP)
+            assertTrue("$size ${l.cards}장", l.cards in 1..CoverBudget.GALLERY_MAX_COVERS)
             assertTrue(l.cardWidth * l.columns + GALLERY_GAP * (l.columns - 1) <= size.width - PADDING_H * 2 + 0.5.dp)
         }
     }
@@ -107,6 +107,15 @@ class ViewGalleryModelTest {
     }
 
     @Test
+    fun aShortWidgetWhoseRowsAllFitInOneRowDoesNotReserveTheMoreLine() {
+        // 4열에 3행(다 받음): 한 줄에 다 보이니 더 보기 자리(32dp)를 빼지 않는다 → 같은 높이에서 4행 이상인 보기보다 표지가 더 높다.
+        val few = layout(board(rows = 3), DpSize(501.dp, 180.dp))
+        val many = layout(board(rows = 30), DpSize(501.dp, 180.dp))
+        assertNotNull(few)
+        assertTrue(many == null || few!!.coverHeight > many.coverHeight)
+    }
+
+    @Test
     fun aPaneHeightLimitsTheGridLikeATabOrSectionCell() {
         val pane = PaneSpec(height = 300.dp)
         val inPane = galleryLayoutFor(board(), full, pane, m, 0.dp, GalleryConfig())!!
@@ -129,9 +138,9 @@ class ViewGalleryModelTest {
     }
 
     @Test
-    fun aRatingPropertyTakesTheFirstLineEvenWhenTheViewHidesItAndIsSpokenAsAScore() {
+    fun aRatingPropertyTakesTheFirstLineEvenWhenItsColumnIsNotAShownLineAndIsSpokenAsAScore() {
         val r = ViewRow("p1", "", listOf("달", "저자 가", "2020"), typed = mapOf("r" to JsonPrimitive(4.0)))
-        val caption = galleryCaption(b, r, propLines = 2, ratingProp = "r") // 별점 열 '별점'은 보기에 안 보인다
+        val caption = galleryCaption(b, r, propLines = 2, ratingProp = "r") // 별점 열 '별점'은 보이는 열 이름 목록에 없지만 열 정보(역할이 있는 열)는 남아 있다
         assertEquals(listOf("★★★★☆", "저자 가"), caption.lines)
         assertEquals("달, 별점 4점 (5점 만점), 저자 가", caption.description)
         assertEquals(listOf("★★★★☆"), galleryCaption(b, r, 1, "r").lines) // 줄이 하나면 별점이 이긴다

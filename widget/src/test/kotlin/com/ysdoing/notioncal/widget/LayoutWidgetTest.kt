@@ -404,4 +404,17 @@ class LayoutWidgetTest {
             assertTrue("$mode $texts", if (mode == LayoutMode.TABS) "내 독서" in texts else "독서" in texts) // 탭 이름은 label, 섹션 머리는 보기 이름
         }
     }
+
+    // --- Phase 12d: 표지는 지금 그려지는 칸의 보기만 읽는다
+
+    @Test
+    fun drawnBoardsAreTheActiveTabForTabsAndEveryCellOtherwise() {
+        val boards = mapOf("a" to board(0).copy(viewId = "a"), "b" to board(1).copy(viewId = "b"), "c" to null)
+        val tabs = com.ysdoing.notioncal.core.data.view.WidgetLayout(com.ysdoing.notioncal.core.data.view.LayoutMode.TABS).add("a")!!.add("b")!!.add("c")!!
+        assertEquals(listOf("b"), drawnBoards(tabs, lastTab = 1, boards = boards).map { it?.viewId })
+        assertEquals(listOf("c"), drawnBoards(tabs, lastTab = 9, boards = boards).map { it?.viewId }.map { it ?: "c" }) // 범위를 넘으면 마지막 탭
+        val sections = tabs.copy(mode = com.ysdoing.notioncal.core.data.view.LayoutMode.SECTIONS)
+        assertEquals(listOf("a", "b", null), drawnBoards(sections, lastTab = 1, boards = boards).map { it?.viewId })
+        assertEquals(emptyList<Any>(), drawnBoards(com.ysdoing.notioncal.core.data.view.WidgetLayout(), 0, boards))
+    }
 }

@@ -77,6 +77,12 @@ internal data class LayoutWidgetState(
     fun paneState(item: LayoutItem) = ViewWidgetState(boards[item.viewId], config.copy(viewId = item.viewId), nowMillis, calendar, covers, item.ratingProp)
 }
 
+/** 지금 그려지는 칸의 보기들: 탭 배치는 고른 탭 하나, 단일·섹션은 모든 칸. 표지는 이 보기들의 것만 읽는다(숨은 탭의 표지로 예산을 쓰지 않는다). */
+internal fun drawnBoards(layout: WidgetLayout, lastTab: Int, boards: Map<String, ViewBoard?>): List<ViewBoard?> {
+    val items = if (layout.mode == LayoutMode.TABS) listOfNotNull(layout.items.getOrNull(lastTab.coerceIn(0, (layout.items.size - 1).coerceAtLeast(0)))) else layout.items
+    return items.map { boards[it.viewId] }
+}
+
 /** 칸마다 같은 그리기 값. [fontScale]은 시스템 글꼴 배율, [staticRows]는 설정 화면 미리보기용([PaneSpec]). */
 internal data class LayoutLook(val palette: WidgetPalette, val metrics: ViewMetrics, val fontScale: Float, val staticRows: Boolean)
 
@@ -149,7 +155,10 @@ class LayoutWidget : GlanceAppWidget() {
         // 탭을 바꿀 때 빈 화면이 나오지 않게 모든 보기의 처음 값을 미리 읽는다(통합 위젯과 같은 요령). 타일의 보기도 함께.
         val initialBoards = boardsOf(deps, WidgetLayout.parse(initialConfig.layoutJson).boardIds()).first()
         val initialCalendar = if (initialBoards.values.any { it?.drawsCalendar() == true }) CalendarSession.load(deps, initialConfig) else CalendarInfo(initialSettings.weekStart, initialSettings.showWeekNumbers)
-        val initialCovers = CoverSession.load(deps, initialBoards.values)
+        val initialLayout = WidgetLayout.parse(initialConfig.layoutJson)
+        val initialDrawn = drawnBoards(initialLayout, initialConfig.lastTab, initialBoards)
+        val initialCoverVersion = deps.covers().version.value // 읽기 전에 정해 그 사이에 받아진 표지가 다시 읽히게 한다
+        val initialCovers = CoverSession.load(deps, initialDrawn)
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val layout = remember(config.layoutJson) { WidgetLayout.parse(config.layoutJson) }
@@ -158,7 +167,7 @@ class LayoutWidget : GlanceAppWidget() {
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
             val calendar = CalendarSession.info(deps, initialCalendar, config, boards.values.any { it?.drawsCalendar() == true })
-            val covers = CoverSession.covers(deps, initialCovers, initialBoards.values, boards.values)
+            val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, initialDrawn, drawnBoards(layout, config.lastTab, boards))
             LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart, calendar, covers), fontScale ?: SystemFontScale.current(context))
         }
     }

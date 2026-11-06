@@ -50,7 +50,7 @@ object Recipes {
 
     private val OPTION_TYPES = setOf("select", "status")
     private val RATING_TYPES = setOf("number", "select")
-    private val RATING_NAMES = listOf("별점", "평점", "평가", "rating", "score", "stars")
+    private val RATING_NAMES = setOf("rating", "score", "stars", "별점", "평점", "평가")
 
     /** 이 레시피가 쓸 수 있는 보기를 어울리는 순서로: 제목 열이 있는 보기(새 항목을 만들 수 있다)에, 레시피마다 필요한 속성이 있는 것만. */
     fun candidates(recipe: Recipe, views: List<RecipeView>): List<RecipeView> =
@@ -141,12 +141,12 @@ object Recipes {
 
     /**
      * 갤러리 보기 하나(표지 카드) + 새 항목 양식: 고른 별점 속성(있으면)과, 날짜 열이 있으면 오늘 날짜로 시작한다. 별점 속성은 배치 항목이 가져
-     * 카드가 ★로 그린다(보기에서 숨겨져 있어도 된다).
+     * 카드가 ★로 그린다(동기화가 값을 저장하는 보기에 보이는 속성이어야 한다).
      */
     private fun gallery(picks: RecipePicks, view: RecipeView): RecipeConfig {
         val rating = view.columns.firstOrNull { it.id == picks.ratingProp && it.type in RATING_TYPES }
         val layout = WidgetLayout(LayoutMode.SINGLE, listOf(LayoutItem(view.viewId, ratingProp = rating?.id.orEmpty())))
-        val form = InputForm(listOfNotNull(rating).map { FormField(it.id) }, dateToday = view.has("date"))
+        val form = InputForm(listOfNotNull(rating).map { FormField(it.id) }, dateToday = view.firstDate() != null) // 새 항목의 날짜 열(ViewWriter와 같은 규칙)
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
     }
 
@@ -178,10 +178,19 @@ object Recipes {
 
     private fun RecipeView.keep(id: String, type: String): String = keep(id, setOf(type))
 
-    /** 고른 별점 속성이 이 보기에도 맞으면 그대로, 아니면 이름이 별점·평점·rating 같은 숫자·선택 속성을 추천하고 없으면 별점 없음(빈 글자)이다. */
+    /**
+     * 고른 별점 속성이 이 보기에도 맞으면 그대로, 아니면 이름이 별점·평점·rating 같은 숫자·선택 속성을 추천하고 없으면 별점 없음(빈 글자)이다.
+     * 보기를 바꿀 때마다 이렇게 다시 고르니, 직접 '별점 없음'을 골랐어도 보기를 바꾸면 이름이 맞는 속성이 다시 추천된다.
+     */
     private fun RecipeView.ratingOrGuess(id: String): String =
         columns.firstOrNull { it.id == id && it.type in RATING_TYPES }?.id
-            ?: columns.firstOrNull { it.type in RATING_TYPES && RATING_NAMES.any { name -> it.name.contains(name, ignoreCase = true) } }?.id.orEmpty()
+            ?: columns.firstOrNull { it.type in RATING_TYPES && isRatingName(it.name) }?.id.orEmpty()
+
+    /** 이름이 정확히 rating·score·stars·별점·평점·평가이거나 '별점'·'평점'이 든 이름('평가금액'·'Operating'처럼 우연히 든 것은 아니다). */
+    private fun isRatingName(name: String): Boolean {
+        val n = name.trim()
+        return RATING_NAMES.any { it.equals(n, ignoreCase = true) } || "별점" in n || "평점" in n
+    }
 
     private fun RecipeView.keep(id: String, types: Set<String>): String =
         columns.firstOrNull { it.id == id && it.type in types }?.id ?: columns.firstOrNull { it.type in types }?.id.orEmpty()

@@ -346,14 +346,14 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
         m, palette, state.config.numberStep, stepNumbers = step != SizeStep.COMPACT,
         actionWidgetId = actionWidgetId, rowAction = actions.firstOrNull()?.takeIf { step != SizeStep.COMPACT },
     )
-    // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
     // 갤러리(Phase 12d): 표지 카드 격자. 자리가 없으면(2×2·낮은 칸) 아래 표·목록으로 대신 그린다.
     val gallery = GalleryConfig.parse(board.viewConfig).takeIf { board.type == "gallery" }
     val galleryLayout = gallery?.let { galleryLayoutFor(board, size, spec, m, lines + presetLinesHeight(presets.size), it) }
     if (gallery != null && galleryLayout != null) {
-        GalleryBody(board, galleryLayout, gallery, state.covers, state.ratingProp, look)
+        GalleryBody(board, galleryLayout, GalleryDraw(gallery, state.covers, state.ratingProp), look)
         return
     }
+    // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(타임라인 같은 다른 종류도 같다).
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
         // 탭·섹션의 낮은 칸이면 카드 수도 그 칸 높이에 맞춘다(보드는 스크롤이 없어 넘치면 잘린다). 열 이동 줄과 열 머리는 카드 위에 늘 그려진다.
@@ -426,13 +426,14 @@ class ViewWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialBoard = initialConfig.viewId?.let { deps.views().observe(it).first() }
         val initialCalendar = if (initialBoard?.drawsCalendar() == true) CalendarSession.load(deps, initialConfig) else CalendarInfo()
+        val initialCoverVersion = deps.covers().version.value // 읽기 전에 정해 그 사이에 받아진 표지가 다시 읽히게 한다
         val initialCovers = CoverSession.load(deps, listOf(initialBoard))
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val board by remember(config.viewId) { config.viewId?.let { deps.views().observe(it) } ?: flowOf(null) }
                 .collectAsState(initialBoard)
             val calendar = CalendarSession.info(deps, initialCalendar, config, board?.drawsCalendar() == true)
-            val covers = CoverSession.covers(deps, initialCovers, listOf(initialBoard), listOf(board))
+            val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, listOf(initialBoard), listOf(board))
             val fontScale by SystemFontScale.flow.collectAsState()
             ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar, covers), fontScale ?: SystemFontScale.current(context))
         }

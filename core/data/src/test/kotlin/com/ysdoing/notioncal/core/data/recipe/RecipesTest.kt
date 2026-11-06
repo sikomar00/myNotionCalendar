@@ -210,6 +210,13 @@ class RecipesTest {
         assertEquals("r", Recipes.defaultPicks(Recipe.GALLERY, listOf(shelf)).ratingProp) // 별점
         val noName = view("g3", "gallery", title, ViewColumn("q", "쪽수", "number"))
         assertEquals("", Recipes.defaultPicks(Recipe.GALLERY, listOf(noName)).ratingProp)
+        // 이름에 우연히 든 말은 별점이 아니다: 'Operating hours'·'Integrating'·'평가금액'·'Underscore'
+        val lookalikes = view("g5", "gallery", title, *listOf("Operating hours", "Integrating", "평가금액", "Underscore").mapIndexed { i, n -> ViewColumn("x$i", n, "number") }.toTypedArray())
+        assertEquals("", Recipes.defaultPicks(Recipe.GALLERY, listOf(lookalikes)).ratingProp)
+        // 이름이 정확하거나 '별점'·'평점'이 들면 별점이다
+        listOf("Rating", "score", "내 별점", "도서 평점", "평가").forEach { n ->
+            assertEquals(n, "x", Recipes.defaultPicks(Recipe.GALLERY, listOf(view("g6", "gallery", title, ViewColumn("x", n, "number")))).ratingProp)
+        }
         // 고른 속성이 새 보기에도 있으면 지키고, 없으면 새 보기에서 다시 추천한다
         val kept = Recipes.withView(Recipe.GALLERY, RecipePicks(viewId = "shelf", ratingProp = "g"), shelf)
         assertEquals("g", kept.ratingProp)

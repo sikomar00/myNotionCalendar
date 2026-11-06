@@ -707,14 +707,23 @@ class ViewSyncTest {
     )
 
     @Test
-    fun aGalleryViewReadsTheCoverFromItsConfiguredPropertyThenThePageCover() = runTest {
+    fun aGalleryViewReadsTheCoverFromItsConfiguredPropertyAndLeavesAnEmptyOneEmpty() = runTest {
         viewType = "gallery"
         viewRaw = Json.parseToJsonElement("""{"type":"gallery","cover":{"type":"property","property_id":"cv"}}""").jsonObject
         register("g1")
         rowPages = listOf(galleryPage("c1", "https://img.example/page1.jpg", "https://img.example/prop1.jpg"), galleryPage("c2", "https://img.example/page2.jpg", null))
         sync().syncAll()
-        val rows = db.viewDao().observeRows("g1").first()
-        assertEquals(listOf("https://img.example/prop1.jpg", "https://img.example/page2.jpg"), rows.map { it.coverUrl })
+        assertEquals(listOf("https://img.example/prop1.jpg", ""), db.viewDao().observeRows("g1").first().map { it.coverUrl })
+    }
+
+    @Test
+    fun aGalleryViewWithAPageCoverSourceReadsThePageCover() = runTest {
+        viewType = "gallery"
+        viewRaw = Json.parseToJsonElement("""{"type":"gallery","cover":{"type":"page_cover"}}""").jsonObject
+        register("g1")
+        rowPages = listOf(galleryPage("c1", "https://img.example/page1.jpg", "https://img.example/prop1.jpg"), galleryPage("c2", null, "https://img.example/prop2.jpg"))
+        sync().syncAll()
+        assertEquals(listOf("https://img.example/page1.jpg", "https://img.example/prop2.jpg"), db.viewDao().observeRows("g1").first().map { it.coverUrl })
     }
 
     @Test

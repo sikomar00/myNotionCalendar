@@ -37,6 +37,11 @@ internal object CoverBudget {
     const val GALLERY_TOTAL_BYTES = 700_000
     const val GALLERY_MAX_COVERS = CoverStore.MAX_GALLERY_COVERS
     const val GALLERY_BITMAP_BYTES = GALLERY_TOTAL_BYTES / GALLERY_MAX_COVERS
+
+    private const val MIN_GALLERY_PER_BOARD = 3
+
+    /** 갤러리 보기 [boards]개가 그려지면 보기마다 읽을 표지 수: 합계 장수를 나누되 보기당 최소 3장(그려지는 보기만 센다). */
+    fun galleryCoversPerBoard(boards: Int): Int = (GALLERY_MAX_COVERS / boards.coerceAtLeast(1)).coerceAtLeast(MIN_GALLERY_PER_BOARD)
 }
 
 /** 위젯이 그릴 표지 묶음(페이지 ID → 비트맵). 비트맵을 다루는 코드는 이 클래스 안에만 있다. */
@@ -80,12 +85,12 @@ internal class Covers private constructor(private val byPage: Map<String, Bitmap
         }
 
         /**
-         * 갤러리 보기들의 표지를 읽는다([boards]는 보기마다 행 목록, IO 스레드에서). 앞쪽 [CoverBudget.GALLERY_MAX_COVERS]장을 보기 수로 나눠(보기당 최소 3장)
+         * 지금 그려지는 갤러리 보기들의 표지를 읽는다([boards]는 보기마다 행 목록, IO 스레드에서). 합계 장수를 보기 수로 나눠([CoverBudget.galleryCoversPerBoard])
          * 보기마다 앞쪽 행만, 한 장씩 [CoverBudget.GALLERY_BITMAP_BYTES] 안으로 줄여 읽어 위젯 하나의 표지 합계를 묶는다. 표지가 없는 행은 건너뛴다(빈 타일로 그린다).
          */
         fun loadGallery(store: CoverStore, boards: List<List<ViewRow>>): Covers {
             if (boards.isEmpty()) return EMPTY
-            val perBoard = (CoverBudget.GALLERY_MAX_COVERS / boards.size).coerceAtLeast(MIN_GALLERY_PER_BOARD)
+            val perBoard = CoverBudget.galleryCoversPerBoard(boards.size)
             val map = LinkedHashMap<String, Bitmap>()
             for (rows in boards) {
                 for (row in rows.take(perBoard)) {
@@ -95,8 +100,6 @@ internal class Covers private constructor(private val byPage: Map<String, Bitmap
             }
             return Covers(map)
         }
-
-        private const val MIN_GALLERY_PER_BOARD = 3
 
         /** JPEG를 RGB_565로 읽고, 예산([maxBytes], 기본 [MAX_BITMAP_BYTES])을 넘으면 줄인다. 깨졌거나 없으면 null(위젯이 죽지 않는다). */
         internal fun decode(file: File, maxBytes: Int = MAX_BITMAP_BYTES): Bitmap? {

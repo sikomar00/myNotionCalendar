@@ -2,6 +2,8 @@ package com.ysdoing.notioncal.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -109,9 +111,11 @@ internal fun RecipeContent(ui: RecipeUi, actions: RecipeActions, preview: @Compo
     }
 }
 
+/** 레시피 칩. 네 개는 좁은 폰(360dp)에 한 줄로 안 들어가니 줄바꿈한다(마지막 칩이 찌그러져 눌리지 않는 일이 없게). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RecipeChips(selected: Recipe, onSelect: (Recipe) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Recipe.values().forEach { recipe ->
             FilterChip(selected = recipe == selected, onClick = { onSelect(recipe) }, label = { Text(stringResource(nameOf(recipe))) })
         }
@@ -155,7 +159,7 @@ private fun PicksSection(draft: RecipeDraft, candidates: List<RecipeView>, actio
             )
         }
         Recipe.GALLERY -> {
-            DateNote(view)
+            DateNote(view, R.string.recipe_gallery_date_note)
             ColumnPick(R.string.recipe_section_rating, view, setOf("number", "select"), picks.ratingProp, actions.onRating, noneLabel = R.string.recipe_rating_none)
             Text(stringResource(R.string.recipe_rating_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -164,9 +168,9 @@ private fun PicksSection(draft: RecipeDraft, candidates: List<RecipeView>, actio
 
 /** 새 항목의 날짜는 보기의 첫 날짜 열에 기록되고 타일도 그 열을 읽는다(고르지 않는다). 어느 열인지 알려 준다. */
 @Composable
-private fun DateNote(view: RecipeView) {
+private fun DateNote(view: RecipeView, note: Int = R.string.recipe_date_note) {
     val date = view.columns.firstOrNull { it.type == "date" } ?: return
-    Text(stringResource(R.string.recipe_date_note, date.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(stringResource(note, date.name), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** 일정·할 일의 상태 보드 고르기: 보드 보기가 하나도 없으면 줄을 그리지 않는다. */
