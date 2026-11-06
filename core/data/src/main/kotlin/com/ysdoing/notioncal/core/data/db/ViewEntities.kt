@@ -30,6 +30,9 @@ const val VIEW_ERROR_UNSUPPORTED = "Validation"
 /** [ViewWriteEntity.lastError]가 이 값이면 처리기가 이 쓰기를 보내는 중이다(노션 값을 읽고 쓰는 동안). 이때 같은 속성을 또 바꾸면 기준값을 이어받지 않는다. */
 const val VIEW_WRITE_SENDING = "Sending"
 
+/** [ViewDao.editPendingCreate]의 결과: 고를 새 항목이 없다 / 이미 보내는 중이라 못 바꿨다 / 바꿨다. */
+enum class PendingEdit { NONE, SENDING, EDITED }
+
 /** [ViewWriteEntity.propType]이 이 값이면 속성 바꿈이 아니라 새 항목 만들기다([ViewWriteEntity.value]는 ViewCreate JSON, pageId는 임시 값). */
 const val VIEW_WRITE_CREATE = "create"
 
@@ -253,6 +256,19 @@ abstract class ViewDao {
 
     @Query("UPDATE view_writes SET value = :value WHERE id = :id")
     abstract suspend fun updateWriteValue(id: Long, value: String?)
+
+    /**
+     * 한 보기의 아직 안 보낸 새 항목 쓰기 중 [pick]이 고른 첫 것을 [edit]이 돌려준 값으로 바꾼다(null이면 지운다). 읽고 쓰는 사이에 다른 해빗 체크가 끼어들어
+     * 서로의 바꿈을 덮지 않게 한 거래다. 처리기가 이미 보내기 시작한([VIEW_WRITE_SENDING]) 것은 노션에 만들어지는 중이라 바꾸지 않고 [PendingEdit.SENDING]이다.
+     */
+    @Transaction
+    open suspend fun editPendingCreate(viewId: String, pick: (ViewWriteEntity) -> Boolean, edit: (ViewWriteEntity) -> String?): PendingEdit {
+        val write = pendingCreates(viewId).firstOrNull(pick) ?: return PendingEdit.NONE
+        if (write.lastError == VIEW_WRITE_SENDING) return PendingEdit.SENDING
+        val value = edit(write)
+        if (value == null) deleteWriteById(write.id) else updateWriteValue(write.id, value)
+        return PendingEdit.EDITED
+    }
 
     /** 보낸 바꿈을 기록한다(Phase 12c, 4초 뒤 되돌리기). 처리기가 보낸 직후 부른다. */
     @Insert

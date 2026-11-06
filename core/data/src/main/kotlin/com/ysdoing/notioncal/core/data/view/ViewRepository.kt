@@ -118,7 +118,8 @@ class ViewRepository @Inject constructor(
         combine(
             dao.observe(viewId), dao.observeRows(viewId), combine(dao.observePendingSendAfter(viewId), dao.observeSent(viewId)) { pending, sent -> pending to sent },
             dao.observePendingPageIds(viewId), dao.observePendingCreateValues(viewId),
-        ) { view, rows, (pending, sent), pendingPages, creates ->
+        ) { view, rows, (pending, sent), pendingPages, createValues ->
+            val creates = createValues.mapNotNull(ViewJson::parseCreate)
             view?.let {
                 ViewBoard(
                     viewId = it.viewId,
@@ -134,8 +135,8 @@ class ViewRepository @Inject constructor(
                     pendingSendAfter = pending,
                     filterJson = it.filterJson,
                     pendingPageIds = pendingPages.toSet(),
-                    pendingCreateDates = creates.mapNotNull { ViewJson.parseCreate(it)?.date?.dateOrNull() }.toSet(),
-                    pendingCreateChecks = creates.mapNotNull { ViewJson.parseCreate(it) }.checkedByDate(),
+                    pendingCreateDates = creates.mapNotNull { it.date?.dateOrNull() }.toSet(),
+                    pendingCreateChecks = creates.checkedByDate(),
                     sentUndoAt = sent.filter { s -> s.holdsIn(rows.firstOrNull { r -> r.pageId == s.pageId }) }.map { s -> s.sentAt },
                 )
             }

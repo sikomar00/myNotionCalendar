@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
+import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_SENDING
 import com.ysdoing.notioncal.core.data.db.ViewRowEntity
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.first
@@ -119,6 +120,66 @@ class ViewWriterHabitTest {
         assertEquals(mapOf(today to setOf("c1")), board.pendingCreateChecks)
         assertEquals(1, writer.undoPending("v1")) // 4초 안이면 새 항목째 지운다
         assertEquals(0, creates().size)
+    }
+
+    // --- 코드 리뷰 반영: 타일이 고른 날짜 속성·같은 날 행이 여럿·보내는 중인 새 항목
+
+    private val twoDates = columns + ViewColumn("d2", "기록일", "date")
+
+    private suspend fun seedTwoDates(vararg rows: Triple<String, Map<String, String>, Pair<Boolean, Boolean>>) {
+        val withTwo = snapshot.copy(columnInfo = ViewJson.encodeColumns(twoDates))
+        db.viewDao().upsert(withTwo)
+        db.viewDao().replace(
+            withTwo,
+            rows.mapIndexed { i, (id, dates, checks) ->
+                val typed = dates.mapValues { dateValue(it.value) } + mapOf("c1" to JsonPrimitive(checks.first), "c2" to JsonPrimitive(checks.second))
+                ViewRowEntity("v1", i, id, "u$i", listOf(id, "", "", "").joinToString(sep), ViewJson.encodeTyped(typed))
+            },
+        )
+    }
+
+    @Test
+    fun theChosenDateColumnFindsTheDaysRowAndReceivesTheNewPagesDate() = runTest {
+        // 기본 날짜 열(날짜)로는 오늘 행이 있지만, 타일이 고른 '기록일'로는 오늘 행이 없다 → 기록일에 새 페이지를 만든다.
+        seedTwoDates(Triple("a", mapOf("d" to "2026-11-06", "d2" to "2026-11-01"), false to false))
+        assertTrue(writer.checkHabit("v1", "c1", today, dateProp = "d2"))
+        assertFalse(checked("a", "c1")) // 기본 열이 오늘인 행은 건드리지 않는다
+        val create = creates().single()
+        assertEquals(listOf("2026-11-06", "d2"), listOf(create.date, create.dateProp))
+        // 같은 날을 다시 누르면 새 항목에서 풀린다(같은 날짜 열의 새 항목만 합친다)
+        assertTrue(writer.checkHabit("v1", "c1", today, dateProp = "d2"))
+        assertEquals(0, creates().size)
+    }
+
+    @Test
+    fun aChosenDateColumnThatIsGoneFallsBackToTheDefaultColumn() = runTest {
+        seed()
+        assertTrue(writer.checkHabit("v1", "c1", today, dateProp = "gone"))
+        assertEquals("d", creates().single().dateProp)
+    }
+
+    @Test
+    fun withSeveralRowsOnADayACheckedRowIsUncheckedAndOtherwiseTheFirstRowIsChecked() = runTest {
+        seed(Triple("a", "2026-11-06", false to false), Triple("b", "2026-11-06", true to false))
+        // 격자는 b가 체크라 '함'으로 그린다. 눌러서 풀리려면 체크된 b가 풀려야 한다(앞의 a를 뒤집으면 칸이 그대로다).
+        assertTrue(writer.checkHabit("v1", "c1", today))
+        assertEquals(listOf(false, false), listOf(checked("a", "c1"), checked("b", "c1")))
+        // 아무도 체크가 아니면 앞의 행을 체크한다
+        assertTrue(writer.checkHabit("v1", "c1", today))
+        assertEquals(listOf(true, false), listOf(checked("a", "c1"), checked("b", "c1")))
+        assertEquals(0, creates().size)
+    }
+
+    @Test
+    fun aNewPageThatIsAlreadyBeingSentIsLeftAloneAndNoSecondPageIsQueued() = runTest {
+        seed()
+        writer.checkHabit("v1", "c1", today)
+        val write = db.viewDao().pendingCreates("v1").single()
+        db.viewDao().markWriteSending(write.id) // 처리기가 노션에 만드는 중
+        assertTrue(writer.checkHabit("v1", "c2", today))
+        val after = db.viewDao().pendingCreates("v1").single()
+        assertEquals(VIEW_WRITE_SENDING, after.lastError)
+        assertEquals(setOf("c1"), ViewJson.parseCreate(after.value)!!.props.keys) // 보낸 요청에 안 실리는 바꿈은 하지 않는다
     }
 
     @Test

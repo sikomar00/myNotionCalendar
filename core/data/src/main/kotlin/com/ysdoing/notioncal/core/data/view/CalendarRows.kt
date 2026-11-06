@@ -38,9 +38,11 @@ object CalendarRows {
     /**
      * Phase 12e WL-04 합쳐 보기: 소스들의 일정을 한 목록으로. 순서는 시작일, 시각 없는 것 먼저, 시각, 소스 순서, 소스 안의 순서다(같은 날 같은 시각이면
      * 소스 순서가 결정적이다). 소스의 날짜 속성이 보기에 없거나 날짜 열이 아니면 그 보기의 기본 날짜 열로 읽는다.
+     * 같은 DB의 보기 둘을 소스로 넣어 한 페이지가 둘 다에 나오면 앞 소스의 것만 남긴다(달력에 두 번 그리지 않는다).
      */
     fun merged(sources: List<Source>): List<CalendarEvent> =
         sources.flatMap { source -> events(source.board, source.dateColumnId).map { if (source.colorHex.isEmpty()) it else it.copy(colorHex = source.colorHex) } }
+            .distinctBy { it.pageId }
             .sortedWith(compareBy({ it.startDate }, { it.startTime != null }, { it.startTime }))
 
     /** 날짜가 있는 행만. 순서는 v1과 같게 시작일, 시각 없는 것 먼저, 시각, 보기의 원래 순서다. */

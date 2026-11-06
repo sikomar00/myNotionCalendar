@@ -380,6 +380,15 @@ class ViewWriteProcessorTest {
     }
 
     @Test
+    fun aCreateIsMarkedSendingWhileItGoesOutAndEditableAgainWhenTheSendFails() = runTest {
+        writer().create("v1", "하나", null)
+        failures += NotionError.Network
+        processor().process()
+        // 연결이 끊겨 못 보냈으면 '보내는 중'이 아니다: 해빗 체크가 그 새 항목의 체크를 다시 고칠 수 있다.
+        assertEquals(NotionError.Network.storedName(), db.viewDao().pendingCreates("v1").single().lastError)
+    }
+
+    @Test
     fun aDroppedCreateIsLeftAsAWriteFailureNotLostSilently() = runTest {
         writer().create("v1", "장보기", null)
         failures += NotionError.Validation("validation_error")

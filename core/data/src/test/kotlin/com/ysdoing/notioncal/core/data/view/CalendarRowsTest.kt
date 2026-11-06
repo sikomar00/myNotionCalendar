@@ -238,6 +238,14 @@ class CalendarRowsTest {
     }
 
     @Test
+    fun aPageInTwoSourcesOfTheSameDatabaseIsDrawnOnceFromTheFirstSource() {
+        val shared = row("same", on = day("2026-11-05"))
+        val merged = CalendarRows.merged(listOf(source("a", listOf(shared), colorHex = "#0B6E99"), source("b", listOf(shared, row("only-b", on = day("2026-11-05"))), colorHex = "#E03E3E")))
+        assertEquals(listOf("same", "only-b"), merged.map { it.pageId })
+        assertEquals(listOf("#0B6E99", "#E03E3E"), merged.map { it.colorHex }) // 겹친 페이지는 앞 소스의 색
+    }
+
+    @Test
     fun aViewWithoutAnyDateColumnAddsNothingAndNoSourcesIsEmpty() {
         assertTrue(CalendarRows.merged(listOf(source("a", listOf(row("a1", on = day("2026-11-05"))), listOf(title)))).isEmpty())
         assertTrue(CalendarRows.merged(emptyList()).isEmpty())

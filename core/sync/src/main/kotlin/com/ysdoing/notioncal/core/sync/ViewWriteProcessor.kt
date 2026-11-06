@@ -213,6 +213,7 @@ class ViewWriteProcessor @Inject constructor(
         val extra = spec.props.mapNotNull { (id, value) ->
             schema.properties.values.firstOrNull { it.id == id }?.let { property -> encodeViewValue(property.name, property.type, value) }
         }.fold(emptyMap<String, JsonElement>()) { all, one -> all + one }
+        dao.markWriteSending(write.id) // 만드는 동안 해빗 체크가 이 새 항목의 체크를 고치려 해도 못 고친다(고쳐도 이미 보낸 요청에 안 실린다). 실패하면 오류 이름이 덮는다
         writer.createPage(write.dataSourceId, encodeViewCreate(titleKey, spec.title, dateKey, spec.date, JsonObject(extra)))
         return SendResult.SENT
     }

@@ -4,6 +4,7 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.EventDao
+import com.ysdoing.notioncal.core.data.db.PendingEdit
 import com.ysdoing.notioncal.core.data.db.VIEW_CELL_SEPARATOR
 import com.ysdoing.notioncal.core.data.db.VIEW_WRITE_CREATE
 import com.ysdoing.notioncal.core.data.db.SentWriteEntity
@@ -77,29 +78,38 @@ class ViewWriter @Inject constructor(
     }
 
     /**
-     * 해빗 체크(Phase 12e RC-03): [day]의 [propId] 습관을 뒤집는다. 그날 행이 있으면 체크를 토글하고, 없으면 아직 안 보낸 그날 새 항목에 합치고
-     * (하루 페이지 1개만), 그것도 없으면 제목 'M월 d일'·그 날짜·체크한 습관으로 새 항목을 만든다(첫 체크 때 만든다). 같은 날 행이 여럿이면 앞의 것이다.
-     * 보기에 날짜 열이나 그 체크박스가 없으면 false다. 위젯 즉시 동작이라 [sendDelayMs]만큼 미뤄 그 안에 되돌릴 수 있다.
+     * 해빗 체크(Phase 12e RC-03): [day]의 [propId] 습관을 뒤집는다. 날짜는 격자가 읽는 날짜 속성 [dateProp](비었거나 없어졌으면 보기의 기본 날짜 열)으로 찾는다.
+     * 그날 행이 있으면 체크를 토글하고(격자는 같은 날 행 중 하나라도 체크면 체크로 그리니, 체크된 행이 있으면 그 행들을 모두 풀고 없으면 앞의 행을 체크한다),
+     * 없으면 아직 안 보낸 그날 새 항목에 합치고(하루 페이지 1개만), 그것도 없으면 제목 'M월 d일'·그 날짜(그 날짜 속성에)·체크한 습관으로 새 항목을 만든다(첫 체크 때 만든다).
+     * 보기에 날짜 열이나 그 체크박스가 없으면 false다. 위젯 즉시 동작이라 [sendDelayMs]만큼 미뤄 그 안에 되돌릴 수 있다. 그날 새 항목을 이미 노션에 보내는 중이면
+     * 아무것도 하지 않는다(만들어진 뒤 다시 받으면 행으로 토글된다. 지금 만들면 같은 날 페이지가 둘 된다).
      * shortcut: 받은 행(100개 상한·보기 필터)과 큐만 보니, 그날 행이 가려져 있거나 방금 보낸 새 항목을 아직 다시 받지 못했으면 같은 날 페이지가 둘 생길 수 있다.
      */
-    suspend fun checkHabit(viewId: String, propId: String, day: LocalDate, sendDelayMs: Long = UNDO_WINDOW_MS): Boolean {
+    suspend fun checkHabit(viewId: String, propId: String, day: LocalDate, dateProp: String = "", sendDelayMs: Long = UNDO_WINDOW_MS): Boolean {
         val columns = ViewJson.columns(dao.snapshot(viewId)?.columnInfo.orEmpty())
-        val date = ViewColumn.dateColumnOf(columns) ?: return false
+        val date = columns.firstOrNull { it.id == dateProp && it.type == "date" } ?: ViewColumn.dateColumnOf(columns) ?: return false
         if (columns.none { it.id == propId && it.type == "checkbox" }) return false
-        val row = dao.rows(viewId).firstOrNull { ViewJson.typed(it.typed)[date.id].startDate() == day }
-        if (row != null) return toggle(viewId, row.pageId, propId, sendDelayMs)
-        if (flipInPendingCreate(viewId, propId, day)) return true
-        return create(viewId, HabitTitle.of(day), day, mapOf(propId to JsonPrimitive(true)), sendDelayMs)
+        val rows = dao.rows(viewId).filter { ViewJson.typed(it.typed)[date.id].startDate() == day }
+        if (rows.isNotEmpty()) {
+            val checked = rows.filter { (ViewJson.typed(it.typed)[propId] as? JsonPrimitive)?.booleanOrNull == true }
+            return checked.ifEmpty { rows.take(1) }.map { toggle(viewId, it.pageId, propId, sendDelayMs) }.all { it }
+        }
+        return when (flipInPendingCreate(viewId, propId, day, date.id)) {
+            PendingEdit.EDITED, PendingEdit.SENDING -> true
+            PendingEdit.NONE -> create(viewId, HabitTitle.of(day), day, mapOf(propId to JsonPrimitive(true)), sendDelayMs, dateColumnId = date.id)
+        }
     }
 
-    /** 그날 새 항목이 아직 큐에 있으면 거기서 [propId] 체크를 뒤집는다(체크가 모두 빠지고 제목이 자동 제목이면 그 새 항목은 지운다). 합쳤으면 true. */
-    private suspend fun flipInPendingCreate(viewId: String, propId: String, day: LocalDate): Boolean {
-        val (write, spec) = dao.pendingCreates(viewId).firstNotNullOfOrNull { w -> ViewJson.parseCreate(w.value)?.takeIf { it.date == day.toString() }?.let { w to it } } ?: return false
-        val checked = spec.props[propId] == JsonPrimitive(true)
-        val props = if (checked) spec.props - propId else spec.props + (propId to JsonPrimitive(true))
-        if (props.isEmpty() && spec.title == HabitTitle.of(day)) dao.deleteWriteById(write.id) else dao.updateWriteValue(write.id, ViewJson.encodeCreate(spec.copy(props = props)))
-        widgets.requestUpdate()
-        return true
+    /** 그날(그 날짜 속성의) 새 항목이 아직 큐에 있으면 거기서 [propId] 체크를 뒤집는다(체크가 모두 빠지고 제목이 자동 제목이면 그 새 항목은 지운다). */
+    private suspend fun flipInPendingCreate(viewId: String, propId: String, day: LocalDate, dateColumnId: String): PendingEdit {
+        fun specOf(write: ViewWriteEntity) = ViewJson.parseCreate(write.value)?.takeIf { it.date?.dateOrNull() == day && it.dateProp == dateColumnId }
+        val result = dao.editPendingCreate(viewId, pick = { specOf(it) != null }) { write ->
+            val spec = specOf(write) ?: return@editPendingCreate write.value
+            val props = if (spec.props[propId] == JsonPrimitive(true)) spec.props - propId else spec.props + (propId to JsonPrimitive(true))
+            if (props.isEmpty() && spec.title == HabitTitle.of(day)) null else ViewJson.encodeCreate(spec.copy(props = props))
+        }
+        if (result == PendingEdit.EDITED) widgets.requestUpdate()
+        return result
     }
 
     /** URL·이메일·전화의 공백 글자는 비우기다(노션이 빈 글자를 거부하고, 로컬과 노션의 비어 있음이 어긋나지 않게). */
@@ -148,13 +158,14 @@ class ViewWriter @Inject constructor(
      * shortcut: 노션이 만들었는데 응답이 끊기면(시간 초과·연결 끊김·5xx) 처리기가 다시 보내 같은 항목이 둘 생길 수 있다(일정 아웃박스의
      * '이미 만들었나' 확인이 없다), 문제가 되면 만든 시각과 제목으로 찾아본다.
      */
-    suspend fun create(viewId: String, title: String, date: LocalDate?, props: Map<String, JsonElement> = emptyMap(), sendDelayMs: Long = 0): Boolean {
+    suspend fun create(viewId: String, title: String, date: LocalDate?, props: Map<String, JsonElement> = emptyMap(), sendDelayMs: Long = 0, dateColumnId: String = ""): Boolean {
         val name = title.trim()
         if (name.isEmpty()) return false
         val snapshot = dao.snapshot(viewId) ?: return false
         val columns = ViewJson.columns(snapshot.columnInfo)
         val titleColumn = columns.firstOrNull { it.type == "title" } ?: return false
-        val dateColumn = ViewColumn.dateColumnOf(columns)?.takeIf { date != null }
+        // [dateColumnId]는 해빗 격자처럼 날짜를 넣을 날짜 속성을 정해 둔 호출용이다(없어졌거나 날짜 열이 아니면 기본 날짜 열).
+        val dateColumn = (columns.firstOrNull { it.id == dateColumnId && it.type == "date" } ?: ViewColumn.dateColumnOf(columns))?.takeIf { date != null }
         // 값 묶음(프리셋·맥락 채움)은 쓸 수 있는 속성에 맞는 값만 싣는다. 제목과 날짜 인자가 정한 날짜 속성은 따로 정하니 뺀다(잘못된 값 하나로 항목을 잃지 않게 거른다).
         val extra = props.filter { (id, value) ->
             val column = columns.firstOrNull { it.id == id }
