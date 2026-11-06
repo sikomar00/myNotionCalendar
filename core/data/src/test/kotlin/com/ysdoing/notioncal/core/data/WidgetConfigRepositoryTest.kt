@@ -48,6 +48,26 @@ class WidgetConfigRepositoryTest {
     }
 
     @Test
+    fun timelineNavigationIsSeparateFromTheMonthAndPerWidget() = runTest {
+        // 한 위젯에 캘린더(달)와 타임라인(주·달)이 함께 있어도 서로의 이동량을 건드리지 않는다.
+        repo.save(WidgetConfig(1, monthOffset = 3, theme = WidgetTheme.DARK))
+        repo.shiftTimeline(1, +1)
+        repo.shiftTimeline(1, +1)
+        repo.shiftTimeline(2, -1)
+        assertEquals(listOf(3, 2), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset))
+        assertEquals(WidgetTheme.DARK, repo.get(1).theme) // 다른 설정은 그대로
+        assertEquals(-1, repo.get(2).timelineOffset)
+
+        repo.shiftMonth(1, +1)
+        assertEquals(listOf(4, 2), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset)) // 달 이동은 타임라인을 안 움직인다
+        repo.resetTimeline(1)
+        assertEquals(listOf(4, 0), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset)) // 타임라인 오늘은 달을 안 되돌린다
+        repo.shiftTimeline(1, +3)
+        repo.resetMonth(1)
+        assertEquals(listOf(0, 3), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset))
+    }
+
+    @Test
     fun valuesAreClampedAndSetsRoundTrip() = runTest {
         repo.save(WidgetConfig(3, dataSourceIds = setOf("b", "a"), fontScale = 999, maxPerCell = 42, opacity = -5))
         val saved = repo.get(3)

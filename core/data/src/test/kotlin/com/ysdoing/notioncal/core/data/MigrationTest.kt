@@ -580,4 +580,21 @@ class MigrationTest {
             db.close()
         }
     }
+
+    /** v21 → v22(Phase 12 마무리): 타임라인 이동량(timelineOffset)은 기본값 0이고 기존 위젯 설정(달 이동량 포함)은 그대로다. */
+    @Test
+    fun v21ToV22AddsTimelineOffset() = runTest {
+        helper.createDatabase(21).use { db ->
+            db.execSQL("INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell, lineSpacing, hideDone, showPhoneCal, viewId, numberStep, presetsJson, layoutJson, lastTab, formJson, actionsJson) VALUES (10, 3, '', 'SYSTEM', 100, 100, 0, 'NORMAL', 0, 0, 'v1', 5.0, '[]', '{\"mode\":\"TABS\"}', 1, '', '[]')")
+        }
+        helper.runMigrationsAndValidate(22).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val widget = db.widgetConfigDao().get(10)!!
+            assertEquals(listOf(3, "v1", 1), listOf(widget.monthOffset, widget.viewId, widget.lastTab)) // 기존 설정 보존
+            assertEquals(0, widget.timelineOffset)
+        } finally {
+            db.close()
+        }
+    }
 }

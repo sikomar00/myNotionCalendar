@@ -53,6 +53,8 @@ data class WidgetConfigEntity(
     @ColumnInfo(defaultValue = "") val formJson: String = "",
     /** v21(Phase 12c IX-07): 액션 버튼 목록(`ViewActions` JSON, 위젯당 최대 5개). 없으면 빈 글자. */
     @ColumnInfo(defaultValue = "") val actionsJson: String = "",
+    /** v22: 타임라인 보기가 보는 창의 이동량(주 또는 달 단위). 캘린더의 [monthOffset](달)과 단위가 달라 따로 둔다. */
+    @ColumnInfo(defaultValue = "0") val timelineOffset: Int = 0,
 )
 
 @Dao

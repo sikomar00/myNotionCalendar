@@ -52,6 +52,8 @@ data class WidgetConfig(
     val formJson: String = "",
     /** 액션 버튼 목록 JSON(Phase 12c IX-07). 해석은 `ViewActions`가 한다. */
     val actionsJson: String = "",
+    /** 타임라인 보기가 보는 창의 이동량(주 또는 달 단위, Phase 12). 캘린더의 [monthOffset]과 단위가 달라 따로 둔다. */
+    val timelineOffset: Int = 0,
 ) {
     companion object {
         val FONT_SCALE_RANGE = 70..150
@@ -81,6 +83,7 @@ internal fun WidgetConfigEntity.toModel() = WidgetConfig(
     lastTab = lastTab.coerceAtLeast(0),
     formJson = formJson,
     actionsJson = actionsJson,
+    timelineOffset = timelineOffset,
 )
 
 internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
@@ -105,6 +108,7 @@ internal fun WidgetConfig.toEntity() = WidgetConfigEntity(
     lastTab = lastTab.coerceAtLeast(0),
     formJson = formJson,
     actionsJson = actionsJson,
+    timelineOffset = timelineOffset,
 )
 
 @Singleton
@@ -129,6 +133,15 @@ class WidgetConfigRepository @Inject constructor(private val dao: WidgetConfigDa
 
     /** WI-04: 오늘 버튼. */
     suspend fun resetMonth(appWidgetId: Int) = save(get(appWidgetId).copy(monthOffset = 0))
+
+    /** 타임라인(VR-TML)의 이전(-1)·다음(+1) 창. 캘린더의 달 이동과 따로 저장해 한 위젯에 둘이 있어도 서로 움직이지 않는다. */
+    suspend fun shiftTimeline(appWidgetId: Int, delta: Int) {
+        val current = get(appWidgetId)
+        save(current.copy(timelineOffset = current.timelineOffset + delta))
+    }
+
+    /** 타임라인의 오늘 버튼. */
+    suspend fun resetTimeline(appWidgetId: Int) = save(get(appWidgetId).copy(timelineOffset = 0))
 
     /** WG-11: 통합 위젯의 탭. 위젯마다 따로 저장한다. */
     suspend fun selectTab(appWidgetId: Int, tab: WidgetTab) = save(get(appWidgetId).copy(selectedTab = tab))
