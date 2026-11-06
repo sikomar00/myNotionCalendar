@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -17,6 +18,9 @@ import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SettingsRepository
 import com.ysdoing.notioncal.core.data.SyncRequester
+import com.ysdoing.notioncal.core.data.WidgetConfigRepository
+import com.ysdoing.notioncal.core.data.view.ViewAction
+import com.ysdoing.notioncal.core.data.view.ViewActions
 import com.ysdoing.notioncal.core.data.view.ViewRepository
 import com.ysdoing.notioncal.core.data.view.ViewWriter
 import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
@@ -38,6 +42,7 @@ import javax.inject.Inject
 class ViewRowViewModel @Inject constructor(
     private val views: ViewRepository,
     private val writer: ViewWriter,
+    private val widgetConfigs: WidgetConfigRepository,
     sync: SyncRequester,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : ViewModel() {
@@ -54,6 +59,13 @@ class ViewRowViewModel @Inject constructor(
     suspend fun save(viewId: String, pageId: String, changes: Map<String, JsonElement>): Boolean = viewModelScope.async {
         changes.map { (propId, value) -> writer.set(viewId, pageId, propId, value) }.all { it }
     }.await()
+
+    /** 이 위젯 설정에 만들어 둔 이 보기의 액션 버튼(Phase 12c IX-07). 위젯 번호가 없으면(위젯이 아닌 곳에서 연 시트) 없다. */
+    suspend fun actions(appWidgetId: Int, viewId: String): List<ViewAction> =
+        if (appWidgetId <= 0) emptyList() else ViewActions.forView(ViewActions.parse(widgetConfigs.get(appWidgetId).actionsJson), viewId)
+
+    /** 액션을 이 행에 적용한다(쓰기 큐에 쌓을 뿐이고 4초 안에 위젯에서 되돌릴 수 있다). 화면이 닫혀도 쌓는 일은 끝까지 한다. */
+    suspend fun apply(viewId: String, pageId: String, action: ViewAction): Boolean = viewModelScope.async { writer.applyAction(viewId, pageId, action) }.await()
 
     suspend fun trash(viewId: String, pageId: String) {
         viewModelScope.async { writer.trash(viewId, pageId) }.await()
@@ -75,11 +87,13 @@ class ViewRowActivity : ComponentActivity() {
             finish()
             return
         }
+        val widgetId = intent.getIntExtra(AppIntents.EXTRA_APPWIDGET_ID, 0)
         setContent {
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 val viewModel: ViewRowViewModel = hiltViewModel()
                 val state by remember(viewId, pageId) { viewModel.state(viewId, pageId) }.collectAsStateWithLifecycle(ViewRowState.Loading)
+                val actions by produceState(emptyList<ViewAction>(), widgetId, viewId) { value = viewModel.actions(widgetId, viewId) }
                 ViewRowHost(
                     state,
                     ViewRowActions(
@@ -87,6 +101,8 @@ class ViewRowActivity : ComponentActivity() {
                         onTrash = { viewModel.trash(viewId, pageId) },
                         onOpen = ::openInNotion,
                         onClose = ::finish,
+                        actions = actions,
+                        onAction = { viewModel.apply(viewId, pageId, it) },
                     ),
                 )
             }

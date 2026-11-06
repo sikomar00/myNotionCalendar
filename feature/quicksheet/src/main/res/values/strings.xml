@@ -78,6 +78,8 @@
     <string name="vre_locked_elsewhere">이 형식은 노션에서 고쳐요</string>
     <string name="vre_empty_value">비어 있음</string>
     <string name="vre_save_failed">저장하지 못했어요. 다시 시도해 주세요</string>
+    <string name="vre_action_failed">적용하지 못했어요. 다시 시도해 주세요</string>
+    <string name="vre_action_dirty">저장하지 않은 변경이 있어서 액션을 쓸 수 없어요. 먼저 저장하세요</string>
     <string name="vre_number_invalid">숫자만 넣어 주세요</string>
     <string name="vre_new_option">새 옵션 이름</string>
     <string name="vre_option_comma">쉼표(,)는 쓸 수 없어요</string>
