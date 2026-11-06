@@ -237,4 +237,36 @@ class WidgetLayoutTest {
         assertEquals(listOf("b", "a"), edited.items.map { it.viewId })
         assertEquals("r", edited.items.first { it.viewId == "a" }.ratingProp)
     }
+
+    // --- Phase 12e WL-04: 합쳐 보기(소스 3개, 소스별 날짜 속성·색)
+
+    @Test
+    fun theMergedModeHoldsThreeSourcesAndKeepsTheFirstOnesWhenSwitchedFromMoreSections() {
+        assertEquals(3, LayoutMode.MERGED.limit)
+        val merged = layout(LayoutMode.MERGED, "a", "b", "c")
+        assertNull(merged.add("d"))
+        assertEquals(listOf("a", "b", "c"), layout(LayoutMode.SECTIONS, "a", "b", "c", "d").withMode(LayoutMode.MERGED).items.map { it.viewId })
+        assertEquals(false, merged.presetsApply) // 프리셋은 한 보기의 값이라 합쳐 보기에는 없다
+        assertEquals(listOf("a", "b", "c"), merged.boardIds())
+        assertNull(merged.addTile(tile())) // 집계 타일은 섹션에서만
+    }
+
+    @Test
+    fun aSourcesDateColumnAndColorRoundTripAndAreCleanedWhenRead() {
+        val edited = layout(LayoutMode.MERGED, "a", "b").withDateProp("a", " d2 ").withColor("a", "purple").withColor("b", "neon")
+        val back = WidgetLayout.parse(WidgetLayout.encode(edited))
+        assertEquals(listOf("d2", ""), back.items.map { it.dateProp })
+        assertEquals(listOf("purple", ""), back.items.map { it.color }) // 모르는 색 이름은 기본
+        assertEquals("", WidgetLayout.parse("""{"mode":"MERGED","items":[{"viewId":"v1","color":"#123456"}]}""").items.single().color)
+        assertEquals("", WidgetLayout.parse("""{"mode":"TABS","items":[{"viewId":"v1"}]}""").items.single().dateProp) // 옛 JSON
+        assertEquals(listOf("b", "a"), edited.move("a", 1).items.map { it.viewId })
+        assertEquals("purple", edited.move("a", 1).items.first { it.viewId == "a" }.color)
+    }
+
+    @Test
+    fun sourcesGetDistinctDefaultColorsInOrderAndAChosenColorWins() {
+        val l = layout(LayoutMode.MERGED, "a", "b", "c").withColor("b", "orange")
+        assertEquals(listOf("#0B6E99", "#D9730D", "#0F7B6C"), (0..2).map { l.colorHexAt(it) })
+        assertEquals(3, (0..2).map { layout(LayoutMode.MERGED, "a", "b", "c").colorHexAt(it) }.toSet().size)
+    }
 }

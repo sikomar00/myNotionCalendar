@@ -1,15 +1,17 @@
 package com.ysdoing.notioncal.core.data.view
 
+import com.ysdoing.notioncal.core.data.NotionColors
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 
-/** Phase 11d WL-01 위젯 배치: 보기 하나 / 탭(보기 여러 개를 탭으로) / 섹션(위아래로 쌓기). 항목 수 상한이 다르다. */
+/** Phase 11d WL-01 위젯 배치: 보기 하나 / 탭(보기 여러 개를 탭으로) / 섹션(위아래로 쌓기) / 합쳐 보기(여러 보기의 일정을 한 달력에). 항목 수 상한이 다르다. */
 enum class LayoutMode(val limit: Int) {
     SINGLE(1),
     TABS(5), // 2026-11-03 사용자 결정: 탭은 최대 5개
     SECTIONS(4), // WL-03: 섹션은 위젯당 최대 4개
+    MERGED(3), // WL-04(Phase 12e): 소스 3개까지, 월 격자 캘린더만(2026-11-06 사용자 결정)
 }
 
 /** 배치의 항목 하나: 보기와, 탭 이름([label], 비면 보기 이름), 섹션 높이 비율([weight] 1~3). */
@@ -20,6 +22,10 @@ data class LayoutItem(
     val weight: Int = 1,
     /** 갤러리 카드가 별점(★) 글자로 그릴 속성 ID(Phase 12d RC-05 레시피가 정한다, 보기에 보이는 속성이어야 값이 온다). 없으면 빈 글자. */
     val ratingProp: String = "",
+    /** 합쳐 보기에서 이 보기의 일정이 읽을 날짜 속성 ID(보기에 보이는 날짜 열). 비면 보기의 기본 날짜 열이다. */
+    val dateProp: String = "",
+    /** 합쳐 보기에서 이 보기의 일정 색([TILE_COLORS]의 노션 색 이름). 비면 소스 순서대로 [WidgetLayout.DEFAULT_SOURCE_COLORS]다. */
+    val color: String = "",
 ) {
     /** 탭·섹션 머리에 쓸 이름. 이름 없는 보기도 노션에서 허용되니 마지막은 '보기'다. */
     fun title(viewName: String): String = label.ifBlank { viewName }.ifBlank { DEFAULT_TITLE }
@@ -103,6 +109,17 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
 
     fun withWeight(viewId: String, weight: Int): WidgetLayout = update(viewId) { it.copy(weight = weight.coerceIn(WEIGHT_RANGE)) }
 
+    fun withDateProp(viewId: String, propId: String): WidgetLayout = update(viewId) { it.copy(dateProp = propId.trim()) }
+
+    fun withColor(viewId: String, color: String): WidgetLayout = update(viewId) { it.copy(color = color.takeIf { name -> name in TILE_COLORS }.orEmpty()) }
+
+    /** 합쳐 보기에서 [index]번째 소스의 일정 색(`#RRGGBB`). 고른 색이 없으면 소스 순서대로 파랑·빨강·초록이라 소스끼리 구분된다. */
+    fun colorHexAt(index: Int): String {
+        val item = items.getOrNull(index)
+        val name = item?.color?.takeIf { it in TILE_COLORS } ?: DEFAULT_SOURCE_COLORS[index.coerceAtLeast(0) % DEFAULT_SOURCE_COLORS.size]
+        return NotionColors.hexFor(name) ?: CalendarRows.FALLBACK_HEX
+    }
+
     /** 종류를 바꾼다. 새 종류의 상한보다 많으면 앞의 항목만 남긴다(다시 늘려도 잘린 항목은 돌아오지 않는다). */
     fun withMode(newMode: LayoutMode): WidgetLayout = copy(mode = newMode).let { it.copy(items = items.take(newMode.limit - it.stripSlots)) }
 
@@ -111,6 +128,7 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
     companion object {
         val WEIGHT_RANGE = 1..3
         const val TILE_LIMIT = 6 // PRD AG: 전체 크기에서 타일 6개
+        val DEFAULT_SOURCE_COLORS = listOf("blue", "red", "green")
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
         /**
@@ -122,7 +140,7 @@ data class WidgetLayout(val mode: LayoutMode = LayoutMode.SINGLE, val items: Lis
             val raw = runCatching { json.decodeFromJsonElement(serializer(), JsonObject(root - "tiles")) }.getOrNull() ?: return WidgetLayout()
             val seen = HashSet<String>()
             val items = raw.items
-                .map { it.copy(viewId = it.viewId.trim(), label = it.label.trim(), weight = it.weight.coerceIn(WEIGHT_RANGE), ratingProp = it.ratingProp.trim()) }
+                .map { it.copy(viewId = it.viewId.trim(), label = it.label.trim(), weight = it.weight.coerceIn(WEIGHT_RANGE), ratingProp = it.ratingProp.trim(), dateProp = it.dateProp.trim(), color = it.color.trim().takeIf { name -> name in TILE_COLORS }.orEmpty()) }
                 .filter { it.viewId.isNotEmpty() && seen.add(it.viewId) }
             val tiles = (root["tiles"] as? JsonArray).orEmpty()
                 .mapNotNull { runCatching { json.decodeFromJsonElement(AggTile.serializer(), it) }.getOrNull()?.normalized() }

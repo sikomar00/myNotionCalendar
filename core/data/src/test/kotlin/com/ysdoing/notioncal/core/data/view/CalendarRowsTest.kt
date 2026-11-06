@@ -193,4 +193,53 @@ class CalendarRowsTest {
         )
         assertEquals(listOf("first", "dayB", "dayA", "early", "late"), events(rows).map { it.pageId })
     }
+
+    // --- Phase 12e WL-04 합쳐 보기
+
+    private val deadline = ViewColumn("e", "마감", "date")
+
+    private fun source(viewId: String, rows: List<ViewRow>, columns: List<ViewColumn> = listOf(title, date), dateColumnId: String = "", colorHex: String = "") =
+        CalendarRows.Source(ViewBoard(viewId, viewId, "table", listOf("이름"), rows, 1L, null, columnInfo = columns), dateColumnId, colorHex)
+
+    @Test
+    fun mergedEventsFromSeveralViewsShareOneDayOrderAndKeepTheirViewIds() {
+        val a = source("a", listOf(row("a1", on = day("2026-11-05")), row("a2", on = day("2026-11-02"))))
+        val b = source("b", listOf(row("b1", on = day("2026-11-05")), row("b2", on = day("2026-11-05T09:00:00+09:00"))))
+        val merged = CalendarRows.merged(listOf(a, b))
+        assertEquals(listOf("a2", "a1", "b1", "b2"), merged.map { it.pageId }) // 시작일 → 종일 먼저 → 같은 날은 소스 순서
+        assertEquals(listOf("a", "a", "b", "b"), merged.map { it.dataSourceId }) // 탭하면 그 일정의 보기 시트를 열 수 있다
+    }
+
+    @Test
+    fun theSourceOrderBreaksTiesTheSameWayWhateverTheViewsOwnRowOrder() {
+        val a = source("a", listOf(row("a1", on = day("2026-11-05"))))
+        val b = source("b", listOf(row("b1", on = day("2026-11-05"))))
+        assertEquals(listOf("a1", "b1"), CalendarRows.merged(listOf(a, b)).map { it.pageId })
+        assertEquals(listOf("b1", "a1"), CalendarRows.merged(listOf(b, a)).map { it.pageId })
+    }
+
+    @Test
+    fun aSourceColorOverridesTheOptionColorAndBlankKeepsIt() {
+        val colored = row("c", on = day("2026-11-05"), extra = mapOf("s" to JsonPrimitive("o3")))
+        val rows = listOf(colored)
+        val columns = listOf(title, date, status)
+        assertEquals("#E03E3E", CalendarRows.merged(listOf(source("a", rows, columns, colorHex = "#E03E3E"))).single().colorHex)
+        assertEquals("#0F7B6C", CalendarRows.merged(listOf(source("a", rows, columns))).single().colorHex) // 소스 색이 없으면 옵션 색
+    }
+
+    @Test
+    fun aSourceReadsItsChosenDateColumnAndFallsBackToTheDefaultWhenItIsNotADateColumn() {
+        val rows = listOf(row("x", on = day("2026-11-05"), extra = mapOf("e" to day("2026-11-20"))))
+        val columns = listOf(title, date, deadline)
+        assertEquals(LocalDate.of(2026, 11, 20), CalendarRows.merged(listOf(source("a", rows, columns, dateColumnId = "e"))).single().startDate)
+        assertEquals(LocalDate.of(2026, 11, 5), CalendarRows.merged(listOf(source("a", rows, columns))).single().startDate)
+        assertEquals(LocalDate.of(2026, 11, 5), CalendarRows.merged(listOf(source("a", rows, columns, dateColumnId = "t"))).single().startDate) // 제목은 날짜 열이 아니다
+        assertEquals(LocalDate.of(2026, 11, 5), CalendarRows.merged(listOf(source("a", rows, columns, dateColumnId = "gone"))).single().startDate) // 지워진 속성
+    }
+
+    @Test
+    fun aViewWithoutAnyDateColumnAddsNothingAndNoSourcesIsEmpty() {
+        assertTrue(CalendarRows.merged(listOf(source("a", listOf(row("a1", on = day("2026-11-05"))), listOf(title)))).isEmpty())
+        assertTrue(CalendarRows.merged(emptyList()).isEmpty())
+    }
 }
