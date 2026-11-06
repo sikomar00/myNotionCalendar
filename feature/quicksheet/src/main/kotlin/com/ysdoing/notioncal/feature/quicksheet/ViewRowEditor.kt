@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -108,7 +109,7 @@ fun ViewRowEditor(
 private fun EditorActions(url: String, canSave: Boolean, dirty: Boolean, save: suspend () -> Boolean, actions: ViewRowActions) {
     val onClose = actions.onClose
     var saving by remember { mutableStateOf(false) } // 다시 만들어진 뒤 '저장 중'으로 남지 않게 저장하지 않는다
-    var failure by rememberSaveable { mutableStateOf(0) } // 실패 문구의 문자열 자원(0이면 없음)
+    var failure by rememberSaveable { mutableIntStateOf(0) } // 실패 문구의 문자열 자원(0이면 없음)
     var confirmTrash by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     if (failure != 0) Text(stringResource(failure), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
