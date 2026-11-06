@@ -19,7 +19,7 @@ import com.ysdoing.notioncal.core.data.view.ViewPresets
 private val NUMBER_STEPS = listOf(1, 5, 10, 50, 100)
 
 /**
- * Phase 11g ST-07 '동작' 탭(보기·노션 위젯): 숫자 ± 단계(IX-03), 프리셋 목록과 만들기(AD-05), 입력 양식(AD-02).
+ * Phase 11g ST-07 '동작' 탭(보기·노션 위젯): 숫자 ± 단계(IX-03), 프리셋 목록과 만들기(AD-05), 입력 양식(AD-02), 액션 버튼(IX-07, Phase 12c).
  * [onCreatePreset]은 새 항목 시트를 '프리셋 만들기'로 여는 일을 화면에 맡긴다(보기 ID를 넘긴다).
  */
 @Composable
@@ -35,6 +35,7 @@ internal fun ActionSettings(kind: ConfigKind, data: ConfigData, config: WidgetCo
     val formViews = remember(kind, config.layoutJson, config.viewId) { formViewIds(kind, config) }
     if (applies) PresetList(config, presetView, onChange, onCreatePreset)
     InputFormSettings(formViews, data, config, onChange)
+    ActionButtonSettings(formViews, data, config, onChange)
 }
 
 /** AD-05: 저장해 둔 프리셋 목록과 삭제, 그리고 '프리셋 만들기'([viewId]가 있을 때). 프리셋은 새 항목 시트의 '프리셋으로 저장'으로도 쌓인다. */
