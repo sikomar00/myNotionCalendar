@@ -112,7 +112,7 @@ object WidgetPreviews {
     }
 
     /** 예시 보기(VW-03). 개인 데이터가 아니다. */
-    fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
+    internal fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
         val rows = listOf("장보기" to "집", "보고서 제출" to "일", "운동" to "건강").mapIndexed { i, (title, tag) ->
             com.ysdoing.notioncal.core.data.view.ViewRow("preview-$i", "", listOf(title, tag, "10/2${i + 1}"))
         }

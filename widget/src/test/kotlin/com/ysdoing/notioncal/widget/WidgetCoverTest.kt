@@ -74,6 +74,42 @@ class WidgetCoverTest {
         assertTrue(CoverBudget.MAX_COVERS * CoverBudget.MAX_BITMAP_BYTES <= 1_200_000) // 위젯 하나가 쥐는 표지 비트맵 합계 상한
     }
 
+    // --- Phase 12d 갤러리: 위젯 하나의 표지 비트맵 합계를 묶는다(PF-07).
+
+    @Test
+    fun theGalleryBudgetKeepsTheWholeWidgetUnderItsCoverTotal() {
+        assertEquals(9, CoverBudget.GALLERY_MAX_COVERS)
+        assertTrue(CoverBudget.GALLERY_MAX_COVERS * CoverBudget.GALLERY_BITMAP_BYTES <= CoverBudget.GALLERY_TOTAL_BYTES)
+        // 합계는 화면 기준 위젯 비트맵 한도(PF-07의 25%)와 책 위젯 합계(6×200KB)보다 크지 않다.
+        assertTrue(CoverBudget.GALLERY_TOTAL_BYTES <= ChartBudget.widgetBytes(720, 1600))
+        assertTrue(CoverBudget.GALLERY_TOTAL_BYTES <= CoverBudget.MAX_COVERS * CoverBudget.MAX_BITMAP_BYTES)
+    }
+
+    @Test
+    fun loadGalleryShrinksEachCoverIntoTheGalleryBudgetAndReadsAtMostNine() {
+        val store = CoverStore(dir)
+        val rows = (1..12).map { ViewRow("p$it", "", listOf("카드 $it"), "https://img.example/$it.jpg") }
+        rows.forEach { jpeg(store.fileFor(it.coverUrl), 240, 360) } // 동기화가 만드는 최대 크기
+        val covers = Covers.loadGallery(store, listOf(rows))
+        assertEquals(9, covers.size)
+        assertTrue(rows.take(9).all { covers.has(it.pageId) } && rows.drop(9).none { covers.has(it.pageId) })
+        val one = Covers.decode(store.fileFor(rows[0].coverUrl), CoverBudget.GALLERY_BITMAP_BYTES)!!
+        assertTrue("${one.byteCount}바이트", one.byteCount <= CoverBudget.GALLERY_BITMAP_BYTES)
+        assertEquals(240f / 360f, one.width.toFloat() / one.height, 0.02f) // 모양은 지킨다
+    }
+
+    @Test
+    fun severalGalleriesShareTheNineCoversWithAtLeastThreeEach() {
+        val store = CoverStore(dir)
+        fun rows(prefix: String) = (1..9).map { ViewRow("$prefix$it", "", listOf("카드"), "https://img.example/$prefix$it.jpg") }
+        val boards = listOf("a", "b", "c").map(::rows)
+        boards.flatten().forEach { jpeg(store.fileFor(it.coverUrl), 40, 60) }
+        val covers = Covers.loadGallery(store, boards)
+        assertEquals(9, covers.size) // 보기 셋: 한 보기에 세 장씩
+        assertTrue(covers.has("a3") && !covers.has("a4") && covers.has("c1"))
+        assertEquals(0, Covers.loadGallery(store, emptyList()).size)
+    }
+
     @Test
     fun rowsWithoutACoverUrlAreSkipped() {
         val covers = Covers.load(CoverStore(dir), listOf(ViewRow("p1", "", listOf("책"), "", null)))

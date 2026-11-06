@@ -43,7 +43,7 @@ class ViewReadOnlyTest {
         val strings = File("../app/src/main/res/values/strings.xml")
         assertTrue("앱 문자열을 찾지 못했습니다: $strings", strings.isFile)
         val limits = Regex("""<string name="add_view_limits">([^<]*)</string>""").find(strings.readText())?.groupValues?.get(1).orEmpty()
-        listOf("체크박스", "상태", "새 항목", "100개", "더 보기", "갤러리 커버", "책 갤러리").forEach {
+        listOf("체크박스", "상태", "새 항목", "100개", "더 보기", "갤러리 보기", "표지 카드").forEach {
             assertTrue("한계 안내에 '$it'이(가) 없습니다: $limits", it in limits)
         }
     }

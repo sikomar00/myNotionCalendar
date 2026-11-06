@@ -44,6 +44,7 @@ import androidx.glance.text.TextStyle
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.view.GalleryConfig
 import com.ysdoing.notioncal.core.data.view.ViewActions
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewJson
@@ -56,7 +57,16 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /** [board]가 null이고 [config]에 보기가 있으면 등록을 해제한 보기다(VW-06). 노션에서 지워진 보기는 [ViewBoard.notFound]로 온다. */
-data class ViewWidgetState(val board: ViewBoard?, val config: WidgetConfig, val nowMillis: Long, val calendar: CalendarInfo = CalendarInfo())
+internal data class ViewWidgetState(
+    val board: ViewBoard?,
+    val config: WidgetConfig,
+    val nowMillis: Long,
+    val calendar: CalendarInfo = CalendarInfo(),
+    /** 갤러리 카드가 그릴 표지(Phase 12d). 갤러리가 아니면 비어 있다. */
+    val covers: Covers = Covers.EMPTY,
+    /** 갤러리 카드가 별점 글자로 그릴 속성 ID(노션 위젯 배치의 항목이 가진다, 없으면 빈 글자). */
+    val ratingProp: String = "",
+)
 
 /** 표(넓을 때)에 넣을 열 수. 열 하나에 [COLUMN_MIN]dp는 있어야 글자가 읽힌다. */
 internal fun tableColumnCount(width: Dp, columns: Int): Int =
@@ -144,7 +154,7 @@ private fun timeText(millis: Long): String = DateTimeFormatter.ofPattern("M/d HH
  * 목록 대신 고정 Column으로 앞쪽 [PREVIEW_ROWS]행만 그린다. 실제 위젯은 항상 목록이다.
  */
 @Composable
-fun ViewWidgetContent(
+internal fun ViewWidgetContent(
     state: ViewWidgetState,
     systemFontScale: Float = LocalContext.current.applicationContext.resources.configuration.fontScale,
     staticRows: Boolean = false,
@@ -337,6 +347,13 @@ private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, p
         actionWidgetId = actionWidgetId, rowAction = actions.firstOrNull()?.takeIf { step != SizeStep.COMPACT },
     )
     // 보드는 group_by 열로 나눠 그린다. 그룹 열을 모르거나 2×2처럼 좁으면 아래 목록·표로 대체한다(달력·갤러리 등 다른 종류도 같다).
+    // 갤러리(Phase 12d): 표지 카드 격자. 자리가 없으면(2×2·낮은 칸) 아래 표·목록으로 대신 그린다.
+    val gallery = GalleryConfig.parse(board.viewConfig).takeIf { board.type == "gallery" }
+    val galleryLayout = gallery?.let { galleryLayoutFor(board, size, spec, m, lines + presetLinesHeight(presets.size), it) }
+    if (gallery != null && galleryLayout != null) {
+        GalleryBody(board, galleryLayout, gallery, state.covers, state.ratingProp, look)
+        return
+    }
     val groups = if (board.type == "board") boardGroups(board) else null
     val layout = groups?.let { boardLayout(step, size.width) }?.let { it.copy(cardsPerColumn = (it.cardsPerColumn - extraLines).coerceAtLeast(1)) }
         // 탭·섹션의 낮은 칸이면 카드 수도 그 칸 높이에 맞춘다(보드는 스크롤이 없어 넘치면 잘린다). 열 이동 줄과 열 머리는 카드 위에 늘 그려진다.
@@ -409,13 +426,15 @@ class ViewWidget : GlanceAppWidget() {
         val initialConfig = deps.widgetConfigs().get(appWidgetId)
         val initialBoard = initialConfig.viewId?.let { deps.views().observe(it).first() }
         val initialCalendar = if (initialBoard?.drawsCalendar() == true) CalendarSession.load(deps, initialConfig) else CalendarInfo()
+        val initialCovers = CoverSession.load(deps, listOf(initialBoard))
         provideContent {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val board by remember(config.viewId) { config.viewId?.let { deps.views().observe(it) } ?: flowOf(null) }
                 .collectAsState(initialBoard)
             val calendar = CalendarSession.info(deps, initialCalendar, config, board?.drawsCalendar() == true)
+            val covers = CoverSession.covers(deps, initialCovers, listOf(initialBoard), listOf(board))
             val fontScale by SystemFontScale.flow.collectAsState()
-            ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar), fontScale ?: SystemFontScale.current(context))
+            ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar, covers), fontScale ?: SystemFontScale.current(context))
         }
     }
 }

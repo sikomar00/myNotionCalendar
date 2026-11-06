@@ -27,8 +27,16 @@ internal object CoverBudget {
     /** 비트맵 한 장 상한(바이트). */
     const val MAX_BITMAP_BYTES = 200_000
 
-    /** 위젯 하나가 한꺼번에 그리는 표지 수 상한. 동기화가 한 보기에서 받는 수와 같은 상수다. */
+    /** 책 위젯 하나가 한꺼번에 그리는 표지 수 상한. 동기화가 한 보기에서 받는 수와 같은 상수다. */
     const val MAX_COVERS = CoverStore.MAX_COVERS_PER_VIEW
+
+    /**
+     * 갤러리(Phase 12d)는 표지가 많아(최대 [GALLERY_MAX_COVERS]장) 위젯 하나의 표지 비트맵 합계를 [GALLERY_TOTAL_BYTES]로 묶는다
+     * (PF-07 25% 한도와 위젯 Binder 여유 안): 한 장 상한은 합계를 장수로 나눈 값이라 카드 크기의 표지를 약 160×240px로 줄여 읽는다.
+     */
+    const val GALLERY_TOTAL_BYTES = 700_000
+    const val GALLERY_MAX_COVERS = CoverStore.MAX_GALLERY_COVERS
+    const val GALLERY_BITMAP_BYTES = GALLERY_TOTAL_BYTES / GALLERY_MAX_COVERS
 }
 
 /** 위젯이 그릴 표지 묶음(페이지 ID → 비트맵). 비트맵을 다루는 코드는 이 클래스 안에만 있다. */
@@ -38,17 +46,17 @@ internal class Covers private constructor(private val byPage: Map<String, Bitmap
     val size: Int get() = byPage.size
 
     /**
-     * [pageId]의 표지를 [width]×[height]에 맞춰 그린다(가운데를 잘라 채움). 없으면 아무것도 그리지 않는다.
+     * [pageId]의 표지를 [width]×[height]에 맞춰 그린다(가운데를 잘라 채움, [fit]이면 전체가 보이게 맞춤). 없으면 아무것도 그리지 않는다.
      * 낭독 설명은 이 그림을 감싼 눌림 상자가 맡아(제목 + 읽은 비율) 그림에는 두지 않는다: 같은 말을 두 번 읽지 않게.
      */
     @Composable
-    fun Draw(pageId: String, width: Dp, height: Dp, corner: Dp) {
+    fun Draw(pageId: String, width: Dp, height: Dp, corner: Dp, fit: Boolean = false) {
         val bitmap = byPage[pageId] ?: return
         Image(
             provider = ImageProvider(bitmap),
             contentDescription = null,
             modifier = GlanceModifier.size(width, height).cornerRadius(corner),
-            contentScale = ContentScale.Crop,
+            contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
         )
     }
 
@@ -71,8 +79,27 @@ internal class Covers private constructor(private val byPage: Map<String, Bitmap
             return Covers(map)
         }
 
-        /** JPEG를 RGB_565로 읽고, 예산([MAX_BITMAP_BYTES])을 넘으면 줄인다. 깨졌거나 없으면 null(위젯이 죽지 않는다). */
-        internal fun decode(file: File): Bitmap? {
+        /**
+         * 갤러리 보기들의 표지를 읽는다([boards]는 보기마다 행 목록, IO 스레드에서). 앞쪽 [CoverBudget.GALLERY_MAX_COVERS]장을 보기 수로 나눠(보기당 최소 3장)
+         * 보기마다 앞쪽 행만, 한 장씩 [CoverBudget.GALLERY_BITMAP_BYTES] 안으로 줄여 읽어 위젯 하나의 표지 합계를 묶는다. 표지가 없는 행은 건너뛴다(빈 타일로 그린다).
+         */
+        fun loadGallery(store: CoverStore, boards: List<List<ViewRow>>): Covers {
+            if (boards.isEmpty()) return EMPTY
+            val perBoard = (CoverBudget.GALLERY_MAX_COVERS / boards.size).coerceAtLeast(MIN_GALLERY_PER_BOARD)
+            val map = LinkedHashMap<String, Bitmap>()
+            for (rows in boards) {
+                for (row in rows.take(perBoard)) {
+                    if (row.coverUrl.isEmpty() || row.pageId in map) continue
+                    decode(store.fileFor(row.coverUrl), CoverBudget.GALLERY_BITMAP_BYTES)?.let { map[row.pageId] = it }
+                }
+            }
+            return Covers(map)
+        }
+
+        private const val MIN_GALLERY_PER_BOARD = 3
+
+        /** JPEG를 RGB_565로 읽고, 예산([maxBytes], 기본 [MAX_BITMAP_BYTES])을 넘으면 줄인다. 깨졌거나 없으면 null(위젯이 죽지 않는다). */
+        internal fun decode(file: File, maxBytes: Int = MAX_BITMAP_BYTES): Bitmap? {
             if (!file.isFile) return null
             val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
             val bitmap = try {
@@ -80,8 +107,8 @@ internal class Covers private constructor(private val byPage: Map<String, Bitmap
             } catch (e: OutOfMemoryError) {
                 null
             } ?: return null
-            if (bitmap.byteCount <= MAX_BITMAP_BYTES) return bitmap
-            val ratio = Math.sqrt(MAX_BITMAP_BYTES.toDouble() / bitmap.byteCount)
+            if (bitmap.byteCount <= maxBytes) return bitmap
+            val ratio = Math.sqrt(maxBytes.toDouble() / bitmap.byteCount)
             val scaled = bitmap.scale(maxOf(1, (bitmap.width * ratio).toInt()), maxOf(1, (bitmap.height * ratio).toInt()))
             if (scaled !== bitmap) bitmap.recycle()
             return scaled
