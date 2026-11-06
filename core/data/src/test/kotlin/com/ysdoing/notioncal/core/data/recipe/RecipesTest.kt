@@ -139,7 +139,7 @@ class RecipesTest {
     }
 
     @Test
-    fun habitsBuildsStreakAndWeeklyRatioTilesAndAOncePerDayTodayForm() {
+    fun habitsBuildsStreakWeeklyRatioTilesASevenDayGridAndAOncePerDayTodayForm() {
         val config = Recipes.build(Recipe.HABITS, RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2")), listOf(habitTable))!!
         val layout = layoutOf(config)
         assertEquals(LayoutMode.SECTIONS, layout.mode)
@@ -150,10 +150,12 @@ class RecipesTest {
                 Triple(AggFn.RATIO, "c1", AggPeriod.THIS_WEEK),
                 Triple(AggFn.RATIO, "c2", AggPeriod.THIS_WEEK),
             ),
-            layout.tiles.map { Triple(it.fn, it.propId, it.period) },
+            layout.tiles.filter { it.kind == TileKind.AGG }.map { Triple(it.fn, it.propId, it.period) },
         )
         assertTrue(layout.tiles.all { it.viewId == "hab" && it.dateProp == "d" })
-        assertEquals(listOf(null, 80.0, 80.0), layout.tiles.map { it.goal }) // 연속 달성일에는 목표를 두지 않는다
+        assertEquals(listOf(null, 80.0, 80.0), layout.tiles.filter { it.kind == TileKind.AGG }.map { it.goal }) // 연속 달성일에는 목표를 두지 않는다
+        val grid = layout.tiles.single { it.kind == TileKind.HABITS } // 7일 격자: 고른 습관 전부
+        assertEquals(listOf("c1", "c2"), grid.habitProps)
         assertEquals(
             InputForm(listOf(FormField("c1"), FormField("c2")), showDate = true, dateToday = true, titleDate = true, oncePerDay = true),
             InputForms.get(config.formJson, "hab"),
@@ -165,7 +167,9 @@ class RecipesTest {
     fun habitsKeepsAtMostThreeCheckboxesSoTheTileStripFits() {
         val picks = RecipePicks(viewId = "hab", checkProps = listOf("c1", "c2", "c3", "c4"))
         val layout = layoutOf(Recipes.build(Recipe.HABITS, picks, listOf(habitTable))!!)
-        assertEquals(listOf("c1", "c2", "c3"), layout.tiles.filter { it.fn == AggFn.RATIO }.map { it.propId })
+        assertEquals(listOf("c1", "c2", "c3"), layout.tiles.filter { it.kind == TileKind.AGG && it.fn == AggFn.RATIO }.map { it.propId })
+        assertEquals(listOf("c1", "c2", "c3"), layout.tiles.single { it.kind == TileKind.HABITS }.habitProps)
+        assertEquals(5, layout.tiles.size) // 연속 달성일 1 + 달성률 3 + 7일 격자 1
         assertTrue(layout.tiles.size <= WidgetLayout.TILE_LIMIT)
     }
 

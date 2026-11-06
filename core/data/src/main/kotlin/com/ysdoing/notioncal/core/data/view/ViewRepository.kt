@@ -8,6 +8,7 @@ import com.ysdoing.notioncal.core.data.db.ViewDao
 import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
 import javax.inject.Inject
@@ -52,6 +53,8 @@ data class ViewBoard(
      * '보낸 변경 되돌리기'를 준다([sentUndoableAt]). 그 뒤에 사용자가 같은 칸을 또 바꿨다면 되돌릴 것이 아니라 빠진다.
      */
     val sentUndoAt: List<Long> = emptyList(),
+    /** 아직 보내지 않은 새 항목이 체크한 속성(날짜 → 속성 ID들, Phase 12e). 해빗 격자가 대기 중인 오늘 페이지를 '체크됨'으로 보인다. */
+    val pendingCreateChecks: Map<LocalDate, Set<String>> = emptyMap(),
 ) {
     private val filter: ViewFilter by lazy { ViewFilter.parse(filterJson) }
 
@@ -132,10 +135,17 @@ class ViewRepository @Inject constructor(
                     filterJson = it.filterJson,
                     pendingPageIds = pendingPages.toSet(),
                     pendingCreateDates = creates.mapNotNull { ViewJson.parseCreate(it)?.date?.dateOrNull() }.toSet(),
+                    pendingCreateChecks = creates.mapNotNull { ViewJson.parseCreate(it) }.checkedByDate(),
                     sentUndoAt = sent.filter { s -> s.holdsIn(rows.firstOrNull { r -> r.pageId == s.pageId }) }.map { s -> s.sentAt },
                 )
             }
         }
+
+    /** 새 항목들이 체크한 속성을 날짜별로 모은다(같은 날 여럿이면 합친다). 날짜가 없는 새 항목은 뺀다. */
+    private fun List<ViewCreate>.checkedByDate(): Map<LocalDate, Set<String>> =
+        mapNotNull { create -> create.date?.dateOrNull()?.let { it to create.props.filterValues { v -> v == JsonPrimitive(true) }.keys } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, sets) -> sets.flatten().toSet() }
 
     suspend fun remove(viewId: String) {
         dao.remove(viewId)

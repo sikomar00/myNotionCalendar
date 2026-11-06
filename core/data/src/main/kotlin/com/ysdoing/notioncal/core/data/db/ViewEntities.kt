@@ -247,6 +247,13 @@ abstract class ViewDao {
     @Query("DELETE FROM view_writes WHERE id = :id")
     abstract suspend fun deleteWriteById(id: Long)
 
+    /** 한 보기에서 아직 노션에 만들러 보내지 않은 새 항목 쓰기, 쌓은 순서대로(해빗 체크가 그날 새 항목에 합친다). */
+    @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND propType = '$VIEW_WRITE_CREATE' ORDER BY id")
+    abstract suspend fun pendingCreates(viewId: String): List<ViewWriteEntity>
+
+    @Query("UPDATE view_writes SET value = :value WHERE id = :id")
+    abstract suspend fun updateWriteValue(id: Long, value: String?)
+
     /** 보낸 바꿈을 기록한다(Phase 12c, 4초 뒤 되돌리기). 처리기가 보낸 직후 부른다. */
     @Insert
     abstract suspend fun insertSent(sent: SentWriteEntity)

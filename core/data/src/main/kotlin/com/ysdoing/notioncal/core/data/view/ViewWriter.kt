@@ -76,6 +76,32 @@ class ViewWriter @Inject constructor(
         }.all { it }
     }
 
+    /**
+     * 해빗 체크(Phase 12e RC-03): [day]의 [propId] 습관을 뒤집는다. 그날 행이 있으면 체크를 토글하고, 없으면 아직 안 보낸 그날 새 항목에 합치고
+     * (하루 페이지 1개만), 그것도 없으면 제목 'M월 d일'·그 날짜·체크한 습관으로 새 항목을 만든다(첫 체크 때 만든다). 같은 날 행이 여럿이면 앞의 것이다.
+     * 보기에 날짜 열이나 그 체크박스가 없으면 false다. 위젯 즉시 동작이라 [sendDelayMs]만큼 미뤄 그 안에 되돌릴 수 있다.
+     * shortcut: 받은 행(100개 상한·보기 필터)과 큐만 보니, 그날 행이 가려져 있거나 방금 보낸 새 항목을 아직 다시 받지 못했으면 같은 날 페이지가 둘 생길 수 있다.
+     */
+    suspend fun checkHabit(viewId: String, propId: String, day: LocalDate, sendDelayMs: Long = UNDO_WINDOW_MS): Boolean {
+        val columns = ViewJson.columns(dao.snapshot(viewId)?.columnInfo.orEmpty())
+        val date = ViewColumn.dateColumnOf(columns) ?: return false
+        if (columns.none { it.id == propId && it.type == "checkbox" }) return false
+        val row = dao.rows(viewId).firstOrNull { ViewJson.typed(it.typed)[date.id].startDate() == day }
+        if (row != null) return toggle(viewId, row.pageId, propId, sendDelayMs)
+        if (flipInPendingCreate(viewId, propId, day)) return true
+        return create(viewId, HabitTitle.of(day), day, mapOf(propId to JsonPrimitive(true)), sendDelayMs)
+    }
+
+    /** 그날 새 항목이 아직 큐에 있으면 거기서 [propId] 체크를 뒤집는다(체크가 모두 빠지고 제목이 자동 제목이면 그 새 항목은 지운다). 합쳤으면 true. */
+    private suspend fun flipInPendingCreate(viewId: String, propId: String, day: LocalDate): Boolean {
+        val (write, spec) = dao.pendingCreates(viewId).firstNotNullOfOrNull { w -> ViewJson.parseCreate(w.value)?.takeIf { it.date == day.toString() }?.let { w to it } } ?: return false
+        val checked = spec.props[propId] == JsonPrimitive(true)
+        val props = if (checked) spec.props - propId else spec.props + (propId to JsonPrimitive(true))
+        if (props.isEmpty() && spec.title == HabitTitle.of(day)) dao.deleteWriteById(write.id) else dao.updateWriteValue(write.id, ViewJson.encodeCreate(spec.copy(props = props)))
+        widgets.requestUpdate()
+        return true
+    }
+
     /** URL·이메일·전화의 공백 글자는 비우기다(노션이 빈 글자를 거부하고, 로컬과 노션의 비어 있음이 어긋나지 않게). */
     private fun blankToNull(column: ViewColumn, value: JsonElement): JsonElement =
         if (column.type in BLANK_IS_EMPTY && value is JsonPrimitive && value.isString && value.content.isBlank()) JsonNull else value

@@ -38,8 +38,11 @@ enum class AggFn(val needsProperty: Boolean, val needsDate: Boolean = false, pri
 /** Phase 12c 타일 색으로 고를 수 있는 노션 색 이름(옵션 색과 같은 계열). 빈 글자는 위젯 기본색이다. */
 val TILE_COLORS = listOf("gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red")
 
-/** 타일 종류: 값 하나([AGG])와, 분류 속성으로 묶은 도넛([DONUT], Phase 12c RC-04 '분류별 도넛'). */
-enum class TileKind { AGG, DONUT }
+/**
+ * 타일 종류: 값 하나([AGG]), 분류 속성으로 묶은 도넛([DONUT], Phase 12c RC-04 '분류별 도넛'),
+ * 습관(체크박스)마다 최근 7일 체크 격자([HABITS], Phase 12e RC-03 '7일 격자·오늘 줄 체크').
+ */
+enum class TileKind { AGG, DONUT, HABITS }
 
 /** 타일이 세는 기간. 날짜 속성([AggTile.dateProp])의 시작 날짜가 기준이다. 연속 달성일은 기간을 무시한다. */
 enum class AggPeriod { ALL, TODAY, THIS_WEEK, THIS_MONTH }
@@ -63,6 +66,8 @@ data class AggTile(
     /** 타일 종류. 도넛은 [groupProp](선택·상태·다중 선택 속성)으로 묶어 [fn](개수·합계)으로 센 값의 몫을 보여 준다. 옛 JSON은 값 타일이다. */
     val kind: TileKind = TileKind.AGG,
     val groupProp: String = "",
+    /** 해빗 격자([TileKind.HABITS])가 그릴 습관(체크박스 속성) ID들(최대 [MAX_HABITS]개). 날짜는 [dateProp]이다. */
+    val habitProps: List<String> = emptyList(),
 ) {
     /**
      * 읽을 때 앞뒤 공백·뜻 없는 값을 바로잡는다. 필요한 속성이 없거나 번호·보기가 빈 타일은 null(버린다).
@@ -74,6 +79,7 @@ data class AggTile(
         val prop = propId.trim()
         val date = dateProp.trim()
         val group = groupProp.trim()
+        if (kind == TileKind.HABITS) return normalizedHabits(tileId, view, date)
         val donut = kind == TileKind.DONUT
         if (tileId.isEmpty() || view.isEmpty() || (fn.needsProperty && prop.isEmpty()) || (fn.needsDate && date.isEmpty())) return null
         if (donut && (group.isEmpty() || (fn != AggFn.COUNT && fn != AggFn.SUM))) return null
@@ -83,7 +89,20 @@ data class AggTile(
             goal = goal?.takeIf { it.isFinite() && it > 0 && !donut },
             color = color.trim().takeIf { it in TILE_COLORS && !donut }.orEmpty(),
             groupProp = if (donut) group else "",
+            habitProps = emptyList(),
         )
+    }
+
+    /** 해빗 격자는 보기·날짜 속성과 습관 1~[MAX_HABITS]개가 있어야 하고(겹치는 것은 하나로), 함수·목표·색·기간은 없다. */
+    private fun normalizedHabits(tileId: String, view: String, date: String): AggTile? {
+        val habits = habitProps.map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(MAX_HABITS)
+        if (tileId.isEmpty() || view.isEmpty() || date.isEmpty() || habits.isEmpty()) return null
+        return AggTile(tileId, view, dateProp = date, label = label.trim(), kind = TileKind.HABITS, habitProps = habits)
+    }
+
+    companion object {
+        /** 해빗 격자 한 줄에 그리는 습관 수 상한(자식 10개 한도와 해빗 레시피의 체크박스 상한). */
+        const val MAX_HABITS = 3
     }
 }
 

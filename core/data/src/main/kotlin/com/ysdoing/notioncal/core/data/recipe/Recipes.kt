@@ -42,8 +42,8 @@ data class RecipeConfig(val layoutJson: String, val formJson: String)
  * 만들기(`build`)를 갖는다. 렌더러·저장소를 건드리지 않아 화면 없이 시험한다.
  */
 object Recipes {
-    /** 해빗트래커 타일 줄이 섹션 자리에 들어가도록 주간 달성률 타일은 체크박스 3개까지(연속 달성일 1 + 3 ≤ 타일 상한). */
-    const val MAX_HABITS = 3
+    /** 해빗트래커 타일 줄이 섹션 자리에 들어가도록 주간 달성률 타일은 체크박스 3개까지(연속 달성일 1 + 3 + 7일 격자 1 ≤ 타일 상한 6). */
+    const val MAX_HABITS = AggTile.MAX_HABITS
 
     /** 주간 달성률 타일의 목표(%). */
     const val WEEKLY_GOAL = 80.0
@@ -109,7 +109,7 @@ object Recipes {
         return RecipeConfig(WidgetLayout.encode(layout), forms)
     }
 
-    /** 연속 달성일 + 체크박스마다 이번 주 달성률(목표 [WEEKLY_GOAL]%) 타일과 보기. 새 항목은 체크박스 칸·오늘 날짜·제목 'M월 d일'로 하루에 한 줄만 만든다. */
+    /** 연속 달성일 + 체크박스마다 이번 주 달성률(목표 [WEEKLY_GOAL]%) 타일 + 7일 격자와 보기. 새 항목은 체크박스 칸·오늘 날짜·제목 'M월 d일'로 하루에 한 줄만 만든다. */
     private fun habits(picks: RecipePicks, view: RecipeView): RecipeConfig? {
         val date = view.firstDate() ?: return null
         val checks = picks.checkProps.mapNotNull { view.column(it, "checkbox") }.distinctBy { it.id }.take(MAX_HABITS)
@@ -119,6 +119,8 @@ object Recipes {
         for (check in checks) {
             layout = layout.addTile(AggTile("", view.viewId, AggFn.RATIO, check.id, date.id, AggPeriod.THIS_WEEK, WEEKLY_GOAL)) ?: return null
         }
+        // 7일 격자(RC-03): 습관마다 최근 7일 칸, 칸을 눌러 체크하고 오늘 페이지가 없으면 첫 체크가 만든다.
+        layout = layout.addTile(AggTile("", view.viewId, dateProp = date.id, kind = TileKind.HABITS, habitProps = checks.map { it.id })) ?: return null
         val form = InputForm(checks.map { FormField(it.id) }, showDate = true, dateToday = true, titleDate = true, oncePerDay = true)
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
     }
