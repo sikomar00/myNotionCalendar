@@ -421,6 +421,35 @@ class ViewWidgetTest {
         onAllNodes(hasTestTag("viewUndo")).assertCountEquals(0)
     }
 
+    private fun withSent(vararg sentAt: Long) = board().copy(sentUndoAt = sentAt.toList())
+
+    @Test
+    fun aSentChangeKeepsTheUndoLineForTwoMinutesWithItsOwnWording() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(withSent(now - 90_000)), systemFontScale = 1f) } // 보낸 지 90초
+        onNode(hasTestTag("viewUndo")).assert(hasRunCallbackClickAction<UndoAction>(actionParametersOf(ViewCellAction.ViewKey to "v1")))
+        onNode(hasTextEqualTo("보낸 변경 되돌리기")).assertExists()
+        onAllNodes(hasTextEqualTo("방금 바꾼 것 되돌리기")).assertCountEquals(0)
+    }
+
+    @Test
+    fun noUndoLineOnceTheSentChangeIsOlderThanTheWindow() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(withSent(now - 121_000)), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("viewUndo")).assertCountEquals(0)
+    }
+
+    @Test
+    fun aDelayedWriteWinsTheWordingOverASentOne() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        provideComposable { ViewWidgetContent(state(board().copy(pendingSendAfter = listOf(now + 3_000), sentUndoAt = listOf(now - 10_000))), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("방금 바꾼 것 되돌리기")).assertExists()
+        onAllNodes(hasTestTag("viewUndo")).assertCountEquals(1)
+    }
+
     @Test
     fun headerAndOneRowFitTheSmallestWidgetAtNormalFonts() {
         // 2×2(110dp)에서 머리와 목록 한 줄이 통째로 보인다. 글자 배율 100%에서 시스템 글꼴이 상한(1.3)을 넘어도 같다.

@@ -303,8 +303,9 @@ internal fun ViewNote(message: Int, appWidgetId: Int, m: ViewMetrics, palette: W
 @Composable
 private fun ViewBody(board: ViewBoard, state: ViewWidgetState, m: ViewMetrics, palette: WidgetPalette, spec: PaneSpec) {
     ViewStatusLine(board, state.config.appWidgetId, state.nowMillis, m, palette)
-    val undoShown = board.undoableAt(state.nowMillis) > 0
-    if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor)
+    val delayedUndo = board.undoableAt(state.nowMillis) > 0
+    val undoShown = delayedUndo || board.sentUndoableAt(state.nowMillis) > 0
+    if (undoShown) ViewUndoLine(board.viewId, palette, m.subSp * m.spFactor, sent = !delayedUndo)
     // 머리 아래 상태·되돌리기 줄이 칸 높이를 차지하니 행·카드 수는 그만큼 뺀 높이로 정한다.
     val lines = (if (viewStatusText(LocalContext.current, board, state.nowMillis) != null) m.tableHeader + 4.dp else 0.dp) + (if (undoShown) UNDO_HEIGHT else 0.dp)
     val paneHeight = spec.height?.let { (it - lines).coerceAtLeast(0.dp) }
