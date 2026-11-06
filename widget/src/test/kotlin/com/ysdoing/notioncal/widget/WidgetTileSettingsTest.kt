@@ -181,4 +181,55 @@ class WidgetTileSettingsTest {
         assertEquals(listOf(TileKind.DONUT, "g"), listOf(other.kind, other.groupProp))
         assertEquals(TileKind.AGG, TileDraft().withView("v1", withGroups).withView("v2", columns).kind)
     }
+
+    // --- 해빗 격자(Phase 12e RC-03)
+
+    private val c1 = ViewColumn("c1", "운동", "checkbox")
+    private val c2 = ViewColumn("c2", "독서", "checkbox")
+    private val c3 = ViewColumn("c3", "영어", "checkbox")
+    private val c4 = ViewColumn("c4", "물", "checkbox")
+    private val habitColumns = listOf(title, day, c1, c2, c3, c4)
+
+    @Test
+    fun habitChoicesAreTheCheckboxProperties() {
+        assertEquals(listOf(c1, c2, c3, c4), habitChoices(habitColumns))
+        assertEquals(emptyList<ViewColumn>(), habitChoices(columns.filter { it.type != "checkbox" }))
+    }
+
+    @Test
+    fun turningOnTheHabitKindPicksTheDateAndTheFirstThreeCheckboxesAndClearsTheValueFields() {
+        val value = TileDraft().withView("v1", habitColumns).withFn(AggFn.SUM, columns).copy(goalText = "10", color = "red", period = AggPeriod.THIS_MONTH)
+        val habits = value.withKind(TileKind.HABITS, habitColumns)
+        assertEquals(listOf(TileKind.HABITS, AggFn.COUNT, "", AggPeriod.ALL, "", ""), listOf(habits.kind, habits.fn, habits.propId, habits.period, habits.goalText, habits.color))
+        assertEquals(listOf("c1", "c2", "c3"), habits.habitProps) // 첫 체크박스 셋(상한)
+        assertEquals("d", habits.dateProp)
+        assertEquals(emptyList<String>(), habits.withKind(TileKind.AGG, habitColumns).habitProps)
+    }
+
+    @Test
+    fun togglingHabitsAddsRemovesAndStopsAtThree() {
+        var draft = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        draft = draft.toggleHabit("c4") // 이미 셋이라 더하지 않는다
+        assertEquals(listOf("c1", "c2", "c3"), draft.habitProps)
+        draft = draft.toggleHabit("c2").toggleHabit("c4")
+        assertEquals(listOf("c1", "c3", "c4"), draft.habitProps)
+    }
+
+    @Test
+    fun aHabitDraftBecomesATileOnlyWithAHabitAndADateAndRoundTrips() {
+        val draft = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        val tile = draft.toTile()!!
+        assertEquals(listOf(TileKind.HABITS, "d", listOf("c1", "c2", "c3")), listOf(tile.kind, tile.dateProp, tile.habitProps))
+        assertNull(draft.copy(habitProps = emptyList()).toTile())
+        assertNull(draft.copy(dateProp = "").toTile())
+        assertEquals(draft.copy(editingId = "t2"), TileDraft.from(tile.copy(id = "t2")).copy(label = ""))
+    }
+
+    @Test
+    fun pickingAnotherViewKeepsTheHabitKindWithThatViewsCheckboxes() {
+        val habits = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        val other = habits.withView("v2", listOf(title, day, ViewColumn("x", "독서", "checkbox")))
+        assertEquals(listOf(TileKind.HABITS, listOf("x")), listOf(other.kind, other.habitProps))
+        assertEquals(TileKind.AGG, TileDraft().withView("v1", habitColumns).withView("v2", columns).kind)
+    }
 }

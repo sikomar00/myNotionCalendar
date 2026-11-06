@@ -15,12 +15,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import com.ysdoing.notioncal.core.data.view.HabitTitle
 import com.ysdoing.notioncal.core.data.view.InputForm
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 /**
  * Phase 11g AD-02 새 항목 시트가 입력 양식·필터 채움·보기 열로 정한 것.
@@ -75,7 +75,7 @@ internal fun resolveAdd(
         DateChoice.TOMORROW -> today.plusDays(1)
         DateChoice.PICK -> pickedIso?.let(LocalDate::parse)
     }
-    val hint = if (plan.titleDate && !presetOnly) DateTimeFormatter.ofPattern("M월 d일").format(date ?: today) else null
+    val hint = if (plan.titleDate && !presetOnly) HabitTitle.of(date ?: today) else null
     return AddResolution(
         date = date,
         autoToday = choice == DateChoice.AUTO && quickDate == null && plan.dateToday,

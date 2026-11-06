@@ -164,6 +164,11 @@
     <string name="layout_tile_view_default">보기</string>
     <string name="layout_tile_prop_default">속성</string>
     <string name="view_row_action_description">%1$s, 이 행에 적용</string>
+    <string name="layout_tile_kind_habits">해빗 격자</string>
+    <string name="layout_tile_form_habits">습관(체크박스, 최대 3개)</string>
+    <string name="layout_tile_no_habits">체크박스 속성이 없어요</string>
+    <string name="layout_tile_habits_limit">해빗 격자는 위젯에 하나까지예요</string>
+    <string name="layout_habit_unavailable">습관 속성을 찾을 수 없어요</string>
     <string name="layout_donut_by">%1$s별</string>
     <string name="layout_tile_form_kind">종류</string>
     <string name="layout_tile_kind_value">값</string>

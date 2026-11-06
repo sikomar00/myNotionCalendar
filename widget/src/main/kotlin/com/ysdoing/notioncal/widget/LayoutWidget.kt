@@ -28,8 +28,10 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.view.AggResult
 import com.ysdoing.notioncal.core.data.view.Aggregator
+import com.ysdoing.notioncal.core.data.view.HabitGrid
 import com.ysdoing.notioncal.core.data.view.LayoutItem
 import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.TileKind
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import com.ysdoing.notioncal.core.data.view.chart.TileDonut
@@ -67,9 +69,10 @@ internal data class LayoutWidgetState(
             val board = boards[tile.viewId]
             // 노션에서 지워졌거나 지원하지 않는 보기의 남은 행은 현재 값이 아니라서 값 없음으로 둔다.
             val live = board?.takeUnless { it.notFound || it.unsupported }
-            val result = live?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false)
+            val result = live?.takeIf { tile.kind != TileKind.HABITS }?.let { Aggregator.compute(it, tile, today, weekStart) } ?: AggResult.unavailable(partial = false)
             val donut = live?.let { TileDonut.compute(it, tile, today, weekStart, DONUT_MAX_LEGEND) }
-            TileCell(tile, result, board, nowMillis, donut)
+            val habits = live?.takeIf { tile.kind == TileKind.HABITS }?.let { HabitGrid.compute(it, tile.dateProp, tile.habitProps, today) }
+            TileCell(tile, result, board, nowMillis, donut, habits)
         }
     }
 
