@@ -40,12 +40,13 @@ class RecipeContentTest {
     private val board = RecipeView("brd", "할 일 보드", "board", listOf(title, col("s", "상태", "status", "할 일")))
     private val habits = RecipeView("hab", "습관", "table", listOf(title, col("d", "날짜", "date"), col("c1", "운동", "checkbox"), col("c2", "독서", "checkbox")))
     private val ledger = RecipeView("led", "가계부", "table", listOf(title, col("d", "날짜", "date"), col("n", "금액", "number"), col("m", "수량", "number"), col("k", "분류", "select", "식비")))
-    private val views = listOf(calendar, board, habits, ledger)
+    private val gallery = RecipeView("gal", "책장", "gallery", listOf(title, col("r", "별점", "number"), col("g", "장르", "select", "소설"), col("d", "읽은 날", "date")))
+    private val views = listOf(calendar, board, habits, ledger, gallery)
 
     private val calls = mutableListOf<String>()
     private val actions = RecipeActions(
         onRecipe = { calls += "recipe:${it.name}" }, onView = { calls += "view:$it" }, onBoard = { calls += "board:$it" },
-        onAmount = { calls += "amount:$it" }, onCategory = { calls += "category:$it" }, onCheck = { calls += "check:$it" }, onBudget = { calls += "budget:$it" },
+        onAmount = { calls += "amount:$it" }, onCategory = { calls += "category:$it" }, onRating = { calls += "rating:$it" }, onCheck = { calls += "check:$it" }, onBudget = { calls += "budget:$it" },
         onAddView = { calls += "addView" }, onPin = { calls += "pin" },
     )
 
@@ -64,12 +65,31 @@ class RecipeContentTest {
     }
 
     @Test
-    fun threeRecipesAreOfferedAndPressingOneReportsIt() {
+    fun fourRecipesAreOfferedAndPressingOneReportsIt() {
         show(Recipe.TASKS)
         compose.onNodeWithText("일정·할 일").assertIsSelected()
         compose.onNodeWithText("해빗트래커").performScrollTo().performClick()
         compose.onNodeWithText("가계부").performScrollTo().performClick()
-        assertEquals(listOf("recipe:HABITS", "recipe:LEDGER"), calls)
+        compose.onNodeWithText("책·영화 기록").performScrollTo().performClick()
+        assertEquals(listOf("recipe:HABITS", "recipe:LEDGER", "recipe:GALLERY"), calls)
+    }
+
+    @Test
+    fun theGalleryRecipePreselectsTheGuessedRatingAndReportsAChangeOrNone() {
+        show(Recipe.GALLERY)
+        compose.onNodeWithText("책장 (갤러리)").assertIsSelected()
+        compose.onNodeWithText("별점").assertIsSelected() // 이름이 별점인 숫자 속성을 추천한다
+        compose.onNodeWithText("장르").performScrollTo().performClick()
+        compose.onNodeWithText("별점 없음").performScrollTo().performClick()
+        compose.onNodeWithText("★★★★☆", substring = true).assertExists() // 안내 글에 보이는 모양
+        assertEquals(listOf("rating:g", "rating:"), calls)
+    }
+
+    @Test
+    fun withoutAGalleryViewTheGalleryRecipeSaysWhatItNeeds() {
+        show(Recipe.GALLERY, registered = listOf(calendar, ledger))
+        compose.onNodeWithText("갤러리 보기(제목 열 포함)가 필요합니다", substring = true).assertExists()
+        compose.onNodeWithText("노션 보기 추가").performScrollTo().assertExists()
     }
 
     @Test

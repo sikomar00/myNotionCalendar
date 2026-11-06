@@ -86,6 +86,8 @@ class RecipeViewModel @Inject constructor(
 
     fun selectCategory(propId: String) = edit { it.selectCategory(propId) }
 
+    fun selectRating(propId: String) = edit { it.selectRating(propId) }
+
     fun toggleCheck(propId: String) = edit { it.toggleCheck(propId) }
 
     fun setBudget(text: String) = edit { it.withBudget(text) }

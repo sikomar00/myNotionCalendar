@@ -26,6 +26,9 @@ data class RecipeDraft(val recipe: Recipe = Recipe.TASKS, val picks: RecipePicks
     /** 가계부 분류(빈 글자면 분류 없음). */
     fun selectCategory(propId: String): RecipeDraft = copy(picks = picks.copy(categoryProp = propId))
 
+    /** 갤러리형 기록의 별점 속성(빈 글자면 별점 없음). */
+    fun selectRating(propId: String): RecipeDraft = copy(picks = picks.copy(ratingProp = propId))
+
     /** 해빗트래커 체크박스를 고르거나 푼다. 이미 [Recipes.MAX_HABITS]개면 더하지 않는다. */
     fun toggleCheck(propId: String): RecipeDraft {
         val now = picks.checkProps

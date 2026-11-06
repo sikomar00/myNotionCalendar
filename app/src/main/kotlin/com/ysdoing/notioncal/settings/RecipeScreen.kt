@@ -55,6 +55,7 @@ internal class RecipeActions(
     val onBoard: (String) -> Unit,
     val onAmount: (String) -> Unit,
     val onCategory: (String) -> Unit,
+    val onRating: (String) -> Unit,
     val onCheck: (String) -> Unit,
     val onBudget: (String) -> Unit,
     val onAddView: () -> Unit,
@@ -70,7 +71,7 @@ fun RecipeRoute(onBack: () -> Unit, onAddView: () -> Unit, viewModel: RecipeView
     val actions = remember(viewModel) {
         RecipeActions(
             viewModel::selectRecipe, viewModel::selectView, viewModel::selectBoard, viewModel::selectAmount,
-            viewModel::selectCategory, viewModel::toggleCheck, viewModel::setBudget, onAddView, viewModel::pin,
+            viewModel::selectCategory, viewModel::selectRating, viewModel::toggleCheck, viewModel::setBudget, onAddView, viewModel::pin,
         )
     }
     Scaffold(
@@ -153,6 +154,11 @@ private fun PicksSection(draft: RecipeDraft, candidates: List<RecipeView>, actio
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        Recipe.GALLERY -> {
+            DateNote(view)
+            ColumnPick(R.string.recipe_section_rating, view, setOf("number", "select"), picks.ratingProp, actions.onRating, noneLabel = R.string.recipe_rating_none)
+            Text(stringResource(R.string.recipe_rating_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -201,18 +207,21 @@ private fun nameOf(recipe: Recipe): Int = when (recipe) {
     Recipe.TASKS -> R.string.recipe_name_tasks
     Recipe.HABITS -> R.string.recipe_name_habits
     Recipe.LEDGER -> R.string.recipe_name_ledger
+    Recipe.GALLERY -> R.string.recipe_name_gallery
 }
 
 private fun describe(recipe: Recipe): Int = when (recipe) {
     Recipe.TASKS -> R.string.recipe_desc_tasks
     Recipe.HABITS -> R.string.recipe_desc_habits
     Recipe.LEDGER -> R.string.recipe_desc_ledger
+    Recipe.GALLERY -> R.string.recipe_desc_gallery
 }
 
 private fun needs(recipe: Recipe): Int = when (recipe) {
     Recipe.TASKS -> R.string.recipe_needs_tasks
     Recipe.HABITS -> R.string.recipe_needs_habits
     Recipe.LEDGER -> R.string.recipe_needs_ledger
+    Recipe.GALLERY -> R.string.recipe_needs_gallery
 }
 
 private fun typeName(type: String): Int = when (type) {

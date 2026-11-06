@@ -42,6 +42,10 @@ class RecipesTest {
     private val table = view("tbl", "table", title, date)
     private val habitTable = view("hab", "table", title, date, run, read, water, sleep)
     private val ledger = view("led", "table", title, date, amount, kind)
+    private val rating = ViewColumn("r", "별점", "number")
+    private val genre = ViewColumn("g", "장르", "select", listOf(ViewChoice("o1", "소설")))
+    private val shelf = view("shelf", "gallery", title, date, rating, genre, name = "책장")
+    private val tableOfBooks = view("books", "table", title, rating)
     private val readOnly = view("ro", "table", formula) // 제목 열이 없어 새 항목을 만들 수 없는 보기
 
     // --- 후보와 기본 선택
@@ -191,6 +195,46 @@ class RecipesTest {
     fun ledgerWithoutACategoryHasNoDonutTile() {
         val tiles = layoutOf(Recipes.build(Recipe.LEDGER, RecipePicks(viewId = "led", amountProp = "n"), listOf(ledger))!!).tiles
         assertEquals(listOf(TileKind.AGG), tiles.map { it.kind })
+    }
+
+    // --- Phase 12d RC-05 갤러리형 기록
+
+    @Test
+    fun theGalleryRecipeOffersOnlyGalleryViewsWithATitle() {
+        assertEquals(listOf("shelf"), Recipes.candidates(Recipe.GALLERY, listOf(tableOfBooks, calendar, shelf, ledger)).map { it.viewId })
+        assertEquals(emptyList<String>(), Recipes.candidates(Recipe.GALLERY, listOf(view("g2", "gallery", date)))) // 제목 열이 없다
+    }
+
+    @Test
+    fun theGalleryRecipeGuessesARatingByNameAndOtherwiseLeavesItEmpty() {
+        assertEquals("r", Recipes.defaultPicks(Recipe.GALLERY, listOf(shelf)).ratingProp) // 별점
+        val noName = view("g3", "gallery", title, ViewColumn("q", "쪽수", "number"))
+        assertEquals("", Recipes.defaultPicks(Recipe.GALLERY, listOf(noName)).ratingProp)
+        // 고른 속성이 새 보기에도 있으면 지키고, 없으면 새 보기에서 다시 추천한다
+        val kept = Recipes.withView(Recipe.GALLERY, RecipePicks(viewId = "shelf", ratingProp = "g"), shelf)
+        assertEquals("g", kept.ratingProp)
+        assertEquals("r", Recipes.withView(Recipe.GALLERY, RecipePicks(viewId = "x", ratingProp = "gone"), shelf).ratingProp)
+    }
+
+    @Test
+    fun theGalleryRecipeBuildsASingleGalleryItemCarryingTheRatingAndAFormWithTheRatingAndTodaysDate() {
+        val config = Recipes.build(Recipe.GALLERY, RecipePicks(viewId = "shelf", ratingProp = "r"), listOf(shelf))!!
+        val layout = layoutOf(config)
+        assertEquals(LayoutMode.SINGLE, layout.mode)
+        assertEquals(listOf("shelf" to "r"), layout.items.map { it.viewId to it.ratingProp })
+        assertEquals(InputForm(listOf(FormField("r")), dateToday = true), InputForms.get(config.formJson, "shelf"))
+    }
+
+    @Test
+    fun aGalleryWithoutARatingOrADateBuildsAPlainForm() {
+        val noDate = view("g4", "gallery", title)
+        val config = Recipes.build(Recipe.GALLERY, RecipePicks(viewId = "g4"), listOf(noDate))!!
+        assertEquals("", layoutOf(config).items.single().ratingProp)
+        assertNull(InputForms.get(config.formJson, "g4")) // 기본 양식은 따로 저장하지 않는다
+        // 사라지거나 맞지 않는 별점 속성은 버린다
+        val ghost = Recipes.build(Recipe.GALLERY, RecipePicks(viewId = "shelf", ratingProp = "zzz"), listOf(shelf))!!
+        assertEquals("", layoutOf(ghost).items.single().ratingProp)
+        assertNull(Recipes.build(Recipe.GALLERY, RecipePicks(viewId = "books", ratingProp = "r"), listOf(tableOfBooks))) // 갤러리가 아니다
     }
 
     @Test

@@ -111,4 +111,18 @@ class RecipeDraftTest {
         assertEquals("led2", draft.repaired(other.filter { it.viewId != "led" }).picks.viewId)
         assertEquals("cal", RecipeDraft().repaired(views).picks.viewId) // 시작 전(고른 보기가 없음)이면 기본 선택으로 채운다
     }
+
+    // --- Phase 12d RC-05 갤러리형 기록
+
+    private val shelf = RecipeView("shelf", "책장", "gallery", listOf(title, ViewColumn("r", "별점", "number"), col("g", "select", "소설")))
+
+    @Test
+    fun theGalleryRecipeStartsWithItsViewAndTheGuessedRatingAndTheUserCanChangeOrClearIt() {
+        val draft = RecipeDraft().start(Recipe.GALLERY, views + shelf)
+        assertEquals(RecipePicks(viewId = "shelf", ratingProp = "r"), draft.picks)
+        assertEquals("g", draft.selectRating("g").picks.ratingProp)
+        assertEquals("", draft.selectRating("").picks.ratingProp)
+        assertNotNull(draft.selectRating("").config(views + shelf)) // 별점 없이도 만들 수 있다
+        assertNull(RecipeDraft().start(Recipe.GALLERY, views).config(views)) // 갤러리 보기가 없으면 만들 수 없다
+    }
 }

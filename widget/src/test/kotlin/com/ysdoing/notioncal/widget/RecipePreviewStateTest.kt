@@ -59,4 +59,20 @@ class RecipePreviewStateTest {
         assertEquals("가계부", state.boards["led"]!!.name) // 아직 못 받은 보기도 이름이 있는 예시 칸으로
         assertEquals(null, state.tileCells().single().result.number) // 타일은 값이 있어야 뜻이 있어 비워 둔다
     }
+
+    @Test
+    fun theGalleryRecipeCarriesItsRatingPropertyIntoThePaneState() {
+        val shelfColumns = listOf(ViewColumn("t", "이름", "title"), ViewColumn("r", "별점", "number"))
+        val shelf = RecipeView("shelf", "책장", "gallery", shelfColumns)
+        val config = Recipes.build(Recipe.GALLERY, RecipePicks(viewId = "shelf", ratingProp = "r"), listOf(shelf))!!
+        val rows = listOf(ViewRow("b1", "", listOf("책"), typed = mapOf("r" to JsonPrimitive(4.0))))
+        val board = ViewBoard("shelf", "책장", "gallery", listOf("이름"), rows, now, null, shelfColumns)
+        val state = WidgetPreviews.layoutPreview(
+            com.ysdoing.notioncal.core.data.WidgetConfig(0, layoutJson = config.layoutJson, formJson = config.formJson),
+            names = mapOf("shelf" to "책장"), now = now, boards = mapOf("shelf" to board),
+        )
+        val pane = state.paneState(state.layout.items.single())
+        assertEquals("r", pane.ratingProp) // 카드가 이 속성을 ★로 그린다
+        assertEquals("gallery", pane.board!!.type)
+    }
 }

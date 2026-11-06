@@ -12,8 +12,8 @@ import com.ysdoing.notioncal.core.data.view.TileKind
 import com.ysdoing.notioncal.core.data.view.ViewColumn
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
 
-/** Phase 11h 레시피(RC-02~04): 일정·할 일 · 해빗트래커 · 가계부. 이미 있는 부품(배치·집계 타일·입력 양식)을 미리 짜 둔 틀이다. */
-enum class Recipe { TASKS, HABITS, LEDGER }
+/** 레시피(RC-02~05): 일정·할 일 · 해빗트래커 · 가계부(Phase 11h) · 갤러리형 기록(책·영화·사진, Phase 12d). 이미 있는 부품(배치·집계 타일·입력 양식)을 미리 짜 둔 틀이다. */
+enum class Recipe { TASKS, HABITS, LEDGER, GALLERY }
 
 /** 레시피가 고를 수 있는 등록한 보기 하나: 노션 보기 종류(`table`·`board`·`calendar`…)와 쓰기 정보([columns]). */
 data class RecipeView(val viewId: String, val name: String, val type: String, val columns: List<ViewColumn>)
@@ -30,6 +30,8 @@ data class RecipePicks(
     val amountProp: String = "",
     val categoryProp: String = "",
     val budget: Double? = null,
+    /** 갤러리형 기록의 별점 속성(숫자·선택, 선택 사항). 카드에 ★로 그려지고 새 항목 양식에 들어간다. */
+    val ratingProp: String = "",
 )
 
 /** 레시피가 만든 노션 위젯 설정 묶음(`widget_configs.layoutJson`·`formJson`). 위젯 번호는 홈 화면에 놓인 뒤에 정해진다. */
@@ -47,6 +49,8 @@ object Recipes {
     const val WEEKLY_GOAL = 80.0
 
     private val OPTION_TYPES = setOf("select", "status")
+    private val RATING_TYPES = setOf("number", "select")
+    private val RATING_NAMES = listOf("별점", "평점", "평가", "rating", "score", "stars")
 
     /** 이 레시피가 쓸 수 있는 보기를 어울리는 순서로: 제목 열이 있는 보기(새 항목을 만들 수 있다)에, 레시피마다 필요한 속성이 있는 것만. */
     fun candidates(recipe: Recipe, views: List<RecipeView>): List<RecipeView> =
@@ -56,6 +60,7 @@ object Recipes {
         Recipe.TASKS -> true
         Recipe.HABITS -> view.has("date") && view.has("checkbox")
         Recipe.LEDGER -> view.has("date") && view.has("number")
+        Recipe.GALLERY -> view.type == "gallery" // 표지 카드는 갤러리 보기만 그린다(날짜·별점은 선택)
     }
 
     /** 후보 첫 보기와 그 보기에서 유형이 맞는 첫 속성들(체크박스는 [MAX_HABITS]개까지). 일정·할 일은 후보 중 보드 보기를 상태 보드로 더한다. 후보가 없으면 빈 선택이다. */
@@ -80,6 +85,7 @@ object Recipes {
                 amountProp = view.keep(picks.amountProp, "number"),
                 categoryProp = view.keep(picks.categoryProp, OPTION_TYPES),
             )
+            Recipe.GALLERY -> moved.copy(ratingProp = view.ratingOrGuess(picks.ratingProp))
         }
     }
 
@@ -91,6 +97,7 @@ object Recipes {
             Recipe.TASKS -> tasks(view, byId[picks.boardViewId]?.takeIf { it.viewId != view.viewId && fits(Recipe.TASKS, it) })
             Recipe.HABITS -> habits(picks, view)
             Recipe.LEDGER -> ledger(picks, view)
+            Recipe.GALLERY -> gallery(picks, view)
         }
     }
 
@@ -132,6 +139,17 @@ object Recipes {
         return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
     }
 
+    /**
+     * 갤러리 보기 하나(표지 카드) + 새 항목 양식: 고른 별점 속성(있으면)과, 날짜 열이 있으면 오늘 날짜로 시작한다. 별점 속성은 배치 항목이 가져
+     * 카드가 ★로 그린다(보기에서 숨겨져 있어도 된다).
+     */
+    private fun gallery(picks: RecipePicks, view: RecipeView): RecipeConfig {
+        val rating = view.columns.firstOrNull { it.id == picks.ratingProp && it.type in RATING_TYPES }
+        val layout = WidgetLayout(LayoutMode.SINGLE, listOf(LayoutItem(view.viewId, ratingProp = rating?.id.orEmpty())))
+        val form = InputForm(listOfNotNull(rating).map { FormField(it.id) }, dateToday = view.has("date"))
+        return RecipeConfig(WidgetLayout.encode(layout), InputForms.put("", view.viewId, form))
+    }
+
     private const val MONTH_SUM = "이번 달 합계"
     private const val MONTH_BY_CATEGORY = "이번 달 분류별"
 
@@ -143,7 +161,11 @@ object Recipes {
     }
 
     private fun rank(recipe: Recipe, type: String): Int {
-        val order = if (recipe == Recipe.TASKS) listOf("calendar", "board", "table", "list") else listOf("table", "list")
+        val order = when (recipe) {
+            Recipe.TASKS -> listOf("calendar", "board", "table", "list")
+            Recipe.GALLERY -> listOf("gallery")
+            else -> listOf("table", "list")
+        }
         return order.indexOf(type).takeIf { it >= 0 } ?: order.size
     }
 
@@ -155,6 +177,11 @@ object Recipes {
     private fun RecipeView.firstDate() = ViewColumn.dateColumnOf(columns)
 
     private fun RecipeView.keep(id: String, type: String): String = keep(id, setOf(type))
+
+    /** 고른 별점 속성이 이 보기에도 맞으면 그대로, 아니면 이름이 별점·평점·rating 같은 숫자·선택 속성을 추천하고 없으면 별점 없음(빈 글자)이다. */
+    private fun RecipeView.ratingOrGuess(id: String): String =
+        columns.firstOrNull { it.id == id && it.type in RATING_TYPES }?.id
+            ?: columns.firstOrNull { it.type in RATING_TYPES && RATING_NAMES.any { name -> it.name.contains(name, ignoreCase = true) } }?.id.orEmpty()
 
     private fun RecipeView.keep(id: String, types: Set<String>): String =
         columns.firstOrNull { it.id == id && it.type in types }?.id ?: columns.firstOrNull { it.type in types }?.id.orEmpty()
