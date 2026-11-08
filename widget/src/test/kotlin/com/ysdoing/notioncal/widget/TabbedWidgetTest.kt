@@ -31,7 +31,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * WG-11 통합 탭 위젯: 위쪽 탭(📅 일정 · ✅ 습관)으로 내용을 바꾸고, 탭은 위젯마다 저장(TabAction)한다.
+ * WG-11 통합 탭 위젯: 아래쪽 탭(📅 일정 · ✅ 습관)으로 내용을 바꾸고, 탭은 위젯마다 저장(TabAction)한다.
  * 📅 탭은 월간 위젯 내용, ✅ 탭은 습관 위젯 내용을 그대로 쓴다. 4×2·4×4에서 RemoteViews 변환(자식 10개 제한) 통과.
  */
 @OptIn(ExperimentalGlanceRemoteViewsApi::class)
@@ -103,6 +103,35 @@ class TabbedWidgetTest {
         val frame = FrameLayout(activity)
         frame.addView(remoteViews.apply(activity, frame))
         frame.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.AT_MOST))
+    }
+
+    /** 탭 줄은 내용 아래(엄지 쪽)에 있다: 실제 View로 펼쳐 탭 버튼이 달 제목·격자보다 아래인지 본다. */
+    @Test
+    fun tabRowSitsBelowTheContent() = runTest(timeout = 2.minutes) {
+        val remoteViews = GlanceRemoteViews().compose(context, large) { Tabbed(WidgetTab.CALENDAR) }.remoteViews
+        val activity = Robolectric.buildActivity(Activity::class.java).create().get()
+        val frame = FrameLayout(activity)
+        frame.addView(remoteViews.apply(activity, frame))
+        val density = activity.resources.displayMetrics.density
+        val w = (large.width.value * density).toInt()
+        val h = (large.height.value * density).toInt()
+        frame.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+        frame.layout(0, 0, w, h)
+        fun topOf(text: String, flag: Int): Int {
+            val found = ArrayList<View>()
+            frame.findViewsWithText(found, text, flag)
+            var view: View = found.first()
+            var top = 0
+            while (view !== frame) {
+                top += view.top
+                view = view.parent as View
+            }
+            return top
+        }
+        val tab = topOf("일정, 선택됨", View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
+        val title = topOf("2026년 10월", View.FIND_VIEWS_WITH_TEXT)
+        assertTrue("탭 $tab, 제목 $title", tab > title)
+        assertTrue("탭 줄은 위젯 아래쪽 절반에 있다: $tab / $h", tab > h / 2)
     }
 
     /** PRD §13: Row·Column 자식 10개 제한. 습관 위젯 세 크기 + 통합 위젯 두 탭을 실제 RemoteViews로 바꿔 본다(4×2·4×4 잘림 확인용). */

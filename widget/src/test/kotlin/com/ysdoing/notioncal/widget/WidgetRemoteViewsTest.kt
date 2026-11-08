@@ -151,6 +151,11 @@ class WidgetRemoteViewsTest {
             .captureRoboImage("src/test/screenshots/agenda_4x2.png")
         renderView(LedgerWidgetTest.LARGE) { LedgerWidgetContent(LedgerWidgetTest.state(), systemFontScale = 1f) }
             .captureRoboImage("src/test/screenshots/ledger_4x4.png")
+        // 통합 탭: 탭 줄이 아래(2026-11-08).
+        val tabbed = WidgetConfig(1, selectedTab = com.ysdoing.notioncal.core.data.WidgetTab.LEDGER)
+        renderView(LedgerWidgetTest.LARGE) {
+            TabbedWidgetContent(tabbed, systemFontScale = 1f) { LedgerWidgetContent(LedgerWidgetState(LedgerWidgetTest.board(), tabbed), systemFontScale = 1f, framed = false) }
+        }.captureRoboImage("src/test/screenshots/tabbed_ledger_4x4.png")
     }
 
     @Test
