@@ -165,7 +165,7 @@ class ViewTimelineTest {
         setAppWidgetSize(large)
         provideComposable { ViewWidgetContent(state(timeline(complete = false)), systemFontScale = 1f) }
         onNode(hasTestTag("timelineTitle").and(hasContentDescriptionEqualTo("1/10 – 1/16, 일정이 많아 일부만 받았습니다"))).assertExists()
-        onNode(hasTextEqualTo("일부만 보여요")).assertExists()
+        onNode(hasTextEqualTo("일부만 보입니다")).assertExists()
     }
 
     @Test

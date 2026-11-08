@@ -52,7 +52,7 @@
     <string name="filter_hide_done">완료한 일정 숨기기</string>
     <string name="filter_no_value">값 없음</string>
     <string name="filter_note">앱 화면에만 적용됩니다. 위젯은 위젯 설정을 따릅니다.</string>
-    <string name="filter_no_sources">켜 둔 데이터베이스가 없습니다.</string>
+    <string name="filter_no_sources">켜 둔 DB가 없습니다.</string>
     <string name="search_title">검색</string>
     <string name="search_hint">일정 제목 검색</string>
     <string name="search_back">뒤로</string>
@@ -67,11 +67,11 @@
     <string name="schema_role_done">완료</string>
     <string name="schema_role_color">색 기준</string>
     <string name="schema_role_sort">정렬</string>
-    <string name="schema_missing_required">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 이 DB는 동기화를 멈췄어요. 저장된 일정은 그대로 보입니다.</string>
-    <string name="schema_type_required">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 이 DB는 동기화를 멈췄어요. 저장된 일정은 그대로 보입니다.</string>
-    <string name="schema_missing_optional">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 그 값 없이 동기화해요.</string>
-    <string name="schema_type_optional">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 그 값 없이 동기화해요.</string>
-    <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었어요. 동기화는 그대로 됩니다.</string>
+    <string name="schema_missing_required">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 이 DB는 동기화를 멈췄습니다. 저장된 일정은 그대로 보입니다.</string>
+    <string name="schema_type_required">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 이 DB는 동기화를 멈췄습니다. 저장된 일정은 그대로 보입니다.</string>
+    <string name="schema_missing_optional">노션 \'%1$s\'에서 %2$s 속성(%3$s)이 사라져 그 값 없이 동기화합니다.</string>
+    <string name="schema_type_optional">노션 \'%1$s\'의 %2$s 속성(%3$s) 종류가 바뀌어 그 값 없이 동기화합니다.</string>
+    <string name="schema_renamed">노션 \'%1$s\'의 \'%2$s\' 속성 이름이 \'%3$s\'(으)로 바뀌었습니다. 동기화는 그대로 됩니다.</string>
     <string name="a11y_done">완료됨</string>
     <string name="month_day_holiday_a11y">%1$d월 %2$d일, %3$s, 일정 %4$d개</string>
     <string name="month_issue_untitled">(제목 없음)</string>

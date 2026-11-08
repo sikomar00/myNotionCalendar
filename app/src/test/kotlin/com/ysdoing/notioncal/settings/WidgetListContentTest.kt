@@ -23,13 +23,13 @@ class WidgetListContentTest {
     fun whileLoadingOnlyTheTitleShows() {
         compose.setContent { MaterialTheme { WidgetListContent(null) {} } }
         compose.onNodeWithText("배치한 위젯").assertExists()
-        compose.onNodeWithText("배치한 위젯이 없어요", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("배치한 위젯이 없습니다", substring = true).assertDoesNotExist()
     }
 
     @Test
     fun anEmptyListSaysHowToAddOne() {
         compose.setContent { MaterialTheme { WidgetListContent(emptyList()) {} } }
-        compose.onNodeWithText("배치한 위젯이 없어요", substring = true).assertExists()
+        compose.onNodeWithText("배치한 위젯이 없습니다", substring = true).assertExists()
     }
 
     @Test

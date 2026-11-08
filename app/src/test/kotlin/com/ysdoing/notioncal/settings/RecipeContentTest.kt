@@ -68,7 +68,7 @@ class RecipeContentTest {
     fun fourRecipesAreOfferedAndPressingOneReportsIt() {
         show(Recipe.TASKS)
         compose.onNodeWithText("일정·할 일").assertIsSelected()
-        compose.onNodeWithText("해빗트래커").performScrollTo().performClick()
+        compose.onNodeWithText("습관 트래커").performScrollTo().performClick()
         compose.onNodeWithText("가계부").performScrollTo().performClick()
         compose.onNodeWithText("책·영화 기록").performScrollTo().performClick()
         assertEquals(listOf("recipe:HABITS", "recipe:LEDGER", "recipe:GALLERY"), calls)

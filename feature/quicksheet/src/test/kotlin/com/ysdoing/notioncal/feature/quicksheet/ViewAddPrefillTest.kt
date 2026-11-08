@@ -86,8 +86,8 @@ class ViewAddPrefillTest {
         show(ViewAddPrefill(listOf(kind), mapOf("c" to JsonPrimitive("a"))))
         compose.onNodeWithText("제목").performTextInput("점심")
         compose.onNodeWithText("프리셋으로 저장").performClick()
-        compose.onNodeWithText("프리셋을 저장하지 못했어요. 프리셋은 5개까지 만들 수 있어요").assertExists()
-        compose.onNodeWithText("프리셋을 저장했어요").assertDoesNotExist()
+        compose.onNodeWithText("프리셋을 저장하지 못했습니다. 프리셋은 5개까지 만들 수 있습니다").assertExists()
+        compose.onNodeWithText("프리셋을 저장했습니다").assertDoesNotExist()
     }
 
     @Test
@@ -106,7 +106,7 @@ class ViewAddPrefillTest {
         compose.onNodeWithText("제목").performTextInput("점심")
         compose.onNodeWithText("프리셋으로 저장").assertIsEnabled().performClick()
         assertEquals(listOf("점심" to mapOf<String, JsonElement>("c" to JsonPrimitive("a"))), presets)
-        compose.onNodeWithText("프리셋을 저장했어요").assertExists()
+        compose.onNodeWithText("프리셋을 저장했습니다").assertExists()
         assertEquals(0, saved.size) // 저장은 만드는 것이 아니다
     }
 

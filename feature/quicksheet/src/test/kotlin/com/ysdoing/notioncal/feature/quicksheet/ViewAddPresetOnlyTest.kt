@@ -96,7 +96,7 @@ class ViewAddPresetOnlyTest {
         show()
         compose.onNodeWithText("제목").performTextInput("택시")
         compose.onNodeWithText("프리셋으로 저장").performClick()
-        compose.onNodeWithText("프리셋을 저장하지 못했어요", substring = true).assertExists()
+        compose.onNodeWithText("프리셋을 저장하지 못했습니다", substring = true).assertExists()
     }
 }
 

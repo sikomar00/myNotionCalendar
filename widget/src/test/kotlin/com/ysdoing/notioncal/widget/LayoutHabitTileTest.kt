@@ -210,7 +210,7 @@ class LayoutHabitTileTest {
         val gone = mapOf("v1" to board().copy(lastError = VIEW_ERROR_NOT_FOUND))
         provideComposable { LayoutWidgetContent(state(listOf(habitsTile("c1")), boards = gone, items = emptyList()), systemFontScale = 1f) }
         onNode(hasTestTag("layoutHabitNote")).assertExists()
-        onAllNodes(hasTextEqualTo("습관 속성을 찾을 수 없어요")).assertCountEquals(0)
+        onAllNodes(hasTextEqualTo("습관 속성을 찾을 수 없습니다")).assertCountEquals(0)
         onNode(hasTextEqualTo(context.getString(R.string.view_widget_not_found))).assertExists()
     }
 

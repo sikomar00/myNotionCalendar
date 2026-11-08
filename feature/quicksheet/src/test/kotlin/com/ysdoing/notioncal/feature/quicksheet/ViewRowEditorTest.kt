@@ -82,7 +82,7 @@ class ViewRowEditorTest {
         show()
         assertTrue("시트 머리에 행 제목이 없다", compose.onAllNodesWithText("첫째").fetchSemanticsNodes().isNotEmpty())
         listOf("이름", "상태", "점수", "끝남", "쪽수", "메모", "태그", "날짜", "링크").forEach { assertTrue("$it 속성이 없다", compose.onAllNodesWithText(it).fetchSemanticsNodes().isNotEmpty()) }
-        compose.onNodeWithText("노션이 계산하는 값이에요").assertExists() // 수식은 잠금 + 이유(ED-02)
+        compose.onNodeWithText("노션이 계산하는 값입니다").assertExists() // 수식은 잠금 + 이유(ED-02)
         compose.onNodeWithContentDescription("읽기 전용").assertExists()
         compose.onNodeWithText("7", useUnmergedTree = true).assertExists() // 잠긴 값도 보여 준다
     }
@@ -119,7 +119,7 @@ class ViewRowEditorTest {
         show()
         compose.onNodeWithText("쪽수").performTextClearance()
         compose.onNodeWithText("쪽수").performTextInput("12쪽")
-        compose.onNodeWithText("숫자만 넣어 주세요").assertExists()
+        compose.onNodeWithText("숫자만 넣으세요").assertExists()
         compose.onNodeWithText("저장").performScrollTo().assertIsNotEnabled()
     }
 
@@ -137,7 +137,7 @@ class ViewRowEditorTest {
         show()
         compose.onNodeWithText("메모").performTextInput("!")
         compose.onNodeWithText("저장").performScrollTo().performClick()
-        compose.onNodeWithText("저장하지 못했어요. 다시 시도해 주세요").assertExists()
+        compose.onNodeWithText("저장하지 못했습니다. 다시 시도하세요").assertExists()
         assertEquals(0, closed)
     }
 
@@ -172,7 +172,7 @@ class ViewRowEditorTest {
         // 노션은 다중 선택 옵션 이름에 쉼표를 허용하지 않는다(보내면 400으로 거부되어 태그가 조용히 사라진다).
         show()
         compose.onNodeWithText("새 옵션 이름").performTextInput("a,b")
-        compose.onNodeWithText("쉼표(,)는 쓸 수 없어요").assertExists()
+        compose.onNodeWithText("쉼표(,)는 쓸 수 없습니다").assertExists()
         compose.onNodeWithText("추가").assertIsNotEnabled()
     }
 
@@ -181,7 +181,7 @@ class ViewRowEditorTest {
         show()
         compose.onNodeWithText("쪽수").performTextClearance()
         compose.onNodeWithText("쪽수").performTextInput("NaN")
-        compose.onNodeWithText("숫자만 넣어 주세요").assertExists()
+        compose.onNodeWithText("숫자만 넣으세요").assertExists()
         compose.onNodeWithText("저장").performScrollTo().assertIsNotEnabled()
     }
 

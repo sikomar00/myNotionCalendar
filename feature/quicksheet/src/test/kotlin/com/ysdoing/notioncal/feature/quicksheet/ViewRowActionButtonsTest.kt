@@ -74,7 +74,7 @@ class ViewRowActionButtonsTest {
         show()
         compose.onNodeWithText("저장").performScrollTo().assertIsNotEnabled()
         assertEquals(0, compose.onAllNodesWithText("내일로").fetchSemanticsNodes().size)
-        assertEquals(0, compose.onAllNodesWithText("저장하지 않은 변경이 있어서 액션을 쓸 수 없어요. 먼저 저장하세요").fetchSemanticsNodes().size)
+        assertEquals(0, compose.onAllNodesWithText("저장하지 않은 변경이 있어서 액션을 쓸 수 없습니다. 먼저 저장하세요").fetchSemanticsNodes().size)
     }
 
     @Test
@@ -83,7 +83,7 @@ class ViewRowActionButtonsTest {
         compose.onNodeWithText("이름").performTextClearance()
         compose.onNodeWithText("이름").performTextInput("둘째")
         compose.onNodeWithText("내일로").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("저장하지 않은 변경이 있어서 액션을 쓸 수 없어요. 먼저 저장하세요").assertExists()
+        compose.onNodeWithText("저장하지 않은 변경이 있어서 액션을 쓸 수 없습니다. 먼저 저장하세요").assertExists()
         assertEquals(emptyList<String>(), applied)
     }
 
@@ -93,7 +93,7 @@ class ViewRowActionButtonsTest {
         show(tomorrow)
         compose.onNodeWithText("내일로").performScrollTo().performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("적용하지 못했어요. 다시 시도해 주세요").assertExists()
+        compose.onNodeWithText("적용하지 못했습니다. 다시 시도하세요").assertExists()
         assertEquals(0, closed)
         assertEquals(listOf("a1"), applied)
     }

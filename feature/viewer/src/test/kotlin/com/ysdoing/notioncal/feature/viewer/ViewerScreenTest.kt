@@ -93,19 +93,19 @@ class ViewerScreenTest {
     @Test
     fun anIncompleteSetSaysThereAreMoreInNotion() {
         compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(rows, complete = false)), onBack = {}, onOpen = {}) } }
-        compose.onNodeWithText("처음 2행만 받았어요. 노션에 행이 더 있어요").assertExists()
+        compose.onNodeWithText("처음 2행만 받았습니다. 노션에 행이 더 있습니다").assertExists()
     }
 
     @Test
     fun missingEmptyAndLoadingAreSpelledOut() {
         compose.setContent { MaterialTheme { ViewerContent(ViewerState.Missing, onBack = {}, onOpen = {}) } }
-        compose.onNodeWithText("이 보기를 찾을 수 없어요. 설정에서 보기를 다시 등록해 주세요.").assertExists()
+        compose.onNodeWithText("이 보기를 찾을 수 없습니다. 설정에서 보기를 다시 등록하세요.").assertExists()
     }
 
     @Test
     fun anEmptyViewAndTheLoadingStateTellWhatIsHappening() {
         compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(emptyList())), onBack = {}, onOpen = {}) } }
-        compose.onNodeWithText("표시할 행이 없어요").assertExists()
+        compose.onNodeWithText("표시할 행이 없습니다").assertExists()
     }
 
     @Test

@@ -12,5 +12,5 @@
     <string name="habit_day">%1$s, %2$d월 %3$d일 %4$s</string>
     <string name="habit_month_grass">%1$d월 기록: %2$d일 함</string>
     <string name="habit_before_start">시작 전</string>
-    <string name="habit_blocked">기록 DB의 \'습관\' 연결 속성을 찾지 못해 체크하지 않았습니다. 설정에서 다시 연결하세요.</string>
+    <string name="habit_blocked">기록 DB의 \'습관\' 관계형 속성을 찾지 못해 체크하지 않았습니다. 설정에서 다시 연결하세요.</string>
 </resources>
