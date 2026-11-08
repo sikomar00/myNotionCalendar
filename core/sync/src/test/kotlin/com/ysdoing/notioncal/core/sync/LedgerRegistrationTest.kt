@@ -100,4 +100,23 @@ class LedgerRegistrationTest {
         assertEquals(9L, again.lastSyncAt)
         assertEquals("전체", again.budgetGroup)
     }
+
+    /**
+     * 다시 연결: 사용자가 고른 매핑은 지키고, 노션에서 사라진 칸(금액)과 비어 있던 칸(대분류·예정)은 새 등록처럼 추천값으로 채운다.
+     * 전에는 늘 추천값이라 다시 연결하면 사용자가 고른 매핑이 조용히 바뀌었다.
+     */
+    @Test
+    fun reconnectKeepsTheChosenLedgerMappingAndFillsOnlyWhatVanished() {
+        val (existing, _, _) = ledgerRows(
+            HabitTarget("ledger", "db-ledger", "거래내역"), LedgerChoice("title", "nAlJ", "gone", "fLw", null, "tIme", "pAy", null, "pLn"),
+            HabitTarget("budget", "db-budget", "예산"), BudgetChoice("title", "tYp", "vAl", "gRp", "aMt"),
+            HabitTarget("category", "db-cat", "카테고리 마스터"), CategoryChoice("title", "gRp"),
+            "생활비", false, "#DFAB01", emptyMap(), 0,
+        )
+        assertEquals(
+            // manual 칸에 사용자가 고른 'pLn'은 추천과 달라도(같은 체크박스 종류라) 그대로 지킨다.
+            LedgerChoice("title", "nAlJ", amount = "aMt", flow = "fLw", category = "cAt", time = "tIme", payment = "pAy", planned = "pLn", manual = "pLn"),
+            keepValidLedger(existing, notion.ledgerSchema),
+        )
+    }
 }

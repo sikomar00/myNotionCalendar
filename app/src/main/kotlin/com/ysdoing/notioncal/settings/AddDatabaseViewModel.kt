@@ -29,6 +29,26 @@ import javax.inject.Inject
 /** 등록 종류. 📅 일정, ✅ 습관 기록(+ 짝인 🌱 습관, HB-01), 💰 거래내역(+ 예산·카테고리 마스터, LD-01). */
 enum class AddKind { CALENDAR, HABIT_LOG, LEDGER }
 
+/**
+ * [AddDatabaseUi.kindLost]의 판정: 이미 등록한 DB를 다른 종류로 다시 등록하려 한다(등록 화면에서 고를 수 없는 🌱 습관·예산·카테고리 포함).
+ * 그대로 등록하면 그 DB의 종류가 바뀌고 짝(습관·예산·카테고리)을 잃는다. 새로 등록하는 DB([existing]이 null)는 막지 않는다.
+ */
+internal fun kindLost(kind: AddKind, existing: SourceKind?): Boolean = existing != null && existing.addKind() != kind
+
+/** 등록 화면 종류로 바꾼 것. 🌱 습관·예산·카테고리는 짝 DB와 함께만 등록하므로 고를 종류가 없다(null). */
+private fun SourceKind.addKind(): AddKind? = when (this) {
+    SourceKind.CALENDAR -> AddKind.CALENDAR
+    SourceKind.HABIT_LOG -> AddKind.HABIT_LOG
+    SourceKind.LEDGER -> AddKind.LEDGER
+    SourceKind.HABIT, SourceKind.BUDGET, SourceKind.CATEGORY -> null
+}
+
+/** 예산 그룹 고르기: 다시 연결이면 사용자가 고른 그룹(선택지에 남아 있을 때), 아니면 '전체', 없으면 첫 선택지. */
+internal fun pickBudgetGroup(options: List<String>?, existing: String?): String =
+    existing?.takeIf { options?.contains(it) == true }
+        ?: options?.firstOrNull { it == LedgerRules.ALL_GROUP }
+        ?: options?.firstOrNull() ?: LedgerRules.ALL_GROUP
+
 /** LD-01 함께 등록할 예산·카테고리 마스터 상태. 자동으로 못 찾으면 링크를 넣는다. */
 data class LedgerPart(
     val searching: Boolean = false,
@@ -64,9 +84,21 @@ data class AddDatabaseUi(
     val ledgerChoice: LedgerChoice? = null,
     val ledger: LedgerPart = LedgerPart(),
 ) {
+    /** 이미 등록한 DB를 다른 종류로 등록하려 한다([kindLost]). 등록을 막고 이유를 보인다. */
+    val kindLost: Boolean get() = kindLost(kind, inspection?.existingKind)
+
+    /** [kindLost]의 까닭이 '그 종류로 쓸 속성이 노션에 없음'(종류 칩이 없음)인지. 아니면 사용자가 다른 종류를 골랐다. */
+    val kindUnavailable: Boolean
+        get() = when (inspection?.existingKind) {
+            SourceKind.HABIT_LOG -> inspection.logSuggestion == null
+            SourceKind.LEDGER -> inspection.ledgerSuggestion == null
+            SourceKind.HABIT, SourceKind.BUDGET, SourceKind.CATEGORY -> true
+            else -> false
+        }
+
     /** 등록 버튼을 누를 수 있는지. */
     val canRegister: Boolean
-        get() = when (kind) {
+        get() = !kindLost && when (kind) {
             AddKind.CALENDAR -> choice != null
             AddKind.HABIT_LOG -> logChoice != null && habit.inspection != null && habit.choice != null
             AddKind.LEDGER -> ledgerChoice != null && ledger.budget?.budget != null && ledger.category?.category != null
@@ -106,7 +138,8 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
                             logChoice = inspection.logSuggestion,
                             habit = HabitPart(),
                             ledgerChoice = inspection.ledgerSuggestion,
-                            ledger = LedgerPart(),
+                            // 다시 연결이면 사용자가 고른 지출 부호로 시작한다(예산 그룹은 예산을 찾은 뒤).
+                            ledger = LedgerPart(spendNegative = inspection.existingSpendNegative ?: true),
                         )
                     }
                     if (kind == AddKind.HABIT_LOG) loadHabits()
@@ -151,8 +184,7 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
                         searched = true,
                         budget = found.budget,
                         category = found.category,
-                        budgetGroup = found.budget?.groupOptions?.firstOrNull { g -> g == LedgerRules.ALL_GROUP }
-                            ?: found.budget?.groupOptions?.firstOrNull() ?: LedgerRules.ALL_GROUP,
+                        budgetGroup = pickBudgetGroup(found.budget?.groupOptions, inspection.existingBudgetGroup),
                     ),
                 )
             }
@@ -168,7 +200,7 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
                 val ok = (result as? CompanionResult.Ok)?.inspection
                 state.copy(
                     ledger = if (budget) {
-                        part.copy(budget = ok ?: part.budget, budgetError = result.takeIf { ok == null }, budgetGroup = ok?.groupOptions?.firstOrNull() ?: part.budgetGroup)
+                        part.copy(budget = ok ?: part.budget, budgetError = result.takeIf { ok == null }, budgetGroup = ok?.let { pickBudgetGroup(it.groupOptions, state.inspection?.existingBudgetGroup) } ?: part.budgetGroup)
                     } else {
                         part.copy(category = ok ?: part.category, categoryError = result.takeIf { ok == null })
                     },

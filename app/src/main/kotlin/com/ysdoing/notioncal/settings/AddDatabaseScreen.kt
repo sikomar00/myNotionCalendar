@@ -182,6 +182,9 @@ fun AddDatabaseRoute(
 
             Text(stringResource(R.string.add_db_color), style = MaterialTheme.typography.titleSmall)
             ColorChoices(ui.colorHex, viewModel::setColor)
+            if (ui.kindLost) {
+                Text(stringResource(if (ui.kindUnavailable) R.string.add_db_kind_lost else R.string.add_db_kind_locked), color = MaterialTheme.colorScheme.error)
+            }
             Button(onClick = viewModel::register, enabled = ui.canRegister, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(

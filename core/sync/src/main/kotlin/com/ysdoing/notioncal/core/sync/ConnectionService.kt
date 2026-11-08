@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.sync
 
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SecretStore
+import com.ysdoing.notioncal.core.data.LedgerPropIds
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.data.SyncTrigger
@@ -46,6 +47,9 @@ data class DatabaseInspection(
     val ledgerProblem: LedgerProblem? = null,
     /** 노션의 부모 페이지 ID(같은 페이지의 예산·카테고리 마스터 찾기). */
     val parentPageId: String? = null,
+    /** 이미 거래내역으로 등록한 DB(다시 연결)면 사용자가 고른 지출 부호·예산 그룹. 등록 화면이 이 값으로 시작한다. */
+    val existingSpendNegative: Boolean? = null,
+    val existingBudgetGroup: String? = null,
 )
 
 /** LD-01 예산·카테고리 마스터 찾기 결과. 못 찾은 쪽은 null이고 등록 화면이 링크 칸을 보인다. */
@@ -128,10 +132,13 @@ class ConnectionService @Inject constructor(
                     logSuggestion = existing?.takeIf { it.sourceKind == SourceKind.HABIT_LOG }?.let { keepValidLog(it, schema) }
                         ?: HabitSuggester.suggestLog(schema),
                     looksLikeHabitDatabase = HabitSuggester.looksLikeHabitDatabase(schema),
-                    ledgerSuggestion = LedgerSuggester.suggestLedger(schema),
+                    ledgerSuggestion = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.let { keepValidLedger(it, schema) }
+                        ?: LedgerSuggester.suggestLedger(schema),
                     ledgerProblem = LedgerSuggester.problem(schema)
                         ?.takeIf { schema.properties.values.any { p -> p.name.trim() in setOf("금액", "Amount") } },
                     parentPageId = database.parent?.pageId,
+                    existingSpendNegative = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.spendNegative,
+                    existingBudgetGroup = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.budgetGroup,
                 ),
             )
         } catch (e: NotionException) {
@@ -310,6 +317,29 @@ internal fun keepValidLog(existing: DataSourceEntity, schema: DataSourceDto): Ha
     val link = existing.linkPropId?.takeIf { types[it] == "relation" }
     val title = existing.titlePropId.takeIf { types[it] == "title" }
     return if (title != null && date != null && link != null) HabitLogChoice(title, date, link) else HabitSuggester.suggestLog(schema)
+}
+
+/**
+ * 다시 연결: 거래내역의 지금 매핑 중 스키마에 남은 것은 두고(같은 종류일 때), 사라지거나 비어 있던 칸은 새 등록처럼 추천값으로 채운다
+ * (등록 때 노션에 없던 속성을 나중에 더한 경우. 등록 화면에서 보이니 사용자가 비울 수 있다).
+ * 제목·날짜·금액·타입을 채울 수 없으면 추천값 전체(없으면 null)를 쓴다.
+ */
+internal fun keepValidLedger(existing: DataSourceEntity, schema: DataSourceDto): LedgerChoice? {
+    val suggested = LedgerSuggester.suggestLedger(schema)
+    val types = schema.properties.values.associate { it.id to it.type }
+    val ids = LedgerPropIds.parse(existing.rolePropIds)
+    fun keep(id: String?, type: String) = id?.takeIf { types[it] == type }
+    return LedgerChoice(
+        titlePropId = keep(existing.titlePropId, "title") ?: suggested?.titlePropId ?: return suggested,
+        datePropId = keep(existing.datePropId, "date") ?: suggested?.datePropId ?: return suggested,
+        amount = keep(ids.amount, "number") ?: suggested?.amount ?: return suggested,
+        flow = keep(ids.flow, "select") ?: suggested?.flow ?: return suggested,
+        category = keep(ids.category, "select") ?: suggested?.category,
+        time = keep(ids.time, "rich_text") ?: suggested?.time,
+        payment = keep(ids.payment, "select") ?: suggested?.payment,
+        planned = keep(ids.planned, "checkbox") ?: suggested?.planned,
+        manual = keep(ids.manual, "checkbox") ?: suggested?.manual,
+    )
 }
 
 /** 다시 연결: 🌱 습관의 지금 매핑 중 스키마에 남은 것은 두고, 사라진 것만 추천값으로 채운다. */
