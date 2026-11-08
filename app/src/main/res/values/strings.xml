@@ -135,7 +135,8 @@
     <string name="settings_sync_interval_note">앱을 열거나 위젯의 ↻를 누르면 바로 동기화합니다. 절전 상태에서는 주기 동기화가 늦어질 수 있습니다.</string>
     <string name="settings_default_database">일정 추가 기본 DB</string>
     <string name="settings_section_diagnostics">진단</string>
-    <string name="settings_extra_props">속성</string>
+    <string name="settings_extra_props">표시 속성</string>
+    <string name="settings_reconnect">속성 연결</string>
     <string name="settings_extra_props_title">%1$s: 편집 화면에 보여 줄 속성</string>
     <string name="settings_extra_props_pending">다음 동기화 뒤에 고를 수 있습니다.</string>
     <string name="settings_extra_props_empty">보기·편집할 수 있는 속성(선택·다중 선택·상태·숫자·URL)이 없습니다.</string>

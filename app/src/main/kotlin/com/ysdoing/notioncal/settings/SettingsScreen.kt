@@ -63,6 +63,7 @@ fun SettingsRoute(
     onOpenRecipes: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenDday: () -> Unit = {},
+    onReconnect: (String, String) -> Unit = { _, _ -> },
     startTab: SettingsTab? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -98,6 +99,7 @@ fun SettingsRoute(
         onAddDatabase = onAddDatabase, onAddView = onAddView, onOpenRecipes = onOpenRecipes, onOpenDiagnostics = onOpenDiagnostics, onOpenDday = onOpenDday,
         onChooseProps = { choosingProps = it }, onChooseColor = { choosingColor = it }, onDelete = { pendingDelete = it },
         tokenInput = remember { mutableStateOf("") },
+        onReconnect = onReconnect,
     )
 
     Scaffold(

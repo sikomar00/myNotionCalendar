@@ -4,9 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -72,18 +73,24 @@ internal fun groupSources(sources: List<DataSourceEntity>): List<SourceGroup> {
 /** 카드 제목: 묶음 DB 이름을 가운뎃점으로 잇는다(예: '✅ 습관 기록 · 🌱 습관'). */
 internal fun SourceGroup.title(): String = members.joinToString(" · ") { it.name }
 
-/** 카드 동작. 색·속성은 일정 DB만 쓴다. */
+/** 카드 동작. 색·표시 속성은 일정 DB만 쓴다. [onReconnect]가 null이면 '속성 연결'을 숨긴다(짝을 잃은 카드는 다시 연결할 수 없다). */
 internal class SourceCardActions(
     val onToggle: (Boolean) -> Unit,
     val onChooseProps: () -> Unit,
     val onChooseColor: () -> Unit,
     val onDelete: () -> Unit,
+    val onReconnect: (() -> Unit)? = null,
 )
+
+/** 다시 연결(속성 매핑 다시 고르기)이 되는 카드: 일정 DB, 짝이 있는 습관 기록·거래내역. 짝을 잃은 🌱 습관·예산·카테고리는 등록 화면이 막는다. */
+internal fun SourceGroup.canReconnect(): Boolean =
+    kind == SourceGroupKind.CALENDAR || main.sourceKind == SourceKind.HABIT_LOG || main.sourceKind == SourceKind.LEDGER
 
 /**
  * DB 카드: 윗줄은 [색 점] 이름 · ⚠ · 스위치(줄 전체를 눌러 켜고 끔, DB 이름으로 읽힘), 아랫줄은 색·강조 · 속성 … 삭제(오른쪽, error 색).
  * 글꼴을 키워도 이름이 사라지거나 삭제가 스위치 옆에 붙지 않게 두 줄로 나눈다(부록 A-5·A-6).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SourceCard(group: SourceGroup, actions: SourceCardActions) {
     val main = group.main
@@ -117,13 +124,18 @@ internal fun SourceCard(group: SourceGroup, actions: SourceCardActions) {
                 Switch(checked = main.enabled, onCheckedChange = null, modifier = Modifier.padding(start = 8.dp))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (calendar) {
-                // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로 연다(디자인 리뷰 2026-10-16).
-                TextButton(onClick = actions.onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_color_emphasis)) }
-                TextButton(onClick = actions.onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            // 글꼴을 키우면 버튼이 다음 줄로 넘어가고 '삭제'는 늘 오른쪽 끝에 남는다.
+            FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (calendar) {
+                    // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로 연다(디자인 리뷰 2026-10-16).
+                    TextButton(onClick = actions.onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_color_emphasis)) }
+                    TextButton(onClick = actions.onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
+                }
+                actions.onReconnect?.let { reconnect ->
+                    TextButton(onClick = reconnect, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_reconnect)) }
+                }
             }
-            Spacer(Modifier.weight(1f))
             val deleteLabel = stringResource(R.string.settings_delete_database, title)
             TextButton(
                 onClick = actions.onDelete,

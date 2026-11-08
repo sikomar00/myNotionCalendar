@@ -66,6 +66,8 @@ internal class SettingsActions(
     val onChooseColor: (String) -> Unit,
     val onDelete: (String) -> Unit,
     val tokenInput: MutableState<String>,
+    /** 등록한 DB의 속성 매핑 다시 고르기(databaseId, dataSourceId) — 스키마 경고의 '다시 연결'과 같은 화면. */
+    val onReconnect: (String, String) -> Unit = { _, _ -> },
 )
 
 /** 페이지의 한 칸: 항목과, 앞 항목과 구분선으로 나눌지(머리가 있는 항목은 나누되 페이지 맨 위는 제외). */
@@ -226,6 +228,7 @@ internal fun DatabasesContent(groups: List<SourceGroup>, onToggle: (String, Bool
                         onChooseProps = { actions.onChooseProps(id) },
                         onChooseColor = { actions.onChooseColor(id) },
                         onDelete = { actions.onDelete(id) },
+                        onReconnect = { actions.onReconnect(group.main.databaseId, id) }.takeIf { group.canReconnect() },
                     ),
                 )
             }

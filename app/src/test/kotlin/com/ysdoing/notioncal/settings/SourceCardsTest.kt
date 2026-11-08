@@ -82,6 +82,17 @@ class SourceCardsTest {
         compose.onAllNodesWithText("색·강조").assertCountEquals(2) // 색·속성은 일정 DB 카드에만
     }
 
+    /** '속성 연결'은 대표 DB의 (databaseId, dataSourceId)로 다시 연결 화면을 연다. 짝을 잃은 카드(옛 예산)에는 없다. */
+    @Test
+    fun reconnectOpensTheMainDatabaseAndIsHiddenOnOrphanCards() {
+        val opened = mutableListOf<Pair<String, String>>()
+        val withReconnect = SettingsActions({}, {}, {}, {}, {}, {}, {}, {}, mutableStateOf(""), onReconnect = { db, ds -> opened += db to ds })
+        compose.setContent { MaterialTheme { Column { DatabasesContent(groupSources(sources), { _, _ -> }, withReconnect) } } }
+        compose.onAllNodesWithText("속성 연결").assertCountEquals(4) // 일정 둘·습관·가계부, 옛 예산은 없음
+        compose.onAllNodesWithText("속성 연결")[2].performClick()
+        assertEquals(listOf("db-log" to "log"), opened)
+    }
+
     @Test
     @Config(fontScale = 2.0f)
     fun aDisabledCalendarCardReadsAsOffAndKeepsItsNameAtLargeFonts() {

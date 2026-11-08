@@ -158,6 +158,7 @@ fun NotionCalNavHost(
                 onOpenRecipes = { nav.navigate(Routes.RECIPES) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) { launchSingleTop = true } },
                 onOpenDday = { nav.navigate(Routes.DDAY) { launchSingleTop = true } },
+                onReconnect = { db, ds -> nav.navigate(Routes.reconnect(db, ds)) { launchSingleTop = true } },
             )
         }
         composable(Routes.VIEWER) {
