@@ -9,6 +9,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
+import androidx.glance.action.actionParametersOf
+import androidx.glance.appwidget.testing.unit.hasRunCallbackClickAction
 import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasClickAction
@@ -223,6 +225,16 @@ class LedgerWidgetTest {
         setAppWidgetSize(LARGE)
         provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
         onAllNodes(hasTestTag("syncError")).assertCountEquals(0)
+    }
+
+    /** NS-06: 다른 위젯과 같은 자리(+ 앞)에 새로고침. */
+    @Test
+    fun refreshSitsBeforeAdd() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
+        onNode(hasTestTag("refresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+        onNode(hasTestTag("ledgerAdd")).assertExists()
     }
 
     private suspend fun render(size: DpSize, content: @Composable () -> Unit) {

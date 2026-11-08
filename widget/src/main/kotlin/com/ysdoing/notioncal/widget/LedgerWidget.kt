@@ -19,6 +19,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -258,6 +259,13 @@ fun LedgerWidgetContent(
                         maxLines = 1,
                     )
                 }
+                // NS-06 새로고침: 다른 위젯과 같은 자리(+ 앞)·같은 폭 기준.
+                if (LocalSize.current.width >= REFRESH_MIN_WIDTH) {
+                    WidgetIconButton(
+                        R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), palette,
+                        visual = (metrics.headerHeight - 2.dp).coerceAtMost(28.dp), height = metrics.headerHeight,
+                    )
+                }
                 // LD-07 입력: 공통 채운 버튼(눌림 폭 48dp, 높이는 머리줄 그대로).
                 WidgetIconButton(
                     R.drawable.ic_widget_add, context.getString(R.string.ledger_widget_add), "ledgerAdd",
@@ -279,10 +287,12 @@ fun LedgerWidgetContent(
         if (metrics.showWeekdays) {
             Row(GlanceModifier.fillMaxWidth().height(metrics.weekdayHeight)) {
                 repeat(7) { i ->
+                    val day = board.weekStart.plus(i.toLong())
                     Text(
-                        text = board.weekStart.plus(i.toLong()).getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
+                        text = day.getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
                         modifier = GlanceModifier.defaultWeight(),
-                        style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
+                        // 월간·분할과 같이 일·토 색.
+                        style = TextStyle(color = palette.dayColor(day), fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
                         maxLines = 1,
                     )
                 }
@@ -427,7 +437,7 @@ private fun androidx.glance.layout.RowScope.DayCell(
         val isToday = date == board.today
         // 오늘은 칠한 네모(DESIGN.md 원칙 3). 월·분할 위젯과 같은 모양.
         Box(
-            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(6.dp).padding(horizontal = 4.dp) else GlanceModifier,
+            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(WidgetShape.TODAY).padding(horizontal = 4.dp) else GlanceModifier,
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -435,7 +445,7 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 style = TextStyle(
                     color = when {
                         isToday -> palette.todayText
-                        inMonth -> palette.text
+                        inMonth -> palette.dayColor(date.dayOfWeek)
                         else -> palette.outside
                     },
                     fontSize = metrics.dateFontSp.sp,

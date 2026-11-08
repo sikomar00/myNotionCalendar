@@ -284,7 +284,7 @@ private fun HabitHeader(board: HabitBoard, metrics: HabitMetrics, palette: Widge
 }
 
 
-/** 7일 칸 위의 요일 줄. 오늘은 굵게. 자식: 이름 자리 + 7 + 숫자 자리 = 9개(Glance 10개 제한). */
+/** 7일 칸 위의 요일 줄. 오늘은 칠한 네모, 다른 날은 요일 색. 자식: 이름 자리 + 7 + 숫자 자리 = 9개(Glance 10개 제한). */
 @Composable
 private fun DayLabels(today: LocalDate, metrics: HabitMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
@@ -292,18 +292,21 @@ private fun DayLabels(today: LocalDate, metrics: HabitMetrics, palette: WidgetPa
         Spacer(GlanceModifier.width(metrics.nameWidth))
         for (back in 6 downTo 0) {
             val date = today.minusDays(back.toLong())
-            val label = if (back == 0) context.getString(R.string.widget_today) else date.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN)
-            Text(
-                text = label,
-                modifier = GlanceModifier.width(metrics.cellWidth),
-                style = TextStyle(
-                    color = if (back == 0) palette.text else palette.subtle,
-                    fontSize = metrics.smallFontSp.sp,
-                    fontWeight = if (back == 0) FontWeight.Bold else null,
-                    textAlign = TextAlign.Center,
-                ),
-                maxLines = 1,
-            )
+            val isToday = back == 0
+            val label = if (isToday) context.getString(R.string.widget_today) else date.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN)
+            Box(GlanceModifier.width(metrics.cellWidth), contentAlignment = Alignment.Center) {
+                Text(
+                    text = label,
+                    modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(WidgetShape.TODAY).padding(horizontal = 4.dp) else GlanceModifier,
+                    style = TextStyle(
+                        color = if (isToday) palette.todayText else palette.dayColor(date.dayOfWeek),
+                        fontSize = metrics.smallFontSp.sp,
+                        fontWeight = if (isToday) FontWeight.Bold else null,
+                        textAlign = TextAlign.Center,
+                    ),
+                    maxLines = 1,
+                )
+            }
         }
         Spacer(GlanceModifier.width(metrics.countWidth))
     }

@@ -203,6 +203,9 @@ private fun todayWeather(state: WidgetUiState) = state.weather.days[state.today]
 
 /** 동기화 시각을 보일 최소 내용 폭(글자 배율 1 기준, 글자가 커지면 비례해 늘림). 모자라면 시각 없이 오류 점만 보인다. */
 private val SYNC_TIME_MIN_WIDTH = 340.dp
+
+/** 머리 버튼을 둥근 48dp 버튼으로 둘 최소 폭: 버튼 셋(144dp) + 짧은 제목('11월')이 들어간다. 2×2(약 110~234dp 중 좁은 쪽)는 예외. */
+private val WIDE_HEADER_MIN_WIDTH = 250.dp
 private val syncTodayFormat = DateTimeFormatter.ofPattern("H:mm")
 private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")
 
@@ -257,8 +260,9 @@ private fun HeaderButton(
     palette: WidgetPalette,
     style: IconButtonStyle = IconButtonStyle.TONAL,
 ) {
-    if (metrics.mode != WidgetMode.SMALL) {
-        // 시안: 원형 톤 버튼. 머리 높이는 일정 줄 수를 지키려고 그대로 두고(34·48dp), 눌림 폭만 48dp다.
+    // 4×2처럼 높이만 낮은 '작음'(폭은 넉넉함)도 둥근 버튼으로 눌림 폭 48dp를 준다. 2×2(폭이 좁음)만 작은 글자 버튼 예외다(UX-02).
+    if (metrics.mode != WidgetMode.SMALL || LocalSize.current.width >= WIDE_HEADER_MIN_WIDTH) {
+        // 시안: 원형 톤 버튼. 머리 높이는 일정 줄 수를 지키려고 그대로 두고(24·34·48dp), 눌림 폭만 48dp다.
         WidgetIconButton(icon, description, tag, action, palette, style, visual = minOf(32.dp, metrics.headerHeight - 4.dp), height = metrics.headerHeight)
         return
     }

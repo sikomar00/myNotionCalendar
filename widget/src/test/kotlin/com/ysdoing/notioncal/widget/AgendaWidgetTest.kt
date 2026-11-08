@@ -3,6 +3,8 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.glance.action.actionParametersOf
+import androidx.glance.appwidget.testing.unit.hasRunCallbackClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasClickAction
 import androidx.glance.testing.unit.hasContentDescriptionEqualTo
@@ -103,5 +105,23 @@ class AgendaWidgetTest {
         provideComposable { AgendaWidgetContent(AgendaWidget.uiState(today, WidgetConfig(1), emptyList(), holidays = holidays)) }
         onNode(hasTextEqualTo("10/14(수) 임시공휴일")).assertExists()
         onAllNodes(hasTestTag("agendaEmpty")).assertCountEquals(1) // 오늘만 '일정 없음'
+    }
+
+    /** NS-06: 머리의 새로고침은 다른 위젯과 같은 자리(+ 앞)에 있다. 좁은 2×2에는 새로고침이 없다. */
+    @Test
+    fun refreshSitsBeforeAdd() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(358.dp, 152.dp))
+        provideComposable { AgendaWidgetContent(state()) }
+        onNode(hasTestTag("refresh")).assert(hasRunCallbackClickAction<RefreshAction>(actionParametersOf()))
+    }
+
+    @Test
+    fun narrowAgendaHasNoRefresh() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(DpSize(110.dp, 152.dp))
+        provideComposable { AgendaWidgetContent(state()) }
+        onAllNodes(hasTestTag("refresh")).assertCountEquals(0)
+        onNode(hasTestTag("add")).assertExists()
     }
 }

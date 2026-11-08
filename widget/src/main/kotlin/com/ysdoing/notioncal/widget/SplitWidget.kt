@@ -303,7 +303,8 @@ private fun MiniMonth(month: YearMonth, state: SplitUiState, metrics: SplitMetri
                 Text(
                     text = day.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN),
                     modifier = GlanceModifier.width(metrics.cellWidth),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.weekdayFontSp.sp, textAlign = TextAlign.Center),
+                    // 월간과 같이 일·토 색(날짜 숫자와 맞춘다).
+                    style = TextStyle(color = palette.dayColor(day), fontSize = metrics.weekdayFontSp.sp, textAlign = TextAlign.Center),
                     maxLines = 1,
                 )
             }
@@ -346,7 +347,7 @@ private fun DayCell(date: LocalDate, inMonth: Boolean, state: SplitUiState, metr
         val text = date.dayOfMonth.toString()
         if (isToday) {
             Box(
-                modifier = GlanceModifier.fillMaxSize().padding(horizontal = 1.dp).background(palette.todayBackground).cornerRadius(6.dp),
+                modifier = GlanceModifier.fillMaxSize().padding(horizontal = 1.dp).background(palette.todayBackground).cornerRadius(WidgetShape.TODAY),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(text, style = TextStyle(color = palette.todayText, fontSize = metrics.dateFontSp.sp, fontWeight = FontWeight.Bold), maxLines = 1)

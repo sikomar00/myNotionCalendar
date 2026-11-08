@@ -140,6 +140,19 @@ class WidgetRemoteViewsTest {
         }
     }
 
+    /**
+     * 매일 쓰는 일정·가계부 위젯: 머리 새로고침이 + 앞, 가계부 요일·날짜는 일·토 색, 오늘은 칠한 네모(종합 진단 2단계).
+     * Robolectric은 목록(LazyColumn) 칸을 그리지 않아 일정 목록·습관 위젯 몸통은 이미지로 볼 수 없다.
+     */
+    @Test
+    fun screenshotDailyWidgets() = runTest(timeout = 2.minutes) {
+        val wide = DpSize(358.dp, 152.dp)
+        renderView(wide) { AgendaWidgetContent(AgendaWidget.uiState(WidgetSamples.today, WidgetConfig(1), WidgetSamples.events), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/agenda_4x2.png")
+        renderView(LedgerWidgetTest.LARGE) { LedgerWidgetContent(LedgerWidgetTest.state(), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/ledger_4x4.png")
+    }
+
     @Test
     fun screenshotSplit4x2() = runTest {
         renderView(DpSize(358.dp, 168.dp)) { SplitWidgetContent(splitState(), systemFontScale = 1f) }
