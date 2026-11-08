@@ -56,7 +56,7 @@ class ViewComparer @Inject constructor(
                 val query = reader.viewQueryIds(view.viewId, VIEW_ROW_LIMIT)
                 compareIds(view.viewId, view.name, view.viewType, query.ids.take(VIEW_ROW_LIMIT), local, query.complete)
             } catch (e: NotionException) {
-                ViewCompare(view.viewId, view.name, view.viewType, 0, local.size, 0, 0, true, error = e.error::class.simpleName)
+                ViewCompare(view.viewId, view.name, view.viewType, 0, local.size, 0, 0, true, error = e.error.storedName())
             }
         }
     }

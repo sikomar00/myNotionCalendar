@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal.core.sync
 
+import android.util.Log
 import androidx.room.withTransaction
 import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EventChange
@@ -36,6 +37,7 @@ import com.ysdoing.notioncal.core.notion.mapping.RemoteEvent
 import com.ysdoing.notioncal.core.notion.mapping.WriteDate
 import com.ysdoing.notioncal.core.notion.mapping.LedgerWrite
 import com.ysdoing.notioncal.core.data.ledger.Flow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -89,8 +91,10 @@ class OutboxProcessor @Inject constructor(
             val sentPages = LinkedHashSet<String>()
             val createdSources = LinkedHashSet<String>()
             var retryError: NotionError? = null
+            // 공유가 끊긴 DB의 작업은 이번 주기에 건너뛴다(그 DB 안의 순서는 지키고, 다른 DB의 쓰기는 계속 보낸다).
+            val skippedSources = HashSet<String>()
             while (true) {
-                val row = outbox.all().firstOrNull() ?: break
+                val row = outbox.all().firstOrNull { it.dataSourceId !in skippedSources } ?: break
                 val source = db.dataSourceDao().get(row.dataSourceId)
                 if (source == null) {
                     // 등록을 지운 DB의 작업은 보낼 곳이 없다.
@@ -101,6 +105,11 @@ class OutboxProcessor @Inject constructor(
                 if (mapping == null) {
                     // 날짜 없는 DB(🌱 습관)에는 앱이 쓰지 않는다(HB-09 전).
                     outbox.delete(row.id)
+                    continue
+                }
+                if (!row.isReadable()) {
+                    // 작업 종류나 바꿈을 읽지 못하면 몇 번을 보내도 같다. 이 작업 하나가 큐 전체를 막지 않게 정리하고 다음 작업을 보낸다.
+                    quarantine(row, source)
                     continue
                 }
                 try {
@@ -123,13 +132,22 @@ class OutboxProcessor @Inject constructor(
                     }
                     sent++
                 } catch (e: NotionException) {
-                    if (e.error is NotionError.Validation) {
-                        reject(row, source)
-                    } else {
-                        if (row.op != OutboxOp.CREATE.name) outbox.markAttempt(row.id)
-                        outbox.markError(row.id, e.error::class.simpleName)
-                        retryError = e.error
-                        break
+                    when {
+                        e.error is NotionError.Validation -> quarantine(row, source)
+                        e.error == NotionError.NotShared -> {
+                            // 그 DB만 이번 주기에 건너뛴다. 작업은 남기고(공유를 다시 켜면 보낸다), 배너는 읽기 동기화의 같은 오류가 띄운다.
+                            // 결과의 오류로 올리지 않는다: 다른 DB의 보낸 일정이 든 보기를 바로 다시 받는 일(SY-06)이 막히지 않게.
+                            outbox.markError(row.id, e.error.storedName())
+                            skippedSources += row.dataSourceId
+                        }
+                        else -> {
+                            // 연결·요청 제한·서버 오류는 일시적일 수 있어 순서를 지키려고 큐를 멈추고 다음 주기에 다시 보낸다(고친 내용을 버리지 않는다).
+                            // shortcut: 늘 같은 4xx(예: 413)로 실패하는 바꿈은 큐를 계속 막는다. 오류 종류를 일시·영구로 나눌 때 그 바꿈만 정리한다.
+                            if (row.op != OutboxOp.CREATE.name) outbox.markAttempt(row.id)
+                            outbox.markError(row.id, e.error.storedName())
+                            retryError = e.error
+                            break
+                        }
                     }
                 }
             }
@@ -144,7 +162,7 @@ class OutboxProcessor @Inject constructor(
         db.syncLogDao().record(
             SyncLogEntity(
                 at = clock.millis(), trigger = SYNC_LOG_OUTBOX, result = if (error == null) "OK" else "ERROR",
-                durationMs = clock.millis() - startedAt, pulled = 0, pushed = sent, error = error?.let { it::class.simpleName },
+                durationMs = clock.millis() - startedAt, pulled = 0, pushed = sent, error = error?.storedName(),
                 requests = (requests.total - requestsBefore).toInt(),
             ),
         )
@@ -336,15 +354,48 @@ class OutboxProcessor @Inject constructor(
 
     private suspend fun refreshPending(pageId: String) = events.setPending(pageId, outbox.countForPage(pageId))
 
+    /**
+     * 보낼 수 없는 작업 하나를 정리한다(노션이 거부함, 또는 작업을 읽지 못함). 거부와 같게 로컬을 되돌리고 '노션 반영 실패'에 남긴다.
+     * 되돌리는 데 쓸 저장값까지 망가져 그것도 못 하면 작업만 지우고 같은 기록을 남긴다. 이 작업 하나 때문에 큐 전체가 멈추지 않게 하는 것이 먼저다.
+     */
+    private suspend fun quarantine(row: OutboxEntity, source: DataSourceEntity) {
+        try {
+            reject(row, source)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "되돌리지 못한 작업 정리(${row.op}): ${e.javaClass.simpleName}")
+            outbox.delete(row.id)
+            refreshPending(row.pageId)
+            db.conflictDao().insert(
+                ConflictEntity(
+                    pageId = row.pageId, title = events.get(row.pageId)?.title.orEmpty(), field = "PAGE", localValue = row.op, remoteValue = null,
+                    kind = KIND_REJECTED, at = clock.millis(),
+                ),
+            )
+        }
+    }
+
     companion object {
         const val KIND_CONFLICT = "CONFLICT"
         const val KIND_REMOTE_DELETED = "REMOTE_DELETED"
         const val KIND_REJECTED = "REJECTED"
+        private const val TAG = "OutboxProcessor"
         private val CREATE_LOOKBACK: Duration = Duration.ofMinutes(1)
     }
 }
 
 private fun decodeChange(json: String) = OutboxJson.decodeFromString(EventChange.serializer(), json)
+
+/**
+ * 보내기 전에 작업 종류·바꿈·되돌릴 원래 값을 읽을 수 있는가. 못 읽는 작업은 다시 보내도 같아 정리한다
+ * (보낸 뒤에 난 오류로 이미 노션에 반영된 작업을 지우지 않으려고 미리 본다).
+ */
+private fun OutboxEntity.isReadable(): Boolean = runCatching {
+    val kind = OutboxOp.valueOf(op)
+    decodeChange(changes)
+    baseValues?.let { if (kind == OutboxOp.TRASH) OutboxJson.decodeFromString(EventSnapshot.serializer(), it) else decodeChange(it) }
+}.isSuccess
 
 /** 충돌을 판정하는 필드 단위(PRD §8.5-6: 속성 단위). */
 internal enum class ChangeField {

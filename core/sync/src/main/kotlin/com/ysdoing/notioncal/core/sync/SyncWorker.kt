@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.core.sync
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -16,6 +17,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
 import com.ysdoing.notioncal.core.data.SYNC_LOG_VIEWS
 import com.ysdoing.notioncal.core.data.SyncRequester
 import com.ysdoing.notioncal.core.data.SyncScheduleInfo
@@ -27,6 +29,7 @@ import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -53,9 +56,9 @@ class SyncWorker @AssistedInject constructor(
         val trigger = inputData.getString(KEY_TRIGGER)?.let { runCatching { SyncTrigger.valueOf(it) }.getOrNull() }
             ?: SyncTrigger.APP_OPEN
         // 보내지 않은 쓰기를 먼저 보낸 뒤 읽는다. 실패해도 읽기는 진행한다(작업은 남아 다음에 다시 보낸다).
-        outbox.process()
+        continueOnFailure(syncLog, clock) { outbox.process() }
         // M3: 위젯에서 바꾼 보기 행도 읽기 전에 보낸다(읽기가 노션의 이전 값으로 덮지 않게).
-        val writeOutcome = viewWrites.process()
+        val writeOutcome = continueOnFailure(syncLog, clock) { viewWrites.process() }
         val outcome = engine.sync(trigger, inputData.getString(KEY_DATA_SOURCE))
         // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
         mirror.refreshIfEnabled()
@@ -71,7 +74,7 @@ class SyncWorker @AssistedInject constructor(
             ),
         )
         // 연결·서버 문제는 WorkManager 백오프로 다시 시도한다. 토큰·공유 문제는 사용자가 고쳐야 하므로 끝낸다.
-        return if (outcome.error.isRetryable() || writeOutcome.retryError.isRetryable()) Result.retry() else Result.success()
+        return if (outcome.error.isRetryable() || writeOutcome?.retryError.isRetryable()) Result.retry() else Result.success()
     }
 
     companion object {
@@ -82,6 +85,28 @@ class SyncWorker @AssistedInject constructor(
 
 private fun NotionError?.isRetryable() = this == NotionError.Network || this == NotionError.RateLimited || this is NotionError.Server
 
+/**
+ * 쓰기 처리 하나가 예상하지 못한 예외로 끝나도 다음 단계(읽기 동기화·다른 큐)가 돌게 한다. 실패한 작업은 큐에 남아 다음 주기에 다시 보낸다.
+ * 삼키지 않고 sync_log에 오류로 남겨 진단 화면에서 보이게 한다. 취소는 그대로 던진다(작업 중지를 삼키지 않는다).
+ */
+internal suspend fun <T> continueOnFailure(syncLog: SyncLogDao, clock: Clock, block: suspend () -> T): T? = try {
+    block()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.w("SyncWorker", "쓰기 처리 실패, 다음 단계는 계속한다", e)
+    syncLog.record(
+        SyncLogEntity(
+            at = clock.millis(), trigger = SYNC_LOG_OUTBOX, result = "ERROR", durationMs = 0, pulled = 0, pushed = 0,
+            error = LOCAL_WRITE_ERROR, requests = 0,
+        ),
+    )
+    null
+}
+
+/** sync_log에 남기는 '앱 안에서 쓰기 처리가 실패함'(노션 오류가 아님). */
+internal const val LOCAL_WRITE_ERROR = "LocalWriteError"
+
 /** NS-04: 아웃박스를 비운다. 네트워크가 없으면 CONNECTED 조건으로 기다렸다가 연결되면 실행된다(NS-06 네트워크 복구). */
 @HiltWorker
 class OutboxWorker @AssistedInject constructor(
@@ -90,16 +115,21 @@ class OutboxWorker @AssistedInject constructor(
     private val processor: OutboxProcessor,
     private val viewWrites: ViewWriteProcessor,
     private val views: ViewSync,
+    private val syncLog: SyncLogDao,
+    private val clock: Clock,
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val outcome = processor.process()
-        val viewOutcome = viewWrites.process()
+        // 일정 큐가 예외로 끝나도 위젯의 보기 쓰기는 보낸다(SyncWorker와 같은 보호).
+        val outcome = continueOnFailure(syncLog, clock) { processor.process() }
+        val viewOutcome = continueOnFailure(syncLog, clock) { viewWrites.process() }
         // SY-06: 보낸 일정이 든 보기(와 새로 만든 페이지가 들어갈 보기)를 바로 다시 받는다. 위젯에서 바꾼 보기 행을 먼저 보낸 뒤라
         // 그 보기도 받는다. 연결이 안 되면 다음 동기화가 한다.
-        if (outcome.retryError == null) views.syncContaining(outcome.sentPageIds, outcome.createdInSources)
-        val errors = listOfNotNull(outcome.retryError, viewOutcome.retryError)
+        if (outcome != null && outcome.retryError == null) views.syncContaining(outcome.sentPageIds, outcome.createdInSources)
+        val errors = listOfNotNull(outcome?.retryError, viewOutcome?.retryError)
         // 토큰·공유 문제는 사용자가 고칠 때까지 기다린다(작업은 남아 있고 다음 요청·주기 실행 때 다시 시도).
         // 둘 중 하나라도 일시 오류면 다시 시도한다(한쪽 오류가 다른 쪽 재시도를 가리지 않게).
+        // 쓰기 처리가 예외로 끝났으면(위에서 기록함) 남은 작업을 백오프 뒤 다시 보낸다.
+        if (outcome == null || viewOutcome == null) return Result.retry()
         return if (errors.all { it == NotionError.Unauthorized || it == NotionError.NotShared }) Result.success() else Result.retry()
     }
 }

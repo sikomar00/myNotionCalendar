@@ -133,7 +133,7 @@ class NotionSyncEngine @Inject constructor(
                     durationMs = clock.millis() - startedAt,
                     pulled = pulled,
                     pushed = 0,
-                    error = lastError?.let { it::class.simpleName },
+                    error = lastError?.storedName(),
                     requests = (requests.total - requestsBefore).toInt(), // PF-11
                 ),
             )

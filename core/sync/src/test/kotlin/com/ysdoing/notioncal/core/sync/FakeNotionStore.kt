@@ -93,6 +93,12 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     /** 조회(queryAll)가 이 오류로 실패하게 한다(중복 확인 조회가 거부되는 경우 재현). */
     var queryError: NotionError? = null
 
+    /** 이 소스의 스키마 읽기가 이 오류로 실패하게 한다(DB 하나의 공유가 끊긴 경우 재현). */
+    var sourceErrors: Map<String, NotionError> = emptyMap()
+
+    /** 쓰기(만들기·고치기·휴지통)가 매번 이 오류로 실패하게 한다(계속되는 서버 오류 재현). */
+    var writeError: NotionError? = null
+
     private val options = mapOf("opt-event" to ("Event" to "yellow"), "opt-learn" to ("Learn" to "blue"), "opt-habit" to ("Habit" to "red"))
 
     val schema: DataSourceDto = NotionJson.decodeFromString(
@@ -205,6 +211,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     private fun guard() {
         if (networkDown) throw NotionException(NotionError.Network)
+        writeError?.let { throw NotionException(it) }
         if (rejectNext) {
             rejectNext = false
             throw NotionException(NotionError.Validation("validation_error"))
@@ -214,6 +221,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     override suspend fun dataSource(dataSourceId: String): DataSourceDto {
         onCall?.invoke()
         if (networkDown) throw NotionException(NotionError.Network)
+        sourceErrors[dataSourceId]?.let { throw NotionException(it) }
         return when (dataSourceId) {
             HABIT_LOG -> logSchema
             HABITS -> habitSchema
