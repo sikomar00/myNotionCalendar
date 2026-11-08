@@ -168,4 +168,15 @@ class EventDaoTest {
         assertEquals(emptyList<Any>(), db.ledgerDao().observeBudgets().first())
         assertEquals("cal", db.dataSourceDao().get("cal")!!.dataSourceId)
     }
+
+    /** 거래내역을 잃은 예산(설정에 혼자 카드로 보인다)도 따로 끄고 지울 수 있다. */
+    @Test
+    fun anOrphanBudgetCanBeToggledAndDeletedOnItsOwn() = runTest {
+        db.dataSourceDao().upsert(source("budget", kind = SourceKind.BUDGET, link = "gone"))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+        repository.setEnabled("budget", false)
+        assertEquals(false, db.dataSourceDao().get("budget")!!.enabled)
+        repository.delete("budget")
+        assertEquals(null, db.dataSourceDao().get("budget"))
+    }
 }

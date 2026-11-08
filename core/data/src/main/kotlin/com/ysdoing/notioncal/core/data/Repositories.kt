@@ -155,7 +155,8 @@ class DataSourceRepository @Inject constructor(
         return when (source.sourceKind) {
             SourceKind.HABIT_LOG -> listOfNotNull(id, source.linkDataSourceId)
             SourceKind.HABIT, SourceKind.LEDGER -> listOf(id) + dataSourceDao.linkedTo(id).map { it.dataSourceId }
-            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.let { pairOf(it) } ?: listOf(id)
+            // 거래내역이 이미 지워졌으면(짝 잃음) 자기 자신만: 그래야 설정에서 따로 끄고 지울 수 있다.
+            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.takeIf { dataSourceDao.get(it) != null }?.let { pairOf(it) } ?: listOf(id)
             else -> listOf(id)
         }
     }

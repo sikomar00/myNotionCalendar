@@ -1,13 +1,11 @@
 package com.ysdoing.notioncal.settings
 
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,22 +17,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.R
 import androidx.compose.foundation.selection.toggleable
@@ -42,15 +36,12 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.Role
 import com.ysdoing.notioncal.core.data.parseIdList
 import com.ysdoing.notioncal.core.data.selectableExtraProps
-import com.ysdoing.notioncal.core.data.SourceKind
-import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material.icons.filled.Warning
 import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.parsePropCatalog
 import androidx.compose.material3.FilterChip
@@ -59,74 +50,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 /** NS-09 매핑한 속성이 사라지거나 종류가 바뀌었다(이름만 바뀐 것은 제외). DB 줄 경고와 설정 탭의 문제 배지가 같이 쓴다. */
 internal fun hasSchemaProblem(source: DataSourceEntity): Boolean = SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }
-
-/**
- * DB 한 줄. 윗줄은 색 점·이름(+종류)·스키마 경고·사용 스위치(스위치는 DB 이름으로 읽힌다), 아랫줄은 색·강조·속성·삭제(error 색 글자 버튼)다.
- * 글꼴을 키워도 이름이 사라지거나 삭제가 스위치 옆에 붙지 않게 두 줄로 나눈다(부록 A-5·A-6).
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun SourceRow(
-    source: DataSourceEntity,
-    onToggle: (Boolean) -> Unit,
-    onChooseProps: () -> Unit,
-    onChooseColor: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    // HB-01: 습관 DB(✅ 기록·🌱 습관)는 달력에 나오지 않아 색·보기 속성 설정이 없다. 종류만 밝힌다.
-    val calendar = source.sourceKind == SourceKind.CALENDAR
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            if (calendar) {
-                // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
-                val colorLabel = stringResource(R.string.settings_color_button, source.name)
-                IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
-                    Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
-                }
-            }
-            Column(Modifier.weight(1f).padding(start = if (calendar) 0.dp else 12.dp)) {
-                Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                val kindLabel = when (source.sourceKind) {
-                    SourceKind.HABIT_LOG -> R.string.settings_kind_habit_log
-                    SourceKind.HABIT -> R.string.settings_kind_habit
-                    SourceKind.LEDGER -> R.string.settings_kind_ledger
-                    SourceKind.BUDGET -> R.string.settings_kind_budget
-                    SourceKind.CATEGORY -> R.string.settings_kind_category
-                    else -> null
-                }
-                kindLabel?.let {
-                    Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
-            if (remember(source.schemaIssues) { hasSchemaProblem(source) }) {
-                Icon(
-                    Icons.Filled.Warning,
-                    contentDescription = stringResource(R.string.settings_schema_warning),
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
-            val enabledLabel = stringResource(R.string.settings_source_enabled, source.name)
-            Switch(checked = source.enabled, onCheckedChange = onToggle, modifier = Modifier.semantics { contentDescription = enabledLabel })
-        }
-        FlowRow(Modifier.fillMaxWidth().padding(start = if (calendar) 0.dp else 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (calendar) {
-                // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로도 연다(디자인 리뷰 2026-10-16).
-                TextButton(onClick = onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                    Text(stringResource(R.string.settings_color_emphasis))
-                }
-                TextButton(onClick = onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
-            }
-            val deleteLabel = stringResource(R.string.settings_delete_database, source.name)
-            TextButton(
-                onClick = onDelete,
-                modifier = Modifier.semantics { contentDescription = deleteLabel },
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error), // A-13: 지우는 동작은 error 색
-                contentPadding = PaddingValues(horizontal = 8.dp),
-            ) { Text(stringResource(R.string.settings_delete)) }
-        }
-    }
-}
 
 /**
  * EX-03: DB 색(20색 격자)과 일정 색 기준을 고른다. 색 속성(select)이 있는 DB만 '속성 값 색'을 고를 수 있다.

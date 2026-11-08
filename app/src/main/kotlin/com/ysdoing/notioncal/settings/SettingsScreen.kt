@@ -147,11 +147,18 @@ fun SettingsRoute(
     }
 
     pendingDelete?.let { id ->
-        val name = sources.firstOrNull { it.dataSourceId == id }?.name.orEmpty()
+        // 짝 DB는 함께 지워지므로(저장소 pairOf) 확인 문구도 묶음 전체를 말한다. 일정이 아닌 DB는 '일정'이라 하지 않는다.
+        val group = remember(sources, id) { groupSources(sources).firstOrNull { it.main.dataSourceId == id } }
+        val name = group?.title() ?: sources.firstOrNull { it.dataSourceId == id }?.name.orEmpty()
+        val body = when {
+            group != null && group.members.size > 1 -> stringResource(R.string.settings_delete_confirm_body_group, name)
+            group == null || group.kind == SourceGroupKind.CALENDAR -> stringResource(R.string.settings_delete_confirm_body, name)
+            else -> stringResource(R.string.settings_delete_confirm_body_other, name)
+        }
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(stringResource(R.string.settings_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.settings_delete_confirm_body, name)) },
+            text = { Text(body) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.delete(id)

@@ -3,6 +3,8 @@ package com.ysdoing.notioncal.settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -197,23 +199,48 @@ private fun DiagnosticsItem(actions: SettingsActions) {
     OutlinedButton(onClick = actions.onOpenDiagnostics) { Text(stringResource(R.string.settings_open_diagnostics)) }
 }
 
-/** 노션 DB 목록과 DB·보기 추가 버튼. */
+/** 노션 DB 목록(종류별 소제목 아래 카드, 짝 DB는 카드 하나)과 DB·보기 추가 버튼. */
 @Composable
 private fun DatabasesItem(viewModel: SettingsViewModel, actions: SettingsActions) {
     val sources by viewModel.sources.collectAsStateWithLifecycle()
+    val groups = remember(sources) { groupSources(sources) }
+    DatabasesContent(groups, viewModel::setEnabled, actions)
+}
+
+/** [DatabasesItem]의 그림(시험이 직접 그린다). 켜고 끄기는 [onToggle](대표 DB id, 켬)로 보낸다. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun DatabasesContent(groups: List<SourceGroup>, onToggle: (String, Boolean) -> Unit, actions: SettingsActions) {
     Section(stringResource(R.string.settings_section_databases))
-    if (sources.isEmpty()) Text(stringResource(R.string.settings_no_databases), color = MaterialTheme.colorScheme.onSurfaceVariant)
-    sources.forEach { source ->
-        SourceRow(
-            source,
-            onToggle = { viewModel.setEnabled(source.dataSourceId, it) },
-            onChooseProps = { actions.onChooseProps(source.dataSourceId) },
-            onChooseColor = { actions.onChooseColor(source.dataSourceId) },
-            onDelete = { actions.onDelete(source.dataSourceId) },
-        )
+    Text(stringResource(R.string.settings_databases_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (groups.isEmpty()) Text(stringResource(R.string.settings_no_databases), color = MaterialTheme.colorScheme.onSurfaceVariant)
+    groups.groupBy { it.kind }.forEach { (kind, inKind) ->
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SubSection(stringResource(kind.label()))
+            inKind.forEach { group ->
+                val id = group.main.dataSourceId
+                SourceCard(
+                    group,
+                    SourceCardActions(
+                        onToggle = { onToggle(id, it) },
+                        onChooseProps = { actions.onChooseProps(id) },
+                        onChooseColor = { actions.onChooseColor(id) },
+                        onDelete = { actions.onDelete(id) },
+                    ),
+                )
+            }
+        }
     }
-    OutlinedButton(onClick = actions.onAddDatabase) { Text(stringResource(R.string.settings_add_database)) }
-    OutlinedButton(onClick = actions.onAddView) { Text(stringResource(R.string.settings_add_view)) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = actions.onAddDatabase) { Text(stringResource(R.string.settings_add_database)) }
+        OutlinedButton(onClick = actions.onAddView) { Text(stringResource(R.string.settings_add_view)) }
+    }
+}
+
+private fun SourceGroupKind.label(): Int = when (this) {
+    SourceGroupKind.CALENDAR -> R.string.settings_group_calendar
+    SourceGroupKind.HABIT -> R.string.settings_group_habit
+    SourceGroupKind.LEDGER -> R.string.settings_group_ledger
 }
 
 /** WI-02 퀵 추가 기본 DB는 일정 DB 중에서만 고른다(습관 기록은 습관 화면에서 만든다). 고를 DB가 둘 미만이면 그리지 않는다. */
@@ -222,7 +249,7 @@ private fun DefaultDatabaseItem(defaultId: String?, viewModel: SettingsViewModel
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val enabled = sources.filter { it.enabled && it.sourceKind == SourceKind.CALENDAR }
     if (enabled.size <= 1) return
-    Text(stringResource(R.string.settings_default_database))
+    SubSection(stringResource(R.string.settings_default_database))
     val current = defaultId?.takeIf { id -> enabled.any { it.dataSourceId == id } } ?: enabled.first().dataSourceId
     enabled.forEach { source -> RadioRow(source.name, source.dataSourceId == current) { viewModel.setDefaultDataSource(source.dataSourceId) } }
 }

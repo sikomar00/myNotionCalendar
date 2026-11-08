@@ -16,6 +16,10 @@
     <string name="settings_connected_unnamed">연결됨</string>
     <string name="settings_section_databases">노션 DB</string>
     <string name="settings_add_database">DB 추가</string>
+    <string name="settings_databases_note">켠 DB만 달력·습관·가계부에 쓰입니다. 끄거나 지워도 노션 원본은 바뀌지 않습니다.</string>
+    <string name="settings_group_calendar">일정</string>
+    <string name="settings_group_habit">습관</string>
+    <string name="settings_group_ledger">가계부</string>
     <string name="settings_add_view">노션 보기 추가</string>
     <string name="add_view_title">노션 보기 추가</string>
     <string name="add_view_limits">위젯에서 체크박스와 상태·선택 값은 눌러서 바꾸고, 머리의 + 로 새 항목을 만들 수 있습니다. 그 밖의 속성과 본문은 노션에서 고칩니다. 행은 보기마다 100개까지 받아 오고, 위젯 크기에 넘치는 행은 더 보기로 엽니다. 갤러리 보기는 표지 카드로(표지는 동기화 때 받아 둡니다) 보드 보기는 열로 나눠 그립니다.</string>
@@ -35,8 +39,11 @@
     <string name="settings_no_databases">등록된 DB가 없습니다.</string>
     <string name="settings_delete_database">%1$s 등록 삭제</string>
     <string name="settings_delete_confirm_title">DB 등록을 삭제할까요?</string>
+    <string name="settings_delete_confirm_body_group">함께 등록한 DB(%1$s)를 이 앱에서 모두 지웁니다. 노션 원본은 바뀌지 않습니다.</string>
+    <string name="settings_delete_confirm_body_other">이 앱에 저장된 %1$s 기록만 지웁니다. 노션 원본은 바뀌지 않습니다.</string>
     <string name="settings_delete_confirm_body">이 앱에 저장된 %1$s 일정만 지웁니다. 노션 원본은 바뀌지 않습니다.</string>
     <string name="settings_delete">삭제</string>
+    <string name="settings_color_button">%1$s 색 바꾸기</string>
     <string name="settings_source_enabled">%1$s 사용</string>
     <string name="settings_tab_connection">연결</string>
     <string name="settings_tab_database">DB</string>
@@ -115,7 +122,6 @@
     <string name="settings_color_fallback">값이 없는 일정은 아래 DB 색으로 표시합니다.</string>
     <string name="settings_color_database">모든 일정을 아래 DB 색으로 표시합니다.</string>
     <string name="settings_color_save">저장</string>
-    <string name="settings_color_button">%1$s 색 바꾸기</string>
     <string name="settings_holidays">공휴일 표시</string>
     <string name="settings_holidays_note">폰의 공휴일 캘린더(구글 대한민국의 휴일)를 읽습니다. 캘린더 권한이 필요합니다.</string>
     <string name="settings_holidays_denied">권한이 없어 공휴일을 표시하지 않습니다. 노션 일정은 그대로입니다.</string>
@@ -164,11 +170,6 @@
     <string name="add_db_color">DB 색</string>
     <string name="add_db_register">등록</string>
     <string name="add_db_no_date">이 DB에는 날짜 속성이 없어 달력에 표시할 수 없습니다.</string>
-    <string name="settings_kind_habit_log">🌱 습관과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_habit">✅ 습관 기록과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_ledger">💰 예산·카테고리 마스터와 함께 켜고 지웁니다</string>
-    <string name="settings_kind_budget">💰 거래내역과 함께 켜고 지웁니다</string>
-    <string name="settings_kind_category">💰 거래내역과 함께 켜고 지웁니다</string>
     <string name="tab_calendar">달력</string>
     <string name="tab_habit">습관</string>
     <string name="tab_ledger">가계부</string>
