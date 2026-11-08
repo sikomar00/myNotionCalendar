@@ -56,6 +56,7 @@ import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EditableEvent
 import com.ysdoing.notioncal.core.data.EventChange
+import com.ysdoing.notioncal.core.designsystem.ReportDirty
 import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.SelectValue
@@ -88,8 +89,11 @@ fun AddForm(
     today: LocalDate = LocalDate.now(APP_ZONE),
     /** NS-10 반복 일정 여러 개 추가. null이면 '반복' 칩을 보이지 않는다. */
     onAddRepeated: ((List<NewEvent>) -> Unit)? = null,
+    /** ED-04: 적다 만 제목이 있는지(시트를 닫기 전에 '변경을 버릴까요?'를 묻는다). */
+    onDirtyChange: (Boolean) -> Unit = {},
 ) {
     var title by rememberSaveable { mutableStateOf("") }
+    ReportDirty(title.isNotBlank(), onDirtyChange)
     var date by rememberSaveable(initialDate) { mutableStateOf(initialDate) }
     var time by rememberSaveable(stateSaver = TimeRangeSaver) { mutableStateOf<TimeRange?>(null) }
     // 칩을 직접 바꾸면 그 값이 빠른 입력 해석보다 앞선다.
@@ -290,6 +294,8 @@ fun EventEditorForm(
     /** DD-01 디데이로 고정했는지. null이면 고정 줄을 숨긴다. 누르면 바로 고정·해제한다(저장과 따로). */
     pinned: Boolean? = null,
     onPinChange: (Boolean) -> Unit = {},
+    /** ED-04: 저장하지 않은 변경이 있는지(시트를 닫기 전에 '변경을 버릴까요?'를 묻는다). */
+    onDirtyChange: (Boolean) -> Unit = {},
 ) {
     val event = item.event
     val context = LocalContext.current
@@ -303,6 +309,15 @@ fun EventEditorForm(
     var optionId by rememberSaveable(event.pageId) { mutableStateOf(item.colorOptionId) }
     var propEdits by rememberSaveable(event.pageId, stateSaver = PropEditsSaver) { mutableStateOf(emptyMap<String, PropValue>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    // 저장 버튼이 보낼 변경. 비어 있지 않으면 저장하지 않은 변경이 있는 것이다.
+    val change = EventChange(
+        title = title.trim().takeIf { it != event.title.trim() && it.isNotBlank() }, // 노션 제목 끝의 공백은 고친 것이 아니다
+        date = if (date != event.startDate || time != originalTime) editedDateValue(event, date, time) else null,
+        done = done.takeIf { it != event.done },
+        select = SelectValue(optionId).takeIf { optionId != item.colorOptionId },
+        props = propEdits.filter { (id, value) -> value != (item.extraValues[id] ?: PropValue()) }.takeIf { it.isNotEmpty() },
+    )
+    ReportDirty(change != EventChange(), onDirtyChange)
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(
@@ -360,18 +375,7 @@ fun EventEditorForm(
         }
         // ED-03·UX-08: 저장은 폭 전체 주 버튼, 열기·삭제는 아래 줄(줄바꿈)에 떨어뜨리고 삭제는 error 색이다(A-7).
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                val dateChanged = date != event.startDate || time != originalTime
-                onSave(
-                    EventChange(
-                        title = title.trim().takeIf { it != event.title && it.isNotBlank() },
-                        date = if (dateChanged) editedDateValue(event, date, time) else null,
-                        done = done.takeIf { it != event.done },
-                        select = SelectValue(optionId).takeIf { optionId != item.colorOptionId },
-                        props = propEdits.filter { (id, value) -> value != (item.extraValues[id] ?: PropValue()) }.takeIf { it.isNotEmpty() },
-                    ),
-                )
-            }) { Text(stringResource(R.string.qs_save)) }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = { onSave(change) }) { Text(stringResource(R.string.qs_save)) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (event.url.isNotBlank()) {
                     TextButton(onClick = {
@@ -399,3 +403,4 @@ fun EventEditorForm(
         )
     }
 }
+

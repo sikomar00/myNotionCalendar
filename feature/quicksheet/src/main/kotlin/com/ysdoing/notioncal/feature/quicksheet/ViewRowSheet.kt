@@ -3,21 +3,11 @@ package com.ysdoing.notioncal.feature.quicksheet
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
+import com.ysdoing.notioncal.core.designsystem.rememberGuardedSheetState
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
 
@@ -28,37 +18,14 @@ import com.ysdoing.notioncal.core.data.view.ViewRow
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ViewRowSheet(board: ViewBoard, row: ViewRow, actions: ViewRowActions) {
-    val dirty = remember { mutableStateOf(false) }
-    var askDiscard by rememberSaveable { mutableStateOf(false) }
+    val guard = rememberDiscardGuard(onClose = actions.onClose)
     // 시트 창은 내비게이션 바 높이를 첫 프레임에 0으로 받는다. 메인 창에서 읽은 값을 스크롤 내용 맨 아래 여백으로 준다(DaySheet와 같은 이유).
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { target ->
-            // 아래로 밀어 닫으려는 순간 변경이 있으면 시트는 그대로 두고 확인을 띄운다.
-            val blocked = target == SheetValue.Hidden && dirty.value
-            if (blocked) askDiscard = true
-            !blocked
-        },
-    )
     ModalBottomSheet(
-        onDismissRequest = { if (dirty.value) askDiscard = true else actions.onClose() },
-        sheetState = sheetState,
+        onDismissRequest = { if (guard.mayClose()) actions.onClose() },
+        sheetState = rememberGuardedSheetState(guard),
         contentWindowInsets = { WindowInsets(0) },
     ) {
-        ViewRowEditor(board, row, actions, onDirtyChange = { dirty.value = it }, bottomInset = navBottom)
+        ViewRowEditor(board, row, actions, onDirtyChange = { guard.dirty = it }, bottomInset = navBottom)
     }
-    if (askDiscard) DiscardChangesDialog(onDiscard = { askDiscard = false; actions.onClose() }, onKeep = { askDiscard = false })
-}
-
-/** ED-04 '변경을 버릴까요?'. 버리기는 error 색이다(UX-08). */
-@Composable
-internal fun DiscardChangesDialog(onDiscard: () -> Unit, onKeep: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onKeep,
-        title = { Text(stringResource(R.string.vre_discard_title)) },
-        text = { Text(stringResource(R.string.vre_discard_body)) },
-        confirmButton = { TextButton(onClick = onDiscard) { Text(stringResource(R.string.vre_discard), color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onKeep) { Text(stringResource(R.string.vre_keep_editing)) } },
-    )
 }

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import java.time.LocalDate
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
 import com.ysdoing.notioncal.core.designsystem.NotionCalTheme
 
 /**
@@ -50,10 +52,14 @@ class QuickSheetActivity : ComponentActivity() {
         setContent {
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
+                // ED-04: 고치거나 적다 만 내용이 있으면 바깥 누르기·뒤로 가기로 닫기 전에 '변경을 버릴까요?'를 묻는다.
+                val guard = rememberDiscardGuard(onClose = ::finish)
+                val requestClose = { if (guard.mayClose()) finish() }
+                BackHandler(onBack = requestClose)
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() },
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { requestClose() },
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     Surface(
@@ -69,6 +75,7 @@ class QuickSheetActivity : ComponentActivity() {
                             viewModel = hiltViewModel(),
                             onFinished = { finish() },
                             modifier = Modifier.navigationBarsPadding().padding(top = 16.dp),
+                            onDirtyChange = { guard.dirty = it },
                         )
                     }
                 }

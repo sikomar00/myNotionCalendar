@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
 import java.time.LocalDate
 
 /** 퀵 시트가 처음 보여줄 화면. */
@@ -55,9 +56,19 @@ fun QuickSheetContent(
     autoFocus: Boolean = true,
     /** 스크롤 내용 맨 아래 여백(시트가 내비게이션 바와 겹칠 때). */
     bottomInset: Dp = 0.dp,
+    /** ED-04: 편집·추가 중 저장하지 않은 내용이 있는지. 시트를 닫기 전에 '변경을 버릴까요?'를 묻는 데 쓴다. */
+    onDirtyChange: (Boolean) -> Unit = {},
 ) {
     // 날짜 모드에서 일정을 누르면 같은 시트 안에서 편집으로 넘어가고, 뒤로 가면 목록으로 돌아온다.
     var editing by rememberSaveable { mutableStateOf((start as? QuickSheetStart.Edit)?.pageId) }
+    // ED-04: 시트 안에서 편집을 떠날 때(뒤로 화살표, 적다 만 추가를 두고 다른 일정 열기)도 고친 내용이 있으면 먼저 묻는다.
+    var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val leaveGuard = rememberDiscardGuard(onClose = { pendingLeave?.invoke(); pendingLeave = null })
+    val reportDirty: (Boolean) -> Unit = { leaveGuard.dirty = it; onDirtyChange(it) }
+    val leave = { action: () -> Unit ->
+        pendingLeave = action
+        if (leaveGuard.mayClose()) { action(); pendingLeave = null }
+    }
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val defaultSource by viewModel.defaultSourceId.collectAsStateWithLifecycle()
 
@@ -71,7 +82,7 @@ fun QuickSheetContent(
             val item by remember(pageId) { viewModel.observeEvent(pageId) }.collectAsState(null)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (start !is QuickSheetStart.Edit) {
-                    IconButton(onClick = { editing = null }) {
+                    IconButton(onClick = { leave { editing = null } }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.qs_back))
                     }
                 }
@@ -87,6 +98,7 @@ fun QuickSheetContent(
                     onDelete = { viewModel.trash(pageId, onTrashed = back) },
                     pinned = pageId in pinnedIds,
                     onPinChange = { viewModel.setDdayPinned(pageId, it) },
+                    onDirtyChange = reportDirty,
                 )
             }
             return@Column
@@ -98,6 +110,7 @@ fun QuickSheetContent(
                     start.date, sources, defaultSource, autoFocus = autoFocus,
                     onAdd = { viewModel.add(it, onAdded = onFinished) },
                     onAddRepeated = { viewModel.addAll(it, onAdded = onFinished) },
+                    onDirtyChange = reportDirty,
                 )
             }
             is QuickSheetStart.Day -> {
@@ -111,12 +124,15 @@ fun QuickSheetContent(
                 }
                 val weather by viewModel.dayWeather.collectAsStateWithLifecycle()
                 if (!weather.isEmpty) DayWeatherStrip(weather)
-                AddForm(start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) }, onAddRepeated = { viewModel.addAll(it) })
+                AddForm(
+                    start.date, sources, defaultSource, autoFocus = autoFocus, onAdd = { viewModel.add(it) }, onAddRepeated = { viewModel.addAll(it) },
+                    onDirtyChange = reportDirty,
+                )
                 HorizontalDivider()
                 DayList(
                     events = events,
                     onToggle = { event, done -> viewModel.setDone(event.pageId, done) },
-                    onOpen = { editing = it.pageId },
+                    onOpen = { event -> leave { editing = event.pageId } },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

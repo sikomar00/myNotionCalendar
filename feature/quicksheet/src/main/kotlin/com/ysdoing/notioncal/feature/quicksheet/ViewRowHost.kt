@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.ViewRow
 
@@ -41,9 +42,8 @@ sealed interface ViewRowState {
  */
 @Composable
 fun ViewRowHost(state: ViewRowState, actions: ViewRowActions) {
-    var dirty by remember { mutableStateOf(false) }
-    var askDiscard by rememberSaveable { mutableStateOf(false) }
-    val requestClose = { if (dirty) askDiscard = true else actions.onClose() }
+    val guard = rememberDiscardGuard(onClose = actions.onClose)
+    val requestClose = { if (guard.mayClose()) actions.onClose() }
     when (state) {
         ViewRowState.Loading -> Unit
         ViewRowState.Missing -> LaunchedEffect(Unit) { actions.onClose() }
@@ -54,13 +54,12 @@ fun ViewRowHost(state: ViewRowState, actions: ViewRowActions) {
                 ViewRowEditor(
                     state.board, state.row, actions,
                     modifier = Modifier.heightIn(max = maxHeight),
-                    onDirtyChange = { dirty = it },
+                    onDirtyChange = { guard.dirty = it },
                     bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
                 )
             }
         }
     }
-    if (askDiscard) DiscardChangesDialog(onDiscard = { askDiscard = false; actions.onClose() }, onKeep = { askDiscard = false })
 }
 
 private const val SHEET_MAX_FRACTION = 0.85f
