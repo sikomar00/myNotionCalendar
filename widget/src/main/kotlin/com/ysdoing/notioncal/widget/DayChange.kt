@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +56,14 @@ class DayChangeReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
+                // 서울 자정이 지나면 다른 달로 넘겨 둔 위젯도 오늘 달로 돌아온다. 시각·시간대 변경(망 시각 보정 포함)은 앱 날짜(서울)를
+                // 바꾸지 않을 때가 많아 그대로 둔다.
+                // shortcut: 자정 바로 그때 달 이동·설정 저장이 겹치면 그 저장이 옛 이동값을 다시 쓸 수 있다, 실제로 남는 일이 보이면 DAO를 한 쿼리로 묶는다.
+                if (intent.action == DayChangeScheduler.ACTION_MIDNIGHT) {
+                    // 초기화에 실패해도 오늘 칸은 옮겨야 하므로 다시 그리기는 계속한다.
+                    runCatching { WidgetDependencies.from(context).widgetConfigs().resetAllOffsets() }
+                        .onFailure { Log.w(GlanceWidgetRefresher.TAG, "자정 이동값 초기화 실패", it) }
+                }
                 AllWidgets.updateAll(context)
             } finally {
                 DayChangeScheduler.scheduleNext(context)

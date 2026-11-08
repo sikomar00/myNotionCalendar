@@ -68,6 +68,20 @@ class WidgetConfigRepositoryTest {
     }
 
     @Test
+    fun aNewDayBringsEveryParkedWidgetBackToTodayAndKeepsTheRest() = runTest {
+        repo.save(WidgetConfig(1, monthOffset = 2, theme = WidgetTheme.DARK, lastTab = 3))
+        repo.save(WidgetConfig(2, timelineOffset = -1))
+        repo.save(WidgetConfig(3, fontScale = 120))
+
+        assertEquals(2, repo.resetAllOffsets()) // 넘겨 둔 두 위젯만 바뀐다
+
+        assertEquals(listOf(0, 0), listOf(repo.get(1).monthOffset, repo.get(2).timelineOffset))
+        assertEquals(listOf(WidgetTheme.DARK, 3), listOf(repo.get(1).theme, repo.get(1).lastTab)) // 다른 설정은 그대로
+        assertEquals(120, repo.get(3).fontScale)
+        assertEquals(0, repo.resetAllOffsets())
+    }
+
+    @Test
     fun valuesAreClampedAndSetsRoundTrip() = runTest {
         repo.save(WidgetConfig(3, dataSourceIds = setOf("b", "a"), fontScale = 999, maxPerCell = 42, opacity = -5))
         val saved = repo.get(3)

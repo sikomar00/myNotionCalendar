@@ -143,6 +143,9 @@ class WidgetConfigRepository @Inject constructor(private val dao: WidgetConfigDa
     /** 타임라인의 오늘 버튼. */
     suspend fun resetTimeline(appWidgetId: Int) = save(get(appWidgetId).copy(timelineOffset = 0))
 
+    /** 날짜가 바뀌면 넘겨 둔 달·타임라인 창을 모든 위젯에서 오늘로 되돌린다(다음 날에는 오늘이 보이게). */
+    suspend fun resetAllOffsets(): Int = dao.resetOffsets()
+
     /** WG-11: 통합 위젯의 탭. 위젯마다 따로 저장한다. */
     suspend fun selectTab(appWidgetId: Int, tab: WidgetTab) = save(get(appWidgetId).copy(selectedTab = tab))
 

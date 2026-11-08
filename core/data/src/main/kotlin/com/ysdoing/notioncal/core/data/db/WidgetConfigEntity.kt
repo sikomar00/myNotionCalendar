@@ -70,4 +70,8 @@ interface WidgetConfigDao {
 
     @Query("DELETE FROM widget_configs WHERE appWidgetId IN (:ids)")
     suspend fun delete(ids: List<Int>)
+
+    /** 넘겨 둔 달·타임라인 창을 모든 위젯에서 오늘로 되돌린다. 되돌린 위젯 수. */
+    @Query("UPDATE widget_configs SET monthOffset = 0, timelineOffset = 0 WHERE monthOffset != 0 OR timelineOffset != 0")
+    suspend fun resetOffsets(): Int
 }
