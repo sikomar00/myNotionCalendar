@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.widget
 
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -10,6 +11,7 @@ import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -33,6 +35,27 @@ import androidx.glance.unit.ColorProvider
 
 // 위젯 공통 부품(2026-11-03 시안, DESIGN.md '위젯'). 새 스타일을 쓰는 위젯이 함께 쓴다.
 // 비트맵 없이 레이아웃·배경색·벡터 아이콘만 쓴다(PF-07). 색은 [WidgetPalette]에서 받는다.
+
+/**
+ * true면 목록을 LazyColumn 대신 고정 Column으로 그린다. 위젯 고르기 미리보기 그림과 앱의 위젯 설정 미리보기는 변환 결과를 View에
+ * 바로 적용하는데, 그때 LazyColumn의 행이 그려지지 않는다(보기 위젯의 `PaneSpec.staticRows`와 같은 까닭). 실제 위젯은 늘 false.
+ */
+internal val LocalStaticLists = staticCompositionLocalOf { false }
+
+/** 목록 한 줄: LazyColumn 항목 ID와 그리기. */
+internal class ListEntry(val id: Long, val content: @Composable () -> Unit)
+
+/** 위젯 목록. 보통은 스크롤되는 LazyColumn, [LocalStaticLists]면 앞쪽 [STATIC_LIST_ROWS]줄만 고정 Column(자식 10개 제한 안)으로. */
+@Composable
+internal fun WidgetList(entries: List<ListEntry>, modifier: GlanceModifier) {
+    if (LocalStaticLists.current) {
+        Column(modifier) { entries.take(STATIC_LIST_ROWS).forEach { it.content() } }
+    } else {
+        LazyColumn(modifier) { entries.forEach { entry -> item(itemId = entry.id) { entry.content() } } }
+    }
+}
+
+internal const val STATIC_LIST_ROWS = 9
 
 /** 눌림 영역 최소(위젯 품질 기준 WL-4.2). 보이는 크기가 작아도 눌림만 이만큼 넓힌다. */
 internal val TAP_TARGET = 48.dp

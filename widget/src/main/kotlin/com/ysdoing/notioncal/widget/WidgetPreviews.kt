@@ -3,9 +3,14 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.widget.RemoteViews
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
@@ -162,21 +167,21 @@ object WidgetPreviews {
     suspend fun publish(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return true
         val manager = GlanceAppWidgetManager(context)
-        val results = listOf(
-            runCatching { manager.setWidgetPreviews(NotionCalWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(AgendaWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(SplitWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(HabitWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(TabbedWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(LedgerWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdaySmallWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(LayoutWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(BookWidgetReceiver::class) }.getOrNull(),
-        )
+        val results = AllWidgets.RECEIVERS.map { receiver ->
+            runCatching { manager.setWidgetPreviews(receiver.kotlin) }
+                .onFailure { Log.w(TAG, "위젯 미리보기 게시 실패: ${receiver.simpleName}", it) }
+                .getOrNull()
+        }
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }
     }
+
 }
+
+/**
+ * 위젯을 View에 바로 적용할 RemoteViews로 그린다(앱의 위젯 설정 미리보기, 위젯 고르기 미리보기 그림). 이 경로는 LazyColumn 행이
+ * 그려지지 않으므로 목록을 고정 Column으로 그린다([LocalStaticLists]).
+ */
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
+internal suspend fun staticRemoteViews(context: Context, size: DpSize, content: @Composable () -> Unit): RemoteViews =
+    GlanceRemoteViews().compose(context, size) { CompositionLocalProvider(LocalStaticLists provides true) { content() } }.remoteViews

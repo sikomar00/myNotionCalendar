@@ -20,8 +20,6 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -176,22 +174,25 @@ fun AgendaWidgetContent(
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         AgendaHeader(state, metrics, palette)
-        LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
+        val entries = buildList {
             state.days.forEach { day ->
-                item(itemId = day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) }
+                add(ListEntry(day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) })
                 if (day.items.isEmpty() && day.date !in state.holidays) {
-                    item(itemId = -day.date.toEpochDay() - 1) {
+                    add(ListEntry(-day.date.toEpochDay() - 1) {
                         WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "agendaEmpty", startPadding = 12.dp)
-                    }
+                    })
                 }
-                items(day.items, itemId = { (event, _) -> (event.pageId + day.date).hashCode().toLong() }) { (event, continues) ->
-                    WidgetEventRow(
-                        event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
-                        tag = "agendaItem", dotWidth = 14.dp, timeColumn = metrics.timeWidth, continues = continues,
-                    )
+                day.items.forEach { (event, continues) ->
+                    add(ListEntry((event.pageId + day.date).hashCode().toLong()) {
+                        WidgetEventRow(
+                            event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
+                            tag = "agendaItem", dotWidth = 14.dp, timeColumn = metrics.timeWidth, continues = continues,
+                        )
+                    })
                 }
             }
         }
+        WidgetList(entries, GlanceModifier.fillMaxWidth().defaultWeight())
     }
 }
 

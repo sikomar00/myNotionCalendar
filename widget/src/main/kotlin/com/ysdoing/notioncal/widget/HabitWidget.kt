@@ -28,8 +28,6 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -234,18 +232,15 @@ fun HabitWidgetContent(
                 ctaText = context.getString(R.string.habit_widget_empty_cta), ctaAction = actionStartActivity(habitTabIntent(context)), ctaTag = "habitEmpty",
             )
         } else {
-            LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                if (metrics.mode == HabitWidgetMode.LARGE) {
-                    item(itemId = GRASS_ITEM) { MonthGrass(state, metrics, palette) }
-                }
-                if (metrics.mode != HabitWidgetMode.SMALL) {
-                    item(itemId = DAYS_ITEM) { DayLabels(board.today, metrics, palette) }
-                }
-                // LazyColumn 항목 ID는 page ID 해시(음수는 위의 머리 항목 몫).
-                items(board.habits, itemId = { it.habit.pageId.hashCode().toLong() and 0xFFFFFFFFL }) { summary ->
-                    HabitRow(summary, board.today, metrics, palette)
+            val entries = buildList {
+                if (metrics.mode == HabitWidgetMode.LARGE) add(ListEntry(GRASS_ITEM) { MonthGrass(state, metrics, palette) })
+                if (metrics.mode != HabitWidgetMode.SMALL) add(ListEntry(DAYS_ITEM) { DayLabels(board.today, metrics, palette) })
+                // 항목 ID는 page ID 해시(음수는 위의 머리 항목 몫).
+                board.habits.forEach { summary ->
+                    add(ListEntry(summary.habit.pageId.hashCode().toLong() and 0xFFFFFFFFL) { HabitRow(summary, board.today, metrics, palette) })
                 }
             }
+            WidgetList(entries, GlanceModifier.fillMaxWidth().defaultWeight())
         }
     }
 }

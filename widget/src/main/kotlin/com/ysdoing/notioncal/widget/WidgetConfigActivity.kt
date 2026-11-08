@@ -45,9 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
@@ -313,7 +311,6 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind in CALENDAR_KINDS) SwitchRow(stringResource(R.string.widget_config_hide_done), config.hideDone) { onChange(config.copy(hideDone = it)) }
     }
 
-    @OptIn(ExperimentalGlanceRemoteViewsApi::class)
     @Composable
     private fun Preview(data: ConfigData, config: WidgetConfig, size: DpSize) {
         var views by remember { mutableStateOf<RemoteViews?>(null) }
@@ -322,41 +319,41 @@ class WidgetConfigActivity : ComponentActivity() {
             views = when (kind) {
                 ConfigKind.AGENDA -> {
                     val state = AgendaWidget.uiState(today, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }
                 }
                 ConfigKind.SPLIT -> {
                     val state = SplitWidget.uiState(today, data.settings, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }
                 }
                 ConfigKind.MONTH -> {
                     val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { WidgetContent(state) }
                 }
                 ConfigKind.LEDGER -> {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }
                 }
                 ConfigKind.VIEW -> {
                     val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }
                 }
                 ConfigKind.LAYOUT -> {
                     val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart, showWeekNumbers = data.settings.showWeekNumbers)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }
                 }
                 ConfigKind.BOOK -> {
                     val state = WidgetPreviews.bookState().copy(config = config.copy(viewId = "preview"))
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { BookWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { BookWidgetContent(state) }
                 }
                 ConfigKind.HABIT -> {
                     val state = WidgetPreviews.habitState(today).copy(config = config)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { HabitWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { HabitWidgetContent(state) }
                 }
                 ConfigKind.DDAY, ConfigKind.DDAY_LIST -> {
                     val state = DdayWidgetState(data.ddays, config, today)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) {
+                    staticRemoteViews(this@WidgetConfigActivity, size) {
                         if (kind == ConfigKind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
-                    }.remoteViews
+                    }
                 }
             }
         }

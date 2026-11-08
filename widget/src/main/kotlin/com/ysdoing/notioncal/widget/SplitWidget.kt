@@ -20,8 +20,6 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -367,22 +365,25 @@ private fun DayCell(date: LocalDate, inMonth: Boolean, state: SplitUiState, metr
 @Composable
 private fun DayList(state: SplitUiState, metrics: SplitMetrics, palette: WidgetPalette) {
     val days = state.agenda.days
-    LazyColumn(GlanceModifier.fillMaxWidth().height(metrics.listHeight)) {
+    val entries = buildList {
         days.forEach { day ->
-            item(itemId = day.date.toEpochDay()) { DayHeader(day.date, state.holidays[day.date], metrics, palette, state.weatherOn(day.date), state.weather.stale) }
+            add(ListEntry(day.date.toEpochDay()) { DayHeader(day.date, state.holidays[day.date], metrics, palette, state.weatherOn(day.date), state.weather.stale) })
             if (day.items.isEmpty() && day.date !in state.holidays) {
-                item(itemId = -day.date.toEpochDay() - 1) { WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "splitEmpty") }
+                add(ListEntry(-day.date.toEpochDay() - 1) { WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "splitEmpty") })
             }
-            items(day.items, itemId = { (event, _) -> (event.pageId + day.date).hashCode().toLong() }) { (event, _) ->
-                WidgetEventRow(
-                    event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
-                    tag = "splitItem", dotWidth = 16.dp,
-                )
+            day.items.forEach { (event, _) ->
+                add(ListEntry((event.pageId + day.date).hashCode().toLong()) {
+                    WidgetEventRow(
+                        event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
+                        tag = "splitItem", dotWidth = 16.dp,
+                    )
+                })
             }
         }
         // 마지막 일정이 '+' 버튼에 가리지 않게 아래 여백을 둔다.
-        item(itemId = Long.MIN_VALUE) { Spacer(GlanceModifier.height(TAP_TARGET)) }
+        add(ListEntry(Long.MIN_VALUE) { Spacer(GlanceModifier.height(TAP_TARGET)) })
     }
+    WidgetList(entries, GlanceModifier.fillMaxWidth().height(metrics.listHeight))
 }
 
 @Composable

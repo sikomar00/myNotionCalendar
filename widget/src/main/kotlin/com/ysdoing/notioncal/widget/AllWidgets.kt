@@ -51,7 +51,8 @@ object AllWidgets {
     /** 그 위젯의 설정 화면을 여는 인텐트(길게 눌러 다시 설정할 때와 같은 화면). */
     fun configIntent(context: Context, appWidgetId: Int): Intent = viewConfigIntent(context, appWidgetId)
 
-    private val RECEIVERS = listOf(
+    /** 위젯 리시버 전부(매니페스트와 같아야 한다). 자정 알람·설정 목록·위젯 고르기 미리보기가 함께 쓴다. */
+    internal val RECEIVERS = listOf(
         NotionCalWidgetReceiver::class.java, AgendaWidgetReceiver::class.java, SplitWidgetReceiver::class.java,
         HabitWidgetReceiver::class.java, TabbedWidgetReceiver::class.java, LedgerWidgetReceiver::class.java,
         DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java,

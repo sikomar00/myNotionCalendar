@@ -17,12 +17,12 @@ import org.robolectric.Robolectric
 internal const val GLANCE_VIEW_ID_BUDGET = 480
 
 /**
- * [content]를 실제 RemoteViews로 변환해 [size] 크기의 View로 붙인다. 변환이 한도를 넘으면 여기서 예외가 나고(PRD §13),
+ * [content]를 실제 RemoteViews로 변환해 [size] 크기의 View로 붙인다. [staticLists]면 목록을 고정 Column으로(미리보기 그림). 변환이 한도를 넘으면 여기서 예외가 나고(PRD §13),
  * 스크린샷 도구가 Activity에 붙은 View를 요구하니 제목 표시줄 없는 Activity에 위젯 크기 그대로 붙인다.
  */
 @OptIn(ExperimentalGlanceRemoteViewsApi::class)
-internal suspend fun renderRemoteViews(context: Context, size: DpSize, content: @Composable () -> Unit): View {
-    val remoteViews = GlanceRemoteViews().compose(context, size) { content() }.remoteViews
+internal suspend fun renderRemoteViews(context: Context, size: DpSize, staticLists: Boolean = false, content: @Composable () -> Unit): View {
+    val remoteViews = if (staticLists) staticRemoteViews(context, size, content) else GlanceRemoteViews().compose(context, size) { content() }.remoteViews
     val activity = Robolectric.buildActivity(Activity::class.java).create().get()
     activity.setTheme(android.R.style.Theme_Material_Light_NoActionBar)
     val density = activity.resources.displayMetrics.density

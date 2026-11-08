@@ -22,8 +22,6 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
@@ -288,39 +286,42 @@ fun DdayListWidgetContent(
             )
             return@Column
         }
-        LazyColumn(GlanceModifier.fillMaxSize()) {
-            items(state.ddays, itemId = { it.pageId.hashCode().toLong() }) { dday ->
-                val label = dday.label
-                val start = dday.start
-                if (label != null && start != null) {
-                    val description = dday.description(context)
-                    Row(
-                        GlanceModifier.fillMaxWidth().height(m.rowHeight)
-                            .clickable(actionStartActivity(ddayEditIntent(context, dday.pageId, start)))
-                            .semantics {
-                                contentDescription = description
-                                testTag = "ddayRow"
-                            },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            label.main,
-                            modifier = GlanceModifier.width(m.labelWidth),
-                            style = TextStyle(
-                                color = if (label.inProgress || label.main == "D-Day") palette.accent else palette.text,
-                                fontSize = m.labelSp.sp,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            maxLines = 1,
-                        )
-                        Column(GlanceModifier.defaultWeight()) {
-                            Text(dday.title ?: context.getString(R.string.dday_widget_untitled), style = TextStyle(color = palette.text, fontSize = m.titleSp.sp), maxLines = 1)
-                            Text(label.sub ?: ddayDateText(start), style = TextStyle(color = palette.subtle, fontSize = m.dateSp.sp), maxLines = 1)
+        WidgetList(
+            state.ddays.map { dday ->
+                ListEntry(dday.pageId.hashCode().toLong()) {
+                    val label = dday.label
+                    val start = dday.start
+                    if (label != null && start != null) {
+                        val description = dday.description(context)
+                        Row(
+                            GlanceModifier.fillMaxWidth().height(m.rowHeight)
+                                .clickable(actionStartActivity(ddayEditIntent(context, dday.pageId, start)))
+                                .semantics {
+                                    contentDescription = description
+                                    testTag = "ddayRow"
+                                },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                label.main,
+                                modifier = GlanceModifier.width(m.labelWidth),
+                                style = TextStyle(
+                                    color = if (label.inProgress || label.main == "D-Day") palette.accent else palette.text,
+                                    fontSize = m.labelSp.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                maxLines = 1,
+                            )
+                            Column(GlanceModifier.defaultWeight()) {
+                                Text(dday.title ?: context.getString(R.string.dday_widget_untitled), style = TextStyle(color = palette.text, fontSize = m.titleSp.sp), maxLines = 1)
+                                Text(label.sub ?: ddayDateText(start), style = TextStyle(color = palette.subtle, fontSize = m.dateSp.sp), maxLines = 1)
+                            }
                         }
                     }
                 }
-            }
-        }
+            },
+            GlanceModifier.fillMaxSize(),
+        )
     }
 }
 
