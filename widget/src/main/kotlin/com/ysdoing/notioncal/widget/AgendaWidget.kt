@@ -107,9 +107,7 @@ class AgendaWidget : GlanceAppWidget() {
             sync: WidgetSync = WidgetSync(),
             holidays: Map<LocalDate, String> = emptyMap(),
         ): AgendaUiState {
-            val shown = events.filter { event ->
-                (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done)
-            }
+            val shown = events.shownIn(config)
             // 공휴일만 있는 날도 목록에 넣는다(EX-02).
             return AgendaUiState(today, Agenda.build(shown, today, lastDay(today), today, holidays = holidays.keys), config, sync, holidays)
         }

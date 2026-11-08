@@ -19,13 +19,28 @@ import com.ysdoing.notioncal.core.data.view.WidgetLayout
  * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
  * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 모양 설정(테마·투명도·글자)만 있다.
  */
-internal enum class ConfigKind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW, LAYOUT, HABIT, BOOK }
+internal enum class ConfigKind { MONTH, AGENDA, SPLIT, THREE_DAY, LEDGER, DDAY, DDAY_LIST, VIEW, LAYOUT, HABIT, BOOK }
+
+/** 위젯 리시버 이름 → 설정 종류. 모르는 위젯은 월 위젯 설정이 되므로 새 위젯은 여기에 꼭 더한다(WidgetRegistryTest가 막는다). */
+internal fun configKindFor(receiverClassName: String?): ConfigKind = when (receiverClassName) {
+    AgendaWidgetReceiver::class.java.name -> ConfigKind.AGENDA
+    SplitWidgetReceiver::class.java.name -> ConfigKind.SPLIT
+    ThreeDayWidgetReceiver::class.java.name -> ConfigKind.THREE_DAY
+    LedgerWidgetReceiver::class.java.name -> ConfigKind.LEDGER
+    DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> ConfigKind.DDAY
+    DdayListWidgetReceiver::class.java.name -> ConfigKind.DDAY_LIST
+    ViewWidgetReceiver::class.java.name -> ConfigKind.VIEW
+    LayoutWidgetReceiver::class.java.name -> ConfigKind.LAYOUT
+    HabitWidgetReceiver::class.java.name -> ConfigKind.HABIT
+    BookWidgetReceiver::class.java.name -> ConfigKind.BOOK
+    else -> ConfigKind.MONTH
+}
 
 /** Phase 11g ST-07 설정 화면의 탭: 내용(위젯이 보여 줄 대상) · 모양(테마·글자·표시 방식) · 동작(숫자 단계·프리셋·입력 양식). */
 internal enum class ConfigTab { CONTENT, LOOK, ACTION }
 
 /** 일정 DB 고르기·완료 숨김을 쓰는 위젯. */
-internal val CALENDAR_KINDS = setOf(ConfigKind.MONTH, ConfigKind.AGENDA, ConfigKind.SPLIT)
+internal val CALENDAR_KINDS = setOf(ConfigKind.MONTH, ConfigKind.AGENDA, ConfigKind.SPLIT, ConfigKind.THREE_DAY)
 
 /** 설정 화면이 한 번 읽어 둔 것(미리보기와 설정 목록이 함께 쓴다). */
 internal data class ConfigData(

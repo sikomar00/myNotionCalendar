@@ -115,9 +115,7 @@ class NotionCalWidget : GlanceAppWidget() {
             month = month,
             today = today,
             weekStart = settings.weekStart,
-            events = events.filter { event ->
-                (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done)
-            },
+            events = events.shownIn(config),
             config = config,
             sync = sync,
             showWeekNumbers = settings.showWeekNumbers,

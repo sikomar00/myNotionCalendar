@@ -14,6 +14,7 @@ internal object WidgetKinds {
     fun forProvider(className: String?): GlanceAppWidget = when (className) {
         AgendaWidgetReceiver::class.java.name -> AgendaWidget()
         SplitWidgetReceiver::class.java.name -> SplitWidget()
+        ThreeDayWidgetReceiver::class.java.name -> ThreeDayWidget()
         HabitWidgetReceiver::class.java.name -> HabitWidget()
         TabbedWidgetReceiver::class.java.name -> TabbedWidget()
         LedgerWidgetReceiver::class.java.name -> LedgerWidget()

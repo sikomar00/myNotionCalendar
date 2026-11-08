@@ -75,20 +75,7 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    private val kind by lazy {
-        when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
-            AgendaWidgetReceiver::class.java.name -> ConfigKind.AGENDA
-            SplitWidgetReceiver::class.java.name -> ConfigKind.SPLIT
-            LedgerWidgetReceiver::class.java.name -> ConfigKind.LEDGER
-            DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> ConfigKind.DDAY
-            DdayListWidgetReceiver::class.java.name -> ConfigKind.DDAY_LIST
-            ViewWidgetReceiver::class.java.name -> ConfigKind.VIEW
-            LayoutWidgetReceiver::class.java.name -> ConfigKind.LAYOUT
-            HabitWidgetReceiver::class.java.name -> ConfigKind.HABIT
-            BookWidgetReceiver::class.java.name -> ConfigKind.BOOK
-            else -> ConfigKind.MONTH
-        }
-    }
+    private val kind by lazy { configKindFor(AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) }
 
     /** WG-11 통합 위젯: 월 위젯 설정에 💰 탭의 금액 숨김(LD-06)을 더한다. */
     private val tabbed by lazy {
@@ -280,10 +267,10 @@ class WidgetConfigActivity : ComponentActivity() {
         if (kind == ConfigKind.LAYOUT) LayoutSettings(data.views, config, onChange)
     }
 
-    /** 일정 위젯 전용: 칸당 줄 수·줄 간격(월간), 머리 날씨(월간·달력 + 일정, WX-04·05), 완료 숨김. */
+    /** 일정 위젯 전용: 칸당 줄 수·줄 간격(월간·3일), 머리 날씨(월간·달력 + 일정, WX-04·05), 완료 숨김. */
     @Composable
     private fun CalendarSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
-        if (kind == ConfigKind.MONTH) {
+        if (kind == ConfigKind.MONTH || kind == ConfigKind.THREE_DAY) {
             ConfigSection(stringResource(R.string.widget_config_lanes))
             ChoiceChips(
                 WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
@@ -320,6 +307,10 @@ class WidgetConfigActivity : ComponentActivity() {
                 ConfigKind.AGENDA -> {
                     val state = AgendaWidget.uiState(today, config, data.events)
                     staticRemoteViews(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }
+                }
+                ConfigKind.THREE_DAY -> {
+                    val state = ThreeDayWidget.uiState(today, config, data.events)
+                    staticRemoteViews(this@WidgetConfigActivity, size) { ThreeDayWidgetContent(state) }
                 }
                 ConfigKind.SPLIT -> {
                     val state = SplitWidget.uiState(today, data.settings, config, data.events)

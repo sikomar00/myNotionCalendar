@@ -20,9 +20,17 @@ fun widgetMode(size: DpSize): WidgetMode = when {
 
 /**
  * Phase 12a 보기 위젯의 캘린더처럼 머리·줄이 따로 있는 곳이 격자에 내주는 면: 폭 [width](주차 열 포함)·높이 [height](요일 줄 포함)에 [weeks]주를 그린다.
- * [maxMode]는 크기 단계 상한이다(2×2는 점만 그리는 [WidgetMode.SMALL]).
+ * [maxMode]는 크기 단계 상한이다(2×2는 점만 그리는 [WidgetMode.SMALL]). [days]는 한 줄의 칸 수(3일 위젯은 3).
+ * [startMode]가 있으면 위젯 크기 대신 그 단계에서 시작한다(3일 위젯은 주 한 줄이 높아 4×2에서도 제목을 그린다). 넘치면 그대로 한 단계씩 내린다.
  */
-data class GridArea(val width: Dp, val height: Dp, val weeks: Int = 6, val maxMode: WidgetMode = WidgetMode.LARGE)
+data class GridArea(
+    val width: Dp,
+    val height: Dp,
+    val weeks: Int = 6,
+    val maxMode: WidgetMode = WidgetMode.LARGE,
+    val days: Int = 7,
+    val startMode: WidgetMode? = null,
+)
 
 /**
  * 위젯 크기·설정에서 계산한 치수. Glance에는 임의 위치 지정이 없어 막대 폭을 칸 폭의 배수로 그린다.
@@ -54,6 +62,8 @@ data class WidgetMetrics(
     /** M6 주차 열 폭(0이면 없음). 날짜 칸의 0.8배, 작음 단계에서는 그리지 않는다. [cellWidth]는 이만큼 줄어든 폭이다. */
     val weekNumberWidth: Dp = 0.dp,
     val weekNumberFontSp: Float = 0f,
+    /** 한 줄의 칸 수(월·주 7, 3일 위젯 3). [cellWidth]는 이 칸 수로 나눈 폭이다. */
+    val days: Int = 7,
 ) {
     /** WS-05: 날짜 줄과 일정 한 줄이 주 높이에 들어가지 않는다(글자가 칸을 넘친다). */
     val overflows: Boolean get() = mode != WidgetMode.SMALL && dateLabelHeight + chipTextHeight > weekHeight + 0.5.dp
@@ -96,7 +106,7 @@ data class WidgetMetrics(
          * 작음은 줄 높이를 고정하고 글자를 줄이므로 넘치지 않는다.
          */
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float, showWeekNumbers: Boolean = false, grid: GridArea? = null): WidgetMetrics {
-            var mode = widgetMode(size).let { if (grid != null && it > grid.maxMode) grid.maxMode else it }
+            var mode = (grid?.startMode ?: widgetMode(size)).let { if (grid != null && it > grid.maxMode) grid.maxMode else it }
             while (true) {
                 val metrics = compute(size, config, systemFontScale, mode, showWeekNumbers, grid)
                 if (mode == WidgetMode.SMALL || !metrics.overflows) return metrics
@@ -124,7 +134,8 @@ data class WidgetMetrics(
             val weekday = if (small) SMALL_WEEKDAY_HEIGHT else maxOf(WEEKDAY_HEIGHT, lineHeight(weekdayFont, TEXT_BOX))
             val contentWidth = grid?.width ?: (size.width - PADDING * 2)
             // 주차 열은 날짜 칸의 0.8배(분할 위젯과 같은 비율). 폭만 줄이므로 주 높이·일정 줄 수는 달라지지 않는다.
-            val weekNumberWidth = if (showWeekNumbers && !small) contentWidth * (WEEK_NUMBER_RATIO / (7 + WEEK_NUMBER_RATIO)) else 0.dp
+            val days = grid?.days ?: 7
+            val weekNumberWidth = if (showWeekNumbers && !small) contentWidth * (WEEK_NUMBER_RATIO / (days + WEEK_NUMBER_RATIO)) else 0.dp
             val weekHeight = grid?.let { (it.height - weekday) / it.weeks } ?: ((size.height - PADDING * 2 - header - weekday) / 6)
             // 작음(2×2, 4×2)은 주 한 줄 높이가 10~18dp까지 줄어든다. 점 자리를 먼저 남기고 날짜 숫자를 맞춘다.
             // 그래도 숫자가 너무 작아지면(6.5sp 미만) 점을 포기하고 숫자만 겹치지 않게 그린다.
@@ -151,7 +162,7 @@ data class WidgetMetrics(
                 mode = mode,
                 headerHeight = header,
                 weekdayHeight = weekday,
-                cellWidth = (contentWidth - weekNumberWidth) / 7,
+                cellWidth = (contentWidth - weekNumberWidth) / days,
                 weekHeight = weekHeight,
                 dateLabelHeight = dateLabel,
                 laneHeight = lane,
@@ -165,18 +176,19 @@ data class WidgetMetrics(
                 textScale = textScale,
                 weekNumberWidth = weekNumberWidth,
                 weekNumberFontSp = dateFont * 0.8f * spFactor,
+                days = days,
             )
         }
     }
 }
 
-/** 레인 한 줄을 이루는 셀. 일정 막대, +N, 빈칸 중 하나. 연속 빈칸은 하나로 합쳐 셀 수를 7개 이하로 유지한다. */
+/** 레인 한 줄을 이루는 셀. 일정 막대, +N, 빈칸 중 하나. 연속 빈칸은 하나로 합쳐 셀 수를 칸 수(7 또는 3) 이하로 유지한다. */
 data class LaneSegment(val startCol: Int, val span: Int, val placed: PlacedEvent?, val hiddenCount: Int)
 
 fun laneSegments(result: WeekLayoutResult, lane: Int): List<LaneSegment> {
     val segments = mutableListOf<LaneSegment>()
     var col = 0
-    while (col < 7) {
+    while (col < result.hiddenCount.size) {
         val placed = result.placed.firstOrNull { it.lane == lane && it.startCol == col }
         when {
             placed != null -> {

@@ -32,6 +32,19 @@
                 android:resource="@xml/agenda_widget_info" />
         </receiver>
 
+        <!-- WG-13 3일 위젯(오늘·내일·모레 세 칸). -->
+        <receiver
+            android:name=".ThreeDayWidgetReceiver"
+            android:exported="true"
+            android:label="@string/three_day_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/three_day_widget_info" />
+        </receiver>
+
         <!-- WG-09 달력 + 일정(왼쪽 미니 월 달력, 오른쪽 일정 목록). -->
         <receiver
             android:name=".SplitWidgetReceiver"

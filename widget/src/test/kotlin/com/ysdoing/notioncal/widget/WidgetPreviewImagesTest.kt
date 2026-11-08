@@ -40,6 +40,7 @@ class WidgetPreviewImagesTest {
         image("month", WidgetPreviews.MONTH_SIZE) { WidgetContent(month, systemFontScale = 1f) }
         image("agenda", WidgetPreviews.AGENDA_SIZE) { AgendaWidgetContent(WidgetPreviews.agendaState(today), systemFontScale = 1f) }
         image("split", WidgetPreviews.SPLIT_SIZE) { SplitWidgetContent(WidgetPreviews.splitState(today), systemFontScale = 1f) }
+        image("three_day", WidgetPreviews.AGENDA_SIZE) { ThreeDayWidgetContent(WidgetPreviews.threeDayState(today), systemFontScale = 1f) }
         image("tabbed", WidgetPreviews.MONTH_SIZE) {
             TabbedWidgetContent(month.config, systemFontScale = 1f) { WidgetContent(month, systemFontScale = 1f, framed = false) }
         }

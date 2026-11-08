@@ -72,6 +72,17 @@ object WidgetPreviews {
     fun agendaState(today: LocalDate = LocalDate.now(APP_ZONE)): AgendaUiState =
         AgendaWidget.uiState(today, WidgetConfig(0), sampleEvents(today))
 
+    fun threeDayState(today: LocalDate = LocalDate.now(APP_ZONE)): WidgetUiState =
+        ThreeDayWidget.uiState(today, WidgetConfig(0), sampleEvents(today) + threeDayExtras(today))
+
+    /** 3일 위젯은 칸이 넓어 하루 일정 몇 개를 더 보인다(시간 칩·여러 날 막대·완료). */
+    private fun threeDayExtras(today: LocalDate): List<CalendarEvent> = listOf(
+        sample("31", "점심 약속", today, time = LocalTime.of(12, 30), color = "#0F7B6C"),
+        sample("32", "치과", today.plusDays(1), time = LocalTime.of(9, 0), color = "#6940A5"),
+        sample("33", "워크숍", today.plusDays(1), end = today.plusDays(2), color = "#D9730D"),
+        sample("34", "장보기", today.plusDays(2), time = LocalTime.of(19, 0), color = "#E03E3E", done = true),
+    )
+
     fun splitState(today: LocalDate = LocalDate.now(APP_ZONE)): SplitUiState =
         SplitWidget.uiState(today, AppSettings(weekStart = DayOfWeek.SUNDAY), WidgetConfig(0), sampleEvents(today))
 

@@ -80,6 +80,10 @@ data class WidgetUiState(
     val dimOutsideMonth: Boolean = true,
 )
 
+/** WG-04 위젯별 DB 필터(비어 있으면 앱에서 켠 DB 전체)와 완료 숨김. */
+internal fun List<CalendarEvent>.shownIn(config: WidgetConfig): List<CalendarEvent> =
+    filter { event -> (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done) }
+
 /**
  * WG-07 위젯 머리줄의 동기화 상태. [lastSuccessAt]은 마지막 성공 시각(ms), [failed]는 마지막 동기화가 실패했는지.
  * 실패해도 일정은 캐시 그대로 그린다(PF-05). 자세한 안내는 앱 배너가 맡는다.

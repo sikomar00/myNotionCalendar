@@ -49,7 +49,7 @@ import java.util.Locale
 internal fun WeekdayRow(weekStart: DayOfWeek, metrics: WidgetMetrics, palette: WidgetPalette) {
     Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.weekdayHeight)) {
         if (metrics.weekNumberWidth > 0.dp) Spacer(GlanceModifier.width(metrics.weekNumberWidth))
-        repeat(7) { i ->
+        repeat(metrics.days) { i ->
             val day = weekStart.plus(i.toLong())
             Text(
                 text = day.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN),
@@ -102,7 +102,7 @@ private fun WeekContent(
         if (metrics.mode == WidgetMode.SMALL) Spacer(GlanceModifier.fillMaxWidth().height(1.dp).background(palette.divider))
         Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.dateLabelHeight)) {
             if (metrics.weekNumberWidth > 0.dp) WeekNumber(weekStart, state.weekStart, metrics, palette)
-            repeat(7) { col ->
+            repeat(metrics.days) { col ->
                 val date = weekStart.plusDays(col.toLong())
                 DateLabel(date, !state.dimOutsideMonth || YearMonth.from(date) == state.month, date == state.today, date in state.holidays, metrics, palette)
             }
@@ -112,7 +112,7 @@ private fun WeekContent(
         } else if (metrics.lanes == 1) {
             SingleLineRow(weekStart, state.events, metrics, palette)
         } else {
-            val layout = WeekLayout.layout(weekStart, state.events, metrics.lanes)
+            val layout = WeekLayout.layout(weekStart, state.events, metrics.lanes, metrics.days)
             repeat(metrics.lanes) { lane ->
                 // 주차 열만큼 들여쓴다(Spacer를 두면 줄마다 View가 늘어 빽빽한 큰 위젯이 Glance View 개수 한도를 넘는다).
                 Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight).padding(start = metrics.weekNumberWidth)) {
@@ -123,7 +123,7 @@ private fun WeekContent(
     }
     // 칸 어디를 눌러도 그 날짜의 퀵 시트(WI-01)를 연다.
     Row(modifier = GlanceModifier.fillMaxSize().padding(start = metrics.weekNumberWidth)) {
-        repeat(7) { col ->
+        repeat(metrics.days) { col ->
             val date = weekStart.plusDays(col.toLong())
             val count = state.events.count { it.occursOn(date) }
             // Spacer에는 클릭이 붙지 않아(실기기 확인) 빈 Box로 터치 영역을 만든다.
@@ -193,7 +193,7 @@ private fun DateLabel(date: LocalDate, inMonth: Boolean, isToday: Boolean, isHol
 @Composable
 private fun DotRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: WidgetMetrics) {
     Row(modifier = GlanceModifier.fillMaxWidth()) {
-        repeat(7) { col ->
+        repeat(metrics.days) { col ->
             val date = weekStart.plusDays(col.toLong())
             val colors = events.filter { it.occursOn(date) }.take(3)
             Row(
@@ -223,7 +223,7 @@ private fun DotRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: W
 private fun SingleLineRow(weekStart: LocalDate, events: List<CalendarEvent>, metrics: WidgetMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     Row(modifier = GlanceModifier.fillMaxWidth().height(metrics.laneHeight).padding(start = metrics.weekNumberWidth)) {
-        repeat(7) { col ->
+        repeat(metrics.days) { col ->
             val date = weekStart.plusDays(col.toLong())
             val dayEvents = events.filter { it.occursOn(date) }
             val first = dayEvents.firstOrNull()
