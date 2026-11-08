@@ -22,6 +22,7 @@ import com.ysdoing.notioncal.core.data.reminders.ReminderRules
 import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
 import com.ysdoing.notioncal.core.data.weather.WeatherPlace
 import java.time.DayOfWeek
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -225,6 +226,18 @@ class SettingsRepository @Inject constructor(
         return taken
     }
 
+    /**
+     * 위젯의 넘긴 달·사흘을 마지막으로 오늘로 되돌린 날(서울). 처음이면 null.
+     * 자정 알람이 오지 않는 경우(폰이 꺼진 채 자정, 시계를 손으로 넘김)에도 다음 방송에서 날짜가 바뀐 것을 알아채려고 쓴다.
+     * 위젯이 다시 받을 값이 아니라 [AppSettings]에 두지 않는다.
+     */
+    suspend fun widgetOffsetsDay(): LocalDate? = dataStore.data.first()[WIDGET_OFFSETS_DAY]?.let(LocalDate::ofEpochDay)
+
+    /** 되돌리기에 성공한 뒤에만 적는다(실패하면 다음 방송에서 다시 시도한다). */
+    suspend fun setWidgetOffsetsDay(day: LocalDate) {
+        dataStore.edit { it[WIDGET_OFFSETS_DAY] = day.toEpochDay() }
+    }
+
     suspend fun setLastSettingsTab(tab: SettingsTab) {
         dataStore.edit { it[SETTINGS_TAB] = tab.id }
     }
@@ -293,6 +306,7 @@ class SettingsRepository @Inject constructor(
         val ALL_DAY_REMINDER_DAY_BEFORE = booleanPreferencesKey("all_day_reminder_day_before")
         val REMINDERS_HANDLED_UNTIL = longPreferencesKey("reminders_handled_until")
         val WIDGET_PREVIEWS_VERSION = intPreferencesKey("widget_previews_version")
+        val WIDGET_OFFSETS_DAY = longPreferencesKey("widget_offsets_day")
         val SEEN_APP_UPDATE_AT = longPreferencesKey("seen_app_update_at")
         val DDAY_REMOVED_NOTICE = stringSetPreferencesKey("dday_removed_notice")
         val WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")

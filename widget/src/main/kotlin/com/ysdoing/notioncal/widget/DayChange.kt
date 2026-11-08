@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * WG-03: 자정이 지나면 위젯의 오늘 칸을 옮긴다. 한 가지 브로드캐스트에만 의존하지 않도록(§7-4)
@@ -56,14 +57,19 @@ class DayChangeReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                // 서울 자정이 지나면 다른 달로 넘겨 둔 위젯도 오늘 달로 돌아온다. 시각·시간대 변경(망 시각 보정 포함)은 앱 날짜(서울)를
-                // 바꾸지 않을 때가 많아 그대로 둔다.
+                // 서울 날짜가 바뀌었으면(자정 알람, 꺼진 채 자정을 넘긴 부팅, 시계를 손으로 넘김) 다른 달로 넘겨 둔 위젯도 오늘로 돌아온다.
+                // 망 시각 보정처럼 날짜가 그대로인 방송은 그대로 둔다.
                 // shortcut: 자정 바로 그때 달 이동·설정 저장이 겹치면 그 저장이 옛 이동값을 다시 쓸 수 있다, 실제로 남는 일이 보이면 DAO를 한 쿼리로 묶는다.
-                if (intent.action == DayChangeScheduler.ACTION_MIDNIGHT) {
-                    // 초기화에 실패해도 오늘 칸은 옮겨야 하므로 다시 그리기는 계속한다.
-                    runCatching { WidgetDependencies.from(context).widgetConfigs().resetAllOffsets() }
-                        .onFailure { Log.w(GlanceWidgetRefresher.TAG, "자정 이동값 초기화 실패", it) }
-                }
+                // 처음(기록 없음)에도 되돌린다(넘긴 위젯이 없으면 바뀌는 행이 없다). 날짜는 되돌리기에 성공한 뒤에만 적어 실패하면 다음 방송에서 다시 한다.
+                // 초기화에 실패해도 오늘 칸은 옮겨야 하므로 다시 그리기는 계속한다.
+                runCatching {
+                    val deps = WidgetDependencies.from(context)
+                    val today = LocalDate.now(APP_ZONE)
+                    if (deps.settings().widgetOffsetsDay() != today) {
+                        deps.widgetConfigs().resetAllOffsets()
+                        deps.settings().setWidgetOffsetsDay(today)
+                    }
+                }.onFailure { Log.w(GlanceWidgetRefresher.TAG, "날짜 변경 이동값 초기화 실패", it) }
                 AllWidgets.updateAll(context)
             } finally {
                 DayChangeScheduler.scheduleNext(context)

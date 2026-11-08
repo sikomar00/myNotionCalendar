@@ -35,4 +35,16 @@ class SettingsTabTest {
         repo.setLastSettingsTab(SettingsTab.NOTIFICATIONS)
         assertEquals(SettingsTab.NOTIFICATIONS, repo.settings.first().lastSettingsTab)
     }
+
+    /** 위젯 이동값을 되돌린 날: 처음은 비어 있고(그래서 첫 방송에서도 되돌린다), 적은 날을 그대로 읽는다. */
+    @Test
+    fun widgetOffsetsDayStartsEmptyAndRoundTrips() = runTest {
+        val scope = TestScope(UnconfinedTestDispatcher(testScheduler))
+        val store = PreferenceDataStoreFactory.create(scope = scope.backgroundScope) { File(tmp.root, "day.preferences_pb") }
+        val repo = SettingsRepository(store, WidgetRefresher {})
+        assertNull(repo.widgetOffsetsDay())
+        val day = java.time.LocalDate.of(2026, 11, 8)
+        repo.setWidgetOffsetsDay(day)
+        assertEquals(day, repo.widgetOffsetsDay())
+    }
 }
