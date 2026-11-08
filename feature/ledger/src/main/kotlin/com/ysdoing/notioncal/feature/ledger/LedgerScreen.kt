@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,6 +64,7 @@ import com.ysdoing.notioncal.core.data.ledger.MoneyFormat
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 
 /**
@@ -74,6 +76,9 @@ fun LedgerRoute(
     onOpenSettings: () -> Unit,
     /** 가계부를 아직 등록하지 않았을 때 '설정에서 등록' 버튼이 여는 설정(데이터베이스 카테고리). 기본은 [onOpenSettings]와 같다. */
     onOpenDatabaseSettings: () -> Unit = onOpenSettings,
+    /** 가계부 위젯에서 누른 날. 그 달로 옮겨 그 날을 고른 뒤 [onOpenDateHandled]를 부른다. */
+    openDate: LocalDate? = null,
+    onOpenDateHandled: () -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val board by viewModel.board.collectAsStateWithLifecycle()
@@ -85,6 +90,7 @@ fun LedgerRoute(
     }
     LedgerScreen(
         board = board,
+        openDate = openDate,
         actions = LedgerActions(
             onOpenSettings = onOpenSettings,
             onOpenDatabaseSettings = onOpenDatabaseSettings,
@@ -94,6 +100,7 @@ fun LedgerRoute(
             onDelete = viewModel::trash,
             onConvert = viewModel::convertPlanned,
             onAdd = openInput,
+            onOpenDateHandled = onOpenDateHandled,
         ),
     )
 }
@@ -108,11 +115,16 @@ data class LedgerActions(
     val onDelete: (String) -> Unit = {},
     val onConvert: (String) -> Unit = {},
     val onAdd: ((LocalDate) -> Unit)? = null,
+    val onOpenDateHandled: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
+fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions, openDate: LocalDate? = null) {
+    // 등록 전이면 고를 날이 없으므로 위젯 날짜를 남겨 두지 않는다(나중에 등록했을 때 갑자기 옛 날로 뛰지 않게).
+    LaunchedEffect(openDate, board?.registered) {
+        if (openDate != null && board?.registered == false) actions.onOpenDateHandled()
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -142,6 +154,19 @@ fun LedgerScreen(board: LedgerBoard?, actions: LedgerActions) {
                 val scope = rememberCoroutineScope()
                 val s = board.summary
                 val gridIndex = 3 + (if (s.noSpendDays != null) 1 else 0) + listOf(s.duplicates, s.needsReview, s.matchedManual).count { it.isNotEmpty() }
+                // 위젯에서 연 날: 보는 달이 다르면 먼저 그 달로 옮기고(새 board가 오면 다시 돈다), 같으면 고르고 목록이 보이게 올린다.
+                LaunchedEffect(openDate, board.month) {
+                    val date = openDate ?: return@LaunchedEffect
+                    val target = YearMonth.from(date)
+                    if (board.month != target) {
+                        actions.onShiftMonth(board.month.until(target, ChronoUnit.MONTHS))
+                        return@LaunchedEffect
+                    }
+                    selected = date
+                    // 처리했다고 알리면 openDate가 비면서 이 효과가 취소되므로, 올리기를 먼저 끝낸다.
+                    listState.scrollToItem(gridIndex)
+                    actions.onOpenDateHandled()
+                }
                 LazyColumn(
                     Modifier.padding(padding).fillMaxSize().testTag("ledgerList"),
                     state = listState,

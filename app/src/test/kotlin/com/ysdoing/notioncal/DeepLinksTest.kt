@@ -41,7 +41,7 @@ class DeepLinksTest {
             null, "", "https://today", "notioncal://unknown", "notioncal://date/2026-13-01", "notioncal://date",
             "notioncal://today?x=1", "notioncal://habit#a",
             // 앱 안 인텐트가 쓰는 data URI(다른 action)도 링크로 해석하지 않는다.
-            "notioncal://tab/ledger", "notioncal://ledger/add/2026-10-19", "notioncal://add/today", "notioncal://done/p1",
+            "notioncal://tab/ledger", "notioncal://tab/ledger/2026-10-19", "notioncal://ledger/add/2026-10-19", "notioncal://add/today", "notioncal://done/p1",
             "notioncal://edit/2026-10-19/p1", "notioncal://day/2026-10-19",
         ).forEach { assertNull(it, DeepLinks.parse(it)) }
     }

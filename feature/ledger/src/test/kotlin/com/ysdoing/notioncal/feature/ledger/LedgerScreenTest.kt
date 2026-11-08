@@ -158,6 +158,39 @@ class LedgerScreenTest {
         assertEquals(listOf(d(19), today), opened)
     }
 
+    /** 가계부 위젯의 항목 있는 날로 열면: 보는 달이 다르면 그 달로 옮기고, 같으면 그 날을 고르고 한 번만 처리했다고 알린다. */
+    @Test
+    fun openDateShiftsToItsMonthThenSelectsTheDay() {
+        val rows = listOf(tx("a", 19, -12_300, "점심"), tx("c", 20, -9_800, "저녁"))
+        val shifts = mutableListOf<Long>()
+        var handled = 0
+        val actions = LedgerActions(onShiftMonth = { shifts += it }, onOpenDateHandled = { handled++ })
+        compose.setContent { MaterialTheme { LedgerScreen(board(rows), actions, openDate = LocalDate.of(2026, 12, 3)) } }
+        compose.waitForIdle()
+        assertEquals(listOf(2L), shifts) // 10월 → 12월
+        assertEquals(0, handled)
+    }
+
+    @Test
+    fun openDateInTheShownMonthSelectsTheDay() {
+        val rows = listOf(tx("a", 19, -12_300, "점심"), tx("c", 20, -9_800, "저녁"))
+        var handled = 0
+        compose.setContent { MaterialTheme { LedgerScreen(board(rows), LedgerActions(onOpenDateHandled = { handled++ }), openDate = d(19)) } }
+        compose.onNodeWithTag("ledgerList").performScrollToNode(hasTestTag("ledgerDayEntries"))
+        compose.onNodeWithText("10월 19일(월)").assertExists()
+        compose.onNodeWithText("점심").assertExists()
+        compose.onNodeWithText("저녁").assertDoesNotExist()
+        assertEquals(1, handled)
+    }
+
+    @Test
+    fun openDateIsDroppedWhenTheLedgerIsNotRegistered() {
+        var handled = 0
+        compose.setContent { MaterialTheme { LedgerScreen(board(emptyList(), registered = false), LedgerActions(onOpenDateHandled = { handled++ }), openDate = d(19)) } }
+        compose.waitForIdle()
+        assertEquals(1, handled)
+    }
+
     @Test
     fun emptyStateExplainsRegistration() {
         var opened = 0

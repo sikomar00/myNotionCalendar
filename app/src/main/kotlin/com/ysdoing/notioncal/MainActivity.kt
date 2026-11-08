@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
     /** 습관·가계부 위젯에서 열었으면 그 탭(AppIntents.EXTRA_TAB). */
     private var openTab by mutableStateOf<HomeTab?>(null)
 
+    /** 가계부 위젯에서 누른 항목 있는 날(AppIntents.EXTRA_LEDGER_DATE). 💰 탭이 그 날을 고르면 비운다. */
+    private var openLedgerDate by mutableStateOf<LocalDate?>(null)
+
     /** EX-12 `notioncal://dday`(디데이 목록 위젯 '+' 포함): 설정의 디데이 화면을 연다. */
     private var openDday by mutableStateOf(false)
     private var openView by mutableStateOf<String?>(null)
@@ -69,6 +72,7 @@ class MainActivity : ComponentActivity() {
         if (firstLaunch) {
             openDate = dateFrom(intent)
             openTab = tabFrom(intent)
+            openLedgerDate = dateFrom(intent, AppIntents.EXTRA_LEDGER_DATE)
             applyLink(intent)
         }
         // PF-10: 실행 표지는 IO에서 확인한다. 프로세스 복원(회전·활동 유지 안 함)은 새 실행으로 세지 않는다.
@@ -87,6 +91,8 @@ class MainActivity : ComponentActivity() {
                         failure = failure,
                         openTab = openTab,
                         onOpenTabHandled = { openTab = null },
+                        openLedgerDate = openLedgerDate,
+                        onOpenLedgerDateHandled = { openLedgerDate = null },
                         openDday = openDday,
                         onOpenDdayHandled = { openDday = false },
                         openView = openView,
@@ -123,6 +129,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         dateFrom(intent)?.let { openDate = it }
         tabFrom(intent)?.let { openTab = it }
+        dateFrom(intent, AppIntents.EXTRA_LEDGER_DATE)?.let { openLedgerDate = it }
         applyLink(intent)
     }
 
@@ -146,6 +153,6 @@ class MainActivity : ComponentActivity() {
         else -> null
     }
 
-    private fun dateFrom(intent: Intent?): LocalDate? =
-        intent?.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    private fun dateFrom(intent: Intent?, key: String = AppIntents.EXTRA_DATE): LocalDate? =
+        intent?.getStringExtra(key)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 }

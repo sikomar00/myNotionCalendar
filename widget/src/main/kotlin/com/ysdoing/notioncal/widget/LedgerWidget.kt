@@ -199,6 +199,12 @@ internal fun ledgerTabIntent(context: Context): Intent =
         .putExtra(AppIntents.EXTRA_TAB, AppIntents.TAB_LEDGER)
         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
+/** 그날 항목이 있는 날: 💰 탭에서 그 날짜의 거래 목록을 연다. 날짜마다 data URI를 달리해 PendingIntent가 서로 덮어쓰지 않게 한다. */
+internal fun ledgerDayIntent(context: Context, date: LocalDate): Intent =
+    ledgerTabIntent(context)
+        .setData("notioncal://tab/ledger/$date".toUri())
+        .putExtra(AppIntents.EXTRA_LEDGER_DATE, date.toString())
+
 /**
  * LD-07 입력 시트 인텐트. :widget은 :feature:ledger에 의존할 수 없어 action 문자열로 연다.
  * 날짜마다 다른 data URI를 붙여 PendingIntent가 서로 덮어쓰지 않게 한다.
@@ -427,8 +433,10 @@ private fun androidx.glance.layout.RowScope.DayCell(
         },
         money.income.takeIf { it != 0L && !hidden }?.let { context.getString(R.string.ledger_widget_day_income, MoneyFormat.full(it)) },
     ).joinToString(", ")
+    // 거래가 있는 날은 무엇이 있었는지 보러 누른다(월간 위젯의 날짜 탭과 같은 뜻). 💰 탭 목록과 같은 기준이라 지난 예정·환불로 0이 된 날도 목록을 연다.
+    val open = if (board.summary.entries[date].isNullOrEmpty()) ledgerInputIntent(context, date) else ledgerDayIntent(context, date)
     Column(
-        GlanceModifier.defaultWeight().height(metrics.dayHeight).clickable(actionStartActivity(ledgerInputIntent(context, date))).semantics {
+        GlanceModifier.defaultWeight().height(metrics.dayHeight).clickable(actionStartActivity(open)).semantics {
             contentDescription = description
             testTag = "ledgerDay"
         },

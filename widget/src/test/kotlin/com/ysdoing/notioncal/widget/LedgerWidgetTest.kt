@@ -152,17 +152,24 @@ class LedgerWidgetTest {
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
     }
 
-    /** LD-07: 머리줄 '+'는 오늘, 날짜 칸은 그 날짜로 입력 시트를 연다(위젯은 네트워크 없이 인텐트만). */
+    /** LD-07: 머리줄 '+'와 빈 날은 그 날짜로 입력 시트, 그날 항목이 있는 날은 💰 탭의 그 날짜를 연다(위젯은 네트워크 없이 인텐트만). */
     @Test
-    fun addButtonAndDayCellsOpenInputSheet() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+    fun addButtonAndEmptyDaysOpenInputAndDaysWithMoneyOpenTheLedgerTab() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)
         setAppWidgetSize(LARGE)
         provideComposable { LedgerWidgetContent(state(), systemFontScale = 1f) }
         onNode(hasTestTag("ledgerAdd")).assert(hasStartActivityClickAction(ledgerInputIntent(context, today)))
         onNode(hasContentDescriptionEqualTo("10월 24일, 예정 50,000원"))
-            .assert(hasStartActivityClickAction(ledgerInputIntent(context, LocalDate.of(2026, 10, 24))))
+            .assert(hasStartActivityClickAction(ledgerDayIntent(context, LocalDate.of(2026, 10, 24))))
+        onNode(hasContentDescriptionEqualTo("10월 17일, 수입 2,500,000원"))
+            .assert(hasStartActivityClickAction(ledgerDayIntent(context, LocalDate.of(2026, 10, 17)))) // 수입만 있는 날도
+        onNode(hasContentDescriptionEqualTo("10월 22일"))
+            .assert(hasStartActivityClickAction(ledgerInputIntent(context, LocalDate.of(2026, 10, 22))))
         assertEquals(AppIntents.ACTION_LEDGER_INPUT, ledgerInputIntent(context, today).action)
         assertEquals(today.toString(), ledgerInputIntent(context, today).getStringExtra(AppIntents.EXTRA_DATE))
+        val day = ledgerDayIntent(context, LocalDate.of(2026, 10, 24))
+        assertEquals(listOf(AppIntents.TAB_LEDGER, "2026-10-24"), listOf(day.getStringExtra(AppIntents.EXTRA_TAB), day.getStringExtra(AppIntents.EXTRA_LEDGER_DATE)))
+        assertEquals(null, day.getStringExtra(AppIntents.EXTRA_DATE)) // 달력 탭으로 바뀌지 않는다
     }
 
     @Test

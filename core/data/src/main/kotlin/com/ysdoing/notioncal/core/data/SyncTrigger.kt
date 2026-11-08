@@ -69,6 +69,9 @@ object AppIntents {
     const val TAB_HABIT = "habit"
     const val TAB_LEDGER = "ledger"
 
+    /** 💰 탭에서 고를 날짜(yyyy-MM-dd, 가계부 위젯의 항목 있는 날). [EXTRA_DATE]는 달력 탭으로 바꿔 버려 따로 둔다. */
+    const val EXTRA_LEDGER_DATE = "com.ysdoing.notioncal.extra.LEDGER_DATE"
+
     /** 퀵 시트(WI-01·02·05). EXTRA_MODE = day|add|edit */
     const val ACTION_QUICK_SHEET = "com.ysdoing.notioncal.action.QUICK_SHEET"
     const val EXTRA_MODE = "com.ysdoing.notioncal.extra.MODE"

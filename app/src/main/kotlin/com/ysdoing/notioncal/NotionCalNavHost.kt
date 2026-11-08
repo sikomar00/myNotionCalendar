@@ -55,6 +55,7 @@ private object Routes {
  * [safeMode]: 앞선 실행이 연달아 첫 화면 전에 끝났다. 월 화면 대신 진단 화면으로 시작한다(PF-10).
  * [failure]: 실행 중 DB를 열지 못하면 진단 화면으로 보낸다(PF-10).
  * [openTab]: 위젯에서 연 하단 탭(습관 위젯 → 습관 탭).
+ * [openLedgerDate]: 가계부 위젯에서 누른 항목 있는 날. 💰 탭이 그 날을 고른다(탭은 [openTab]이 바꾼다).
  */
 @Composable
 fun NotionCalNavHost(
@@ -64,6 +65,8 @@ fun NotionCalNavHost(
     failure: AppFailure?,
     openTab: HomeTab? = null,
     onOpenTabHandled: () -> Unit = {},
+    openLedgerDate: LocalDate? = null,
+    onOpenLedgerDateHandled: () -> Unit = {},
     openDday: Boolean = false,
     onOpenDdayHandled: () -> Unit = {},
     openView: String? = null,
@@ -127,7 +130,14 @@ fun NotionCalNavHost(
                     )
                 },
                 habit = { HabitRoute(onOpenSettings = openSettings, onOpenDatabaseSettings = openDatabase) },
-                ledger = { LedgerRoute(onOpenSettings = openSettings, onOpenDatabaseSettings = openDatabase) },
+                ledger = {
+                    LedgerRoute(
+                        onOpenSettings = openSettings,
+                        onOpenDatabaseSettings = openDatabase,
+                        openDate = openLedgerDate,
+                        onOpenDateHandled = onOpenLedgerDateHandled,
+                    )
+                },
             )
         }
         composable(Routes.SEARCH) {
