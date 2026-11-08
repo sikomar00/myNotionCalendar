@@ -171,11 +171,13 @@ internal fun WidgetHeader(
     titleSp: Float,
     subSp: Float,
     titleModifier: GlanceModifier = GlanceModifier,
+    /** 아이콘 칩. 머리 버튼이 많은 위젯(3일 위젯의 ‹ ›)은 좁을 때 제목 자리를 지키려고 끈다. */
+    showChip: Boolean = headerShowsChip(LocalSize.current.width),
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Row(GlanceModifier.fillMaxWidth().height(height), verticalAlignment = Alignment.CenterVertically) {
         Row(titleModifier.defaultWeight().height(height), verticalAlignment = Alignment.CenterVertically) {
-            if (headerShowsChip(LocalSize.current.width)) {
+            if (showChip) {
                 Box(
                     GlanceModifier.size(HEADER_CHIP).background(palette.accentContainer).cornerRadius(HEADER_CHIP / 2),
                     contentAlignment = Alignment.Center,

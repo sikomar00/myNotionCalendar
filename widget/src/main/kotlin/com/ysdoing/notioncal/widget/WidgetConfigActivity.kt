@@ -288,10 +288,17 @@ class WidgetConfigActivity : ComponentActivity() {
             ) { onChange(config.copy(lineSpacing = it)) }
         }
         // 날씨가 보이는 설정 화면이라 출처를 둔다.
-        if (kind == ConfigKind.MONTH || kind == ConfigKind.SPLIT) {
+        if (kind == ConfigKind.MONTH || kind == ConfigKind.SPLIT || kind == ConfigKind.THREE_DAY) {
+            // 3일 위젯은 머리가 아니라 날짜마다 붙인다.
+            val days = kind == ConfigKind.THREE_DAY
+            val note = when {
+                !data.settings.weatherEnabled -> R.string.widget_config_weather_off
+                days -> R.string.widget_config_weather_days_note
+                else -> R.string.widget_config_weather_note
+            }
             SwitchRow(
-                stringResource(R.string.widget_config_weather), config.showWeather,
-                note = stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
+                stringResource(if (days) R.string.widget_config_weather_days else R.string.widget_config_weather), config.showWeather,
+                note = stringResource(note),
             ) { onChange(config.copy(showWeather = it)) }
             if (config.showWeather) WeatherAttribution()
         }
@@ -309,7 +316,8 @@ class WidgetConfigActivity : ComponentActivity() {
                     staticRemoteViews(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }
                 }
                 ConfigKind.THREE_DAY -> {
-                    val state = ThreeDayWidget.uiState(today, config, data.events)
+                    // 설정 미리보기는 늘 오늘부터(넘겨 둔 사흘은 일정을 읽어 두지 않았다).
+                    val state = ThreeDayWidget.uiState(today, config.copy(timelineOffset = 0), data.events)
                     staticRemoteViews(this@WidgetConfigActivity, size) { ThreeDayWidgetContent(state) }
                 }
                 ConfigKind.SPLIT -> {

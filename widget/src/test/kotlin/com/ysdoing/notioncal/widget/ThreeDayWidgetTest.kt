@@ -16,6 +16,8 @@ import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTheme
 import com.ysdoing.notioncal.core.data.calendar.WeekLayout
+import com.ysdoing.notioncal.core.data.weather.Sky
+import com.ysdoing.notioncal.core.data.weather.WeatherDay
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -92,10 +94,62 @@ class ThreeDayWidgetTest {
         val configs = listOf(WidgetConfig(1), WidgetConfig(1, fontScale = 150, theme = WidgetTheme.DARK, opacity = 60, lineSpacing = LineSpacing.COMPACT))
         for (config in configs) {
             for (size in listOf(DpSize(250.dp, 110.dp), wide, large, DpSize(411.dp, 600.dp))) {
-                val state = ThreeDayWidget.uiState(today, config, WidgetSamples.dense)
+                // 날씨를 켠 상태(요일 옆 아이콘)로 본다.
+                val weather = WidgetWeather((0..2).associate { today.plusDays(it.toLong()) to WeatherDay(today.plusDays(it.toLong()), Sky.CLEAR, 21, 12, 10) })
+                val state = ThreeDayWidget.uiState(today, config.copy(showWeather = true), WidgetSamples.dense).copy(weather = weather)
                 val view = renderRemoteViews(context, size) { ThreeDayWidgetContent(state, systemFontScale = 1.3f) }
                 assertTrue("$size $config", glanceIdsUsed(view) <= GLANCE_VIEW_ID_BUDGET)
             }
         }
+    }
+
+    /** ‹ ›로 넘긴 사흘: 첫날·제목이 옮겨 가고 오늘 네모가 없으며, 제목을 누르면 오늘로 돌아온다. */
+    @Test
+    fun aParkedWidgetShowsTheNextThreeDaysAndTheTitleReturnsToToday() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val parked = WidgetConfig(1, timelineOffset = 1)
+        provideComposable { ThreeDayWidgetContent(ThreeDayWidget.uiState(today, parked, WidgetSamples.events), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("10/16 – 10/18")).assertExists()
+        onNode(hasContentDescriptionEqualTo("10/16 – 10/18, 오늘로 돌아가기")).assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 0)))
+        onNode(hasContentDescriptionEqualTo("10월 16일, 일정 0개")).assertExists()
+        onAllNodes(hasContentDescriptionEqualTo("10월 13일, 일정 2개")).assertCountEquals(0)
+        onNode(hasTestTag("prev")).assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to -1)))
+        onNode(hasTestTag("next")).assert(hasRunCallbackClickAction<TimelineNavAction>(actionParametersOf(MonthNavAction.DeltaKey to 1)))
+        assertEquals(LocalDate.of(2026, 10, 10), ThreeDayWidget.startOf(today, WidgetConfig(1, timelineOffset = -1)))
+    }
+
+    /** 머리 버튼이 많아도 제목 자리(약 80dp)가 남는다: 넓으면 칩·새로고침·‹ ›·+, 기본 폭이면 ‹ ›·+, 더 좁으면 새로고침·+, 아주 좁으면 +만. */
+    @Test
+    fun theHeaderKeepsRoomForTheTitleAtEveryWidth() {
+        for (width in listOf(180, 200, 220, 250, 300, 340, 358, 411)) {
+            val parts = ThreeDayWidget.headerParts(width.dp)
+            val buttons = 1 + (if (parts.refresh) 1 else 0) + (if (parts.nav) 2 else 0)
+            val used = (if (parts.chip) 40 else 0) + buttons * 48
+            val room = width - WidgetMetrics.PADDING.value * 2 - used
+            assertTrue("$width $parts room=$room", room >= 80)
+        }
+        assertTrue(ThreeDayWidget.headerParts(250.dp).nav) // 기본 최소 폭(250dp)에서도 ‹ ›가 있다
+    }
+
+    /** 날씨를 켜면 예보가 있는 날짜마다 요일 옆에 아이콘, 끄면 없다. */
+    @Test
+    fun weatherIconsFollowTheWidgetSetting() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val weather = WidgetWeather(mapOf(today to WeatherDay(today, Sky.CLEAR, 21, 12, 10), today.plusDays(2) to WeatherDay(today.plusDays(2), Sky.RAIN, 17, 11, 80)))
+        provideComposable {
+            ThreeDayWidgetContent(ThreeDayWidget.uiState(today, WidgetConfig(1, showWeather = true), WidgetSamples.events).copy(weather = weather), systemFontScale = 1f)
+        }
+        onAllNodes(hasTestTag("weather")).assertCountEquals(2)
+    }
+
+    @Test
+    fun noWeatherIconsWhenTheSettingIsOff() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(wide)
+        val weather = WidgetWeather(mapOf(today to WeatherDay(today, Sky.CLEAR, 21, 12, 10)))
+        provideComposable { ThreeDayWidgetContent(ThreeDayWidget.uiState(today, WidgetConfig(1), WidgetSamples.events).copy(weather = weather), systemFontScale = 1f) }
+        onAllNodes(hasTestTag("weather")).assertCountEquals(0)
     }
 }
