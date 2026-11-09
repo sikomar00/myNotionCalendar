@@ -50,10 +50,12 @@ class PropertyEncoder(
     private val doneOption: String?,
     private val undoneOption: String?,
     private val keyFor: (propertyId: String) -> String = { it },
+    /** 색 기준 속성의 종류("select"·"status"). 등록 화면이 둘 다 허용하고, 다른 키로 보내면 노션이 거부한다. */
+    private val colorType: String = "select",
 ) {
     /** 스키마로 ID → 이름을 찾는 인코더. 스키마에 없는 ID는 그대로 쓴다. */
     constructor(mapping: PropertyMapping, doneOption: String?, undoneOption: String?, schema: DataSourceDto) :
-        this(mapping, doneOption, undoneOption, namesById(schema))
+        this(mapping, doneOption, undoneOption, namesById(schema), colorTypeOf(mapping, schema))
 
     fun encode(write: PageWrite): JsonObject = buildJsonObject {
         write.title?.let { title ->
@@ -93,10 +95,11 @@ class PropertyEncoder(
             }
         }
         val colorPropId = mapping.colorPropId
-        if (write.setSelect && colorPropId != null) {
+        // status는 비울 수 없는 속성이라(노션) 색 지우기는 보내지 않는다. 보낸 뒤 받은 노션 값으로 색이 돌아온다.
+        if (write.setSelect && colorPropId != null && !(colorType == "status" && write.selectOptionId == null)) {
             putJsonObject(keyFor(colorPropId)) {
                 val id = write.selectOptionId
-                if (id == null) put("select", JsonNull) else putJsonObject("select") { put("id", id) }
+                if (id == null) put(colorType, JsonNull) else putJsonObject(colorType) { put("id", id) }
             }
         }
         val linkPropId = mapping.linkPropId
@@ -156,6 +159,9 @@ class PropertyEncoder(
             val names = schema.properties.values.associate { it.id to it.name }
             return { id -> names[id] ?: id }
         }
+
+        private fun colorTypeOf(mapping: PropertyMapping, schema: DataSourceDto): String =
+            schema.properties.values.firstOrNull { it.id == mapping.colorPropId }?.type?.takeIf { it == "status" } ?: "select"
 
         /** 노션 rich text 한 조각의 최대 길이. */
         const val MAX_TITLE = 2000

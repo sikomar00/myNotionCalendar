@@ -89,7 +89,7 @@ data class ViewRowEntity(
 
 /**
  * v14 위젯에서 바꾼 보기 행 속성 중 아직 노션에 보내지 않은 것(아웃박스와 같은 역할의 보기 전용 큐).
- * 같은 페이지·속성은 마지막 값 하나만 남긴다. [value]는 JSON 원시값(체크 true/false, 선택지 ID, 숫자), null이면 비운다.
+ * 같은 페이지·속성은 마지막 값 하나만 남긴다(이미 보내는 중인 것은 따로 남는다). [value]는 JSON 원시값(체크 true/false, 선택지 ID, 숫자), null이면 비운다.
  * 캘린더형 일정의 아웃박스와 섞지 않는다: 그쪽은 날짜 속성이 있는 DB만 처리하고 일정 행을 갱신한다.
  */
 @Entity(tableName = "view_writes")
@@ -212,14 +212,21 @@ abstract class ViewDao {
     @Query("SELECT viewId FROM view_snapshots WHERE dataSourceId = :dataSourceId")
     abstract suspend fun viewIdsOfSource(dataSourceId: String): List<String>
 
-    @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId")
-    protected abstract suspend fun writeFor(viewId: String, pageId: String, propId: String): ViewWriteEntity?
+    /** 한 속성의 기다리는(보내는 중이 아닌) 쓰기 중 먼저 쌓은 것. */
+    @Query(
+        "SELECT * FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId " +
+            "AND (lastError IS NULL OR lastError != '$VIEW_WRITE_SENDING') ORDER BY id LIMIT 1",
+    )
+    protected abstract suspend fun waitingWrite(viewId: String, pageId: String, propId: String): ViewWriteEntity?
 
     @Insert
     protected abstract suspend fun insertWrite(write: ViewWriteEntity)
 
-    @Query("DELETE FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId")
-    protected abstract suspend fun deleteWrite(viewId: String, pageId: String, propId: String)
+    @Query(
+        "DELETE FROM view_writes WHERE viewId = :viewId AND pageId = :pageId AND propId = :propId " +
+            "AND (lastError IS NULL OR lastError != '$VIEW_WRITE_SENDING')",
+    )
+    protected abstract suspend fun deleteWaitingWrites(viewId: String, pageId: String, propId: String)
 
     @Query("DELETE FROM view_writes WHERE viewId = :viewId")
     protected abstract suspend fun deleteWrites(viewId: String)
@@ -227,9 +234,12 @@ abstract class ViewDao {
     @Query("SELECT * FROM view_writes ORDER BY id LIMIT 1")
     abstract suspend fun firstWrite(): ViewWriteEntity?
 
-    /** 보낼 때가 된([ViewWriteEntity.sendAfter] <= [now]) 쓰기 중 가장 먼저 쌓은 것. 아직 지연 중인 앞선 쓰기가 뒤의 쓰기를 막지 않는다. */
-    @Query("SELECT * FROM view_writes WHERE sendAfter <= :now ORDER BY id LIMIT 1")
-    abstract suspend fun firstDueWrite(now: Long): ViewWriteEntity?
+    /**
+     * 보낼 때가 된([ViewWriteEntity.sendAfter] <= [now]) 쓰기 중 가장 먼저 쌓은 것. 아직 지연 중인 앞선 쓰기가 뒤의 쓰기를 막지 않는다.
+     * [skipped] id의 쓰기는 건너뛴다(이번 실행에서 공유가 끊겨 남겨 둔 새 항목).
+     */
+    @Query("SELECT * FROM view_writes WHERE sendAfter <= :now AND id NOT IN (:skipped) ORDER BY id LIMIT 1")
+    abstract suspend fun firstDueWrite(now: Long, skipped: Collection<Long>): ViewWriteEntity?
 
     /** 한 보기에서 아직 지연 중인([ViewWriteEntity.sendAfter] > [now]) 쓰기, 쌓은 순서대로. */
     @Query("SELECT * FROM view_writes WHERE viewId = :viewId AND sendAfter > :now ORDER BY id")
@@ -291,6 +301,10 @@ abstract class ViewDao {
 
     @Query("UPDATE view_writes SET attempts = attempts + 1, lastError = :error WHERE id = :id")
     abstract suspend fun markWriteFailed(id: Long, error: String)
+
+    /** 실패를 적되 시도 횟수는 세지 않는다(연결·속도 제한·인증처럼 이 쓰기 탓이 아닌 오류). */
+    @Query("UPDATE view_writes SET lastError = :error WHERE id = :id")
+    abstract suspend fun markWriteError(id: Long, error: String)
 
     @Query("SELECT COUNT(*) FROM view_writes WHERE viewId = :viewId")
     abstract suspend fun pendingWrites(viewId: String): Int
@@ -365,10 +379,11 @@ abstract class ViewDao {
     open suspend fun enqueue(row: ViewRowEntity, write: ViewWriteEntity) {
         updateRow(row.viewId, row.pageId, row.cells, row.typed, row.progress)
         // 같은 속성의 대기분이 있으면 그 기준값(노션에 있던 값)을 이어받는다. 새 쓰기의 기준을 로컬에서 바꾼 값으로 잡으면 충돌 확인이 어긋난다.
-        // 단 이미 보내는 중이면 그 값은 노션에 반영되는 중이라 이어받지 않는다(보낸 값을 노션의 다른 편집으로 보게 된다).
-        val prior = writeFor(write.viewId, write.pageId, write.propId)
-        deleteWrite(write.viewId, write.pageId, write.propId)
-        val inherited = if (prior != null && prior.lastError != VIEW_WRITE_SENDING) write.copy(baseValue = prior.baseValue) else write
+        // 이미 보내는 중인 쓰기는 지우지도 이어받지도 않고 앞에 둔다: 지우면 그 전송이 일시 오류로 실패했을 때 그 값을 기준으로 삼은 새 쓰기가
+        // 노션 값과 달라 충돌로 버려진다(두 바꿈을 모두 잃음). 남겨 두면 실패해도 다음 실행에서 그것부터 다시 보낸다.
+        val prior = waitingWrite(write.viewId, write.pageId, write.propId)
+        deleteWaitingWrites(write.viewId, write.pageId, write.propId)
+        val inherited = if (prior != null) write.copy(baseValue = prior.baseValue) else write
         // 앞선 쓰기가 이미 보낼 때가 됐는데(보내지 못해 쌓여 있다) 그 위를 지연 쓰기가 덮으면, 되돌리기가 앞선 바꿈까지 지워 잃게 된다.
         // 그럴 땐 되돌릴 창을 주지 않고 바로 보낸다.
         insertWrite(if (prior != null && prior.sendAfter <= write.createdAt) inherited.copy(sendAfter = 0) else inherited)

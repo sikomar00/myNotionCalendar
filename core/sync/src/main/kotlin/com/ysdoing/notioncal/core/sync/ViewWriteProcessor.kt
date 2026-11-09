@@ -42,7 +42,7 @@ data class ViewWriteOutcome(val sent: Int, val dropped: Int, val remaining: Int,
  * 위젯에서 한 보기 행 바꿈과 새 항목(view_writes)을 노션으로 보낸다. 만든 순서대로 하나씩 보내고, 일시 오류(연결·5xx·속도 제한·인증)면
  * 큐 전체를 멈춰 다음 실행에서 이어 간다. 노션이 거부(400)하거나 페이지·속성이 없으면, 값이 깨졌으면, 바꿈이 너무 여러 번 실패하면
  * 그 항목을 버리고 '노션 반영 실패'로 남긴다(앱 월 화면 머리의 알림). 바꿈은 그 보기를 다시 받아 위젯을 노션 값으로 되돌린다.
- * 새 항목은 일시 오류로는 버리지 않고 보낼 때까지 다시 시도한다(사용자가 입력한 글이라 잃지 않게). 새 항목을 만든 보기도 다시 받아 새 행을 보인다.
+ * 새 항목은 일시 오류나 공유 끊김으로는 버리지 않고 보낼 때까지 다시 시도한다(사용자가 입력한 글이라 잃지 않게). 새 항목을 만든 보기도 다시 받아 새 행을 보인다.
  * 일정 아웃박스([OutboxProcessor])와 따로 도는 큐라 서로의 순서·충돌 규칙에 영향이 없다.
  */
 @Singleton
@@ -82,17 +82,28 @@ class ViewWriteProcessor @Inject constructor(
         var retryError: NotionError? = null
         // 되돌릴 수 있는 시간이 지난 보낸 기록은 지우고, 위젯의 '보낸 변경 되돌리기' 줄도 이때 사라지게 다시 그린다.
         val expired = dao.deleteSentBefore(clock.millis() - ViewWriter.SENT_UNDO_WINDOW_MS)
+        // 공유가 끊긴 DB의 새 항목은 이번 실행에 건너뛴다(사용자가 입력한 글이라 버리지 않고, 공유를 다시 켜면 보낸다).
+        // 그 항목만 건너뛴다: 같은 DB의 속성 바꿈·휴지통은 예전처럼 '노션 반영 실패'로 정리돼 큐에 끝없이 남지 않는다.
+        val skipped = HashSet<Long>()
         while (true) {
-            val write = dao.firstDueWrite(clock.millis()) ?: break // 지연 중인 쓰기(sendAfter가 아직 안 됨)는 남겨 둔다
+            val write = dao.firstDueWrite(clock.millis(), skipped) ?: break // 지연 중인 쓰기(sendAfter가 아직 안 됨)는 남겨 둔다
             val result = try {
                 trySend(write, schemas)
             } catch (e: NotionException) {
-                if (e.error is NotionError.Validation || e.error == NotionError.NotShared) {
-                    SendResult.REJECTED
-                } else {
-                    dao.markWriteFailed(write.id, e.error.storedName())
-                    retryError = e.error
-                    break
+                val error = e.error
+                when {
+                    error == NotionError.NotShared && write.propType == VIEW_WRITE_CREATE -> {
+                        dao.markWriteError(write.id, error.storedName())
+                        skipped += write.id
+                        continue
+                    }
+                    error is NotionError.Validation || error == NotionError.NotShared -> SendResult.REJECTED
+                    else -> {
+                        // 서버 오류만 이 쓰기의 시도로 센다. 연결·속도 제한·인증은 이 쓰기 탓이 아니라, 세면 오래 꺼져 있던 폰에서 바꿈을 버린다.
+                        if (error is NotionError.Server) dao.markWriteFailed(write.id, error.storedName()) else dao.markWriteError(write.id, error.storedName())
+                        retryError = error
+                        break
+                    }
                 }
             }
             when (result) {

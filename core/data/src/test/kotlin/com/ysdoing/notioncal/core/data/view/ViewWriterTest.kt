@@ -502,8 +502,12 @@ class ViewWriterTest {
         // 보내는 중인 쓰기는 이미 노션에 반영되는 중이다. 다음 쓰기의 기준을 처음 값으로 이어받으면 보낸 값을 노션의 '다른 편집'으로 본다.
         seedMixed()
         writer().set("mx", "m1", "t", JsonPrimitive("둘째"))
-        db.viewDao().markWriteSending(db.viewDao().firstWrite()!!.id)
+        val sending = db.viewDao().firstWrite()!!.id
+        db.viewDao().markWriteSending(sending)
         writer().set("mx", "m1", "t", JsonPrimitive("셋째"))
+        // 보내는 중인 쓰기는 지우지 않고 앞에 남는다(전송이 끊기면 다음 실행에서 그것부터 다시 보낸다).
+        assertEquals(2, db.viewDao().pendingWriteCount())
+        db.viewDao().deleteWriteById(sending) // 처리기가 보내고 지웠다
         val write = db.viewDao().firstWrite()!!
         assertEquals(listOf("\"셋째\"", "\"둘째\""), listOf(write.value, write.baseValue)) // 기준은 직전에 보낸 값
     }

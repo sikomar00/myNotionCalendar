@@ -74,6 +74,15 @@ object MappingSuggester {
         return firstOf(NotionPageMapper.COMPLETE_GROUP) to firstOf("To-do")
     }
 
+    /**
+     * 보낼 때 쓸 완료·해제 옵션: 지금 스키마에서 다시 고르고, 못 고르면 [stored](등록 때 값).
+     * 노션에서 옵션 이름을 바꾸면 저장한 이름은 없는 옵션이 되어 완료 체크가 거부·되돌려진다.
+     */
+    fun statusOptions(schema: DataSourceDto, donePropId: String?, stored: Pair<String?, String?>): Pair<String?, String?> {
+        val (done, undone) = schema.properties.values.firstOrNull { it.id == donePropId }?.let(::statusOptions) ?: (null to null)
+        return (done ?: stored.first) to (undone ?: stored.second)
+    }
+
     fun doneType(prop: PropertySchemaDto?): DoneType? = when (prop?.type) {
         "checkbox" -> DoneType.CHECKBOX
         "status" -> DoneType.STATUS

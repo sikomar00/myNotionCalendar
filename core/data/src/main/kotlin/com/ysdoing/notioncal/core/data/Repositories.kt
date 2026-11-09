@@ -8,8 +8,12 @@ import com.ysdoing.notioncal.core.data.db.EventRow
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.SyncLogDao
 import com.ysdoing.notioncal.core.data.db.SyncLogEntity
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -114,11 +118,23 @@ class EditableEventRepository @Inject constructor(
     private val eventDao: EventDao,
     private val dataSourceDao: DataSourceDao,
 ) {
-    fun observe(pageId: String): Flow<EditableEvent?> =
-        combine(eventDao.observe(pageId), dataSourceDao.observeAll()) { event, sources ->
+    /**
+     * 새 일정을 편집하는 사이 생성이 노션에 가 id가 바뀌어도 같은 일정을 계속 낸다([CreatedPageIds]). 편집 폼은 id에 입력을 묶어 두므로
+     * 처음 연 id 그대로 내고, id가 바뀌는 순간 잠깐 지나가는 '없음'은 건너뛴다(폼이 닫혀 입력이 사라지지 않게).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observe(pageId: String): Flow<EditableEvent?> {
+        val events = CreatedPageIds.observe(pageId).flatMapLatest { id ->
+            if (id == pageId) {
+                eventDao.observe(id).filter { it != null || CreatedPageIds.resolve(pageId) == pageId } // 이름이 바뀌어 사라진 임시 행
+            } else {
+                eventDao.observe(id).dropWhile { it == null } // 진짜 행이 보이기 전의 '없음'만 건너뛰고, 그 뒤 지워지면 알린다
+            }
+        }
+        return combine(events, dataSourceDao.observeAll()) { event, sources ->
             val source = event?.let { e -> sources.firstOrNull { it.dataSourceId == e.dataSourceId } } ?: return@combine null
             EditableEvent(
-                event = EventRow(event, source.colorHex, source.useOptionColors).toCalendarEvent(),
+                event = EventRow(event.copy(pageId = pageId), source.colorHex, source.useOptionColors).toCalendarEvent(),
                 colorOptionId = event.colorOptionId,
                 colorOptions = parseColorOptions(source.colorOptions),
                 dataSourceName = source.name,
@@ -128,6 +144,7 @@ class EditableEventRepository @Inject constructor(
                 titleHasMention = event.titleHasMention,
             )
         }
+    }
 }
 
 @Singleton

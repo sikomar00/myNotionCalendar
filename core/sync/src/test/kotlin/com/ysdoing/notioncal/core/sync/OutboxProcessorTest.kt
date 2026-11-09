@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.DateValue
+import com.ysdoing.notioncal.core.data.EditableEventRepository
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventWriter
+import com.ysdoing.notioncal.core.data.OutboxOp
+import kotlinx.coroutines.flow.first
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.parseExtraValues
@@ -230,6 +233,65 @@ class OutboxProcessorTest {
         val created = notion.pages.values.single { it.title == "영어 스터디 복습" }
         assertEquals(created.id, db.eventDao().get(created.id)!!.pageId)
         assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun deletingACreateThatTimedOutTrashesThePageNotionAlreadyMade() = runTest {
+        // 생성이 시간 초과로 끝났지만 노션은 만들었다. 그 일정을 지우면 작업을 지우지 않고 찾아서 휴지통으로 보낸다(다음 동기화에 되살아나지 않게).
+        seeded()
+        val tempId = writer.create("ds", "지울 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        writer.trash(tempId)
+        assertEquals(OutboxOp.CANCEL_CREATE.name, db.outboxDao().all().single().op)
+
+        tick(30)
+        processor().process()
+
+        val made = notion.pages.values.single { it.title == "지울 일정" }
+        assertTrue(made.inTrash)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertNull(db.eventDao().get(made.id))
+        assertNull(db.eventDao().get(tempId))
+    }
+
+    @Test
+    fun deletingAnInterruptedCreateNeverTrashesAnotherEventWithTheSameTitleAndDate() = runTest {
+        // 같은 '커피'(10/20)를 하나 만들어 받아 두고, 1분 안에 또 만들었는데 노션에 닿기 전에 끊겼다. 둘째를 지워도 첫째는 남는다.
+        seeded()
+        writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        processor().process()
+        val first = notion.pages.values.single { it.title == "커피" }
+        val second = writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        var calls = 0
+        notion.onCall = { if (++calls == 2) throw com.ysdoing.notioncal.core.notion.NotionException(NotionError.Network) } // 스키마 다음, 생성 요청이 끊김
+        processor().process()
+        notion.onCall = null
+        writer.trash(second)
+        assertEquals(OutboxOp.CANCEL_CREATE.name, db.outboxDao().all().single().op)
+
+        processor().process()
+
+        assertFalse(notion.pages.getValue(first.id).inTrash)
+        assertEquals("커피", db.eventDao().get(first.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aSheetOpenedOnANewEventKeepsWorkingAfterItGetsItsNotionId() = runTest {
+        // 새 일정의 편집 시트를 연 채 생성이 노션에 가 id가 바뀌었다: 같은 시트에서 고친 내용이 진짜 페이지로 간다.
+        seeded()
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        processor().process()
+        val realId = notion.pages.values.single { it.title == "새 일정" }.id
+
+        val opened = EditableEventRepository(db.eventDao(), db.dataSourceDao()).observe(tempId).first()
+        assertEquals(tempId, opened!!.event.pageId) // 시트의 입력이 묶인 id는 그대로다
+        writer.update(tempId, EventChange(title = "고친 새 일정"))
+        processor().process()
+
+        assertEquals("고친 새 일정", notion.pages.getValue(realId).title)
+        assertEquals("고친 새 일정", db.eventDao().get(realId)!!.title)
     }
 
     // --- SY-08(Phase 10-1): 아웃박스 결함 3건. 각각 고치기 전에 실패하는 시험이다.

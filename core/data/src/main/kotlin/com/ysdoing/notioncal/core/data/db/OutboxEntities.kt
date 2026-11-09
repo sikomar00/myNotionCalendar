@@ -18,7 +18,7 @@ data class OutboxEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val pageId: String,
     val dataSourceId: String,
-    /** "CREATE", "UPDATE", "TRASH" */
+    /** "CREATE", "UPDATE", "TRASH", "CANCEL_CREATE"(OutboxOp) */
     val op: String,
     /** 보낼 값(바뀐 필드만). */
     val changes: String,

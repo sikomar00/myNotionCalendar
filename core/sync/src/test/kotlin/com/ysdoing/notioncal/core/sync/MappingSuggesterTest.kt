@@ -44,6 +44,18 @@ class MappingSuggesterTest {
         assertEquals("Done" to "시작 전", MappingSuggester.statusOptions(status))
     }
 
+    /** 등록 뒤 노션에서 완료 옵션 이름을 바꿨다: 보낼 때는 지금 스키마의 이름을 쓴다. 완료 속성이 없으면 저장값. */
+    @Test
+    fun sendTimeStatusOptionsFollowRenamedOptions() {
+        val renamed = schema(
+            """{"id":"ds2","properties":{"상태":{"id":"sTaT","name":"상태","type":"status","status":{
+              "options":[{"id":"o1","name":"할 일"},{"id":"o3","name":"끝"}],
+              "groups":[{"name":"To-do","option_ids":["o1"]},{"name":"Complete","option_ids":["o3"]}]}}}}""",
+        )
+        assertEquals("끝" to "할 일", MappingSuggester.statusOptions(renamed, "sTaT", "Done" to "시작 전"))
+        assertEquals("Done" to "시작 전", MappingSuggester.statusOptions(calendar, "sTaT", "Done" to "시작 전"))
+    }
+
     @Test
     fun databaseWithoutDateCannotBeUsed() {
         assertNull(MappingSuggester.suggest(schema("""{"id":"x","properties":{"N":{"id":"title","name":"N","type":"title"}}}""")))

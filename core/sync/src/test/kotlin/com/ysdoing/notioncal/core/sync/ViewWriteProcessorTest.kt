@@ -181,10 +181,55 @@ class ViewWriteProcessorTest {
         assertEquals(2, outcome.remaining) // 순서를 지키려고 첫 실패에서 멈춘다
         assertEquals(NotionError.Network, outcome.retryError)
         val first = db.viewDao().firstWrite()!!
-        assertEquals(1, first.attempts)
+        assertEquals(0, first.attempts) // 연결 끊김은 이 쓰기 탓이 아니라 버릴 때까지의 횟수로 세지 않는다
         assertEquals("Network", first.lastError)
         // 다음 실행에서 이어 보낸다.
         assertEquals(2, processor().process().sent)
+    }
+
+    /** 오래 꺼져 있던 폰: 연결·속도 제한·인증 실패가 몇 번이 나도 바꿈을 버리지 않는다. 서버 오류만 센다. */
+    @Test
+    fun onlyServerErrorsCountTowardDroppingAChange() = runTest {
+        writer().toggle("v1", "p1", "dn")
+        repeat(12) {
+            failures += listOf(NotionError.Network, NotionError.RateLimited, NotionError.Unauthorized)[it % 3]
+            processor().process()
+        }
+        assertEquals(0, db.viewDao().firstWrite()!!.attempts)
+        failures += NotionError.Server(503)
+        processor().process()
+        assertEquals(1, db.viewDao().firstWrite()!!.attempts)
+        assertEquals(1, processor().process().sent)
+    }
+
+    /** 노션에서 그 DB의 공유를 끊었다: 위젯에서 쓴 새 항목은 버리지 않고 남겨, 공유를 다시 켜면 만든다. */
+    @Test
+    fun aCreateForAnUnsharedDatabaseIsKeptUntilItIsSharedAgain() = runTest {
+        writer().create("v1", "장보기", null)
+        writer().toggle("v1", "p1", "dn")
+        failures += listOf(NotionError.NotShared, NotionError.NotShared)
+        val outcome = processor().process()
+        // 새 항목만 남기고, 같은 DB의 속성 바꿈은 예전처럼 '노션 반영 실패'로 정리한다(큐에 끝없이 남지 않게).
+        assertEquals(listOf(0, 1, 1), listOf(outcome.sent, outcome.dropped, outcome.remaining))
+        assertEquals("UPDATE", db.conflictDao().all().single().localValue)
+        assertEquals(1, processor().process().sent)
+        assertEquals(1, created.size)
+    }
+
+    /** 보내는 중에 같은 칸을 또 바꾸고 첫 전송이 끊겼다: 두 바꿈이 모두 남아 다음 실행에서 순서대로 나간다(충돌로 버려지지 않는다). */
+    @Test
+    fun aChangeMadeWhileTheSameCellIsBeingSentIsKeptBehindIt() = runTest {
+        writer().toggle("v1", "p1", "dn") // 꺼짐 → 켜짐
+        duringLookup = { if (pageLookups == 1) writer().toggle("v1", "p1", "dn") } // 보내는 중에 다시 켜짐 → 꺼짐
+        failures += NotionError.Network
+        processor().process()
+        assertEquals(2, db.viewDao().pendingWriteCount())
+        // 다음 실행: 첫 바꿈을 보낸 뒤 노션 값은 켜짐이다(가짜 노션은 값을 저장하지 않아 두 번째 확인 때 바꿔 둔다).
+        duringLookup = { if (pageLookups == 3) remote = remotePage(done = true, status = "o1", pages = 12.0) }
+        val outcome = processor().process()
+        assertEquals(listOf(2, 0), listOf(outcome.sent, outcome.dropped))
+        assertEquals(listOf("""{"Done":{"checkbox":true}}""", """{"Done":{"checkbox":false}}"""), sent.map { it.second.toString() })
+        assertEquals(0, db.conflictDao().all().size)
     }
 
     @Test

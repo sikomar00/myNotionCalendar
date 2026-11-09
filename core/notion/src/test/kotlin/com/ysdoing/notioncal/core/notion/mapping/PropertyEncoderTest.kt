@@ -77,6 +77,20 @@ class PropertyEncoderTest {
         assertFalse(encoder.encode(PageWrite(title = "x")).containsKey("cTgR"))
     }
 
+    /** 색 기준을 status로 고른 DB: select 키로 보내면 노션이 거부해 색 바꿈이 되돌려진다. */
+    @Test
+    fun statusColorPropertyIsWrittenAsStatus() {
+        val schema = NotionJson.decodeFromString(
+            DataSourceDto.serializer(),
+            """{"id":"ds","properties":{"단계":{"id":"dAnG","name":"단계","type":"status"}}}""",
+        )
+        val json = PropertyEncoder(tasks, null, null, schema).encode(PageWrite(setSelect = true, selectOptionId = "opt-doing"))
+        assertEquals("opt-doing", json["단계"]!!.jsonObject["status"]!!.jsonObject["id"]!!.jsonPrimitive.content)
+        assertFalse(json["단계"]!!.jsonObject.containsKey("select"))
+        // status는 비울 수 없어 색 지우기는 보내지 않는다(보내면 거부돼 '노션 반영 실패'가 남는다).
+        assertFalse(PropertyEncoder(tasks, null, null, schema).encode(PageWrite(setSelect = true, selectOptionId = null)).containsKey("단계"))
+    }
+
     @Test
     fun keysAreSchemaNamesNotEncodedIds() {
         // 실기기에서 `e%3D~%40` 같은 인코딩된 ID 키는 노션이 무시했다. 보낼 때는 스키마의 이름을 쓴다.

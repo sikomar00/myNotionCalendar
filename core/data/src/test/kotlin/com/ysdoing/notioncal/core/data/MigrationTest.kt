@@ -513,7 +513,7 @@ class MigrationTest {
         helper.runMigrationsAndValidate(18).close()
         val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
         try {
-            val write = db.viewDao().firstDueWrite(now = 10)!!
+            val write = db.viewDao().firstDueWrite(now = 10, skipped = emptyList())!!
             assertEquals(listOf("true", 1, 0L), listOf(write.value, write.attempts, write.sendAfter)) // 옛 쓰기는 바로 보낼 수 있다
             assertEquals("", db.viewDao().snapshot("v1")!!.filterJson)
             val widget = db.widgetConfigDao().get(7)!!
@@ -568,7 +568,7 @@ class MigrationTest {
         helper.runMigrationsAndValidate(21).close()
         val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
         try {
-            val write = db.viewDao().firstDueWrite(now = 100)!!
+            val write = db.viewDao().firstDueWrite(now = 100, skipped = emptyList())!!
             assertEquals(listOf("true", 12L, 0L), listOf(write.value, write.sendAfter, write.batchId)) // 옛 쓰기는 묶음이 아니다
             val widget = db.widgetConfigDao().get(9)!!
             assertEquals(listOf("v1", "{\"v1\":{}}", ""), listOf(widget.viewId, widget.formJson, widget.actionsJson)) // 기존 설정 보존
