@@ -147,7 +147,8 @@ private fun EditorActions(url: String, canSave: Boolean, dirty: Boolean, save: s
     ) { Text(stringResource(R.string.qs_save)) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (url.isNotBlank()) TextButton(onClick = { actions.onOpen(url) }) { Text(stringResource(R.string.qs_open_in_notion)) }
-        TextButton(onClick = { confirmTrash = true }) { Text(stringResource(R.string.vre_trash), color = MaterialTheme.colorScheme.error) }
+        // 일정 편집·가계부와 같은 '삭제'(확인 대화상자도 같은 문구).
+        TextButton(onClick = { confirmTrash = true }) { Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error) }
     }
     if (confirmTrash) {
         AlertDialog(
@@ -161,7 +162,7 @@ private fun EditorActions(url: String, canSave: Boolean, dirty: Boolean, save: s
                         actions.onTrash()
                         onClose()
                     }
-                }) { Text(stringResource(R.string.vre_trash_confirm), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.qs_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { confirmTrash = false }) { Text(stringResource(R.string.qs_cancel)) } },
         )

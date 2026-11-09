@@ -118,17 +118,32 @@ internal fun ReminderSection(
     // 시간 일정: N분 전(여러 개)
     Text(stringResource(R.string.settings_reminders_timed), style = MaterialTheme.typography.bodyMedium)
     var adding by rememberSaveable { mutableStateOf(false) }
+    var removing by rememberSaveable { mutableStateOf<Int?>(null) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         rules.timedMinutes.forEach { minutes ->
             val label = reminderLabel(minutes)
+            // 칩 어디를 눌러도 빼기라 글자만 눌러도 바로 사라졌다. 먼저 묻는다(칩 안 X만 따로 누르게 하면 누르는 영역이 18dp로 너무 작다).
             InputChip(
                 selected = false,
-                onClick = { onRulesChange(rules.copy(timedMinutes = rules.timedMinutes - minutes)) },
+                onClick = { removing = minutes },
                 label = { Text(label) },
                 trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_reminders_remove, label)) },
             )
         }
         AssistChip(onClick = { adding = true }, label = { Text(stringResource(R.string.settings_reminders_add)) })
+    }
+    removing?.let { minutes ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text(stringResource(R.string.settings_reminders_remove_confirm, reminderLabel(minutes))) },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    onRulesChange(rules.copy(timedMinutes = rules.timedMinutes - minutes))
+                }) { Text(stringResource(R.string.settings_reminders_remove_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.settings_cancel)) } },
+        )
     }
     if (adding) {
         AddReminderDialog(

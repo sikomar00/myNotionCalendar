@@ -30,6 +30,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import androidx.compose.ui.test.onLast
 
 /** Phase 11b ED-01~05: 보기 행 편집 시트의 내용. 속성 순서·잠금·바뀐 것만 저장·휴지통 확인·큰 글꼴. */
 @RunWith(RobolectricTestRunner::class)
@@ -212,10 +213,10 @@ class ViewRowEditorTest {
     @Test
     fun trashAsksFirstAndThenSendsTheRowToTheTrash() {
         show()
-        compose.onNodeWithText("휴지통으로 보내기").performScrollTo().performClick()
+        compose.onNodeWithText("삭제").performScrollTo().performClick()
         compose.onNodeWithText("휴지통으로 보낼까요?").assertExists()
         assertEquals(0, trashed)
-        compose.onNodeWithText("보내기").performClick()
+        compose.onAllNodesWithText("삭제").onLast().performClick() // 확인 대화상자 쪽
         assertEquals(1, trashed)
         assertEquals(1, closed)
     }
@@ -223,7 +224,7 @@ class ViewRowEditorTest {
     @Test
     fun cancellingTheTrashDialogKeepsTheRow() {
         show()
-        compose.onNodeWithText("휴지통으로 보내기").performScrollTo().performClick()
+        compose.onNodeWithText("삭제").performScrollTo().performClick()
         compose.onNodeWithText("취소").performClick()
         assertEquals(0, trashed)
     }
@@ -233,6 +234,6 @@ class ViewRowEditorTest {
     fun theThreeButtonsAreReachableAtTheLargestFont() {
         // UX-04: 글꼴 2.0에서도 저장·노션에서 열기·휴지통이 잘리지 않고 닿는다(저장은 폭 전체, 나머지는 아래 줄에서 줄바꿈).
         show()
-        listOf("저장", "노션에서 열기", "휴지통으로 보내기").forEach { compose.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
+        listOf("저장", "노션에서 열기", "삭제").forEach { compose.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
     }
 }

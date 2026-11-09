@@ -107,9 +107,9 @@
     <string name="settings_week_start">주 시작 요일</string>
     <string name="settings_sunday">일요일</string>
     <string name="settings_monday">월요일</string>
-    <string name="settings_hide_done">완료 항목 숨기기</string>
-    <string name="settings_hide_done_off">끄면 취소선으로 표시합니다.</string>
-    <string name="settings_schema_warning">노션 속성이 바뀌었습니다. 다시 연결이 필요할 수 있습니다</string>
+    <string name="settings_hide_done">완료한 일정 숨기기</string>
+    <string name="settings_hide_done_off">달력 ☰ 필터의 같은 설정입니다. 끄면 취소선으로 표시합니다.</string>
+    <string name="settings_schema_warning">노션 속성이 바뀌었습니다. \'속성 연결\'에서 다시 고르세요</string>
     <string name="settings_color_title">%1$s 색·강조</string>
     <string name="settings_color_emphasis">색·강조</string>
     <string name="settings_emphasis_title">강조할 일정</string>
@@ -222,7 +222,7 @@
     <string name="add_db_habit_no_relation">고른 속성이 다른 DB를 가리키는 관계형 속성이 아닙니다.</string>
     <string name="add_db_habit_link_hint">날짜가 없는 DB입니다. 🌱 습관 DB라면 ✅ 습관 기록 DB 링크를 넣으세요. 두 DB를 함께 등록합니다.</string>
     <string name="add_db_register_habit">습관 등록</string>
-    <string name="add_db_kind_lost">등록된 종류로 쓸 속성을 노션에서 찾지 못했습니다. 노션에서 필요한 속성(날짜·연결, 금액·타입)의 이름과 종류를 확인한 뒤 다시 연결하세요. 🌱 습관·예산·카테고리는 짝인 습관 기록·거래내역에서 연결합니다.</string>
+    <string name="add_db_kind_lost">등록된 종류로 쓸 속성을 노션에서 찾지 못했습니다. 노션에서 필요한 속성(날짜·연결, 금액·타입)의 이름과 종류를 확인한 뒤 \'속성 연결\'로 다시 고르세요. 🌱 습관·예산·카테고리는 짝인 습관 기록·거래내역에서 연결합니다.</string>
     <string name="add_db_kind_locked">이미 다른 종류로 등록된 DB라 종류를 바꿀 수 없습니다. 바꾸려면 설정에서 등록을 지운 뒤 다시 추가하세요.</string>
     <string name="add_db_preset_note">추천 값은 속성 이름으로 고른 기본값입니다. 필요하면 바꾸세요.</string>
     <string name="settings_section_reminders">알림</string>
@@ -236,6 +236,8 @@
     <string name="settings_reminders_add">추가</string>
     <string name="settings_reminders_add_title">알림 추가</string>
     <string name="settings_reminders_remove">%1$s 알림 빼기</string>
+    <string name="settings_reminders_remove_confirm">%1$s 알림을 뺄까요?</string>
+    <string name="settings_reminders_remove_ok">빼기</string>
     <string name="settings_reminders_amount">얼마 전</string>
     <string name="settings_reminders_max">최대 7일 전까지</string>
     <string name="settings_reminders_unit_minutes">분</string>

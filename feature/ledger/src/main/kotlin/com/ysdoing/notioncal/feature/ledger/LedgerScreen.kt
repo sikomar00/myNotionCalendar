@@ -355,7 +355,10 @@ private fun Duplicates(groups: List<DuplicateGroup>, actions: LedgerActions) {
             Column(Modifier.padding(top = 8.dp)) {
                 TxLine(group.keep)
                 Row {
-                    TextButton(onClick = { actions.onResolve(group) }) { Text(stringResource(R.string.ledger_keep_first)) }
+                    // 나중 행들이 노션 휴지통으로 가므로 삭제와 같게 확인을 받는다.
+                    TrashButton(stringResource(R.string.ledger_keep_first), stringResource(R.string.ledger_keep_first_confirm_body, group.extra.size), danger = false) {
+                        actions.onResolve(group)
+                    }
                     TextButton(onClick = { actions.onKeepBoth(group) }) { Text(stringResource(R.string.ledger_keep_both)) }
                 }
             }
@@ -379,21 +382,30 @@ private fun Review(rows: List<LedgerTx>, actions: LedgerActions) {
     }
 }
 
-/** 삭제는 노션 휴지통으로 가지만, 한 번 눌러 바로 사라지지 않게 확인을 받는다(퀵 시트와 같은 문구). */
 @Composable
-private fun DeleteButton(tx: LedgerTx, onDelete: (String) -> Unit) {
+private fun DeleteButton(tx: LedgerTx, onDelete: (String) -> Unit) =
+    TrashButton(stringResource(R.string.ledger_delete), stringResource(R.string.ledger_delete_confirm_body)) { onDelete(tx.pageId) }
+
+/**
+ * 노션 휴지통으로 보내는 버튼. 한 번 눌러 바로 사라지지 않게 확인을 받는다. 확인 문구·색은 일정 편집과 같다(빨간 '삭제', A-13).
+ * [danger]가 false면 버튼 글자는 기본색이다('먼저 만든 것만 남기기'처럼 정리가 주된 뜻일 때).
+ */
+@Composable
+private fun TrashButton(label: String, body: String, danger: Boolean = true, onConfirm: () -> Unit) {
     var asking by rememberSaveable { mutableStateOf(false) }
-    TextButton(onClick = { asking = true }) { Text(stringResource(R.string.ledger_delete)) }
+    TextButton(onClick = { asking = true }) {
+        Text(label, color = if (danger) MaterialTheme.colorScheme.error else Color.Unspecified)
+    }
     if (asking) {
         AlertDialog(
             onDismissRequest = { asking = false },
             title = { Text(stringResource(R.string.ledger_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.ledger_delete_confirm_body)) },
+            text = { Text(body) },
             confirmButton = {
                 TextButton(onClick = {
                     asking = false
-                    onDelete(tx.pageId)
-                }) { Text(stringResource(R.string.ledger_delete_confirm)) }
+                    onConfirm()
+                }) { Text(stringResource(R.string.ledger_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { asking = false }) { Text(stringResource(R.string.ledger_cancel)) } },
         )

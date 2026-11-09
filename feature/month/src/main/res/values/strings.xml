@@ -60,7 +60,7 @@
     <string name="search_empty_query">찾을 일정 제목을 입력하세요.</string>
     <string name="search_no_result">찾는 일정이 없습니다.</string>
     <string name="search_untitled">(제목 없음)</string>
-    <string name="schema_reconnect">다시 연결</string>
+    <string name="schema_reconnect">속성 연결</string>
     <string name="schema_ack">확인</string>
     <string name="schema_role_title">제목</string>
     <string name="schema_role_date">날짜</string>

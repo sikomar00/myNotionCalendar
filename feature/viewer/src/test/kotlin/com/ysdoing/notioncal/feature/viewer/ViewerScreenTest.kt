@@ -18,6 +18,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onAllNodesWithText
 
 /** VR-02 '더 보기' 전체 화면: 보기의 행을 열 이름과 함께 보이고, 행을 누르면 노션 페이지를 연다(편집 시트는 11b). */
 @RunWith(RobolectricTestRunner::class)
@@ -62,7 +64,7 @@ class ViewerScreenTest {
         compose.setContent { MaterialTheme { ViewerContent(ViewerState.Ready(board(noUrl)), onBack = {}, onOpen = {}) } }
         compose.onNodeWithContentDescription("주소 없음, 편집").performClick()
         compose.onNodeWithText("노션에서 열기").assertDoesNotExist()
-        compose.onNodeWithText("휴지통으로 보내기").assertExists()
+        compose.onNodeWithText("삭제").assertExists()
     }
 
     @Test
@@ -85,8 +87,8 @@ class ViewerScreenTest {
             MaterialTheme { ViewerContent(ViewerState.Ready(board(rows)), onBack = {}, onOpen = {}, onTrash = { trashed += it }) }
         }
         compose.onNodeWithContentDescription("운동, 편집").performClick()
-        compose.onNodeWithText("휴지통으로 보내기").performScrollTo().performClick()
-        compose.onNodeWithText("보내기").performClick()
+        compose.onNodeWithText("삭제").performScrollTo().performClick()
+        compose.onAllNodesWithText("삭제").onLast().performClick() // 확인 대화상자 쪽
         assertEquals(listOf("p2"), trashed)
     }
 

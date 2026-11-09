@@ -73,6 +73,8 @@ import javax.inject.Inject
 import com.ysdoing.notioncal.core.data.calendar.DONE_MARK
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /** 검색어와 그 결과. 입력이 바뀐 직후 이전 결과를 새 검색어의 결과로 오해하지 않게 함께 둔다. */
 data class SearchResults(val query: String, val events: List<CalendarEvent>)
@@ -91,6 +93,7 @@ class SearchViewModel @Inject constructor(
     val results: StateFlow<SearchResults?> = _query
         .debounce(SEARCH_DELAY_MS)
         .mapLatest { q -> SearchResults(q, events.search(q, LocalDate.now(clock.withZone(APP_ZONE)))) }
+        .flowOn(Dispatchers.Default) // 결과 변환이 추가 속성 JSON을 읽는다(메인 스레드 금지)
         .catch { error ->
             health.report(error)
             emit(SearchResults("", emptyList()))

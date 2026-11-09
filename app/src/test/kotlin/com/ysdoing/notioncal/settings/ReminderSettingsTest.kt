@@ -55,7 +55,10 @@ class ReminderSettingsTest {
         compose.clickLastWithText("추가")
         assertEquals(listOf(10, 2880), rules.timedMinutes)
         compose.onNodeWithText("2일 전").assertExists()
-        compose.onNodeWithContentDescription("10분 전 알림 빼기").performClick()
+        compose.onNodeWithText("10분 전").performClick()
+        assertEquals(listOf(10, 2880), rules.timedMinutes) // 칩 글자를 눌러도 바로 빠지지 않고 먼저 묻는다
+        compose.onNodeWithText("10분 전 알림을 뺄까요?").assertExists()
+        compose.onNodeWithText("빼기").performClick()
         assertEquals(listOf(2880), rules.timedMinutes)
     }
 

@@ -2,6 +2,8 @@ package com.ysdoing.notioncal.feature.ledger
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -101,10 +103,13 @@ class LedgerScreenTest {
         }
         compose.onNodeWithText("중복 1건").assertExists()
         compose.onNodeWithText("먼저 만든 것만 남기기").performClick()
+        assertEquals(emptyList<String>(), resolved) // 나중 행이 휴지통으로 가므로 확인 전에는 정리하지 않는다
+        compose.onNodeWithText("나중에 들어온 같은 행 1건을", substring = true).assertExists()
+        confirmTrash()
         compose.onNodeWithText("둘 다 유지").performClick()
         compose.onNodeWithText("확인 필요 1건").assertExists()
         compose.onNodeWithText("삭제").performClick()
-        compose.onNodeWithText("휴지통으로 보내기").performClick()
+        confirmTrash()
         compose.onNodeWithText("실제로 전환").performClick()
         assertEquals(listOf("second"), resolved)
         assertEquals(listOf("first"), kept)
@@ -126,8 +131,13 @@ class LedgerScreenTest {
         compose.onNodeWithText("정리 대상 1건").assertExists()
         compose.onNodeWithText("삭제").performClick()
         assertEquals(emptyList<String>(), deleted) // 확인 전에는 지우지 않는다
-        compose.onNodeWithText("휴지통으로 보내기").performClick()
+        confirmTrash()
         assertEquals(listOf("manual"), deleted)
+    }
+
+    /** 확인 대화상자의 '삭제'(일정 편집과 같은 문구). 뒤에 깔린 카드의 '삭제' 버튼과 같은 글자라 대화상자 쪽(마지막)을 누른다. */
+    private fun confirmTrash() {
+        compose.onAllNodesWithText("삭제").onLast().performClick()
     }
 
     /**

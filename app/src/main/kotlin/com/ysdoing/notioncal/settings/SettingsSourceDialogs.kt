@@ -18,7 +18,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.R
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.Role
 import com.ysdoing.notioncal.core.data.parseIdList
@@ -47,6 +45,8 @@ import com.ysdoing.notioncal.core.data.parsePropCatalog
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import com.ysdoing.notioncal.core.designsystem.toggleRow
+import com.ysdoing.notioncal.core.designsystem.RadioRow
 
 /** NS-09 매핑한 속성이 사라지거나 종류가 바뀌었다(이름만 바뀐 것은 제외). DB 줄 경고와 설정 탭의 문제 배지가 같이 쓴다. */
 internal fun hasSchemaProblem(source: DataSourceEntity): Boolean = SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }
@@ -73,14 +73,9 @@ internal fun ColorDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasColorProp) {
+                    // 줄 전체 48dp 눌림 영역(designsystem 규칙, UX-02). 날 selectable은 라디오 높이(약 24dp)뿐이었다.
                     listOf(true to R.string.settings_color_by_option, false to R.string.settings_color_by_database).forEach { (value, label) ->
-                        Row(
-                            Modifier.fillMaxWidth().selectable(selected = useOptions == value, role = Role.RadioButton) { useOptions = value },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = useOptions == value, onClick = null)
-                            Text(stringResource(label), Modifier.padding(start = 8.dp))
-                        }
+                        RadioRow(stringResource(label), selected = useOptions == value) { useOptions = value }
                     }
                 }
                 Text(
@@ -190,7 +185,7 @@ internal fun ExtraPropsDialog(source: DataSourceEntity, onSave: (List<String>) -
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .toggleable(value = prop.id in chosen, role = Role.Checkbox) { on ->
+                                .toggleRow(prop.id in chosen, Role.Checkbox) { on -> // 줄 전체 48dp(UX-02)
                                     chosen = if (on) chosen + prop.id else chosen - prop.id
                                 },
                             verticalAlignment = Alignment.CenterVertically,

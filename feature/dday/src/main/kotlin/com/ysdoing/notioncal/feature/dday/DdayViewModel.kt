@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Clock
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /** DD-01 디데이 화면: Room만 읽는다(고정 목록·일정 제목 검색). 고정은 앱 상태라 노션에 쓰지 않는다. */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -38,7 +40,7 @@ class DdayViewModel @Inject constructor(
 
     private val results = combine(query.debounce(SEARCH_DEBOUNCE_MS), today) { q, day -> q to day }.flatMapLatest { (q, day) ->
         flow<List<CalendarEvent>> { emit(events.search(q, day)) }
-    }
+    }.flowOn(Dispatchers.Default) // 결과 변환이 추가 속성 JSON을 읽는다(메인 스레드 금지)
 
     val state: StateFlow<DdayUiState> = combine(
         today.flatMapLatest { ddays.observe(it) },

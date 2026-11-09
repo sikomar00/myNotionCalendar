@@ -35,6 +35,8 @@ import com.ysdoing.notioncal.core.data.dday.DdayRepository
 import com.ysdoing.notioncal.core.data.weather.WeatherDay
 import com.ysdoing.notioncal.core.data.weather.WeatherHour
 import com.ysdoing.notioncal.core.data.weather.WeatherRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /** 시간 입력(시작·종료). 종일 일정이면 null. */
 data class TimeRange(val start: LocalTime, val end: LocalTime)
@@ -95,6 +97,7 @@ class QuickSheetViewModel @Inject constructor(
     /** 그날 일정(여러 날 일정 포함). */
     val dayEvents: StateFlow<List<CalendarEvent>> = date
         .flatMapLatest { d -> if (d == null) flowOf(emptyList()) else events.observeRange(d, d) }
+        .flowOn(Dispatchers.Default) // 일정 변환이 추가 속성 JSON을 읽는다(메인 스레드 금지, 달력·습관 화면과 같게)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** EX-02 그날 공휴일 이름(없거나 표시를 끄면 null). */
@@ -126,7 +129,8 @@ class QuickSheetViewModel @Inject constructor(
         s.defaultDataSourceId?.takeIf { id -> list.any { it.dataSourceId == id } } ?: list.firstOrNull()?.dataSourceId
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun observeEvent(pageId: String): Flow<EditableEvent?> = editable.observe(pageId)
+    /** 색 선택지·속성 목록·추가 속성 값 JSON을 읽으므로 메인 스레드 밖에서 만든다. */
+    fun observeEvent(pageId: String): Flow<EditableEvent?> = editable.observe(pageId).flowOn(Dispatchers.Default)
 
     /** WI-02 */
     fun add(event: NewEvent, onAdded: () -> Unit = {}) {

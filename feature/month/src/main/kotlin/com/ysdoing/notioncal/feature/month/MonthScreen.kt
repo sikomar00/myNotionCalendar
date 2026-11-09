@@ -25,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -145,6 +146,8 @@ fun MonthRoute(
         onOpenDateHandled()
     }
 
+    // 열린 서랍은 뒤로 가기로 닫는다. ModalDrawerSheet를 drawerState 없이 써서 시스템 뒤로 가기가 서랍을 지나쳐 앱을 닫았다.
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
     // ☰로만 열고(스와이프로 열면 월 넘김 가로 페이저와 겹친다), 열려 있을 때만 밀어서 닫을 수 있다.
     ModalNavigationDrawer(
         drawerState = drawerState,
