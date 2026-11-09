@@ -47,6 +47,7 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.ledger.DayMoney
+import com.ysdoing.notioncal.core.data.ledger.LEDGER_RECENT_WEEKS
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.data.ledger.MoneyFormat
 import kotlinx.coroutines.flow.first
@@ -120,13 +121,13 @@ data class LedgerMetrics(
             if (content(summary, weekdays) < cellNeeded) summary = false
             if (content(summary, weekdays) < cellNeeded) weekdays = false
             val fit = (content(summary, weekdays) / cellNeeded).toInt().coerceIn(1, 6)
-            val rows = if (mode == LedgerWidgetMode.LARGE && fit == 6) 6 else minOf(fit, 5)
+            val rows = if (mode == LedgerWidgetMode.LARGE && fit == 6) 6 else minOf(fit, LEDGER_RECENT_WEEKS.toInt())
             if (rows < 6) mode = LedgerWidgetMode.COMPACT
             val cell = maxOf(cellNeeded, content(summary, weekdays) / rows)
             // 기존 배치를 줄이지 않고, 칸에 남는 높이가 있을 때만 주 합계 줄 → 두 번째 금액 줄 순으로 쓴다(LD-15).
             val spare = cell - cellNeeded
             val amountLine = box(amount)
-            // 주 합계는 6주 그리드에서만: 최근 몇 주만 보이는 작은 위젯은 앞 주의 거래를 읽어 오지 않아 합계가 모자랄 수 있다.
+            // 주 합계는 6주 그리드에서만: 주 합계는 이 달 날짜분만 세어(weekMoney) 최근 몇 주를 보이는 작은 위젯의 지난달 주는 0으로 보인다.
             val weekTotal = if (rows == 6 && spare >= amountLine) amountLine else 0.dp
             return LedgerMetrics(
                 mode = mode,
@@ -233,6 +234,16 @@ fun LedgerWidgetContent(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)
     } else {
         GlanceModifier.fillMaxSize()
+    }
+    if (!board.registered) {
+        // 거래내역 DB를 등록하지 않았으면 '0원'과 빈 달력 대신 안내한다(습관 위젯과 같은 모양). 머리의 +도 뺀다: 저장이 NO_LEDGER로 실패한다.
+        Column(outer.padding(horizontal = LedgerMetrics.PADDING_H, vertical = LedgerMetrics.PADDING_V)) {
+            WidgetEmpty(
+                R.drawable.ic_widget_wallet, context.getString(R.string.ledger_widget_empty), palette, metrics.headerFontSp,
+                ctaText = context.getString(R.string.ledger_widget_empty_cta), ctaAction = actionStartActivity(ledgerTabIntent(context)), ctaTag = "ledgerEmpty",
+            )
+        }
+        return
     }
     // 자식: 위쪽 묶음 1 + 요일 1 + 주 줄 최대 6 = 8개(Glance 10개 제한).
     Column(outer.padding(horizontal = LedgerMetrics.PADDING_H, vertical = LedgerMetrics.PADDING_V)) {

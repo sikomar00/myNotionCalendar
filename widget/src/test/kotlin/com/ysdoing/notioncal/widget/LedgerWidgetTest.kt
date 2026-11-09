@@ -152,6 +152,18 @@ class LedgerWidgetTest {
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
     }
 
+    /** 거래내역 DB를 등록하지 않았으면 '0원'·빈 달력·+ 대신 안내와 💰 탭 버튼(습관 위젯과 같은 모양). */
+    @Test
+    fun unregisteredLedgerShowsGuidanceInsteadOfAnEmptyCalendar() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(LedgerWidgetState(board().copy(registered = false), WidgetConfig(1)), systemFontScale = 1f) }
+        onNode(hasTextEqualTo("등록한 가계부가 없습니다")).assertExists()
+        onNode(hasTestTag("ledgerEmpty")).assert(hasStartActivityClickAction(ledgerTabIntent(context)))
+        onAllNodes(hasTestTag("ledgerDay")).assertCountEquals(0)
+        onAllNodes(hasTestTag("ledgerAdd")).assertCountEquals(0)
+    }
+
     /** LD-07: 머리줄 '+'와 빈 날은 그 날짜로 입력 시트, 그날 항목이 있는 날은 💰 탭의 그 날짜를 연다(위젯은 네트워크 없이 인텐트만). */
     @Test
     fun addButtonAndEmptyDaysOpenInputAndDaysWithMoneyOpenTheLedgerTab() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {

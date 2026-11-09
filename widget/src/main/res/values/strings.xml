@@ -68,6 +68,8 @@
     <string name="ledger_widget_week_over">이번 주 %1$s 초과 · %2$d일</string>
     <string name="ledger_widget_week_spend">이번 주 지출 %1$s</string>
     <string name="ledger_widget_add">거래 추가</string>
+    <string name="ledger_widget_empty">등록한 가계부가 없습니다</string>
+    <string name="ledger_widget_empty_cta">가계부 보기</string>
     <string name="ledger_widget_day">%1$d월 %2$d일</string>
     <string name="ledger_widget_week_total">주 합계 지출 %1$s, 수입 %2$s</string>
     <string name="ledger_widget_week_total_hidden">주 합계</string>

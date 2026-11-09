@@ -137,6 +137,17 @@ class CoverSyncTest {
         assertTrue(client.interceptors.all { it is com.ysdoing.notioncal.core.notion.http.SocketTagInterceptor })
     }
 
+    /** 위젯이 메인 스레드에서 처음 만들어도 디스크를 건드리지 않는다(폴더는 처음 파일을 쓸 때 구함, StrictMode). */
+    @Test
+    fun creatingTheStoreAndReadingItsVersionDoesNotTouchTheFolder() {
+        var asked = 0
+        val store = CoverStore({ asked++; dir })
+        assertEquals(0, store.version.value)
+        assertEquals(0, asked)
+        store.save("https://img.example/1.jpg", jpegLike)
+        assertEquals(1, asked)
+    }
+
     @Test
     fun storeKeepsTheSameFileWhenOnlyTheSignatureChanges() {
         val store = CoverStore(dir)

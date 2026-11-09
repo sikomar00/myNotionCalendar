@@ -18,11 +18,17 @@ import javax.inject.Singleton
  * 경로는 같아서 같은 표지를 다시 받지 않는다. 책을 가리키는 값이 쿼리에 든 외부 주소(`?id=…`)는 서로 다른 파일이다.
  */
 class CoverStore(
-    private val dir: File,
+    dirOf: () -> File,
     private val maxTotalBytes: Long = MAX_TOTAL_BYTES,
     /** 이보다 새로 쓴 파일은 정리하지 않는다: 정리가 도는 사이 다른 동기화가 막 저장한 표지·임시 파일을 지우지 않게. */
     private val pruneGraceMillis: Long = PRUNE_GRACE_MILLIS,
 ) {
+    constructor(dir: File, maxTotalBytes: Long = MAX_TOTAL_BYTES, pruneGraceMillis: Long = PRUNE_GRACE_MILLIS) :
+        this({ dir }, maxTotalBytes, pruneGraceMillis)
+
+    // 폴더 경로는 처음 쓸 때(파일 읽기·쓰기, 늘 IO 스레드) 구한다. 위젯이 메인 스레드에서 이 객체를 처음 만들 때
+    // noBackupFilesDir가 폴더를 확인해(디스크 읽기) StrictMode 위반이 났다(설치 직후 위젯 다시 그리기, 실기기 확인).
+    private val dir by lazy(dirOf)
     private val lock = Any()
 
     fun fileFor(url: String): File = File(dir, "${keyOf(url)}.jpg")
@@ -117,5 +123,5 @@ object CoverModule {
     /** 자동 백업에 넣지 않는 폴더(다시 받을 수 있는 이미지라 백업이 부풀지 않게). */
     @Provides
     @Singleton
-    fun provideCoverStore(@ApplicationContext context: Context): CoverStore = CoverStore(File(context.noBackupFilesDir, "covers"))
+    fun provideCoverStore(@ApplicationContext context: Context): CoverStore = CoverStore({ File(context.noBackupFilesDir, "covers") })
 }

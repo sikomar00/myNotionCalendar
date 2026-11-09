@@ -25,6 +25,9 @@ import java.time.temporal.TemporalAdjusters
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** 6주 그리드가 들어가지 않는 작은 가계부 위젯이 그리는 최근 주의 최대 수(이번 주 포함). 보드는 그만큼 앞 주의 거래도 읽는다. */
+const val LEDGER_RECENT_WEEKS = 5L
+
 /** LD-07 저장 결과. */
 enum class LedgerAddResult { SAVED, INVALID_AMOUNT, NO_LEDGER }
 
@@ -64,7 +67,10 @@ class LedgerRepository @Inject constructor(
         settings.settings.map { it.weekStart }.distinctUntilChanged().flatMapLatest { weekStart ->
             val gridFrom = gridStart(month, weekStart)
             val weekFrom = today.with(TemporalAdjusters.previousOrSame(weekStart))
-            val from = minOf(gridFrom, weekFrom, month.atDay(1)).minusDays(1)
+            // 작은 가계부 위젯은 이번 주를 맨 아래로 최근 [LEDGER_RECENT_WEEKS]주까지 그린다. 월초엔 그 앞 주가 그리드 앞이라 금액이 비어 보였다.
+            val recentFrom = weekFrom.minusWeeks(LEDGER_RECENT_WEEKS - 1)
+            val cardsFrom = minOf(gridFrom, weekFrom, month.atDay(1)).minusDays(1)
+            val from = minOf(cardsFrom, recentFrom.minusDays(1))
             val to = maxOf(gridFrom.plusDays(GRID_DAYS - 1), weekFrom.plusDays(6)).plusDays(1)
             val inputs = combine(
                 db.dataSourceDao().observeByKind(SourceKind.LEDGER.name),
@@ -87,9 +93,19 @@ class LedgerRepository @Inject constructor(
                     rules = rules,
                     asOf = input.asOf,
                 )
-                LedgerBoard(month, today, weekStart, summary, registered = source != null)
+                LedgerBoard(month, today, weekStart, summary.cardsFrom(cardsFrom), registered = source != null)
             }
         }
+
+    /**
+     * 💰 탭의 중복·확인 필요·짝 카드는 보는 달의 그리드 범위([from]부터)만: 작은 위젯 때문에 더 앞 주까지 읽어도 지난달 항목이
+     * 이번 달 카드에 섞여 '정리'로 지난달 행을 지우지 않게 한다.
+     */
+    private fun LedgerSummary.cardsFrom(from: LocalDate) = copy(
+        duplicates = duplicates.filter { !it.keep.date.isBefore(from) },
+        needsReview = needsReview.filter { !it.date.isBefore(from) },
+        matchedManual = matchedManual.filter { !it.first.date.isBefore(from) },
+    )
 
     private class Inputs(
         val source: com.ysdoing.notioncal.core.data.db.DataSourceEntity?,
