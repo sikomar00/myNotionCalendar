@@ -7,6 +7,8 @@ import com.ysdoing.notioncal.core.notion.dto.ErrorDto
 import com.ysdoing.notioncal.core.notion.dto.PageDto
 import com.ysdoing.notioncal.core.notion.dto.ParentDto
 import com.ysdoing.notioncal.core.notion.dto.QueryRequestDto
+import com.ysdoing.notioncal.core.notion.dto.SearchRequestDto
+import com.ysdoing.notioncal.core.notion.dto.plainTitle
 import com.ysdoing.notioncal.core.notion.dto.UpdatePageDto
 import com.ysdoing.notioncal.core.notion.dto.UserDto
 import com.ysdoing.notioncal.core.notion.dto.ViewDto
@@ -43,6 +45,15 @@ interface NotionWriter {
     suspend fun trashPage(pageId: String): PageDto?
 }
 
+/** 이 연결에 공유된 DB 하나(검색 결과). 등록 조회는 [databaseId]로 한다([dataSourceId]로 DB를 조회하면 404). */
+data class SharedDataSource(val databaseId: String, val dataSourceId: String, val name: String)
+
+/** 공유 DB 검색 결과. [truncated]면 [MAX_SEARCH_PAGES]쪽에서 멈춰 더 있을 수 있다. */
+data class SharedDataSources(val items: List<SharedDataSource>, val truncated: Boolean)
+
+/** 공유 DB 검색을 받는 최대 쪽 수(쪽당 100개). */
+internal const val MAX_SEARCH_PAGES = 5
+
 /**
  * [NotionApi] 호출을 감싸 실패를 [NotionException]으로 바꾼다.
  * API(OkHttp·SSL 초기화)는 첫 호출 때 만든다. 화면 ViewModel이 메인 스레드에서 이 클래스를 주입받아도
@@ -71,6 +82,26 @@ class NotionClient @Inject constructor(
             cursor = if (page.hasMore) page.nextCursor else null
         } while (cursor != null)
         return found
+    }
+
+    /**
+     * NS-02: 이 연결에 공유된 DB(data source) 목록. DB 아래에 있지 않은 것(부모가 DB가 아님)은 등록할 수 없어 뺀다.
+     * 공유한 DB가 아주 많아도 끝없이 받지 않게 [MAX_SEARCH_PAGES]쪽(500개)까지만 받고, 그랬으면 [SharedDataSources.truncated].
+     * 휴지통에 있는 것은 뺀다.
+     */
+    suspend fun sharedDataSources(): SharedDataSources {
+        val found = mutableListOf<SharedDataSource>()
+        var cursor: String? = null
+        var pages = 0
+        do {
+            val page = call { api.search(SearchRequestDto(startCursor = cursor)) }
+            page.results.forEach { result ->
+                val databaseId = result.parent?.databaseId ?: return@forEach
+                if (!result.inTrash) found += SharedDataSource(databaseId, result.id, result.title.plainTitle())
+            }
+            cursor = if (page.hasMore) page.nextCursor else null
+        } while (cursor != null && ++pages < MAX_SEARCH_PAGES)
+        return SharedDataSources(found, truncated = cursor != null)
     }
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto = call { api.dataSource(dataSourceId) }

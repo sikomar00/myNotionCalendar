@@ -158,6 +158,16 @@
     <string name="error_invalid_link">노션 DB 링크에서 ID를 찾지 못했습니다.</string>
 
     <string name="add_db_title">DB 추가</string>
+    <string name="add_db_pick_title">노션에서 고르기</string>
+    <string name="add_db_pick_empty">이 앱에 연결된 DB가 없습니다. 노션에서 DB 페이지의 ••• → 연결 추가로 이 앱을 연결하면 여기에 보입니다.</string>
+    <string name="add_db_pick_retry">다시 불러오기</string>
+    <string name="add_db_pick_again">목록에서 다시 고르기</string>
+    <string name="add_db_pick_truncated">목록이 길어 앞의 500개만 보입니다. 찾는 DB가 없으면 아래에 링크를 붙여넣으세요.</string>
+    <string name="add_db_pick_search">DB 이름 검색</string>
+    <string name="add_db_pick_no_match">찾는 이름의 DB가 없습니다.</string>
+    <string name="add_db_pick_registered">등록됨</string>
+    <string name="add_db_pick_untitled">(제목 없음)</string>
+    <string name="add_db_or_link">또는 링크 붙여넣기</string>
     <string name="add_db_link_label">DB 링크</string>
     <string name="add_db_link_hint">노션에서 DB 페이지의 ••• → 링크 복사</string>
     <string name="add_db_inspect">조회</string>

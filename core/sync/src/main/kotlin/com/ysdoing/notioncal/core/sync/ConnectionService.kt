@@ -11,10 +11,15 @@ import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.notion.NotionClient
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
+import com.ysdoing.notioncal.core.notion.SharedDataSource
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
+import com.ysdoing.notioncal.core.notion.dto.plainTitle
 import com.ysdoing.notioncal.core.notion.mapping.NotionLinkParser
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +69,25 @@ sealed interface CompanionResult {
     data class Failed(val error: NotionError) : CompanionResult
 }
 
+/** NS-02 DB 추가 목록의 한 줄: 이 연결에 공유된 DB. [registered]면 이미 등록했다(짝으로 함께 등록한 것 포함). */
+data class SharedDatabase(val databaseId: String, val dataSourceId: String, val name: String, val registered: Boolean)
+
+sealed interface SharedDatabasesResult {
+    /** [truncated]면 목록이 길어 앞쪽만 받았다(없으면 링크 붙여넣기). */
+    data class Ok(val databases: List<SharedDatabase>, val truncated: Boolean = false) : SharedDatabasesResult
+    data class Failed(val error: NotionError) : SharedDatabasesResult
+}
+
+/**
+ * 등록 안 한 DB를 먼저, 그 안에서는 이름순(노션 검색은 최근 수정순이라 목록이 매번 흔들린다). 이름은 한국어 순서(대소문자 무시)로,
+ * 제목이 없는 DB는 끝에 둔다.
+ */
+internal fun sharedDatabases(shared: List<SharedDataSource>, registeredIds: Set<String>): List<SharedDatabase> {
+    val byName = Collator.getInstance(Locale.KOREAN).apply { strength = Collator.SECONDARY }
+    return shared.map { SharedDatabase(it.databaseId, it.dataSourceId, it.name, it.dataSourceId in registeredIds) }
+        .sortedWith(compareBy<SharedDatabase>({ it.registered }, { it.name.isBlank() }).thenComparing({ it.name }, byName))
+}
+
 sealed interface InspectResult {
     data class Ok(val inspection: DatabaseInspection) : InspectResult
     data object InvalidLink : InspectResult
@@ -95,6 +119,17 @@ class ConnectionService @Inject constructor(
         }
     }
 
+    /** NS-02: 링크를 붙여넣지 않고 고르도록, 이 연결에 공유된 DB 목록(읽기만). */
+    suspend fun sharedDatabases(): SharedDatabasesResult = withContext(io) {
+        try {
+            val registered = dataSourceDao.observeAll().first().map { it.dataSourceId }.toSet()
+            val shared = client.sharedDataSources()
+            SharedDatabasesResult.Ok(sharedDatabases(shared.items, registered), shared.truncated)
+        } catch (e: NotionException) {
+            SharedDatabasesResult.Failed(e.error)
+        }
+    }
+
     suspend fun inspect(link: String, preferredDataSourceId: String? = null): InspectResult = withContext(io) {
         val parsedId = NotionLinkParser.databaseId(link) ?: return@withContext InspectResult.InvalidLink
         // 🌱 습관·예산·카테고리 마스터 다시 연결(NS-09): 짝인 ✅ 습관 기록·거래내역으로 연다(한 화면에서 함께 맞춘다).
@@ -113,8 +148,8 @@ class ConnectionService @Inject constructor(
                 ?: refs.firstOrNull()?.first
                 ?: return@withContext InspectResult.Failed(NotionError.NotShared)
             val schema = client.dataSource(dataSourceId)
-            val name = database.title.joinToString("") { it.plainText }.ifBlank {
-                schema.title.joinToString("") { it.plainText }
+            val name = database.title.plainTitle().ifBlank {
+                schema.title.plainTitle()
             }
             val existing = dataSourceDao.get(dataSourceId)
             val suggested = MappingSuggester.suggest(schema)
@@ -196,9 +231,9 @@ class ConnectionService @Inject constructor(
         try {
             val schema = client.dataSource(habitSourceId)
             val databaseId = relation.databaseId
-            val name = databaseId?.let { id -> runCatching { client.database(id) }.getOrNull()?.title?.joinToString("") { it.plainText } }
+            val name = databaseId?.let { id -> runCatching { client.database(id) }.getOrNull()?.title?.plainTitle() }
                 ?.takeIf { it.isNotBlank() }
-                ?: schema.title.joinToString("") { it.plainText }
+                ?: schema.title.plainTitle()
             val existing = dataSourceDao.get(habitSourceId)?.takeIf { it.sourceKind == SourceKind.HABIT }
             val suggested = HabitSuggester.suggestHabit(schema)
             HabitInspectResult.Ok(
@@ -238,7 +273,7 @@ class ConnectionService @Inject constructor(
         val database = client.database(databaseId)
         val dataSourceId = database.dataSources.firstOrNull()?.id ?: throw NotionException(NotionError.NotShared)
         val schema = client.dataSource(dataSourceId)
-        val name = database.title.joinToString("") { it.plainText }.ifBlank { schema.title.joinToString("") { it.plainText } }
+        val name = database.title.plainTitle().ifBlank { schema.title.plainTitle() }
         val budgetChoice = if (budget) LedgerSuggester.suggestBudget(schema) else null
         val categoryChoice = if (budget) null else LedgerSuggester.suggestCategory(schema)
         if (budgetChoice == null && categoryChoice == null) {

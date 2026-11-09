@@ -19,6 +19,9 @@ data class RichTextDto(
     @SerialName("plain_text") val plainText: String = "",
 )
 
+/** 노션 제목(서식 글자 조각들)을 한 줄 글자로. 노션 제목 앞뒤에 빈칸이 붙어 오는 일이 있어(실기기 확인) 자른다. */
+fun List<RichTextDto>.plainTitle(): String = joinToString("") { it.plainText }.trim()
+
 @Serializable
 data class DataSourceRefDto(
     val id: String,
@@ -30,6 +33,8 @@ data class DataSourceRefDto(
 data class ParentRefDto(
     val type: String = "",
     @SerialName("page_id") val pageId: String? = null,
+    /** 검색 결과의 data source가 속한 DB. */
+    @SerialName("database_id") val databaseId: String? = null,
 )
 
 @Serializable
@@ -163,6 +168,33 @@ data class QueryResponseDto(
     @SerialName("next_cursor") val nextCursor: String? = null,
     @SerialName("has_more") val hasMore: Boolean = false,
     @SerialName("request_status") val requestStatus: RequestStatusDto? = null,
+)
+
+/** POST v1/search: 이 연결에 공유된 data source만(2025-09-03부터 DB 대신 data source로 찾는다). */
+@Serializable
+data class SearchRequestDto(
+    val filter: SearchFilterDto = SearchFilterDto(),
+    @SerialName("start_cursor") val startCursor: String? = null,
+    @SerialName("page_size") val pageSize: Int = 100,
+)
+
+@Serializable
+data class SearchFilterDto(val property: String = "object", val value: String = "data_source")
+
+@Serializable
+data class SearchResponseDto(
+    val results: List<SearchResultDto> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
+
+/** 검색 결과 한 줄. 앱은 id·제목·부모 DB만 쓴다(칸이 없어도 깨지지 않게 기본값). */
+@Serializable
+data class SearchResultDto(
+    val id: String,
+    val title: List<RichTextDto> = emptyList(),
+    val parent: ParentRefDto? = null,
+    @SerialName("in_trash") val inTrash: Boolean = false,
 )
 
 @Serializable

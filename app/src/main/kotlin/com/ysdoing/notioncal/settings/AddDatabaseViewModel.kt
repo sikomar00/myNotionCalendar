@@ -16,6 +16,8 @@ import com.ysdoing.notioncal.core.sync.HabitInspectResult
 import com.ysdoing.notioncal.core.sync.HabitInspection
 import com.ysdoing.notioncal.core.sync.HabitLogChoice
 import com.ysdoing.notioncal.core.sync.InspectResult
+import com.ysdoing.notioncal.core.sync.SharedDatabasesResult
+import com.ysdoing.notioncal.core.sync.SharedDatabase
 import com.ysdoing.notioncal.core.sync.MappingChoice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -61,6 +63,15 @@ data class LedgerPart(
     val spendNegative: Boolean = true,
 )
 
+/** NS-02 '노션에서 고르기' 목록 상태. [databases]가 null이면 아직 받지 않았다. */
+data class SharedListUi(
+    val loading: Boolean = false,
+    val databases: List<SharedDatabase>? = null,
+    val error: NotionError? = null,
+    /** 목록이 길어 앞쪽만 받았다. */
+    val truncated: Boolean = false,
+)
+
 /** HB-01 짝인 🌱 습관 조회 상태. */
 data class HabitPart(
     val loading: Boolean = false,
@@ -83,6 +94,7 @@ data class AddDatabaseUi(
     val habit: HabitPart = HabitPart(),
     val ledgerChoice: LedgerChoice? = null,
     val ledger: LedgerPart = LedgerPart(),
+    val shared: SharedListUi = SharedListUi(),
 ) {
     /** 이미 등록한 DB를 다른 종류로 등록하려 한다([kindLost]). 등록을 막고 이유를 보인다. */
     val kindLost: Boolean get() = kindLost(kind, inspection?.existingKind)
@@ -113,11 +125,14 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
 
     private var lastLink = ""
     private var habitJob: Job? = null
+    private var inspectJob: Job? = null
 
     fun inspect(link: String, dataSourceId: String? = null) {
         lastLink = link
         _ui.update { it.copy(loading = true, error = null, invalidLink = false) }
-        viewModelScope.launch {
+        // 앞선 조회가 늦게 끝나 방금 고른 DB를 덮어쓰지 않게 취소한다(목록에서 연달아 누른 경우).
+        inspectJob?.cancel()
+        inspectJob = viewModelScope.launch {
             when (val result = connection.inspect(link, dataSourceId)) {
                 is InspectResult.Ok -> {
                     val inspection = result.inspection
@@ -152,6 +167,29 @@ class AddDatabaseViewModel @Inject constructor(private val connection: Connectio
     }
 
     fun selectDataSource(id: String) = inspect(lastLink, id)
+
+    /** NS-02: 이 연결에 공유된 DB 목록을 받는다(읽기만). 받는 중이면 다시 부르지 않는다. */
+    fun loadShared() {
+        if (_ui.value.shared.loading) return
+        _ui.update { it.copy(shared = it.shared.copy(loading = true, error = null)) }
+        viewModelScope.launch {
+            val shared = when (val result = connection.sharedDatabases()) {
+                is SharedDatabasesResult.Ok -> SharedListUi(databases = result.databases, truncated = result.truncated)
+                is SharedDatabasesResult.Failed -> SharedListUi(error = result.error)
+            }
+            _ui.update { it.copy(shared = shared) }
+        }
+    }
+
+    /** 목록에서 고른 DB를 링크로 넣은 것처럼 조회한다(첫 인자는 부모 DB id여야 한다). */
+    fun pick(database: SharedDatabase) = inspect(database.databaseId, database.dataSourceId)
+
+    /** 잘못 골랐을 때 목록으로 돌아간다: 조회한 DB와 매핑을 비우고 받아 둔 목록·고른 색은 남긴다. */
+    fun backToList() {
+        inspectJob?.cancel()
+        habitJob?.cancel()
+        _ui.update { AddDatabaseUi(colorHex = it.colorHex, shared = it.shared) }
+    }
 
     fun updateChoice(transform: (MappingChoice) -> MappingChoice) {
         _ui.update { state -> state.copy(choice = state.choice?.let(transform)) }

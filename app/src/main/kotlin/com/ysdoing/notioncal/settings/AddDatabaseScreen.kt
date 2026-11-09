@@ -36,6 +36,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -82,6 +83,8 @@ fun AddDatabaseRoute(
         if (ui.inspection == null && !ui.loading) viewModel.inspect(db, ds)
     }
     LaunchedEffect(ui.registered) { if (ui.registered) onDone() }
+    // NS-02: 새로 더할 때는 링크 대신 고를 수 있게 공유된 DB 목록을 한 번 받는다(다시 연결은 이미 DB가 정해져 있다).
+    LaunchedEffect(reconnect) { if (reconnect == null && ui.shared.databases == null) viewModel.loadShared() }
 
     Scaffold(
         topBar = {
@@ -100,6 +103,20 @@ fun AddDatabaseRoute(
             Modifier.padding(padding).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // DB를 고른 뒤에는 목록을 접어 속성 고르기가 바로 보이게 한다.
+            if (reconnect == null && ui.inspection == null) {
+                SharedDatabaseList(
+                    ui.shared,
+                    // 조회하는 동안에는 다른 줄을 누를 수 없다(늦게 온 응답이 고른 DB를 덮어쓰지 않게).
+                    enabled = !ui.loading,
+                    onPick = { database ->
+                        link = database.databaseId
+                        viewModel.pick(database)
+                    },
+                    onRetry = viewModel::loadShared,
+                )
+                SubSection(stringResource(R.string.add_db_or_link))
+            }
             OutlinedTextField(
                 value = link,
                 onValueChange = { link = it },
@@ -119,6 +136,12 @@ fun AddDatabaseRoute(
 
             val inspection = ui.inspection ?: return@Column
             Text(inspection.name, style = MaterialTheme.typography.titleLarge)
+            if (reconnect == null && ui.shared.databases != null) {
+                TextButton(onClick = {
+                    link = ""
+                    viewModel.backToList()
+                }) { Text(stringResource(R.string.add_db_pick_again)) }
+            }
             if (inspection.dataSources.size > 1) {
                 PropertyDropdown(
                     label = stringResource(R.string.add_db_data_source),

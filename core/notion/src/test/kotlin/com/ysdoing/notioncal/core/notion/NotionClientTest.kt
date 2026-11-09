@@ -251,4 +251,35 @@ class NotionClientTest {
         assertEquals("/v1/blocks/page-money/children?page_size=100", server.takeRequest().target)
         assertEquals("/v1/blocks/page-money/children?start_cursor=c2&page_size=100", server.takeRequest().target)
     }
+
+    /** NS-02 DB 목록: data source만 찾고(필터), 다음 쪽까지 잇고, DB 아래에 있지 않은 것은 뺀다. 고른 뒤 조회는 부모 DB id로 한다. */
+    @Test
+    fun sharedDataSourcesFollowCursorAndKeepOnlyThoseUnderADatabase() = runTest {
+        server.enqueue(
+            ok(
+                """{"object":"list","results":[
+                   {"object":"data_source","id":"ds-cal","title":[{"plain_text":"📅 "},{"plain_text":"Calendar"}],
+                    "parent":{"type":"database_id","database_id":"db-cal"}},
+                   {"object":"data_source","id":"ds-wiki","title":[{"plain_text":"위키"}],"parent":{"type":"page_id","page_id":"p1"}}],
+                   "next_cursor":"c2","has_more":true}""",
+            ),
+        )
+        server.enqueue(
+            ok(
+                """{"object":"list","results":[
+                   {"object":"data_source","id":"ds-tx","title":[{"plain_text":" 거래내역 "}],"parent":{"type":"database_id","database_id":"db-tx"}}],
+                   "next_cursor":null,"has_more":false}""",
+            ),
+        )
+        assertEquals(
+            listOf(SharedDataSource("db-cal", "ds-cal", "📅 Calendar"), SharedDataSource("db-tx", "ds-tx", "거래내역")),
+            client.sharedDataSources().items,
+        )
+        val first = server.takeRequest()
+        assertEquals("/v1/search", first.target)
+        val body1 = Json.parseToJsonElement(first.body!!.utf8()).jsonObject
+        assertEquals("""{"property":"object","value":"data_source"}""", body1["filter"].toString())
+        val body2 = Json.parseToJsonElement(server.takeRequest().body!!.utf8()).jsonObject
+        assertEquals("\"c2\"", body2["start_cursor"].toString())
+    }
 }
