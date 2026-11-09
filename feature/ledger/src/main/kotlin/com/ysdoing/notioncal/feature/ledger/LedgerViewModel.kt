@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.ledger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.AppHealth
+import com.ysdoing.notioncal.core.data.observeToday
 import com.ysdoing.notioncal.core.data.ledger.DuplicateGroup
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.data.ledger.LedgerRepository
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.time.YearMonth
 import javax.inject.Inject
 
@@ -27,9 +29,15 @@ import javax.inject.Inject
 class LedgerViewModel @Inject constructor(
     private val ledger: LedgerRepository,
     private val health: AppHealth,
+    clock: Clock,
 ) : ViewModel() {
     private val today = MutableStateFlow(ledger.today())
     private val month = MutableStateFlow(YearMonth.from(today.value))
+
+    init {
+        // 켜 둔 채 자정을 넘기면 오늘 표시·주 예산을 새 날로(보던 달은 그대로).
+        viewModelScope.launch { observeToday(clock).collect { today.value = it } }
+    }
 
     /** null이면 아직 읽는 중. */
     val board: StateFlow<LedgerBoard?> = combine(month, today) { m, t -> m to t }
