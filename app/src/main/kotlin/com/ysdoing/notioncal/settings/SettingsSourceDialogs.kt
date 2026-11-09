@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.ysdoing.notioncal.core.designsystem.toggleRow
 import com.ysdoing.notioncal.core.designsystem.RadioRow
+import androidx.compose.runtime.remember
 
 /** NS-09 매핑한 속성이 사라지거나 종류가 바뀌었다(이름만 바뀐 것은 제외). DB 줄 경고와 설정 탭의 문제 배지가 같이 쓴다. */
 internal fun hasSchemaProblem(source: DataSourceEntity): Boolean = SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }
@@ -134,7 +135,8 @@ private fun EmphasisPicker(
     onProp: (String?) -> Unit,
     onOptions: (List<String>) -> Unit,
 ) {
-    val props = parsePropCatalog(source.propCatalog).filter { it.type in EMPHASIS_TYPES && it.options.isNotEmpty() }
+    // 속성 목록 JSON은 대화상자를 열 때 한 번만 읽는다(칩을 누를 때마다 다시 읽지 않게).
+    val props = remember(source.propCatalog) { parsePropCatalog(source.propCatalog).filter { it.type in EMPHASIS_TYPES && it.options.isNotEmpty() } }
     HorizontalDivider()
     Text(stringResource(R.string.settings_emphasis_title), style = MaterialTheme.typography.titleSmall)
     Text(
@@ -171,7 +173,7 @@ private val EMPHASIS_TYPES = setOf("select", "multi_select", "status")
 /** EX-07: 편집 화면에 보여 줄 속성 고르기. 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. */
 @Composable
 internal fun ExtraPropsDialog(source: DataSourceEntity, onSave: (List<String>) -> Unit, onDismiss: () -> Unit) {
-    val candidates = source.selectableExtraProps()
+    val candidates = remember(source.propCatalog, source.titlePropId, source.datePropId, source.donePropId, source.colorPropId) { source.selectableExtraProps() }
     var chosen by rememberSaveable(source.dataSourceId) { mutableStateOf(parseIdList(source.extraPropIds)) }
     AlertDialog(
         onDismissRequest = onDismiss,

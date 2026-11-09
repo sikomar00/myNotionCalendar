@@ -76,6 +76,8 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
+import java.time.Clock
+import com.ysdoing.notioncal.core.data.observeToday
 
 /** LD-07 빠른 입력 열기(위젯 '+'·날짜 탭, 💰 탭). 날짜마다 data URI를 달리해 PendingIntent가 서로 덮지 않게 한다. */
 fun ledgerInputIntent(context: Context, date: LocalDate): Intent =
@@ -196,12 +198,17 @@ class LedgerInputActivity : ComponentActivity() {
     @Inject
     lateinit var settings: SettingsRepository
 
+    @Inject
+    lateinit var clock: Clock
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val today = LocalDate.now(APP_ZONE)
-        val date = intent.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
+        val opened = LocalDate.now(clock.withZone(APP_ZONE))
+        val date = intent.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: opened
         setContent {
+            // 열어 둔 채 자정을 넘기면 '예정·앱입력' 꼬리표를 새 날로(저장은 저장할 때의 오늘로 판정하므로 둘이 같아야 한다).
+            val today by remember { observeToday(clock) }.collectAsStateWithLifecycle(opened)
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 val viewModel: LedgerInputViewModel = hiltViewModel()

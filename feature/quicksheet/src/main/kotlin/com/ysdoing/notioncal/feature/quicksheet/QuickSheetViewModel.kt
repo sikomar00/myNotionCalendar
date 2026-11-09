@@ -81,7 +81,7 @@ class QuickSheetViewModel @Inject constructor(
     private val holidays: HolidayRepository,
     private val ddays: DdayRepository,
     private val weather: WeatherRepository,
-    sync: SyncRequester,
+    private val sync: SyncRequester,
 ) : ViewModel() {
     private val date = MutableStateFlow<LocalDate?>(null)
 
@@ -90,34 +90,38 @@ class QuickSheetViewModel @Inject constructor(
         SheetSyncThrottle.Shared.request(sync)
     }
 
+    /** 날짜 시트는 ViewModel을 다시 쓰므로(월 화면의 키 하나) 다른 날을 열 때마다 동기화도 요청한다(60초 제한은 그대로). */
     fun showDay(day: LocalDate) {
+        if (date.value != day) SheetSyncThrottle.Shared.request(sync)
         date.value = day
     }
 
+    // 아래 세 값은 어느 날의 값인지 함께 낸다([ForDay]). ViewModel을 다시 쓰므로 다른 날을 열면 첫 화면에 직전 날의 값이 남아 있어,
+    // 화면은 지금 연 날짜의 값일 때만 쓴다.
+
     /** 그날 일정(여러 날 일정 포함). */
-    val dayEvents: StateFlow<List<CalendarEvent>> = date
-        .flatMapLatest { d -> if (d == null) flowOf(emptyList()) else events.observeRange(d, d) }
+    val dayEvents: StateFlow<ForDay<List<CalendarEvent>>> = date
+        .flatMapLatest { d -> if (d == null) flowOf(ForDay(null, emptyList())) else events.observeRange(d, d).map { ForDay(d, it) } }
         .flowOn(Dispatchers.Default) // 일정 변환이 추가 속성 JSON을 읽는다(메인 스레드 금지, 달력·습관 화면과 같게)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ForDay(null, emptyList()))
 
     /** EX-02 그날 공휴일 이름(없거나 표시를 끄면 null). */
-    val dayHoliday: StateFlow<String?> = date
-        .flatMapLatest { d -> if (d == null) flowOf(emptyMap()) else holidays.observe(d, d) }
-        .map { it.values.firstOrNull() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val dayHoliday: StateFlow<ForDay<String?>> = date
+        .flatMapLatest { d -> if (d == null) flowOf(ForDay<String?>(null, null)) else holidays.observe(d, d).map { ForDay<String?>(d, it.values.firstOrNull()) } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ForDay<String?>(null, null))
 
     /** WX-03 그날 예보(하루 요약 + 3시간 간격). 날씨를 끄거나 예보가 없으면 비어 있다. */
-    val dayWeather: StateFlow<DayWeather> = date
+    val dayWeather: StateFlow<ForDay<DayWeather>> = date
         .flatMapLatest { d ->
             if (d == null) {
-                flowOf(DayWeather())
+                flowOf(ForDay(null, DayWeather()))
             } else {
                 combine(weather.observeDays(d, d), weather.observeHoursOn(d), weather.observeStatus()) { days, hours, status ->
-                    DayWeather(days[d], hours, status.stale, status.fetchedAt)
+                    ForDay(d, DayWeather(days[d], hours, status.stale, status.fetchedAt))
                 }
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DayWeather())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ForDay(null, DayWeather()))
 
     /** 추가할 수 있는 DB(앱에서 켠 일정 DB). 습관 기록은 습관 화면·위젯에서만 만든다. */
     val sources: StateFlow<List<DataSourceEntity>> = dataSources.observeCalendarSources()
@@ -193,4 +197,10 @@ data class DayWeather(
     val fetchedAt: java.time.Instant? = null,
 ) {
     val isEmpty: Boolean get() = day == null && hours.isEmpty()
+}
+
+/** [date] 날의 값(날짜 시트가 지금 연 날짜의 값인지 가르려고 함께 낸다). */
+data class ForDay<T>(val date: LocalDate?, val value: T) {
+    /** [day]의 값이면 그 값, 아니면(직전 날의 값) [fallback]. */
+    fun on(day: LocalDate, fallback: T): T = if (date == day) value else fallback
 }
