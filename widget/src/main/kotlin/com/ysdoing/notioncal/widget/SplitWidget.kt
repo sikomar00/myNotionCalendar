@@ -107,10 +107,11 @@ class SplitWidget : GlanceAppWidget() {
             val settings by remember { deps.settings().settings }.collectAsState(initialSettings)
             val fontScale by SystemFontScale.flow.collectAsState()
             val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
-            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정 알람이 위젯을 다시 그리게 한다.
-            val today = LocalDate.now(APP_ZONE)
-            val events by remember(today) { deps.events().observeRange(today, AgendaWidget.lastDay(today)) }
-                .collectAsState(if (today == initialToday) initialEvents else emptyList())
+            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+            val today = widgetToday()
+            val events = rememberLatest(today, if (today == initialToday) initialEvents else emptyList()) {
+                deps.events().observeRange(today, AgendaWidget.lastDay(today))
+            }
             val holidays by remember(today, settings.weekStart) {
                 val (from, to) = holidayRange(today, settings.weekStart)
                 deps.holidays().observe(from, to)

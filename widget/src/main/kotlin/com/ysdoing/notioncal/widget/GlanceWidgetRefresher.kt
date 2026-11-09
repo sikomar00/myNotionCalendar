@@ -50,6 +50,7 @@ class GlanceWidgetRefresher @Inject constructor(
         firstRequestAt = 0L
         // 살아 있는 위젯 세션은 관찰 상태가 바뀌어야 다시 그린다. 기기 글꼴 크기도 그 상태에 넣는다(S25-06).
         SystemFontScale.refresh(context)
+        WidgetToday.refresh() // 자정 알람이 늦어도 다른 갱신 때 새 날로
         AllWidgets.updateAll(context) // 종류마다 실패를 따로 받아 기록한다
         val config = context.resources.configuration
         Log.d(

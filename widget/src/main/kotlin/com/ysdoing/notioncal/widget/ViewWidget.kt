@@ -441,6 +441,7 @@ class ViewWidget : GlanceAppWidget() {
             val calendar = CalendarSession.info(deps, initialCalendar, config, board?.needsCalendarInfo() == true)
             val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, listOf(initialBoard), listOf(board))
             val fontScale by SystemFontScale.flow.collectAsState()
+            widgetToday() // 자정에 살아 있는 세션도 다시 그리게 오늘을 구독한다(그릴 때 지금 시각으로 오늘을 계산)
             ViewWidgetContent(ViewWidgetState(board, config, System.currentTimeMillis(), calendar, covers), fontScale ?: SystemFontScale.current(context))
         }
     }

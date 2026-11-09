@@ -46,6 +46,7 @@ object DayChangeScheduler {
      */
     suspend fun catchUp(context: Context) {
         if (!AllWidgets.anyPlaced(context)) return
+        WidgetToday.refresh()
         if (resetOffsetsIfNewDay(context)) AllWidgets.updateAll(context)
         scheduleNext(context)
     }
@@ -86,6 +87,7 @@ class DayChangeReceiver : BroadcastReceiver() {
             try {
                 // 초기화에 실패해도 오늘 칸은 옮겨야 하므로 다시 그리기는 계속한다.
                 DayChangeScheduler.resetOffsetsIfNewDay(context)
+                WidgetToday.refresh() // 살아 있는 세션도 새 날로 다시 그리게
                 AllWidgets.updateAll(context)
             } finally {
                 DayChangeScheduler.scheduleNext(context)

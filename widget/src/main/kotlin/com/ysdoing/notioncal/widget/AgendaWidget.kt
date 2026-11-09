@@ -86,10 +86,9 @@ class AgendaWidget : GlanceAppWidget() {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val fontScale by SystemFontScale.flow.collectAsState()
             val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
-            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정 알람이 위젯을 다시 그리게 한다.
-            val today = LocalDate.now(APP_ZONE)
-            val events by remember(today) { deps.events().observeRange(today, lastDay(today)) }
-                .collectAsState(if (today == initialToday) initialEvents else emptyList())
+            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+            val today = widgetToday()
+            val events = rememberLatest(today, if (today == initialToday) initialEvents else emptyList()) { deps.events().observeRange(today, lastDay(today)) }
             val holidays by remember(today) { deps.holidays().observe(today, lastDay(today)) }
                 .collectAsState(if (today == initialToday) initialHolidays else emptyMap())
             AgendaWidgetContent(uiState(today, config, events, sync, holidays), fontScale ?: SystemFontScale.current(context))

@@ -14,6 +14,8 @@ import com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.data.view.ViewBoard
 import com.ysdoing.notioncal.core.data.view.WidgetLayout
+import com.ysdoing.notioncal.core.data.habit.HabitBoard
+import java.time.LocalDate
 
 /**
  * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
@@ -51,6 +53,10 @@ internal data class ConfigData(
     val ddays: List<Dday> = emptyList(),
     val views: List<ViewSnapshotEntity> = emptyList(),
     val boards: Map<String, ViewBoard?> = emptyMap(),
+    /** 통합 위젯의 ✅ 탭 미리보기. */
+    val habits: HabitBoard? = null,
+    /** 가계부 미리보기의 공휴일(위젯과 같은 빨간 날짜). */
+    val ledgerHolidays: Map<LocalDate, String> = emptyMap(),
 )
 
 /** 이 위젯 설정에 보일 탭. 항목이 없는 탭은 뺀다(모양은 모든 위젯에 있다). 탭이 하나뿐이면 화면이 탭 줄을 그리지 않는다. */

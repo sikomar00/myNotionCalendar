@@ -55,10 +55,17 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
+import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 
 /** LD-03 가계부 위젯 한 개가 그릴 것. Room에서 읽은 값만 담는다. */
 /** [sync]는 마지막 동기화 결과: 실패면 머리에 경고 아이콘 + 글자로 알린다(WS-3, 색만으로 알리지 않음). */
-data class LedgerWidgetState(val board: LedgerBoard, val config: WidgetConfig, val sync: WidgetSync = WidgetSync())
+data class LedgerWidgetState(
+    val board: LedgerBoard,
+    val config: WidgetConfig,
+    val sync: WidgetSync = WidgetSync(),
+    /** EX-02 그린 날짜의 공휴일 이름(다른 달력 위젯과 같게 빨간 날짜·낭독). */
+    val holidays: Map<LocalDate, String> = emptyMap(),
+)
 
 /** 크기 단계: 6주가 들어가면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주(4×2는 보통 1~2주). */
 enum class LedgerWidgetMode { LARGE, COMPACT }
@@ -177,19 +184,29 @@ class LedgerWidget : GlanceAppWidget() {
 
 /** 가계부 위젯과 통합 위젯(💰 탭)이 함께 쓰는 세션. 첫 프레임부터 내용이 보이도록 초기값을 먼저 읽는다. */
 internal object LedgerSession {
-    suspend fun load(deps: WidgetDependencies): LedgerBoard {
+    /** 첫 프레임에 그릴 보드와 공휴일(공휴일도 미리 읽어 첫 화면부터 빨간 날짜가 깜빡이지 않게). */
+    class Initial(val board: LedgerBoard, val holidays: Map<LocalDate, String>)
+
+    suspend fun load(deps: WidgetDependencies): Initial {
         val today = LocalDate.now(APP_ZONE)
-        return deps.ledger().observeBoard(YearMonth.from(today), today).first()
+        val board = deps.ledger().observeBoard(YearMonth.from(today), today).first()
+        val (from, to) = drawnDays(board)
+        return Initial(board, deps.holidays().observe(from, to).first())
     }
 
+    /** 그리는 날짜 범위: 6주 그리드와, 작은 위젯이 그리는 최근 몇 주. */
+    fun drawnDays(board: LedgerBoard): Pair<LocalDate, LocalDate> =
+        minOf(board.gridStart, board.summary.weekStart.minusWeeks(LEDGER_RECENT_WEEKS - 1)) to board.gridStart.plusDays(GRID_DAYS - 1)
+
     @Composable
-    fun Content(deps: WidgetDependencies, initial: LedgerBoard, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
-        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
-        val today = LocalDate.now(APP_ZONE)
-        val board by remember(today) { deps.ledger().observeBoard(YearMonth.from(today), today) }
-            .collectAsState(initial.takeIf { it.today == today } ?: initial)
+    fun Content(deps: WidgetDependencies, initial: Initial, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+        val today = widgetToday()
+        val board = rememberLatest(today, initial.board) { deps.ledger().observeBoard(YearMonth.from(today), today) }
         val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(WidgetSync())
-        LedgerWidgetContent(LedgerWidgetState(board, config, sync), fontScale, framed)
+        val days = drawnDays(board)
+        val holidays = rememberLatest(days, initial.holidays) { deps.holidays().observe(days.first, days.second) }
+        LedgerWidgetContent(LedgerWidgetState(board, config, sync, holidays), fontScale, framed)
     }
 }
 
@@ -323,10 +340,10 @@ fun LedgerWidgetContent(
                 // 한 주 = 합계 줄 + 날짜 칸 줄(자식 2개). 위쪽 자식은 8개 그대로라 Glance 10개 제한 안이다.
                 Column(GlanceModifier.fillMaxWidth().height(metrics.cellHeight)) {
                     WeekTotals(s.weekMoney(weekFirst), metrics, palette, hidden)
-                    DayRow(weekFirst, board, metrics, palette, hidden)
+                    DayRow(weekFirst, state, metrics, palette)
                 }
             } else {
-                DayRow(weekFirst, board, metrics, palette, hidden)
+                DayRow(weekFirst, state, metrics, palette)
             }
         }
     }
@@ -334,11 +351,11 @@ fun LedgerWidgetContent(
 
 /** 한 주의 날짜 칸 일곱 개. */
 @Composable
-private fun DayRow(weekFirst: LocalDate, board: LedgerBoard, metrics: LedgerMetrics, palette: WidgetPalette, hidden: Boolean) {
+private fun DayRow(weekFirst: LocalDate, state: LedgerWidgetState, metrics: LedgerMetrics, palette: WidgetPalette) {
     Row(GlanceModifier.fillMaxWidth().height(metrics.dayHeight)) {
         repeat(7) { col ->
             val date = weekFirst.plusDays(col.toLong())
-            DayCell(date, board, board.summary.days[date] ?: DayMoney(), metrics, palette, hidden)
+            DayCell(date, state, state.board.summary.days[date] ?: DayMoney(), metrics, palette)
         }
     }
 }
@@ -431,14 +448,18 @@ private fun WeekLine(board: LedgerBoard, metrics: LedgerMetrics, palette: Widget
  */
 @Composable
 private fun androidx.glance.layout.RowScope.DayCell(
-    date: LocalDate, board: LedgerBoard, money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette, hidden: Boolean,
+    date: LocalDate, state: LedgerWidgetState, money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette,
 ) {
     val context = LocalContext.current
+    val board = state.board
+    val hidden = state.config.hideAmounts
+    val holiday = state.holidays[date]
     val future = date.isAfter(board.today)
     val amount = if (future) money.planned else money.spend
     val inMonth = YearMonth.from(date) == board.month
     val description = listOfNotNull(
         context.getString(R.string.ledger_widget_day, date.monthValue, date.dayOfMonth),
+        holiday,
         amount.takeIf { it != 0L && !hidden }?.let {
             context.getString(if (future) R.string.ledger_widget_day_planned else R.string.ledger_widget_day_spend, MoneyFormat.full(it))
         },
@@ -464,8 +485,9 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 style = TextStyle(
                     color = when {
                         isToday -> palette.todayText
-                        inMonth -> palette.dayColor(date.dayOfWeek)
-                        else -> palette.outside
+                        !inMonth -> palette.outside
+                        holiday != null -> palette.holiday // 월간·분할 위젯과 같은 순서
+                        else -> palette.dayColor(date.dayOfWeek)
                     },
                     fontSize = metrics.dateFontSp.sp,
                     fontWeight = if (isToday) FontWeight.Bold else null,

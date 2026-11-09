@@ -331,7 +331,7 @@ internal object DdaySession {
 
     @Composable
     fun state(deps: WidgetDependencies, initial: List<Dday>, config: WidgetConfig): DdayWidgetState {
-        val today = LocalDate.now(APP_ZONE)
+        val today = widgetToday() // 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday)
         val ddays by remember(today) { deps.ddays().observeVisible(today) }.collectAsState(initial)
         return DdayWidgetState(ddays, config, today)
     }

@@ -26,8 +26,8 @@ internal object CalendarSession {
         if (!enabled) return initial
         val settings by remember { deps.settings().settings }.collectAsState(null)
         val weekStart = settings?.weekStart ?: initial.weekStart
-        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
-        val range = calendarRange(LocalDate.now(APP_ZONE), config.monthOffset, weekStart)
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+        val range = calendarRange(widgetToday(), config.monthOffset, weekStart)
         val holidays by remember(range) { deps.holidays().observe(range.first, range.second) }.collectAsState(initial.holidays)
         return CalendarInfo(weekStart, settings?.showWeekNumbers ?: initial.showWeekNumbers, holidays)
     }

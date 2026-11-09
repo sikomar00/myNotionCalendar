@@ -152,6 +152,15 @@ class LedgerWidgetTest {
         onNode(hasTextEqualTo("이번 주 2.8만 남음 · 4일")).assertExists()
     }
 
+    /** EX-02 공휴일은 다른 달력 위젯과 같게 날짜 칸이 공휴일 이름을 함께 읽는다(색은 일요일과 같은 빨강). */
+    @Test
+    fun aHolidayIsNamedOnItsDay() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(LARGE)
+        provideComposable { LedgerWidgetContent(state().copy(holidays = mapOf(LocalDate.of(2026, 10, 9) to "한글날")), systemFontScale = 1f) }
+        onNode(hasContentDescriptionEqualTo("10월 9일, 한글날")).assertExists()
+    }
+
     /** 거래내역 DB를 등록하지 않았으면 '0원'·빈 달력·+ 대신 안내와 💰 탭 버튼(습관 위젯과 같은 모양). */
     @Test
     fun unregisteredLedgerShowsGuidanceInsteadOfAnEmptyCalendar() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {

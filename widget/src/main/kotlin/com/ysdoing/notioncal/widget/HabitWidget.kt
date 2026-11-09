@@ -198,10 +198,11 @@ internal object HabitSession {
 
     @Composable
     fun Content(deps: WidgetDependencies, initial: Initial, config: WidgetConfig, fontScale: Float, framed: Boolean = true, showHeader: Boolean = true) {
-        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정 알람이 위젯을 다시 그리게 한다.
-        val today = LocalDate.now(APP_ZONE)
-        val board by remember(today) { deps.habits().observeBoard(today) }
-            .collectAsState(if (initial.board.today == today) initial.board else HabitBoard(today, emptyList()))
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+        val today = widgetToday()
+        val board = rememberLatest(today, if (initial.board.today == today) initial.board else HabitBoard(today, emptyList())) {
+            deps.habits().observeBoard(today)
+        }
         val weekStart by remember { deps.settings().settings }.collectAsState(null)
         val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(WidgetSync())
         HabitWidgetContent(HabitWidgetState(board, config, weekStart?.weekStart ?: initial.weekStart, sync), fontScale, framed, showHeader)

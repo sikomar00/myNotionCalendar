@@ -64,6 +64,7 @@ import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
 import com.ysdoing.notioncal.core.designsystem.notionColorScheme
 import kotlinx.coroutines.withContext
+import com.ysdoing.notioncal.core.data.WidgetTab
 
 /**
  * WG-04 위젯별 설정. 위젯을 처음 놓을 때와 길게 눌러 다시 설정할 때 열린다.
@@ -146,12 +147,15 @@ class WidgetConfigActivity : ComponentActivity() {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
-            val ledger = if (kind == ConfigKind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
+            // 통합 위젯은 고른 탭(✅·💰)을 미리 보이므로 그 두 탭의 내용도 읽어 둔다.
+            val ledger = if (kind == ConfigKind.LEDGER || tabbed) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
+            val habits = if (tabbed) deps.habits().observeBoard(today).first() else null
+            val ledgerHolidays = ledger?.let { LedgerSession.drawnDays(it) }?.let { (from, to) -> deps.holidays().observe(from, to).first() }.orEmpty()
             val ddays = if (kind == ConfigKind.DDAY || kind == ConfigKind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
             val views = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.BOOK) deps.views().observeRegistered().first() else emptyList()
             // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번, 행 JSON을 읽으니 메인 스레드 밖에서).
             val boards = if (kind == ConfigKind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
-            loaded = ConfigData(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards)
+            loaded = ConfigData(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards, habits, ledgerHolidays)
         }
         val data = loaded ?: run {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } // 로딩 중 빈 화면 방지(부록 A-8)
@@ -326,11 +330,29 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 ConfigKind.MONTH -> {
                     val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
-                    staticRemoteViews(this@WidgetConfigActivity, size) { WidgetContent(state) }
+                    staticRemoteViews(this@WidgetConfigActivity, size) {
+                        // 통합 위젯은 실제 모습대로 탭 줄과 고른 탭을 그린다(전에는 탭 줄 없이 월간만 보였다).
+                        if (!tabbed) {
+                            WidgetContent(state)
+                        } else {
+                            TabbedWidgetContent(config) { tab ->
+                                when (tab) {
+                                    WidgetTab.CALENDAR -> WidgetContent(state, framed = false)
+                                    WidgetTab.HABIT -> HabitWidgetContent(
+                                        HabitWidgetState(data.habits ?: WidgetPreviews.habitState(today).board, config, data.settings.weekStart),
+                                        framed = false, showHeader = false,
+                                    )
+                                    WidgetTab.LEDGER -> LedgerWidgetContent(
+                                        LedgerWidgetState(data.ledger ?: WidgetPreviews.ledgerState(today).board, config, holidays = data.ledgerHolidays), framed = false,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
                 ConfigKind.LEDGER -> {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
-                    staticRemoteViews(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }
+                    staticRemoteViews(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config, holidays = data.ledgerHolidays)) }
                 }
                 ConfigKind.VIEW -> {
                     val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))

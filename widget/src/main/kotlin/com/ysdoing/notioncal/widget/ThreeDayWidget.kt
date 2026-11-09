@@ -79,11 +79,10 @@ class ThreeDayWidget : GlanceAppWidget() {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val fontScale by SystemFontScale.flow.collectAsState()
             val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
-            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정 알람이 위젯을 다시 그리게 한다.
-            val today = LocalDate.now(APP_ZONE)
+            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+            val today = widgetToday()
             val start = startOf(today, config)
-            val events by remember(start) { deps.events().observeRange(start, lastDay(start)) }
-                .collectAsState(if (start == initialStart) initialEvents else emptyList())
+            val events = rememberLatest(start, if (start == initialStart) initialEvents else emptyList()) { deps.events().observeRange(start, lastDay(start)) }
             val holidays by remember(start) { deps.holidays().observe(start, lastDay(start)) }
                 .collectAsState(if (start == initialStart) initialHolidays else emptyMap())
             val weather by remember(today, config.showWeather) {

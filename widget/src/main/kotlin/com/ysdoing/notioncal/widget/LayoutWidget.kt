@@ -180,6 +180,7 @@ class LayoutWidget : GlanceAppWidget() {
             val fontScale by SystemFontScale.flow.collectAsState()
             val calendar = CalendarSession.info(deps, initialCalendar, config, layout.needsCalendarInfo(boards))
             val covers = CoverSession.covers(deps, initialCovers, initialCoverVersion, initialDrawn, drawnBoards(layout, config.lastTab, boards))
+            widgetToday() // 자정에 살아 있는 세션도 다시 그리게 오늘을 구독한다(그릴 때 지금 시각으로 오늘을 계산)
             LayoutWidgetContent(LayoutWidgetState(config, layout, boards, System.currentTimeMillis(), settings.weekStart, calendar, covers), fontScale ?: SystemFontScale.current(context))
         }
     }

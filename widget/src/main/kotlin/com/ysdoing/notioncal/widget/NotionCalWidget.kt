@@ -50,8 +50,8 @@ internal object MonthSession {
     fun Content(deps: WidgetDependencies, initial: Initial, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
         val settings by remember { deps.settings().settings }.collectAsState(initial.settings)
         val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initial.sync)
-        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
-        val today = LocalDate.now(APP_ZONE)
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+        val today = widgetToday()
         val month = YearMonth.from(today).plusMonths(config.monthOffset.toLong())
         val sameGrid = month == initial.month && settings.weekStart == initial.settings.weekStart
         val events by remember(month, settings.weekStart) {
