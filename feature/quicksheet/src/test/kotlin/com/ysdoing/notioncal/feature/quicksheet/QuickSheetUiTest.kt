@@ -307,9 +307,12 @@ class QuickSheetUiTest {
         val v = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(16, 30)))
         assertEquals(day.atTime(15, 0).atZone(APP_ZONE).toInstant().toEpochMilli(), v.startTime)
         assertEquals(90 * 60_000L, v.endTime!! - v.startTime!!)
-        // 종료가 시작보다 이르면 1시간으로 맞춘다.
-        val fixed = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(14, 0)))
-        assertEquals(3_600_000L, fixed.endTime!! - fixed.startTime!!)
+        // 종료가 시작보다 이르면 자정을 넘겨 다음 날 끝난다(23:00–01:00은 2시간). 같으면 1시간으로 맞춘다.
+        val overnight = dateValueOf(day, TimeRange(LocalTime.of(23, 0), LocalTime.of(1, 0)))
+        assertEquals(2 * 3_600_000L, overnight.endTime!! - overnight.startTime!!)
+        assertEquals(day.plusDays(1).toString(), overnight.endDate)
+        val same = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(15, 0)))
+        assertEquals(3_600_000L, same.endTime!! - same.startTime!!)
         assertEquals("2026-10-13", dateValueOf(day, null).startDate)
         assertNull(dateValueOf(day, null).startTime)
     }

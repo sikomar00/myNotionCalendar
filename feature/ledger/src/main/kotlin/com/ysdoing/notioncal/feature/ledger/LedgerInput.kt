@@ -128,6 +128,8 @@ fun LedgerInputContent(
     val amount = amountText.filter(Char::isDigit).toLongOrNull() ?: 0L
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // 대분류는 지금 고른 지출·수입으로 읽는다. 화면을 돌려 다시 만들어져도 되살린 '수입'에 지출 대분류가 붙지 않게.
+    LaunchedEffect(Unit) { onFlowChange(flow) }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
@@ -205,7 +207,6 @@ class LedgerInputActivity : ComponentActivity() {
                 val viewModel: LedgerInputViewModel = hiltViewModel()
                 val categories by viewModel.categories.collectAsStateWithLifecycle()
                 val result by viewModel.result.collectAsStateWithLifecycle()
-                LaunchedEffect(Unit) { viewModel.loadCategories(Flow.OUT) }
                 LaunchedEffect(result) { if (result == LedgerAddResult.SAVED) finish() }
                 // ED-04: 금액이나 내용을 적다 만 채로 바깥 누르기·뒤로 가기로 닫으면 '변경을 버릴까요?'를 먼저 묻는다('취소'는 바로 닫는다).
                 val guard = rememberDiscardGuard(onClose = ::finish)

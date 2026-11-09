@@ -100,7 +100,7 @@ internal val TimeRangeSaver = Saver<TimeRange?, String>(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TimeChip(time: TimeRange?, onChange: (TimeRange?) -> Unit) {
+internal fun TimeChip(time: TimeRange?, nextDayLabel: Boolean = false, onChange: (TimeRange?) -> Unit) {
     var editing by rememberSaveable { mutableStateOf<String?>(null) } // "start" | "end"
     val allDay = time == null
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -120,7 +120,11 @@ internal fun TimeChip(time: TimeRange?, onChange: (TimeRange?) -> Unit) {
         if (time != null) {
             AssistChip(onClick = { editing = "start" }, label = { Text(time.start.format(timeFormat)) })
             Text("–")
-            AssistChip(onClick = { editing = "end" }, label = { Text(time.end.format(timeFormat)) })
+            // 하루짜리 일정에서 종료가 시작보다 이르면 다음 날 끝난다(dateValueOf). 그렇게 저장된다는 것을 칩에서 알린다.
+            // 끝나는 날이 따로 있는 기간 일정은 끝날을 날짜 칩이 보이므로 붙이지 않는다([nextDayLabel]이 false).
+            val end = time.end.format(timeFormat)
+            val nextDay = nextDayLabel && time.end.isBefore(time.start)
+            AssistChip(onClick = { editing = "end" }, label = { Text(if (nextDay) stringResource(R.string.qs_next_day_time, end) else end) })
         }
     }
     val target = editing

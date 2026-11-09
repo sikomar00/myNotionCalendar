@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.CalendarEvent
+import com.ysdoing.notioncal.core.data.CreatedPageIds
 import com.ysdoing.notioncal.core.data.DataSourceRepository
 import com.ysdoing.notioncal.core.data.DateValue
 import com.ysdoing.notioncal.core.data.EditableEvent
@@ -50,12 +51,14 @@ data class NewEvent(
 /**
  * 날짜 + 선택적 시간을 저장용 값으로 바꾼다. 시간은 Asia/Seoul 기준(NS-07).
  * 시간 일정이 다른 날에 끝나면 끝나는 날을 endDate로 둬, 동기화 결과(DateCodec.displayDates)와 같은 모양이 되게 한다.
+ * 종료 시각이 시작보다 이르면 다음 날에 끝나는 것으로 본다(23:00–01:00). 같으면 1시간으로 맞춘다.
  */
 fun dateValueOf(date: LocalDate, time: TimeRange?, endDate: LocalDate? = null): DateValue {
     val lastDay = endDate?.takeIf { it.isAfter(date) }
     if (time == null) return DateValue.allDay(date, lastDay)
     val start = date.atTime(time.start).atZone(APP_ZONE).toInstant()
     var end = (lastDay ?: date).atTime(time.end).atZone(APP_ZONE).toInstant()
+    if (end.isBefore(start)) end = end.atZone(APP_ZONE).plusDays(1).toInstant()
     if (!end.isAfter(start)) end = start.plusSeconds(3600)
     val endDay = end.atZone(APP_ZONE).toLocalDate().takeIf { it.isAfter(date) }
     return DateValue(date.toString(), endDay?.toString(), start.toEpochMilli(), end.toEpochMilli())
@@ -161,14 +164,18 @@ class QuickSheetViewModel @Inject constructor(
     val pinnedDdays: StateFlow<Set<String>> = ddays.observePinnedIds()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    /** 고정은 진짜 노션 id로 한다(새 일정 시트는 생성이 노션에 간 뒤에도 처음 연 임시 id를 들고 있다). */
+    fun isDdayPinned(pageId: String, pinned: Set<String>): Boolean = CreatedPageIds.resolve(pageId) in pinned
+
     fun setDdayPinned(pageId: String, pinned: Boolean) {
-        viewModelScope.launch { if (pinned) ddays.pin(pageId) else ddays.unpin(pageId) }
+        val id = CreatedPageIds.resolve(pageId)
+        viewModelScope.launch { if (pinned) ddays.pin(id) else ddays.unpin(id) }
     }
 
     fun trash(pageId: String, onTrashed: () -> Unit = {}) {
         viewModelScope.launch {
             writer.trash(pageId)
-            ddays.unpin(pageId) // DD-01: 앱에서 지운 일정은 고정도 바로 푼다.
+            ddays.unpin(CreatedPageIds.resolve(pageId)) // DD-01: 앱에서 지운 일정은 고정도 바로 푼다.
             onTrashed()
         }
     }

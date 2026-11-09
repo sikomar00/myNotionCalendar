@@ -167,7 +167,7 @@ fun AddForm(
                 date = it
                 dateTouched = true
             }
-            TimeChip(shownTime) {
+            TimeChip(shownTime, nextDayLabel = shownEnd == null) {
                 time = it
                 timeTouched = true
             }
@@ -336,7 +336,8 @@ fun EventEditorForm(
         )
         ChipFlow {
             DateChip(date) { date = it }
-            TimeChip(time) { time = it }
+            // 원래 하루짜리이거나 밤을 넘기는(다음 날 끝) 일정만: 날 수를 지키는 editedDateValue에서 그때만 '다음 날'이 맞다.
+            TimeChip(time, nextDayLabel = event.endDate?.isAfter(event.startDate.plusDays(1)) != true) { time = it }
         }
         CheckboxRow(stringResource(R.string.qs_done), done) { done = it } // 글자도 눌리고 줄이 48dp 이상(A-4)
         if (item.colorOptions.isNotEmpty()) {

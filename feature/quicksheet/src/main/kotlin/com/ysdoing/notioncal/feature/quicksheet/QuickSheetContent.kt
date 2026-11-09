@@ -96,7 +96,7 @@ fun QuickSheetContent(
                     item = current,
                     onSave = { change -> viewModel.save(pageId, change, onSaved = back) },
                     onDelete = { viewModel.trash(pageId, onTrashed = back) },
-                    pinned = pageId in pinnedIds,
+                    pinned = viewModel.isDdayPinned(pageId, pinnedIds),
                     onPinChange = { viewModel.setDdayPinned(pageId, it) },
                     onDirtyChange = reportDirty,
                 )
