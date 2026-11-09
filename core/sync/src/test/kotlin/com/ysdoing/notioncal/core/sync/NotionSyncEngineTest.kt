@@ -226,6 +226,19 @@ class NotionSyncEngineTest {
         assertEquals(setOf("old-kept"), local().keys)
     }
 
+    /** 시계를 앞당긴 채 동기화했다가 되돌리면 기록한 대조 시각이 미래다: 하루 1회 대조가 멈추지 않고 바로 돈다. */
+    @Test
+    fun aFullReconcileTimeInTheFutureDoesNotStopReconciling() = runTest {
+        register()
+        remote.put("trashed", "지울 항목", "2026-10-11")
+        now = Instant.parse("2026-10-20T03:00:00Z") // 일주일 앞당긴 시계
+        engine().sync(SyncTrigger.PERIODIC)
+        now = Instant.parse("2026-10-13T03:00:00Z") // 시계를 바로잡음
+        remote.trash("trashed")
+        engine().sync(SyncTrigger.PERIODIC) // 주기 동기화는 대조할 때일 때만 지운 것을 찾는다
+        assertTrue(local().isEmpty())
+    }
+
     @Test
     fun noRegisteredSourcesWritesNoLog() = runTest {
         engine().sync(SyncTrigger.APP_OPEN)

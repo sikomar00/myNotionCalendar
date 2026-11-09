@@ -278,6 +278,40 @@ class OutboxProcessorTest {
     }
 
     @Test
+    fun aRateLimitedCreateIsNotTreatedAsPossiblyCreated() = runTest {
+        // 429는 노션이 받기 전에 거절한 것이라 만들어지지 않았다: 시도를 세지 않아 다음에 '끊긴 생성 찾기'로 앞 기록을 고르지 않는다.
+        seeded()
+        writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        var calls = 0
+        notion.onCall = { if (++calls == 2) throw com.ysdoing.notioncal.core.notion.NotionException(NotionError.RateLimited) }
+        processor().process()
+        assertEquals(0, db.outboxDao().all().single().attempts)
+    }
+
+    @Test
+    fun aTrashedPageThatSyncPutBackIsRemovedOnceTheTrashIsSent() = runTest {
+        // 지운 뒤 휴지통을 보내기 전에 동기화가 옛 페이지를 다시 넣었더라도, 휴지통을 보내면 로컬에서도 지운다(다음 대조까지 보이지 않게).
+        seeded()
+        val old = db.eventDao().get("p1")!!
+        writer.trash("p1")
+        db.eventDao().upsert(listOf(old))
+        processor().process()
+        assertTrue(notion.pages.getValue("p1").inTrash)
+        assertNull(db.eventDao().get("p1"))
+    }
+
+    @Test
+    fun writesAreSentInTheOrderTheyWereMadeEvenIfTheClockWentBack() = runTest {
+        // 시계를 한 시간 되돌린 뒤 같은 칸을 다시 고쳤다: 나중 바꿈이 마지막에 나가 노션에 남는다.
+        seeded()
+        writer.update("p1", EventChange(title = "첫 고침"))
+        now = now.minusSeconds(3_600)
+        writer.update("p1", EventChange(title = "둘째 고침"))
+        processor().process()
+        assertEquals("둘째 고침", notion.pages.getValue("p1").title)
+    }
+
+    @Test
     fun aSheetOpenedOnANewEventKeepsWorkingAfterItGetsItsNotionId() = runTest {
         // 새 일정의 편집 시트를 연 채 생성이 노션에 가 id가 바뀌었다: 같은 시트에서 고친 내용이 진짜 페이지로 간다.
         seeded()

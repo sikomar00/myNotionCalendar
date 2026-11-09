@@ -46,7 +46,6 @@ import com.ysdoing.notioncal.core.notion.mapping.QueryFilters
 import com.ysdoing.notioncal.core.notion.mapping.RemoteEvent
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Clock
@@ -82,7 +81,7 @@ class NotionSyncEngine @Inject constructor(
     private val ddayNotice: DdayRemovedNotice = DdayRemovedNotice.None,
     private val requests: RequestCounter = RequestCounter(),
 ) {
-    private val mutex = Mutex()
+    private val mutex get() = EventQueueLock.mutex
 
     /** 이번 동기화에서 만든 DB별 매퍼(DD-01 고정 일정 한 건 조회에 다시 쓴다). */
     private val runMappers = HashMap<String, NotionPageMapper>()
@@ -166,7 +165,9 @@ class NotionSyncEngine @Inject constructor(
         var pulled = 0
 
         val lastFull = source.lastFullSyncAt
-        val fullDue = lastFull == null || catalogMissing || Duration.between(Instant.ofEpochMilli(lastFull), now) >= FULL_RECONCILE_INTERVAL
+        // 기록한 시각이 지금보다 뒤면(시계를 앞당긴 채 동기화했다) 하루 1회 대조가 그만큼 멈추므로 대조할 때로 본다.
+        val fullDue = lastFull == null || catalogMissing || lastFull > now.toEpochMilli() ||
+            Duration.between(Instant.ofEpochMilli(lastFull), now) >= FULL_RECONCILE_INTERVAL
         val lastSync = source.lastSyncAt
         if (lastSync != null) {
             val since = Instant.ofEpochMilli(lastSync).minus(INCREMENTAL_OVERLAP)
@@ -329,16 +330,17 @@ class NotionSyncEngine @Inject constructor(
         if (incoming.isEmpty()) return
         // 아직 노션에 보내지 않은 쓰기가 있는 페이지는 건드리지 않는다. 내 변경이 서버 값으로 되돌아가거나
         // 휴지통 대기 중인 일정이 다시 나타나는 것을 막는다(전송이 끝나면 응답으로 맞춰진다).
-        val pending = db.outboxDao().pageIds().toHashSet()
-        val pages = incoming.filterNot { it.pageId in pending }
-        if (pages.isEmpty()) return
-        val (present, gone) = pages.partition { it.event != null }
-        db.withTransaction {
+        // 확인과 덮어쓰기를 한 거래로 한다: 그 사이 사용자가 지우면(EventWriter도 거래) 방금 지운 일정을 다시 넣었다.
+        val changed = db.withTransaction {
+            val pending = db.outboxDao().pageIds().toHashSet()
+            val pages = incoming.filterNot { it.pageId in pending }
+            val (present, gone) = pages.partition { it.event != null }
             if (present.isNotEmpty()) events.upsert(present.map { it.event!!.toEntity(source.dataSourceId) })
             if (gone.isNotEmpty()) events.delete(gone.map { it.pageId })
+            pages.isNotEmpty()
         }
         // WG-05: 바뀐 내용이 있으면 위젯을 갱신한다(구현이 짧은 시간의 요청을 묶는다).
-        widgetRefresher.requestUpdate()
+        if (changed) widgetRefresher.requestUpdate()
     }
 
     companion object {

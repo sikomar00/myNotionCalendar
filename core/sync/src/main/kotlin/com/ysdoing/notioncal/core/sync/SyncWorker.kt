@@ -94,7 +94,8 @@ internal suspend fun <T> continueOnFailure(syncLog: SyncLogDao, clock: Clock, bl
 } catch (e: CancellationException) {
     throw e
 } catch (e: Exception) {
-    Log.w("SyncWorker", "쓰기 처리 실패, 다음 단계는 계속한다", e)
+    // 예외 종류만 남긴다: SQLite·직렬화 메시지에 일정 제목 같은 JSON 조각이 섞여 릴리스 로그로 나갈 수 있다.
+    Log.w("SyncWorker", "쓰기 처리 실패(${e.javaClass.name}), 다음 단계는 계속한다")
     syncLog.record(
         SyncLogEntity(
             at = clock.millis(), trigger = SYNC_LOG_OUTBOX, result = "ERROR", durationMs = 0, pulled = 0, pushed = 0,

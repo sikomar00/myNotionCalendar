@@ -41,7 +41,8 @@ interface OutboxDao {
     @Update
     suspend fun update(row: OutboxEntity)
 
-    @Query("SELECT * FROM outbox ORDER BY createdAt, id")
+    /** 쌓은 순서(id). 기기 시각(createdAt)으로 줄 세우면 시계를 되돌린 뒤의 바꿈이 앞선 바꿈보다 먼저 나가 노션에 옛 값이 남았다. */
+    @Query("SELECT * FROM outbox ORDER BY id")
     suspend fun all(): List<OutboxEntity>
 
     @Query("SELECT * FROM outbox WHERE id = :id")
@@ -57,6 +58,10 @@ interface OutboxDao {
     /** 생성을 보내기 직전: 시도를 세고 보낸 내용([sent], EventChange JSON)을 남긴다. 끊긴 뒤 그 내용으로 만들어진 페이지를 찾고, 그 뒤 고친 것을 가른다. */
     @Query("UPDATE outbox SET attempts = attempts + 1, baseValues = :sent WHERE id = :id")
     suspend fun markSending(id: Long, sent: String)
+
+    /** 생성 요청이 확실히 닿지 않았다(429·401): [markSending]이 센 시도 하나를 되돌린다. */
+    @Query("UPDATE outbox SET attempts = MAX(attempts - 1, 0) WHERE id = :id")
+    suspend fun unmarkSending(id: Long)
 
     @Query("UPDATE outbox SET lastError = :error WHERE id = :id")
     suspend fun markError(id: Long, error: String?)

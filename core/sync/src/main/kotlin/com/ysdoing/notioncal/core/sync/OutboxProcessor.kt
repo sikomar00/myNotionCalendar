@@ -41,6 +41,16 @@ import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * 일정 읽기 동기화([NotionSyncEngine.sync])와 아웃박스 전송([OutboxProcessor.process])이 함께 쓰는 잠금. 동기화가 노션에서 읽은 뒤
+ * 반영하기 전에 사용자가 지운 일정의 휴지통이 나가면, 반영 때는 보낼 작업이 이미 없어 옛 페이지를 다시 넣었다(시트를 열 때 시작한
+ * 동기화 중에 지우는 흔한 경우). 둘을 겹치지 않게 해 전송은 동기화가 끝난 뒤에 나가고, 그때는 지운 일정이 다시 들어오지 않는다.
+ * 서로를 부르지 않으므로 중첩되지 않는다. 보기 큐(view_writes)는 따로 돈다.
+ */
+internal object EventQueueLock {
+    val mutex = Mutex()
+}
+
 /** 한 번 처리한 결과. [retryError]가 있으면 일시 오류로 멈춘 것이라 나중에 다시 실행한다. */
 data class OutboxOutcome(
     val sent: Int,
@@ -70,7 +80,7 @@ class OutboxProcessor @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
     private val requests: RequestCounter = RequestCounter(),
 ) {
-    private val mutex = Mutex()
+    private val mutex get() = EventQueueLock.mutex
     private val outbox get() = db.outboxDao()
     private val events get() = db.eventDao()
 
@@ -172,7 +182,14 @@ class OutboxProcessor @Inject constructor(
         val page = existing ?: run {
             // 응답을 못 받고 끊겨도 노션이 이미 만들었을 수 있다: 시도를 세고 보낸 내용을 남겨 다음에 먼저 찾아본다(SY-08 ②).
             outbox.markSending(row.id, OutboxJson.encodeToString(EventChange.serializer(), change))
-            writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
+            try {
+                writer.createPage(source.dataSourceId, encoder.encode(change.toPageWrite(parsePropCatalog(source.propCatalog))))
+            } catch (e: NotionException) {
+                // 429·401은 노션이 받기 전에 거절한 것이라 만들어지지 않았다. 센 시도를 되돌려 다음에 '끊긴 생성 찾기'로
+                // 같은 제목·날짜의 앞 기록을 이 생성의 것으로 잘못 고르지 않게 한다(1분 안에 같은 거래를 두 번 넣은 경우).
+                if (e.error == NotionError.RateLimited || e.error == NotionError.Unauthorized) outbox.unmarkSending(row.id)
+                throw e
+            }
         }
         val sentNow = if (existing != null) lastSent else change
         try {
@@ -304,7 +321,11 @@ class OutboxProcessor @Inject constructor(
 
     private suspend fun trash(row: OutboxEntity) {
         writer.trashPage(row.pageId) // 이미 없으면(404) null이고, 그래도 목적은 이룬 것이다.
-        outbox.delete(row.id)
+        // 지울 때 로컬 행은 이미 없앴지만, 그 뒤 동기화가 옛 페이지를 다시 넣었을 수 있다(다음 대조까지 보였다).
+        db.withTransaction {
+            outbox.delete(row.id)
+            if (outbox.countForPage(row.pageId) == 0) events.delete(listOf(row.pageId))
+        }
     }
 
     /** §12 충돌 3: 폰에서 고친 항목을 노션에서 지웠다면 로컬에서도 지우고, 남은 작업을 폐기하고 기록한다. */
