@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.EventRepository
+import com.ysdoing.notioncal.core.data.observeToday
 import com.ysdoing.notioncal.core.data.dday.DdayMode
 import com.ysdoing.notioncal.core.data.dday.DdayRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,9 +17,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Clock
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /** DD-01 디데이 화면: Room만 읽는다(고정 목록·일정 제목 검색). 고정은 앱 상태라 노션에 쓰지 않는다. */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -26,15 +31,19 @@ import javax.inject.Inject
 class DdayViewModel @Inject constructor(
     private val ddays: DdayRepository,
     private val events: EventRepository,
+    clock: Clock,
 ) : ViewModel() {
     private val query = MutableStateFlow("")
 
-    private val results = query.debounce(SEARCH_DEBOUNCE_MS).flatMapLatest { q ->
-        flow<List<CalendarEvent>> { emit(events.search(q, ddays.today())) }
-    }
+    /** 켜 둔 채 자정을 넘기면 고정 목록과 검색 결과를 함께 새 날로(둘이 하루 어긋나지 않게). */
+    private val today = observeToday(clock).shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    private val results = combine(query.debounce(SEARCH_DEBOUNCE_MS), today) { q, day -> q to day }.flatMapLatest { (q, day) ->
+        flow<List<CalendarEvent>> { emit(events.search(q, day)) }
+    }.flowOn(Dispatchers.Default) // 결과 변환이 추가 속성 JSON을 읽는다(메인 스레드 금지)
 
     val state: StateFlow<DdayUiState> = combine(
-        ddays.observe(ddays.today()),
+        today.flatMapLatest { ddays.observe(it) },
         ddays.removedNotice,
         query,
         results,

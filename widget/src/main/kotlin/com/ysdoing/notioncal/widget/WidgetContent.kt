@@ -74,7 +74,15 @@ data class WidgetUiState(
     val holidays: Map<LocalDate, String> = emptyMap(),
     /** WX-04 머리의 오늘 날씨(위젯 설정에서 켠 위젯만). */
     val weather: WidgetWeather = WidgetWeather(),
+    /** M6 앱 설정 '주차 표시'(기본 끔). 켜면 중간·큼 단계에 주차 열이 생기고 칸 폭이 그만큼 줄어든다. 일정 줄 수·머리 높이는 그대로다. */
+    val showWeekNumbers: Boolean = false,
+    /** 보이는 달 밖의 날짜를 흐리게 그린다. 이번 주 한 줄(보기 위젯의 4×2 캘린더)은 달이 아니라 7일이라 끈다. */
+    val dimOutsideMonth: Boolean = true,
 )
+
+/** WG-04 위젯별 DB 필터(비어 있으면 앱에서 켠 DB 전체)와 완료 숨김. */
+internal fun List<CalendarEvent>.shownIn(config: WidgetConfig): List<CalendarEvent> =
+    filter { event -> (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done) }
 
 /**
  * WG-07 위젯 머리줄의 동기화 상태. [lastSuccessAt]은 마지막 성공 시각(ms), [failed]는 마지막 동기화가 실패했는지.
@@ -99,9 +107,11 @@ fun WidgetContent(
     framed: Boolean = true,
 ) {
     val context = LocalContext.current
-    val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale)
-    val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val start = gridStart(state.month, state.weekStart)
+    val weeks = (0 until 6).map { start.plusWeeks(it.toLong()) }
+    // 크고 일정이 빽빽한 달은 Glance 뷰 한도(500개)를 넘어 위젯이 오류 화면이 된다. 보기 캘린더처럼 넘칠 듯하면 칸당 줄 수를 줄인다.
+    val metrics = fitLanes(weeks, state.events, WidgetMetrics.of(LocalSize.current, state.config, systemFontScale, state.showWeekNumbers))
+    val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val outer = if (framed) {
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)
     } else {
@@ -111,9 +121,9 @@ fun WidgetContent(
     Column(modifier = outer.padding(WidgetMetrics.PADDING)) {
         Header(state, metrics, palette)
         WeekdayRow(state.weekStart, metrics, palette)
-        repeat(6) { week ->
+        weeks.forEach { weekStart ->
             WeekRow(
-                weekStart = start.plusWeeks(week.toLong()),
+                weekStart = weekStart,
                 state = state,
                 metrics = metrics,
                 palette = palette,
@@ -180,14 +190,18 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                 todayWeather(state)?.let { WeatherChip(it, state.weather.stale, palette, metrics.chipFontSp, showTemps = metrics.mode == WidgetMode.LARGE) }
             }
         }
-        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
-        HeaderButton(R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add", actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette)
+        // 순서는 3일 위젯과 같게 [새로고침][‹][›][+]: 나란히 두어도 ‹ ›와 +의 자리가 엇갈리지 않고, + 앞에 새로고침(다른 위젯과 같은 규칙).
         // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 48dp 버튼 4개가 들어가는 큼에서만 보인다.
         if (metrics.mode == WidgetMode.LARGE) {
             HeaderButton(R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
         }
         HeaderButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
         HeaderButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
+        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
+        HeaderButton(
+            R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
+            actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette, IconButtonStyle.FILLED,
+        )
     }
 }
 
@@ -196,6 +210,9 @@ private fun todayWeather(state: WidgetUiState) = state.weather.days[state.today]
 
 /** 동기화 시각을 보일 최소 내용 폭(글자 배율 1 기준, 글자가 커지면 비례해 늘림). 모자라면 시각 없이 오류 점만 보인다. */
 private val SYNC_TIME_MIN_WIDTH = 340.dp
+
+/** 머리 버튼을 둥근 48dp 버튼으로 둘 최소 폭: 버튼 셋(144dp) + 짧은 제목('11월')이 들어간다. 2×2(약 110~234dp 중 좁은 쪽)는 예외. */
+private val WIDE_HEADER_MIN_WIDTH = 250.dp
 private val syncTodayFormat = DateTimeFormatter.ofPattern("H:mm")
 private val syncDateFormat = DateTimeFormatter.ofPattern("M/d")
 
@@ -217,15 +234,14 @@ internal fun SyncBadge(sync: WidgetSync, today: LocalDate, fontSp: Float, palett
         )
     }
     if (sync.failed) {
-        Text(
-            text = "●",
+        // 빨간 점(색만)이 아니라 다른 위젯의 오류 줄과 같은 경고 모양으로 알린다(A11Y-03). 머리 폭이 좁아 글자는 붙이지 않는다.
+        // 낭독은 '동기화 오류'만: 제목을 누르면 앱이 아니라 오늘로 가는 경우가 있어 '눌러서 앱 열기'는 틀렸다.
+        Box(
             modifier = GlanceModifier.padding(start = 4.dp).semantics {
-                contentDescription = context.getString(R.string.widget_sync_error)
+                contentDescription = context.getString(R.string.widget_sync_error_short)
                 testTag = "syncError"
             },
-            style = TextStyle(color = palette.error, fontSize = fontSp.sp),
-            maxLines = 1,
-        )
+        ) { WidgetIcon(R.drawable.ic_widget_warning, palette.error, (fontSp * 1.15f).dp) }
     }
 }
 
@@ -234,20 +250,32 @@ internal fun appIntent(context: Context): Intent =
     (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-private val HEADER_BUTTON_WIDTH = 48.dp
-
-private fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
+internal fun navAction(delta: Int) = actionRunCallback<MonthNavAction>(actionParametersOf(MonthNavAction.DeltaKey to delta))
 
 /**
- * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 폭 48dp(큼은 머리줄도 48dp라 48×48).
- * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 글자 폭 그대로 둔다(예외).
+ * 머리줄 버튼(WI-04 월 이동, WI-02 추가, NS-06 새로고침). A11Y-02: 중간·큼은 원형 톤 버튼으로 폭 48dp(큼은 머리줄도 48dp라 48×48).
+ * 작음(2×2)은 폭·높이가 모자라 48dp를 줄 수 없어 아이콘 폭 그대로 둔다(예외).
  */
 @Composable
-private fun HeaderButton(@DrawableRes icon: Int, description: String, tag: String, action: Action, metrics: WidgetMetrics, palette: WidgetPalette) {
+private fun HeaderButton(
+    @DrawableRes icon: Int,
+    description: String,
+    tag: String,
+    action: Action,
+    metrics: WidgetMetrics,
+    palette: WidgetPalette,
+    style: IconButtonStyle = IconButtonStyle.TONAL,
+) {
+    // 4×2처럼 높이만 낮은 '작음'(폭은 넉넉함)도 둥근 버튼으로 눌림 폭 48dp를 준다. 2×2(폭이 좁음)만 작은 글자 버튼 예외다(UX-02).
+    if (metrics.mode != WidgetMode.SMALL || LocalSize.current.width >= WIDE_HEADER_MIN_WIDTH) {
+        // 시안: 원형 톤 버튼. 머리 높이는 일정 줄 수를 지키려고 그대로 두고(24·34·48dp), 눌림 폭만 48dp다.
+        WidgetIconButton(icon, description, tag, action, palette, style, visual = minOf(32.dp, metrics.headerHeight - 4.dp), height = metrics.headerHeight)
+        return
+    }
     Box(
         modifier = GlanceModifier
             .height(metrics.headerHeight)
-            .then(if (metrics.mode == WidgetMode.SMALL) GlanceModifier.padding(horizontal = 5.dp) else GlanceModifier.width(HEADER_BUTTON_WIDTH))
+            .padding(horizontal = 5.dp)
             .clickable(action)
             .semantics {
                 contentDescription = description
@@ -308,6 +336,14 @@ class WidgetPalette private constructor(
     val expense: ColorProvider,
     /** HB-03 잔디 농도(낮음·중간·모두). */
     private val grass: List<ColorProvider>,
+    /** 위젯 톤(시안): 타일·버튼 면, 강조 컨테이너, 초록(습관·완료). 바탕과 같은 불투명도를 따른다. */
+    val tile: ColorProvider,
+    val tileHigh: ColorProvider,
+    val accentContainer: ColorProvider,
+    val onAccentContainer: ColorProvider,
+    val green: ColorProvider,
+    val greenContainer: ColorProvider,
+    val onGreenContainer: ColorProvider,
 ) {
     /** HB-03 잔디: 그날 한 비율 [ratio](0~1)를 4단계(없음·절반 미만·모두 미만·모두)로. */
     fun grassLevel(ratio: Float): ColorProvider = when {
@@ -334,22 +370,32 @@ class WidgetPalette private constructor(
         val divider: Color,
         val accent: Color,
         val track: Color,
+        val tile: Color,
+        val tileHigh: Color,
+        val accentContainer: Color,
+        val onAccentContainer: Color,
     )
 
     companion object {
         // 앱과 같은 화면 틀 색(DesignTokens). 다른 달 날짜(outside)만 위젯 전용 값(3:1 이상).
         private val LIGHT = with(DesignTokens.Light) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT), Color(SURFACE_HIGHEST))
+            Scheme(
+                Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808080), Color(RULE), Color(ACCENT), Color(SURFACE_HIGHEST),
+                WidgetTones.LIGHT.tile, WidgetTones.LIGHT.tileHigh, WidgetTones.LIGHT.accentContainer, WidgetTones.LIGHT.onAccentContainer,
+            )
         }
         private val DARK = with(DesignTokens.Dark) {
-            Scheme(Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT), Color(0xFF3A3A3A))
+            Scheme(
+                Color(PAPER), Color(INK), Color(GRAPHITE), Color(0xFF808083), Color(RULE), Color(ACCENT), Color(0xFF3A3A3A),
+                WidgetTones.DARK.tile, WidgetTones.DARK.tileHigh, WidgetTones.DARK.accentContainer, WidgetTones.DARK.onAccentContainer,
+            )
         }
         // 일요일·공휴일·토요일 글자색. 작은 글자도 4.5:1 이상(흰 배경 위 5.6·5.8, #191919 위 6.3·6.3).
         // 다른 달 날짜(outside)는 3:1 이상(흰 배경 3.9, #191919 4.5). 앱(CalendarColors.kt)과 같은 값이다.
-        private val SUNDAY_LIGHT = Color(0xFFC62828)
-        private val SUNDAY_DARK = Color(0xFFFF6B6B)
-        private val SATURDAY_LIGHT = Color(0xFF1565C0)
-        private val SATURDAY_DARK = Color(0xFF5B9BF8)
+        private val SUNDAY_LIGHT = Color(DesignTokens.Light.SUNDAY)
+        private val SUNDAY_DARK = Color(DesignTokens.Dark.SUNDAY)
+        private val SATURDAY_LIGHT = Color(DesignTokens.Light.SATURDAY)
+        private val SATURDAY_DARK = Color(DesignTokens.Dark.SATURDAY)
 
         /**
          * Material You 색은 그릴 때마다 시스템 색 자원(android.R.color.system_*)에서 읽는다. 배경화면이 바뀌면
@@ -362,12 +408,16 @@ class WidgetPalette private constructor(
                     c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral2_200),
                     c(android.R.color.system_neutral2_500), c(android.R.color.system_neutral2_800), c(android.R.color.system_accent1_200),
                     c(android.R.color.system_neutral2_700),
+                    c(android.R.color.system_neutral1_800), c(android.R.color.system_neutral1_700),
+                    c(android.R.color.system_accent1_700), c(android.R.color.system_accent1_100),
                 )
             } else {
                 Scheme(
                     c(android.R.color.system_neutral1_50), c(android.R.color.system_neutral1_900), c(android.R.color.system_neutral2_700),
                     c(android.R.color.system_neutral2_400), c(android.R.color.system_neutral2_100), c(android.R.color.system_accent1_600),
                     c(android.R.color.system_neutral2_200),
+                    c(android.R.color.system_neutral1_100), c(android.R.color.system_neutral1_200),
+                    c(android.R.color.system_accent1_100), c(android.R.color.system_accent1_900),
                 )
             }
         }
@@ -414,6 +464,13 @@ class WidgetPalette private constructor(
                 income = pair(Color(DesignTokens.Light.INCOME), Color(DesignTokens.Dark.INCOME)),
                 expense = pair(Color(DesignTokens.Light.EXPENSE), Color(DesignTokens.Dark.EXPENSE)),
                 grass = listOf(0.35f, 0.65f, 1f).map { a -> pick({ it.accent.copy(alpha = a) }) },
+                tile = pick({ it.tile }, bg = true),
+                tileHigh = pick({ it.tileHigh }, bg = true),
+                accentContainer = pick({ it.accentContainer }),
+                onAccentContainer = pick({ it.onAccentContainer }),
+                green = pair(WidgetTones.LIGHT.green, WidgetTones.DARK.green),
+                greenContainer = pair(WidgetTones.LIGHT.greenContainer, WidgetTones.DARK.greenContainer),
+                onGreenContainer = pair(WidgetTones.LIGHT.onGreenContainer, WidgetTones.DARK.onGreenContainer),
             )
         }
     }

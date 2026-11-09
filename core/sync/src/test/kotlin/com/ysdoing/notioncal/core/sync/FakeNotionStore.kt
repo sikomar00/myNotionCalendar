@@ -87,6 +87,18 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     /** 생성 요청이 노션에 반영된 뒤, 응답이 돌아가기 전에 실행한다(전송 중 해제 경쟁 재현). 한 번 쓰면 지운다. */
     var afterCreate: (suspend (PageDto) -> Unit)? = null
 
+    /** 모든 노션 호출 앞에서 실행한다(요청 수 계수 시험용). */
+    var onCall: (() -> Unit)? = null
+
+    /** 조회(queryAll)가 이 오류로 실패하게 한다(중복 확인 조회가 거부되는 경우 재현). */
+    var queryError: NotionError? = null
+
+    /** 이 소스의 스키마 읽기가 이 오류로 실패하게 한다(DB 하나의 공유가 끊긴 경우 재현). */
+    var sourceErrors: Map<String, NotionError> = emptyMap()
+
+    /** 쓰기(만들기·고치기·휴지통)가 매번 이 오류로 실패하게 한다(계속되는 서버 오류 재현). */
+    var writeError: NotionError? = null
+
     private val options = mapOf("opt-event" to ("Event" to "yellow"), "opt-learn" to ("Learn" to "blue"), "opt-habit" to ("Habit" to "red"))
 
     val schema: DataSourceDto = NotionJson.decodeFromString(
@@ -199,6 +211,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
 
     private fun guard() {
         if (networkDown) throw NotionException(NotionError.Network)
+        writeError?.let { throw NotionException(it) }
         if (rejectNext) {
             rejectNext = false
             throw NotionException(NotionError.Validation("validation_error"))
@@ -206,7 +219,9 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     }
 
     override suspend fun dataSource(dataSourceId: String): DataSourceDto {
+        onCall?.invoke()
         if (networkDown) throw NotionException(NotionError.Network)
+        sourceErrors[dataSourceId]?.let { throw NotionException(it) }
         return when (dataSourceId) {
             HABIT_LOG -> logSchema
             HABITS -> habitSchema
@@ -218,6 +233,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     }
 
     override suspend fun pageOrNull(pageId: String): PageDto? {
+        onCall?.invoke()
         if (networkDown) throw NotionException(NotionError.Network)
         return pages[pageId]?.toDto() ?: habits[pageId]?.toDto() ?: budgets[pageId]?.toDto() ?: categories[pageId]?.toDto()
     }
@@ -226,7 +242,9 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     val queries = mutableListOf<Pair<String, JsonObject?>>()
 
     override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult {
+        onCall?.invoke()
         if (networkDown) throw NotionException(NotionError.Network)
+        queryError?.let { throw NotionException(it) }
         queries += dataSourceId to filter
         if (dataSourceId == BUDGET || dataSourceId == CATEGORY) {
             require(filter == null) { "예산·카테고리 마스터는 필터 없이 전체 조회한다" }
@@ -266,6 +284,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     }
 
     override suspend fun createPage(dataSourceId: String, properties: JsonObject): PageDto {
+        onCall?.invoke()
         guard()
         val id = "page-" + UUID.randomUUID().toString().take(8)
         val page = Page(id, "", null, createdTime = now(), lastEdited = now(), dataSourceId = dataSourceId)
@@ -285,6 +304,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     }
 
     override suspend fun updatePage(pageId: String, properties: JsonObject): PageDto {
+        onCall?.invoke()
         guard()
         val page = pages[pageId] ?: throw NotionException(NotionError.NotShared)
         page.applyProperties(properties)
@@ -294,6 +314,7 @@ class FakeNotionStore(private val now: () -> Instant) : NotionReader, NotionWrit
     }
 
     override suspend fun trashPage(pageId: String): PageDto? {
+        onCall?.invoke()
         guard()
         val page = pages[pageId] ?: return null
         page.inTrash = true

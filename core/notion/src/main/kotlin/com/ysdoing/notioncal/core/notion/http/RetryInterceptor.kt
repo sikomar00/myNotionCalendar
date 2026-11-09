@@ -49,8 +49,9 @@ class RetryInterceptor(
         min(1L shl attempt, 30L) * 1000 + random.nextLong(0, 251)
 
     companion object {
-        /** GET과 data source 조회(POST .../query)는 서버 상태를 바꾸지 않아 다시 보내도 안전하다. */
+        /** GET과 data source 조회(POST .../query)·검색(POST v1/search)은 서버 상태를 바꾸지 않아 다시 보내도 안전하다. */
         fun isReadOnly(request: Request): Boolean =
-            request.method == "GET" || (request.method == "POST" && request.url.encodedPath.endsWith("/query"))
+            request.method == "GET" ||
+                (request.method == "POST" && (request.url.encodedPath.endsWith("/query") || request.url.encodedPath.endsWith("/v1/search")))
     }
 }

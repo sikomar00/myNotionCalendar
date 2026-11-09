@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ysdoing.notioncal.core.data.DesignTokens
 import com.ysdoing.notioncal.core.data.habit.DayMark
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
@@ -61,14 +62,19 @@ import java.util.Locale
 
 /** HB-02·HB-04 습관 탭. 습관마다 최근 7일(누르면 체크·해제), 상태 문구, 이번 주·이번 달, 이번 달 잔디. */
 @Composable
-fun HabitRoute(onOpenSettings: () -> Unit, viewModel: HabitViewModel = hiltViewModel()) {
+fun HabitRoute(
+    onOpenSettings: () -> Unit,
+    /** 습관이 없을 때 '설정에서 등록' 버튼이 여는 설정(데이터베이스 카테고리). 기본은 [onOpenSettings]와 같다. */
+    onOpenDatabaseSettings: () -> Unit = onOpenSettings,
+    viewModel: HabitViewModel = hiltViewModel(),
+) {
     val board by viewModel.board.collectAsStateWithLifecycle()
     val blocked by viewModel.blocked.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         viewModel.onResume()
         onPauseOrDispose { }
     }
-    HabitScreen(board, onToggle = viewModel::toggle, onOpenSettings = onOpenSettings, blocked = blocked, onBlockedShown = viewModel::dismissBlocked)
+    HabitScreen(board, onToggle = viewModel::toggle, onOpenSettings = onOpenSettings, blocked = blocked, onBlockedShown = viewModel::dismissBlocked, onOpenDatabaseSettings = onOpenDatabaseSettings)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +85,7 @@ fun HabitScreen(
     onOpenSettings: () -> Unit,
     blocked: Boolean = false,
     onBlockedShown: () -> Unit = {},
+    onOpenDatabaseSettings: () -> Unit = onOpenSettings,
 ) {
     val snackbar = remember { SnackbarHostState() }
     val blockedText = stringResource(R.string.habit_blocked)
@@ -115,7 +122,7 @@ fun HabitScreen(
     ) { padding ->
         when {
             board == null -> Unit
-            board.habits.isEmpty() -> EmptyHabits(onOpenSettings, Modifier.padding(padding))
+            board.habits.isEmpty() -> EmptyHabits(onOpenDatabaseSettings, Modifier.padding(padding))
             else -> LazyColumn(Modifier.padding(padding).fillMaxSize().testTag("habitList")) {
                 items(board.habits, key = { it.habit.pageId }) { summary ->
                     HabitCard(summary, board.today, board.doneDates[summary.habit.pageId].orEmpty(), onToggle)
@@ -186,7 +193,8 @@ private fun DayCell(name: String, mark: DayMark, isToday: Boolean, highlight: Bo
     Column(
         modifier
             .heightIn(min = 56.dp)
-            .toggleable(value = mark.done, role = Role.Checkbox, onValueChange = { onToggle() })
+            // 시작 전 빈 날은 기록할 수 없다(HabitRepository.toggle도 막는다). 그날 기록이 있으면 지울 수 있게 둔다.
+            .toggleable(value = mark.done, enabled = mark.done || !mark.beforeStart, role = Role.Checkbox, onValueChange = { onToggle() })
             .semantics { contentDescription = description }
             .testTag(if (isToday) "habitToday" else "habitDay"),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -249,4 +257,4 @@ private fun MonthGrass(today: LocalDate, done: Set<LocalDate>, monthCount: Int) 
 
 /** 일요일 글자색(앱 달력·위젯과 같은 값, 흰 배경 5.6:1·#191919 위 6.3:1). */
 private val SundayColor: Color
-    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(0xFFFF6B6B) else Color(0xFFC62828)
+    @Composable get() = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color(DesignTokens.Dark.SUNDAY) else Color(DesignTokens.Light.SUNDAY)

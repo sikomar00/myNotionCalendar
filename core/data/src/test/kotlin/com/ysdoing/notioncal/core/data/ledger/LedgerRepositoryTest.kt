@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventWriter
+import com.ysdoing.notioncal.core.data.LedgerValue
+import com.ysdoing.notioncal.core.data.applying
+import com.ysdoing.notioncal.core.data.valuesFor
 import com.ysdoing.notioncal.core.data.OutboxJson
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.SettingsRepository
@@ -111,6 +114,35 @@ class LedgerRepositoryTest {
         assertEquals(2_500_000L, board.summary.monthIncome)
         assertEquals(LocalDate.of(2027, 1, 5), board.summary.asOf)
         assertEquals(90_200L, board.summary.weekRemaining)
+    }
+
+    /** 작은 가계부 위젯은 월초에도 이번 주를 맨 아래로 최근 5주를 그린다: 그리드 앞(지난달) 주의 거래도 읽어 칸이 비지 않는다. 이 달 합계에는 넣지 않는다. */
+    @Test
+    fun earlyMonthBoardAlsoReadsTheRecentWeeksBeforeTheGrid() = runTest {
+        db.eventDao().upsert(
+            listOf(
+                tx("oct", LocalDate.of(2026, 10, 26), -5_000), tx("nov", LocalDate.of(2026, 11, 2), -3_000),
+                // 그리드 앞 주의 중복: 칸 금액에는 들어가도 11월 💰 탭의 '중복' 카드에는 섞이지 않는다(정리로 지난달 행을 지우지 않게).
+                tx("dup1", LocalDate.of(2026, 10, 27), -4_000, created = 1, title = "GS25"), tx("dup2", LocalDate.of(2026, 10, 27), -4_000, created = 2, title = "GS25"),
+            ),
+        )
+        val repo = repository()
+        val board = repo.observeBoard(YearMonth.of(2026, 11), LocalDate.of(2026, 11, 9)).first()
+        assertEquals(5_000L, board.summary.days[LocalDate.of(2026, 10, 26)]?.spend)
+        assertEquals(3_000L, board.summary.monthSpend)
+        assertTrue(board.summary.duplicates.isEmpty())
+        // 같은 중복이 10월 탭에서는 카드에 보인다(그 달의 그리드 안).
+        assertEquals(1, repo.observeBoard(YearMonth.of(2026, 10), LocalDate.of(2026, 11, 9)).first().summary.duplicates.size)
+    }
+
+    /** LD-09 '실제로 전환'을 노션이 거부하면 되돌릴 수 있게, 바꾸기 전 가계부 값을 기준값으로 남긴다(전에는 비어 앱만 바뀐 채 남았다). */
+    @Test
+    fun aLedgerChangeKeepsTheValuesToRevertTo() {
+        val row = tx("p", today, -5_000, planned = true)
+        val change = EventChange(ledger = LedgerValue(planned = false, manual = true))
+        val base = row.valuesFor(change)
+        assertEquals(LedgerValue(planned = true, manual = false), base.ledger)
+        assertEquals(row, row.applying(change, emptyList()).applying(base, emptyList()))
     }
 
     /** LD-08: 정리하면 나중 행이 휴지통(아웃박스 TRASH)으로 가고, 둘 다 유지는 앱 상태에 남아 합계에 둘 다 센다. */

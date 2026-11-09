@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal
 
+import android.util.Log
 import android.app.Application
 import android.content.ComponentCallbacks
 import android.content.Context
@@ -18,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
+import com.ysdoing.notioncal.widget.DayChangeScheduler
 import com.ysdoing.notioncal.widget.WidgetPreviews
 import com.ysdoing.notioncal.core.data.AppUpdateRefresh
 import com.ysdoing.notioncal.core.data.SettingsRepository
@@ -70,6 +72,10 @@ class NotionCalApp : Application(), Configuration.Provider {
         weatherScheduler.start(appScope) // WX-01 3시간 주기 예보
         appScope.launch(Dispatchers.IO) { runCatching { QuickAdd.publishShortcut(this@NotionCalApp) } } // EX-06
         appScope.launch(Dispatchers.IO) { publishWidgetPreviews() } // WG-08
+        // WG-03: 강제 중지로 지워진 자정 알람을 다시 걸고, 그 사이 날짜가 바뀌었으면 넘겨 둔 위젯 달을 오늘로.
+        appScope.launch(Dispatchers.IO) {
+            runCatching { DayChangeScheduler.catchUp(this@NotionCalApp) }.onFailure { Log.w("NotionCalApp", "자정 알람 다시 걸기 실패(${it.javaClass.name})") }
+        }
         appScope.launch(Dispatchers.IO) { // 업데이트 직후 첫 동기화는 전체 범위(§12 대조)
             runCatching { appUpdateRefresh.onStart(packageManager.getPackageInfo(packageName, 0).lastUpdateTime) }
         }

@@ -1,0 +1,235 @@
+package com.ysdoing.notioncal.widget
+
+import com.ysdoing.notioncal.core.data.view.AggFn
+import com.ysdoing.notioncal.core.data.view.AggPeriod
+import com.ysdoing.notioncal.core.data.view.TileKind
+import com.ysdoing.notioncal.core.data.view.ViewChoice
+import com.ysdoing.notioncal.core.data.view.ViewColumn
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Phase 11e 설정의 타일 추가 양식. 화면 대신 순수 부분(함수에 맞는 속성, 보기·함수를 바꿀 때 기본값, 양식 → 타일)을 본다.
+ */
+class WidgetTileSettingsTest {
+    private val title = ViewColumn("t", "이름", "title")
+    private val amount = ViewColumn("n", "금액", "number")
+    private val count = ViewColumn("q", "수량", "number")
+    private val done = ViewColumn("c", "완료", "checkbox")
+    private val day = ViewColumn("d", "날짜", "date")
+    private val due = ViewColumn("e", "마감", "date")
+    private val columns = listOf(title, amount, count, done, day, due)
+
+    @Test
+    fun eachFunctionOffersOnlyItsPropertyTypes() {
+        assertEquals(listOf(amount, count), propertyChoices(AggFn.SUM, columns))
+        assertEquals(listOf(amount, count), propertyChoices(AggFn.MAX, columns))
+        assertEquals(listOf(done), propertyChoices(AggFn.RATIO, columns))
+        assertEquals(listOf(done), propertyChoices(AggFn.STREAK, columns))
+        assertEquals(emptyList<ViewColumn>(), propertyChoices(AggFn.COUNT, columns)) // 개수는 속성이 필요 없다
+        assertEquals(emptyList<ViewColumn>(), propertyChoices(AggFn.SUM, listOf(title, done))) // 숫자 속성이 없는 보기
+    }
+
+    @Test
+    fun dateChoicesAreTheDatePropertiesOnly() {
+        assertEquals(listOf(day, due), dateChoices(columns))
+        assertEquals(emptyList<ViewColumn>(), dateChoices(listOf(title, amount)))
+    }
+
+    @Test
+    fun editingATileFillsTheFormFromItAndSavesItUnderTheSameId() {
+        val tile = com.ysdoing.notioncal.core.data.view.AggTile("t3", "v1", AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH, 5000.0, "식비 합계", "blue")
+        val draft = TileDraft.from(tile)
+        assertEquals(TileDraft("v1", AggFn.SUM, "n", "d", AggPeriod.THIS_MONTH, "5000", "식비 합계", "blue", "t3"), draft)
+        assertEquals(tile, draft.toTile()) // 왕복: 번호·색·목표가 그대로
+        assertEquals("5.5", TileDraft.from(tile.copy(goal = 5.5)).goalText)
+        // 고친 값으로 저장하면 같은 번호의 새 타일이다. 새 타일 양식은 번호가 비어 '추가' 때 붙는다.
+        assertEquals("t3", draft.copy(color = "red", goalText = "").toTile()!!.id)
+        assertEquals("red", draft.copy(color = "red").toTile()!!.color)
+        assertEquals("t", TileDraft().withView("v1", columns).toTile()!!.id)
+    }
+
+    @Test
+    fun changingTheViewWhileEditingKeepsTheTileIdNameAndColorSoSavingReplacesItInsteadOfAddingACopy() {
+        val tile = com.ysdoing.notioncal.core.data.view.AggTile("t3", "v1", AggFn.COUNT, label = "식비", color = "blue")
+        val moved = TileDraft.from(tile).withView("v2", columns)
+        assertEquals(listOf("t3", "식비", "blue", "v2"), listOf(moved.editingId, moved.label, moved.color, moved.viewId))
+        assertEquals("t3", moved.toTile()!!.id)
+    }
+
+    @Test
+    fun anUnknownColorIsDroppedSoOnlyTheNotionPaletteIsStored() {
+        assertEquals("", TileDraft().withView("v1", columns).copy(color = "neon").toTile()!!.color)
+        assertEquals("green", TileDraft().withView("v1", columns).copy(color = " green ").toTile()!!.color)
+        assertEquals("", TileDraft().withView("v1", columns).toTile()!!.color)
+    }
+
+    @Test
+    fun pickingAViewStartsFromCountWithTheFirstDateProperty() {
+        val draft = TileDraft().withView("v1", columns)
+        assertEquals(TileDraft(viewId = "v1", fn = AggFn.COUNT, propId = "", dateProp = "d"), draft)
+    }
+
+    @Test
+    fun changingTheFunctionPicksTheFirstFittingPropertyAndKeepsTheDate() {
+        val sum = TileDraft().withView("v1", columns).withFn(AggFn.SUM, columns)
+        assertEquals("n", sum.propId)
+        assertEquals("d", sum.dateProp)
+        val ratio = sum.withFn(AggFn.RATIO, columns)
+        assertEquals("c", ratio.propId) // 숫자 속성은 비율에 맞지 않아 바뀐다
+        assertEquals("", ratio.withFn(AggFn.COUNT, columns).propId)
+    }
+
+    @Test
+    fun changingBetweenFunctionsThatTakeTheSamePropertyKeepsTheChosenOne() {
+        val picked = TileDraft().withView("v1", columns).withFn(AggFn.SUM, columns).copy(propId = "q")
+        listOf(AggFn.AVG, AggFn.MIN, AggFn.MAX, AggFn.SUM).forEach { assertEquals("q", picked.withFn(it, columns).propId) }
+    }
+
+    @Test
+    fun aViewWithoutDatesLeavesTheDatePropertyEmptyAndStreakCannotBeBuilt() {
+        val noDates = listOf(title, amount, done)
+        val draft = TileDraft().withView("v1", noDates).withFn(AggFn.STREAK, noDates)
+        assertEquals("", draft.dateProp)
+        assertNull(draft.toTile()) // 연속 달성일은 날짜 속성이 있어야 한다
+    }
+
+    @Test
+    fun theDraftBecomesATileOnlyWhenItHasWhatTheFunctionNeeds() {
+        assertNull(TileDraft().toTile()) // 보기를 안 골랐다
+        assertNull(TileDraft(viewId = "v1", fn = AggFn.SUM).toTile()) // 속성이 없다
+        assertNotNull(TileDraft(viewId = "v1", fn = AggFn.COUNT).toTile())
+        val tile = TileDraft(viewId = "v1", fn = AggFn.SUM, propId = "n", dateProp = "d", period = AggPeriod.THIS_MONTH, goalText = " 5,000 ", label = "  식비 ").toTile()!!
+        assertEquals(5000.0, tile.goal!!, 0.0)
+        assertEquals("식비", tile.label)
+        assertEquals(AggPeriod.THIS_MONTH, tile.period)
+    }
+
+    @Test
+    fun theGoalAcceptsPercentSignsThousandsCommasAndDecimalCommas() {
+        assertEquals(80.0, TileDraft(viewId = "v1", goalText = "80%").toTile()!!.goal!!, 0.0)
+        assertEquals(1500.0, TileDraft(viewId = "v1", goalText = "1,500").toTile()!!.goal!!, 0.0)
+        assertEquals(1.5, TileDraft(viewId = "v1", goalText = "1,5").toTile()!!.goal!!, 0.0) // 쉼표 소수점을 열 배로 읽지 않는다
+        assertEquals(12345.5, TileDraft(viewId = "v1", goalText = "12,345.5").toTile()!!.goal!!, 0.0)
+        assertNull(TileDraft(viewId = "v1", goalText = "").toTile()!!.goal) // 비우면 목표 없음
+    }
+
+    @Test
+    fun aGoalThatCannotBeReadOrIsNotPositiveBlocksTheTileAndIsFlagged() {
+        listOf("abc", "-5", "0", "8 0").forEach {
+            val draft = TileDraft(viewId = "v1", goalText = it)
+            assertNull("목표 '$it'", draft.toTile())
+            assertTrue("목표 '$it'", draft.goalInvalid)
+        }
+        assertFalse(TileDraft(viewId = "v1", goalText = "").goalInvalid)
+        assertFalse(TileDraft(viewId = "v1", goalText = "80").goalInvalid)
+    }
+
+    @Test
+    fun aPeriodWithoutADatePropertyFallsBackToAll() {
+        val tile = TileDraft(viewId = "v1", fn = AggFn.COUNT, dateProp = "", period = AggPeriod.TODAY).toTile()!!
+        assertEquals(AggPeriod.ALL, tile.period)
+    }
+
+    @Test
+    fun theTabAndTileNameInputsAreCutByCodePointsNotUtf16() {
+        assertEquals("가나다", "가나다라".takeCodePoints(3))
+        assertEquals("📚📖", "📚📖📕".takeCodePoints(2)) // 이모지를 반으로 자르지 않는다
+        assertEquals("짧다", "짧다".takeCodePoints(20))
+    }
+
+    // --- 분류별 도넛(Phase 12c RC-04)
+
+    private val kind = ViewColumn("k", "분류", "select", listOf(ViewChoice("o1", "식비")))
+    private val tags = ViewColumn("g", "태그", "multi_select")
+    private val state = ViewColumn("s", "상태", "status")
+    private val withGroups = columns + listOf(kind, tags, state)
+
+    @Test
+    fun donutGroupChoicesAreTheSelectStatusAndMultiSelectProperties() {
+        assertEquals(listOf(kind, tags, state), groupChoices(withGroups))
+        assertEquals(emptyList<ViewColumn>(), groupChoices(columns))
+    }
+
+    @Test
+    fun turningOnTheDonutKindPicksTheFirstGroupLimitsTheFunctionAndClearsGoalAndColor() {
+        val value = TileDraft().withView("v1", withGroups).withFn(AggFn.AVG, withGroups).copy(goalText = "100", color = "red")
+        val donut = value.withKind(TileKind.DONUT, withGroups)
+        assertEquals(listOf(TileKind.DONUT, "k", AggFn.COUNT, "", ""), listOf(donut.kind, donut.groupProp, donut.fn, donut.goalText, donut.color))
+        assertEquals(AggFn.SUM, donut.withFn(AggFn.SUM, withGroups).withKind(TileKind.DONUT, withGroups).fn) // 합계는 그대로 둔다
+        assertEquals("g", donut.copy(groupProp = "g").withKind(TileKind.DONUT, withGroups).groupProp) // 맞는 분류 속성은 그대로
+        assertEquals("", donut.withKind(TileKind.AGG, withGroups).groupProp)
+    }
+
+    @Test
+    fun aDonutDraftBecomesATileOnlyWithAGroupAndSavesItsKind() {
+        val donut = TileDraft().withView("v1", withGroups).withKind(TileKind.DONUT, withGroups).withFn(AggFn.SUM, withGroups)
+        val tile = donut.toTile()!!
+        assertEquals(listOf(TileKind.DONUT, "k", AggFn.SUM, "n"), listOf(tile.kind, tile.groupProp, tile.fn, tile.propId))
+        assertNull(donut.copy(groupProp = "").toTile()) // 분류 속성이 없으면 '추가'를 막는다
+        assertEquals(donut.copy(editingId = "t2"), TileDraft.from(tile.copy(id = "t2")).copy(label = ""))
+    }
+
+    @Test
+    fun pickingAnotherViewKeepsTheDonutKindWithThatViewsFirstGroup() {
+        val donut = TileDraft().withView("v1", withGroups).withKind(TileKind.DONUT, withGroups)
+        val other = donut.withView("v2", listOf(title, amount, day, tags))
+        assertEquals(listOf(TileKind.DONUT, "g"), listOf(other.kind, other.groupProp))
+        assertEquals(TileKind.AGG, TileDraft().withView("v1", withGroups).withView("v2", columns).kind)
+    }
+
+    // --- 해빗 격자(Phase 12e RC-03)
+
+    private val c1 = ViewColumn("c1", "운동", "checkbox")
+    private val c2 = ViewColumn("c2", "독서", "checkbox")
+    private val c3 = ViewColumn("c3", "영어", "checkbox")
+    private val c4 = ViewColumn("c4", "물", "checkbox")
+    private val habitColumns = listOf(title, day, c1, c2, c3, c4)
+
+    @Test
+    fun habitChoicesAreTheCheckboxProperties() {
+        assertEquals(listOf(c1, c2, c3, c4), habitChoices(habitColumns))
+        assertEquals(emptyList<ViewColumn>(), habitChoices(columns.filter { it.type != "checkbox" }))
+    }
+
+    @Test
+    fun turningOnTheHabitKindPicksTheDateAndTheFirstThreeCheckboxesAndClearsTheValueFields() {
+        val value = TileDraft().withView("v1", habitColumns).withFn(AggFn.SUM, columns).copy(goalText = "10", color = "red", period = AggPeriod.THIS_MONTH)
+        val habits = value.withKind(TileKind.HABITS, habitColumns)
+        assertEquals(listOf(TileKind.HABITS, AggFn.COUNT, "", AggPeriod.ALL, "", ""), listOf(habits.kind, habits.fn, habits.propId, habits.period, habits.goalText, habits.color))
+        assertEquals(listOf("c1", "c2", "c3"), habits.habitProps) // 첫 체크박스 셋(상한)
+        assertEquals("d", habits.dateProp)
+        assertEquals(emptyList<String>(), habits.withKind(TileKind.AGG, habitColumns).habitProps)
+    }
+
+    @Test
+    fun togglingHabitsAddsRemovesAndStopsAtThree() {
+        var draft = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        draft = draft.toggleHabit("c4") // 이미 셋이라 더하지 않는다
+        assertEquals(listOf("c1", "c2", "c3"), draft.habitProps)
+        draft = draft.toggleHabit("c2").toggleHabit("c4")
+        assertEquals(listOf("c1", "c3", "c4"), draft.habitProps)
+    }
+
+    @Test
+    fun aHabitDraftBecomesATileOnlyWithAHabitAndADateAndRoundTrips() {
+        val draft = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        val tile = draft.toTile()!!
+        assertEquals(listOf(TileKind.HABITS, "d", listOf("c1", "c2", "c3")), listOf(tile.kind, tile.dateProp, tile.habitProps))
+        assertNull(draft.copy(habitProps = emptyList()).toTile())
+        assertNull(draft.copy(dateProp = "").toTile())
+        assertEquals(draft.copy(editingId = "t2"), TileDraft.from(tile.copy(id = "t2")).copy(label = ""))
+    }
+
+    @Test
+    fun pickingAnotherViewKeepsTheHabitKindWithThatViewsCheckboxes() {
+        val habits = TileDraft().withView("v1", habitColumns).withKind(TileKind.HABITS, habitColumns)
+        val other = habits.withView("v2", listOf(title, day, ViewColumn("x", "독서", "checkbox")))
+        assertEquals(listOf(TileKind.HABITS, listOf("x")), listOf(other.kind, other.habitProps))
+        assertEquals(TileKind.AGG, TileDraft().withView("v1", habitColumns).withView("v2", columns).kind)
+    }
+}

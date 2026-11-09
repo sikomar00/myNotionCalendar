@@ -5,52 +5,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
-import androidx.glance.appwidget.lazy.LazyColumn
-import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.layout.width
-import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.CalendarEvent
-import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.calendar.Agenda
 import com.ysdoing.notioncal.core.data.calendar.AgendaDay
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 
@@ -95,10 +86,9 @@ class AgendaWidget : GlanceAppWidget() {
             val config by remember { deps.widgetConfigs().observe(appWidgetId) }.collectAsState(initialConfig)
             val fontScale by SystemFontScale.flow.collectAsState()
             val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(initialSync)
-            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정 알람이 위젯을 다시 그리게 한다.
-            val today = LocalDate.now(APP_ZONE)
-            val events by remember(today) { deps.events().observeRange(today, lastDay(today)) }
-                .collectAsState(if (today == initialToday) initialEvents else emptyList())
+            // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+            val today = widgetToday()
+            val events = rememberLatest(today, if (today == initialToday) initialEvents else emptyList()) { deps.events().observeRange(today, lastDay(today)) }
             val holidays by remember(today) { deps.holidays().observe(today, lastDay(today)) }
                 .collectAsState(if (today == initialToday) initialHolidays else emptyMap())
             AgendaWidgetContent(uiState(today, config, events, sync, holidays), fontScale ?: SystemFontScale.current(context))
@@ -116,9 +106,7 @@ class AgendaWidget : GlanceAppWidget() {
             sync: WidgetSync = WidgetSync(),
             holidays: Map<LocalDate, String> = emptyMap(),
         ): AgendaUiState {
-            val shown = events.filter { event ->
-                (config.dataSourceIds.isEmpty() || event.dataSourceId in config.dataSourceIds) && !(config.hideDone && event.done)
-            }
+            val shown = events.shownIn(config)
             // 공휴일만 있는 날도 목록에 넣는다(EX-02).
             return AgendaUiState(today, Agenda.build(shown, today, lastDay(today), today, holidays = holidays.keys), config, sync, holidays)
         }
@@ -131,6 +119,8 @@ class AgendaWidget : GlanceAppWidget() {
  */
 internal data class AgendaMetrics(
     val headerHeight: Dp,
+    /** 동기화 실패 글자 부제가 붙는 머리. */
+    val headerWithSub: Dp,
     val dateHeight: Dp,
     val itemHeight: Dp,
     val timeWidth: Dp,
@@ -151,6 +141,7 @@ internal data class AgendaMetrics(
             val time = 10f * scale
             return AgendaMetrics(
                 headerHeight = maxOf(32.dp, box(header) + 6.dp),
+                headerWithSub = maxOf(40.dp, box(header) + box(time) + 4.dp),
                 dateHeight = box(date) + 4.dp,
                 itemHeight = box(item) + 6.dp,
                 timeWidth = (time * textScale * 4.4f).dp,
@@ -180,64 +171,58 @@ fun AgendaWidgetContent(
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
         AgendaHeader(state, metrics, palette)
-        LazyColumn(GlanceModifier.fillMaxWidth().defaultWeight()) {
+        val entries = buildList {
             state.days.forEach { day ->
-                item(itemId = day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) }
+                add(ListEntry(day.date.toEpochDay()) { DateRow(day.date, state.today, state.holidays[day.date], metrics, palette) })
                 if (day.items.isEmpty() && day.date !in state.holidays) {
-                    item(itemId = -day.date.toEpochDay() - 1) {
+                    add(ListEntry(-day.date.toEpochDay() - 1) {
                         WidgetEmptyRow(metrics.itemHeight, metrics.itemFontSp, palette, tag = "agendaEmpty", startPadding = 12.dp)
-                    }
+                    })
                 }
-                items(day.items, itemId = { (event, _) -> (event.pageId + day.date).hashCode().toLong() }) { (event, continues) ->
-                    WidgetEventRow(
-                        event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
-                        tag = "agendaItem", dotWidth = 14.dp, timeColumn = metrics.timeWidth, continues = continues,
-                    )
+                day.items.forEach { (event, continues) ->
+                    add(ListEntry((event.pageId + day.date).hashCode().toLong()) {
+                        WidgetEventRow(
+                            event, day.date, metrics.itemHeight, metrics.itemFontSp, metrics.timeFontSp, palette,
+                            tag = "agendaItem", dotWidth = 14.dp, timeColumn = metrics.timeWidth, continues = continues,
+                        )
+                    })
                 }
             }
         }
+        WidgetList(entries, GlanceModifier.fillMaxWidth().defaultWeight())
     }
 }
 
+/** 머리(공통 [WidgetHeader]): 달력 아이콘 + 오늘 날짜(누르면 앱) + 동기화 실패면 글자 부제 + 채운 '+'(WI-02, 오늘 날짜로 입력칸). */
 @Composable
 private fun AgendaHeader(state: AgendaUiState, metrics: AgendaMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     val today = state.today
-    Row(GlanceModifier.fillMaxWidth().height(metrics.headerHeight), verticalAlignment = Alignment.CenterVertically) {
-        Row(
-            modifier = GlanceModifier
-                .defaultWeight()
-                .height(metrics.headerHeight)
-                .clickable(actionStartActivity(appIntent(context)))
-                .semantics { testTag = "agendaTitle" },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = context.getString(
-                    R.string.agenda_widget_title,
-                    today.monthValue,
-                    today.dayOfMonth,
-                    today.dayOfWeek.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN),
-                ),
-                style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
-                maxLines = 1,
+    val failed = state.sync.failed
+    val height = if (failed) metrics.headerWithSub else metrics.headerHeight
+    WidgetHeader(
+        icon = R.drawable.ic_widget_calendar,
+        title = context.getString(R.string.agenda_widget_title, today.monthValue, today.dayOfMonth, today.dayOfWeek.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN)),
+        // 실패는 색 점이 아니라 글자로 알린다(WS-3, A11Y-03). 실패해도 일정은 캐시 그대로 그린다(PF-05).
+        subtitle = if (failed) context.getString(R.string.widget_sync_error_short) else null,
+        palette = palette,
+        height = height,
+        titleSp = metrics.headerFontSp,
+        subSp = metrics.timeFontSp,
+        titleModifier = GlanceModifier.clickable(actionStartActivity(appIntent(context))).semantics { testTag = "agendaTitle" },
+    ) {
+        // NS-06 새로고침: 노션 보기·습관 위젯과 같은 자리(+ 앞)·같은 폭 기준.
+        if (LocalSize.current.width >= REFRESH_MIN_WIDTH) {
+            WidgetIconButton(
+                R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), palette,
+                visual = (height - 4.dp).coerceAtMost(32.dp), height = height,
             )
-            SyncBadge(state.sync, today, metrics.timeFontSp, palette, showTime = false)
         }
-        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다. 터치 영역은 48dp(A11Y-02).
-        Box(
-            modifier = GlanceModifier
-                .width(48.dp)
-                .height(metrics.headerHeight)
-                .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, today)))
-                .semantics {
-                    contentDescription = context.getString(R.string.widget_add)
-                    testTag = "add"
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            WidgetIcon(R.drawable.ic_widget_add, palette.accent, (metrics.headerHeight * 0.55f).coerceAtMost(24.dp))
-        }
+        WidgetIconButton(
+            R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
+            actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, today)), palette,
+            style = IconButtonStyle.FILLED, visual = (height - 4.dp).coerceAtMost(32.dp), height = height,
+        )
     }
 }
 
@@ -256,23 +241,29 @@ private fun DateRow(date: LocalDate, today: LocalDate, holiday: String?, metrics
     }
     // EX-02: 공휴일은 날짜 줄에 이름을 붙이고 빨강으로.
     val label = listOfNotNull(day, holiday).joinToString(" ")
-    Text(
-        text = label,
+    val isToday = date == today
+    Box(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(metrics.dateHeight)
-            .padding(top = 2.dp)
             .clickable(actionStartActivity(quickSheetIntent(context, AppIntents.MODE_DAY, date)))
             .semantics { testTag = "agendaDate" },
-        style = TextStyle(
-            color = when {
-                holiday != null -> palette.holiday
-                date == today -> palette.accent
-                else -> palette.dayColor(date.dayOfWeek)
-            },
-            fontSize = metrics.dateFontSp.sp,
-            fontWeight = FontWeight.Bold,
-        ),
-        maxLines = 1,
-    )
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        // 오늘은 월간과 같은 칠한 네모(DESIGN.md 원칙 3). 다른 날은 요일 색 글자.
+        Text(
+            text = label,
+            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(WidgetShape.TODAY).padding(horizontal = 4.dp) else GlanceModifier,
+            style = TextStyle(
+                color = when {
+                    isToday -> palette.todayText
+                    holiday != null -> palette.holiday
+                    else -> palette.dayColor(date.dayOfWeek)
+                },
+                fontSize = metrics.dateFontSp.sp,
+                fontWeight = FontWeight.Bold,
+            ),
+            maxLines = 1,
+        )
+    }
 }

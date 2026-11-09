@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.sync
 
 import com.ysdoing.notioncal.core.data.IoDispatcher
 import com.ysdoing.notioncal.core.data.SecretStore
+import com.ysdoing.notioncal.core.data.LedgerPropIds
 import com.ysdoing.notioncal.core.data.SourceKind
 import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.data.SyncTrigger
@@ -10,12 +11,18 @@ import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.notion.NotionClient
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.notion.NotionException
+import com.ysdoing.notioncal.core.notion.SharedDataSource
 import com.ysdoing.notioncal.core.notion.dto.DataSourceDto
+import com.ysdoing.notioncal.core.notion.dto.plainTitle
 import com.ysdoing.notioncal.core.notion.mapping.NotionLinkParser
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.ysdoing.notioncal.core.data.DataSourceRepository
 
 /** 연결 테스트 결과(NS-01). */
 sealed interface ConnectionResult {
@@ -46,6 +53,9 @@ data class DatabaseInspection(
     val ledgerProblem: LedgerProblem? = null,
     /** 노션의 부모 페이지 ID(같은 페이지의 예산·카테고리 마스터 찾기). */
     val parentPageId: String? = null,
+    /** 이미 거래내역으로 등록한 DB(다시 연결)면 사용자가 고른 지출 부호·예산 그룹. 등록 화면이 이 값으로 시작한다. */
+    val existingSpendNegative: Boolean? = null,
+    val existingBudgetGroup: String? = null,
 )
 
 /** LD-01 예산·카테고리 마스터 찾기 결과. 못 찾은 쪽은 null이고 등록 화면이 링크 칸을 보인다. */
@@ -58,6 +68,25 @@ sealed interface CompanionResult {
     /** 예산이면 기간유형·기간값, 카테고리면 제목이 없어 쓸 수 없다. */
     data object Unusable : CompanionResult
     data class Failed(val error: NotionError) : CompanionResult
+}
+
+/** NS-02 DB 추가 목록의 한 줄: 이 연결에 공유된 DB. [registered]면 이미 등록했다(짝으로 함께 등록한 것 포함). */
+data class SharedDatabase(val databaseId: String, val dataSourceId: String, val name: String, val registered: Boolean)
+
+sealed interface SharedDatabasesResult {
+    /** [truncated]면 목록이 길어 앞쪽만 받았다(없으면 링크 붙여넣기). */
+    data class Ok(val databases: List<SharedDatabase>, val truncated: Boolean = false) : SharedDatabasesResult
+    data class Failed(val error: NotionError) : SharedDatabasesResult
+}
+
+/**
+ * 등록 안 한 DB를 먼저, 그 안에서는 이름순(노션 검색은 최근 수정순이라 목록이 매번 흔들린다). 이름은 한국어 순서(대소문자 무시)로,
+ * 제목이 없는 DB는 끝에 둔다.
+ */
+internal fun sharedDatabases(shared: List<SharedDataSource>, registeredIds: Set<String>): List<SharedDatabase> {
+    val byName = Collator.getInstance(Locale.KOREAN).apply { strength = Collator.SECONDARY }
+    return shared.map { SharedDatabase(it.databaseId, it.dataSourceId, it.name, it.dataSourceId in registeredIds) }
+        .sortedWith(compareBy<SharedDatabase>({ it.registered }, { it.name.isBlank() }).thenComparing({ it.name }, byName))
 }
 
 sealed interface InspectResult {
@@ -74,6 +103,7 @@ class ConnectionService @Inject constructor(
     private val dataSourceDao: DataSourceDao,
     private val scheduler: SyncScheduler,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val dataSources: DataSourceRepository,
 ) {
     suspend fun hasToken(): Boolean = withContext(io) { !secretStore.token().isNullOrBlank() }
 
@@ -88,6 +118,17 @@ class ConnectionService @Inject constructor(
             ConnectionResult.Connected(client.me().name)
         } catch (e: NotionException) {
             ConnectionResult.Failed(e.error)
+        }
+    }
+
+    /** NS-02: 링크를 붙여넣지 않고 고르도록, 이 연결에 공유된 DB 목록(읽기만). */
+    suspend fun sharedDatabases(): SharedDatabasesResult = withContext(io) {
+        try {
+            val registered = dataSourceDao.observeAll().first().map { it.dataSourceId }.toSet()
+            val shared = client.sharedDataSources()
+            SharedDatabasesResult.Ok(sharedDatabases(shared.items, registered), shared.truncated)
+        } catch (e: NotionException) {
+            SharedDatabasesResult.Failed(e.error)
         }
     }
 
@@ -109,8 +150,8 @@ class ConnectionService @Inject constructor(
                 ?: refs.firstOrNull()?.first
                 ?: return@withContext InspectResult.Failed(NotionError.NotShared)
             val schema = client.dataSource(dataSourceId)
-            val name = database.title.joinToString("") { it.plainText }.ifBlank {
-                schema.title.joinToString("") { it.plainText }
+            val name = database.title.plainTitle().ifBlank {
+                schema.title.plainTitle()
             }
             val existing = dataSourceDao.get(dataSourceId)
             val suggested = MappingSuggester.suggest(schema)
@@ -128,10 +169,13 @@ class ConnectionService @Inject constructor(
                     logSuggestion = existing?.takeIf { it.sourceKind == SourceKind.HABIT_LOG }?.let { keepValidLog(it, schema) }
                         ?: HabitSuggester.suggestLog(schema),
                     looksLikeHabitDatabase = HabitSuggester.looksLikeHabitDatabase(schema),
-                    ledgerSuggestion = LedgerSuggester.suggestLedger(schema),
+                    ledgerSuggestion = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.let { keepValidLedger(it, schema) }
+                        ?: LedgerSuggester.suggestLedger(schema),
                     ledgerProblem = LedgerSuggester.problem(schema)
                         ?.takeIf { schema.properties.values.any { p -> p.name.trim() in setOf("금액", "Amount") } },
                     parentPageId = database.parent?.pageId,
+                    existingSpendNegative = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.spendNegative,
+                    existingBudgetGroup = existing?.takeIf { it.sourceKind == SourceKind.LEDGER }?.budgetGroup,
                 ),
             )
         } catch (e: NotionException) {
@@ -189,9 +233,9 @@ class ConnectionService @Inject constructor(
         try {
             val schema = client.dataSource(habitSourceId)
             val databaseId = relation.databaseId
-            val name = databaseId?.let { id -> runCatching { client.database(id) }.getOrNull()?.title?.joinToString("") { it.plainText } }
+            val name = databaseId?.let { id -> runCatching { client.database(id) }.getOrNull()?.title?.plainTitle() }
                 ?.takeIf { it.isNotBlank() }
-                ?: schema.title.joinToString("") { it.plainText }
+                ?: schema.title.plainTitle()
             val existing = dataSourceDao.get(habitSourceId)?.takeIf { it.sourceKind == SourceKind.HABIT }
             val suggested = HabitSuggester.suggestHabit(schema)
             HabitInspectResult.Ok(
@@ -231,7 +275,7 @@ class ConnectionService @Inject constructor(
         val database = client.database(databaseId)
         val dataSourceId = database.dataSources.firstOrNull()?.id ?: throw NotionException(NotionError.NotShared)
         val schema = client.dataSource(dataSourceId)
-        val name = database.title.joinToString("") { it.plainText }.ifBlank { schema.title.joinToString("") { it.plainText } }
+        val name = database.title.plainTitle().ifBlank { schema.title.plainTitle() }
         val budgetChoice = if (budget) LedgerSuggester.suggestBudget(schema) else null
         val categoryChoice = if (budget) null else LedgerSuggester.suggestCategory(schema)
         if (budgetChoice == null && categoryChoice == null) {
@@ -286,18 +330,21 @@ class ConnectionService @Inject constructor(
     /** HB-01: ✅ 습관 기록과 🌱 습관을 한 쌍으로 저장하고 두 DB 모두 동기화를 요청한다(습관을 먼저). */
     suspend fun registerHabit(log: DatabaseInspection, logChoice: HabitLogChoice, habit: HabitInspection, habitChoice: HabitChoice, colorHex: String) =
         withContext(io) {
+            val existingLog = dataSourceDao.get(log.dataSourceId)
             val (logRow, habitRow) = habitRows(
                 log = HabitTarget(log.dataSourceId, log.databaseId, log.name),
                 logChoice = logChoice,
                 habit = habit.target,
                 habitChoice = habitChoice,
                 colorHex = colorHex,
-                existingLog = dataSourceDao.get(log.dataSourceId),
+                existingLog = existingLog,
                 existingHabit = dataSourceDao.get(habit.target.dataSourceId),
                 nextPosition = dataSourceDao.nextPosition(),
             )
             dataSourceDao.upsert(logRow)
             dataSourceDao.upsert(habitRow)
+            // 다른 🌱로 다시 연결했으면, 이제 아무 기록 DB도 가리키지 않는 옛 🌱를 지운다(설정에 홀로 남아 계속 동기화됐다).
+            existingLog?.linkDataSourceId?.takeIf { it != habitRow.dataSourceId }?.let { dataSources.deleteOrphanHabit(it) }
             scheduler.request(SyncTrigger.APP_OPEN, habitRow.dataSourceId)
             scheduler.request(SyncTrigger.APP_OPEN, logRow.dataSourceId)
         }
@@ -310,6 +357,29 @@ internal fun keepValidLog(existing: DataSourceEntity, schema: DataSourceDto): Ha
     val link = existing.linkPropId?.takeIf { types[it] == "relation" }
     val title = existing.titlePropId.takeIf { types[it] == "title" }
     return if (title != null && date != null && link != null) HabitLogChoice(title, date, link) else HabitSuggester.suggestLog(schema)
+}
+
+/**
+ * 다시 연결: 거래내역의 지금 매핑 중 스키마에 남은 것은 두고(같은 종류일 때), 사라지거나 비어 있던 칸은 새 등록처럼 추천값으로 채운다
+ * (등록 때 노션에 없던 속성을 나중에 더한 경우. 등록 화면에서 보이니 사용자가 비울 수 있다).
+ * 제목·날짜·금액·타입을 채울 수 없으면 추천값 전체(없으면 null)를 쓴다.
+ */
+internal fun keepValidLedger(existing: DataSourceEntity, schema: DataSourceDto): LedgerChoice? {
+    val suggested = LedgerSuggester.suggestLedger(schema)
+    val types = schema.properties.values.associate { it.id to it.type }
+    val ids = LedgerPropIds.parse(existing.rolePropIds)
+    fun keep(id: String?, type: String) = id?.takeIf { types[it] == type }
+    return LedgerChoice(
+        titlePropId = keep(existing.titlePropId, "title") ?: suggested?.titlePropId ?: return suggested,
+        datePropId = keep(existing.datePropId, "date") ?: suggested?.datePropId ?: return suggested,
+        amount = keep(ids.amount, "number") ?: suggested?.amount ?: return suggested,
+        flow = keep(ids.flow, "select") ?: suggested?.flow ?: return suggested,
+        category = keep(ids.category, "select") ?: suggested?.category,
+        time = keep(ids.time, "rich_text") ?: suggested?.time,
+        payment = keep(ids.payment, "select") ?: suggested?.payment,
+        planned = keep(ids.planned, "checkbox") ?: suggested?.planned,
+        manual = keep(ids.manual, "checkbox") ?: suggested?.manual,
+    )
 }
 
 /** 다시 연결: 🌱 습관의 지금 매핑 중 스키마에 남은 것은 두고, 사라진 것만 추천값으로 채운다. */

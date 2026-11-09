@@ -38,6 +38,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.width
 import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.semantics.testTag
@@ -49,7 +50,7 @@ import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.WidgetTab
 
 /**
- * WG-11 통합 탭 위젯: 위쪽 탭 버튼(📅 일정 · ✅ 습관 · 💰 가계부)으로 내용을 바꾼다. 📅 탭은 월간 위젯([WidgetContent]),
+ * WG-11 통합 탭 위젯: 아래쪽 탭 버튼(📅 일정 · ✅ 습관 · 💰 가계부)으로 내용을 바꾼다(엄지가 닿는 쪽, 2026-11-08 사용자 요청). 📅 탭은 월간 위젯([WidgetContent]),
  * ✅ 탭은 습관 위젯([HabitWidgetContent]), 💰 탭은 가계부 위젯([LedgerWidgetContent]) 내용을 그대로 쓰고, 탭 줄을 뺀 크기를 안쪽에 알려 각자 크기 단계를 정한다.
  * 고른 탭은 위젯마다 저장하고(widget_configs.selectedTab) 그 위젯만 다시 그린다. 좌우 밀기는 위젯 라이브러리가 지원하지 않는다.
  */
@@ -100,11 +101,15 @@ class TabbedWidget : GlanceAppWidget() {
         fun contentSize(size: DpSize, config: WidgetConfig, systemFontScale: Float): DpSize =
             DpSize(size.width, (size.height - tabRowHeight(config, systemFontScale)).coerceAtLeast(0.dp))
 
+        /** 탭 글자 크기(sp). 시스템 글꼴은 상한에서 자른 만큼 sp를 되돌린다(위젯 글자는 시스템 배율을 또 곱해 그려진다). */
+        fun tabFontSp(config: WidgetConfig, systemFontScale: Float): Float =
+            TAB_FONT * config.fontScale / 100f * minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE) / systemFontScale
+
         internal const val TAB_FONT = 12f
     }
 }
 
-/** 통합 위젯 틀: 탭 줄 + 고른 탭 내용. 탭 줄 자식은 3개(📅·✅·💰). */
+/** 통합 위젯 틀: 고른 탭 내용 + 아래쪽 탭 줄. 탭 줄 자식은 3개(일정·습관·가계부). */
 @Composable
 fun TabbedWidgetContent(
     config: WidgetConfig,
@@ -115,25 +120,24 @@ fun TabbedWidgetContent(
     val palette = WidgetPalette.of(config.theme, config.opacity, context)
     val size = LocalSize.current
     val tabHeight = TabbedWidget.tabRowHeight(config, systemFontScale)
-    val textScale = minOf(systemFontScale, WidgetMetrics.MAX_SYSTEM_TEXT_SCALE)
-    val fontSp = TabbedWidget.TAB_FONT * config.fontScale / 100f * textScale / systemFontScale
+    val fontSp = TabbedWidget.tabFontSp(config, systemFontScale)
     Column(
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius)
             .background(palette.background),
     ) {
-        Row(GlanceModifier.fillMaxWidth().height(tabHeight).padding(horizontal = 6.dp)) {
-            WidgetTab.entries.forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
-        }
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             // 검증 메모 11: 안쪽 내용은 LocalSize로 크기 단계를 정하므로 탭 줄을 뺀 크기를 알려 준다.
             CompositionLocalProvider(LocalSize provides TabbedWidget.contentSize(size, config, systemFontScale)) {
                 content(config.selectedTab)
             }
         }
+        Row(GlanceModifier.fillMaxWidth().height(tabHeight).padding(horizontal = 6.dp).semantics { testTag = "tabRow" }) {
+            WidgetTab.entries.forEach { tab -> TabButton(tab, selected = tab == config.selectedTab, tabHeight, fontSp, palette) }
+        }
     }
 }
 
-/** 탭 버튼. 고른 탭은 굵은 먹색 + 강조색 막대(선택 상태라 강조색을 쓴다). */
+/** 탭 버튼: 벡터 아이콘 + 글자(이모지는 기기 글꼴마다 모양이 달라 쓰지 않는다). 고른 탭은 굵은 먹색 + 위 가장자리 강조색 막대(선택 상태라 강조색을 쓴다). */
 @Composable
 private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fontSp: Float, palette: WidgetPalette) {
     val context = LocalContext.current
@@ -144,6 +148,12 @@ private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fo
             WidgetTab.LEDGER -> R.string.tabbed_widget_tab_ledger
         },
     )
+    val icon = when (tab) {
+        WidgetTab.CALENDAR -> R.drawable.ic_widget_calendar
+        WidgetTab.HABIT -> R.drawable.ic_widget_habit
+        WidgetTab.LEDGER -> R.drawable.ic_widget_wallet
+    }
+    val color = if (selected) palette.text else palette.subtle
     Column(
         modifier = GlanceModifier
             .defaultWeight()
@@ -156,23 +166,26 @@ private fun RowScope.TabButton(tab: WidgetTab, selected: Boolean, height: Dp, fo
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            modifier = GlanceModifier.fillMaxWidth().defaultWeight().padding(top = 6.dp),
-            style = TextStyle(
-                color = if (selected) palette.text else palette.subtle,
-                fontSize = fontSp.sp,
-                fontWeight = if (selected) FontWeight.Bold else null,
-                textAlign = TextAlign.Center,
-            ),
-            maxLines = 1,
-        )
+        // 탭 줄이 아래에 있으므로 고른 탭 막대는 내용과 맞닿는 위 가장자리에 둔다.
         if (selected) {
             Box(GlanceModifier.fillMaxWidth().height(2.dp).padding(horizontal = 16.dp)) {
                 Box(GlanceModifier.fillMaxSize().cornerRadius(1.dp).background(palette.accent)) {}
             }
         } else {
             Spacer(GlanceModifier.height(2.dp))
+        }
+        Row(
+            GlanceModifier.fillMaxWidth().defaultWeight().padding(bottom = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WidgetIcon(icon, color, (fontSp * 1.3f).dp)
+            Spacer(GlanceModifier.width(4.dp))
+            Text(
+                text = label,
+                style = TextStyle(color = color, fontSize = fontSp.sp, fontWeight = if (selected) FontWeight.Bold else null, textAlign = TextAlign.Center),
+                maxLines = 1,
+            )
         }
     }
 }

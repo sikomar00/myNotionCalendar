@@ -24,7 +24,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.app.NotificationManagerCompat
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.reminders.notificationPermissionGranted
 import androidx.compose.ui.unit.dp
 
@@ -79,25 +79,12 @@ internal fun ReminderSection(
         denied = !ok
         if (ok) onEnable(true)
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.settings_reminders))
-            Text(
-                stringResource(R.string.settings_reminders_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    SwitchRow(stringResource(R.string.settings_reminders), enabled && granted, note = stringResource(R.string.settings_reminders_note)) { on ->
+        when {
+            !on -> onEnable(false)
+            granted -> onEnable(true)
+            else -> launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        Switch(
-            checked = enabled && granted,
-            onCheckedChange = { on ->
-                when {
-                    !on -> onEnable(false)
-                    granted -> onEnable(true)
-                    else -> launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
-            },
-        )
     }
     if (denied && !granted) {
         Text(
@@ -131,17 +118,32 @@ internal fun ReminderSection(
     // 시간 일정: N분 전(여러 개)
     Text(stringResource(R.string.settings_reminders_timed), style = MaterialTheme.typography.bodyMedium)
     var adding by rememberSaveable { mutableStateOf(false) }
+    var removing by rememberSaveable { mutableStateOf<Int?>(null) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         rules.timedMinutes.forEach { minutes ->
             val label = reminderLabel(minutes)
+            // 칩 어디를 눌러도 빼기라 글자만 눌러도 바로 사라졌다. 먼저 묻는다(칩 안 X만 따로 누르게 하면 누르는 영역이 18dp로 너무 작다).
             InputChip(
                 selected = false,
-                onClick = { onRulesChange(rules.copy(timedMinutes = rules.timedMinutes - minutes)) },
+                onClick = { removing = minutes },
                 label = { Text(label) },
                 trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_reminders_remove, label)) },
             )
         }
         AssistChip(onClick = { adding = true }, label = { Text(stringResource(R.string.settings_reminders_add)) })
+    }
+    removing?.let { minutes ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text(stringResource(R.string.settings_reminders_remove_confirm, reminderLabel(minutes))) },
+            confirmButton = {
+                TextButton(onClick = {
+                    removing = null
+                    onRulesChange(rules.copy(timedMinutes = rules.timedMinutes - minutes))
+                }) { Text(stringResource(R.string.settings_reminders_remove_ok)) }
+            },
+            dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.settings_cancel)) } },
+        )
     }
     if (adding) {
         AddReminderDialog(

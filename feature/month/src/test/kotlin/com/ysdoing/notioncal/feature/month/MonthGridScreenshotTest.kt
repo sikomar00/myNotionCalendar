@@ -69,12 +69,13 @@ class MonthGridScreenshotTest {
         zoom: Float = 1f,
         holidays: Map<LocalDate, String> = emptyMap(),
         shown: List<CalendarEvent> = events,
+        weekNumbers: Boolean = false,
     ) {
         compose.setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface {
                     TextZoom(zoom) {
-                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), shown, holidays), onDayClick = {})
+                        MonthGrid(MonthGridState(month, weekStart, LocalDate.of(2026, 10, 13), shown, holidays, showWeekNumbers = weekNumbers), onDayClick = {})
                     }
                 }
             }
@@ -102,6 +103,14 @@ class MonthGridScreenshotTest {
     // MV-08: 확대하면 줄·글자가 커지고 넘친 일정은 +N, 축소하면 더 많은 줄이 보인다.
     @Test
     fun zoomIn() = capture(YearMonth.of(2026, 10), "month_2026_10_zoom_150", zoom = 1.5f)
+
+    // 설정의 '주 번호 표시'를 켜면 왼쪽에 주차 열(40~45주)이 생기고 그리드는 그만큼 좁아진다.
+    @Test
+    fun weekNumbers() = capture(YearMonth.of(2026, 10), "month_2026_10_week_numbers", weekNumbers = true)
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun weekNumbersDark() = capture(YearMonth.of(2026, 10), "month_2026_10_week_numbers_dark", weekNumbers = true)
 
     @Test
     fun zoomOut() = capture(YearMonth.of(2026, 10), "month_2026_10_zoom_70", zoom = 0.7f)

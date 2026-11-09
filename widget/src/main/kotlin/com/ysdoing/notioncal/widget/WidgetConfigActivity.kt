@@ -3,16 +3,17 @@ package com.ysdoing.notioncal.widget
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
-import android.widget.FrameLayout
 import android.widget.RemoteViews
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.toggleable
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,51 +25,46 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
-import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
-import com.ysdoing.notioncal.core.data.AppSettings
-import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.LineSpacing
 import com.ysdoing.notioncal.core.data.WidgetConfig
-import com.ysdoing.notioncal.core.data.WidgetTheme
-import com.ysdoing.notioncal.core.data.db.DataSourceEntity
+import com.ysdoing.notioncal.core.data.view.ViewPreset
+import com.ysdoing.notioncal.core.data.view.ViewPresets
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
-import com.ysdoing.notioncal.core.data.dday.Dday
+import com.ysdoing.notioncal.core.designsystem.RadioRow
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
-import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
-import kotlin.math.roundToInt
+import com.ysdoing.notioncal.core.designsystem.selectableRow
 import com.ysdoing.notioncal.core.designsystem.NotionShapes
 import com.ysdoing.notioncal.core.designsystem.NotionTypography
 import com.ysdoing.notioncal.core.designsystem.notionColorScheme
+import kotlinx.coroutines.withContext
+import com.ysdoing.notioncal.core.data.WidgetTab
 
 /**
  * WG-04 위젯별 설정. 위젯을 처음 놓을 때와 길게 눌러 다시 설정할 때 열린다.
@@ -80,23 +76,7 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: AppWidgetManager.INVALID_APPWIDGET_ID
     }
 
-    /**
-     * 어떤 위젯의 설정인지. 보조(WG-06)·달력 + 일정(WG-09)은 그 모양으로 미리보기를 보이고, 월 위젯 전용 설정은 숨긴다.
-     * 통합 위젯(WG-11)은 📅 탭이 월 위젯 내용이라 MONTH로 다룬다. 습관 위젯(HB-03)은 설정 화면이 없다.
-     */
-    private enum class Kind { MONTH, AGENDA, SPLIT, LEDGER, DDAY, DDAY_LIST, VIEW }
-
-    private val kind by lazy {
-        when (AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) {
-            AgendaWidgetReceiver::class.java.name -> Kind.AGENDA
-            SplitWidgetReceiver::class.java.name -> Kind.SPLIT
-            LedgerWidgetReceiver::class.java.name -> Kind.LEDGER
-            DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> Kind.DDAY
-            DdayListWidgetReceiver::class.java.name -> Kind.DDAY_LIST
-            ViewWidgetReceiver::class.java.name -> Kind.VIEW
-            else -> Kind.MONTH
-        }
-    }
+    private val kind by lazy { configKindFor(AppWidgetManager.getInstance(this).getAppWidgetInfo(appWidgetId)?.provider?.className) }
 
     /** WG-11 통합 위젯: 월 위젯 설정에 💰 탭의 금액 숨김(LD-06)을 더한다. */
     private val tabbed by lazy {
@@ -123,6 +103,15 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
+    /** 프리셋 만들기 시트가 돌려준 프리셋. 화면이 목록에 더하고 비운다(DB는 '저장'에서 목록과 함께 쓴다). */
+    private var madePreset by mutableStateOf<ViewPreset?>(null)
+
+    private val presetSheet = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) madePreset = presetFrom(result.data)
+    }
+
+    private fun createPreset(viewId: String) = presetSheet.launch(presetAddIntent(this, viewId, appWidgetId))
+
     private fun finishSaved() {
         setResult(RESULT_OK, resultIntent())
         finish()
@@ -141,272 +130,259 @@ class WidgetConfigActivity : ComponentActivity() {
     @Composable
     private fun ConfigScreen(deps: WidgetDependencies, previewSize: DpSize, onSaved: () -> Unit) {
         val scope = rememberCoroutineScope()
-        var loaded by remember { mutableStateOf<Loaded?>(null) }
+        var loaded by remember { mutableStateOf<ConfigData?>(null) }
         var config by remember { mutableStateOf(WidgetConfig(appWidgetId)) }
         LaunchedEffect(Unit) {
-            val saved = deps.widgetConfigs().get(appWidgetId)
+            // Phase 11h: 레시피로 놓은 새 노션 위젯(저장된 행이 없는 위젯)이면 대기 레시피의 구성으로 시작한다.
+            val start = if (kind == ConfigKind.LAYOUT) deps.recipeClaims().startFor(appWidgetId, System.currentTimeMillis()) else null
+            val saved = start ?: deps.widgetConfigs().get(appWidgetId)
             val settings = deps.settings().settings.first()
             val today = LocalDate.now(APP_ZONE)
             val month = NotionCalWidget.monthFor(saved)
-            val events = if (kind == Kind.VIEW) {
+            val events = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.HABIT || kind == ConfigKind.BOOK) {
                 emptyList()
-            } else if (kind == Kind.MONTH) {
+            } else if (kind == ConfigKind.MONTH) {
                 deps.events().observeRange(NotionCalWidget.gridFrom(month, settings.weekStart), NotionCalWidget.gridTo(month, settings.weekStart)).first()
             } else {
                 deps.events().observeRange(today, AgendaWidget.lastDay(today)).first()
             }
             config = saved
-            val ledger = if (kind == Kind.LEDGER) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
-            val ddays = if (kind == Kind.DDAY || kind == Kind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
-            val views = if (kind == Kind.VIEW) deps.views().observeRegistered().first() else emptyList()
-            loaded = Loaded(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views)
+            // 통합 위젯은 고른 탭(✅·💰)을 미리 보이므로 그 두 탭의 내용도 읽어 둔다.
+            val ledger = if (kind == ConfigKind.LEDGER || tabbed) deps.ledger().observeBoard(YearMonth.from(today), today).first() else null
+            val habits = if (tabbed) deps.habits().observeBoard(today).first() else null
+            val ledgerHolidays = ledger?.let { LedgerSession.drawnDays(it) }?.let { (from, to) -> deps.holidays().observe(from, to).first() }.orEmpty()
+            val ddays = if (kind == ConfigKind.DDAY || kind == ConfigKind.DDAY_LIST) deps.ddays().observeVisible(today).first() else emptyList()
+            val views = if (kind == ConfigKind.VIEW || kind == ConfigKind.LAYOUT || kind == ConfigKind.BOOK) deps.views().observeRegistered().first() else emptyList()
+            // 집계 타일 미리보기는 등록한 보기의 실제 행으로 계산한다(보기마다 한 번, 행 JSON을 읽으니 메인 스레드 밖에서).
+            val boards = if (kind == ConfigKind.LAYOUT) withContext(Dispatchers.Default) { views.associate { it.viewId to deps.views().observe(it.viewId).first() } } else emptyMap()
+            loaded = ConfigData(settings, events, deps.dataSources().observeCalendarSources().first(), ledger, ddays, views, boards, habits, ledgerHolidays)
         }
-        val data = loaded ?: return
+        val data = loaded ?: run {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() } // 로딩 중 빈 화면 방지(부록 A-8)
+            return
+        }
+        LaunchedEffect(madePreset) {
+            val preset = madePreset ?: return@LaunchedEffect
+            madePreset = null
+            // 화면에 있는 목록으로 센다: 화면에서 지운 프리셋은 되살아나지 않고, 5개가 차 있으면 알린다.
+            val updated = ViewPresets.add(config.presetsJson, preset)
+            if (updated == null) Toast.makeText(this@WidgetConfigActivity, R.string.widget_config_preset_full, Toast.LENGTH_SHORT).show() else config = config.copy(presetsJson = updated)
+        }
+        val tabs = remember { configTabs(kind) }
+        var tabIndex by rememberSaveable { mutableIntStateOf(0) }
+        val tab = tabs[tabIndex.coerceIn(tabs.indices)]
 
-        Column(
-            Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.widget_config_title), style = MaterialTheme.typography.titleLarge)
-            Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.widget_config_preview), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+            // 미리보기는 위에 고정하고 설정만 스크롤한다: 슬라이더를 만지며 바로 결과를 본다.
             Preview(data, config, previewSize)
-
-            // DD-03·04: 위젯마다 보여 줄 디데이(고르지 않으면 가장 가까운 디데이).
-            if (kind == Kind.DDAY) {
-                Section(stringResource(R.string.widget_config_dday))
-                Row(Modifier.selectableRow(config.ddayPageId == null) { config = config.copy(ddayPageId = null) }, verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = config.ddayPageId == null, onClick = null)
-                    Text(stringResource(R.string.widget_config_dday_nearest))
-                }
-                data.ddays.forEach { dday ->
-                    Row(Modifier.selectableRow(config.ddayPageId == dday.pageId) { config = config.copy(ddayPageId = dday.pageId) }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = config.ddayPageId == dday.pageId, onClick = null)
-                        dday.label?.let { Text(it.text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp)) }
-                        Text(dday.title.orEmpty())
+            if (tabs.size > 1) ConfigTabRow(tabs, tab) { tabIndex = tabs.indexOf(it) }
+            key(tab) { // 탭을 바꾸면 위에서부터 보인다
+                Column(
+                    Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 12.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    when (tab) {
+                        ConfigTab.CONTENT -> ContentSettings(data, config) { config = it }
+                        ConfigTab.LOOK -> LookSettings(data, config) { config = it }
+                        ConfigTab.ACTION -> ActionSettings(kind, data, config, { config = it }, ::createPreset)
                     }
                 }
-                if (data.ddays.isEmpty()) {
-                    Text(stringResource(R.string.widget_config_dday_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
             }
-
-            // VW-04: 위젯마다 보여 줄 보기(앱 설정의 '보기 추가'로 등록한 것 중에서).
-            if (kind == Kind.VIEW) {
-                Section(stringResource(R.string.widget_config_view))
-                data.views.forEach { view ->
-                    Row(Modifier.selectableRow(config.viewId == view.viewId) { config = config.copy(viewId = view.viewId) }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = config.viewId == view.viewId, onClick = null)
-                        Text(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-                if (data.views.isEmpty()) {
-                    Text(stringResource(R.string.widget_config_view_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { config = config.resetLook() }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.widget_config_reset)) }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            deps.widgetConfigs().save(config)
+                            if (kind == ConfigKind.LAYOUT) deps.recipeClaims().consume() // 레시피로 시작했으면 저장한 지금 대기를 지운다(회전해도 저장 전에는 남는다)
+                            val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
+                            // 통합 위젯(WG-11)도 월 미리보기·설정을 쓰고, 다시 그릴 때는 제 종류로 그린다.
+                            WidgetKinds.update(this@WidgetConfigActivity, glanceId)
+                            onSaved()
+                        }
+                    },
+                    modifier = Modifier.weight(2f),
+                ) { Text(stringResource(R.string.widget_config_save)) }
             }
-
-            if (kind in CALENDAR_KINDS) {
-                Section(stringResource(R.string.widget_config_sources))
-                SourcePicker(data.sources, config.dataSourceIds) { config = config.copy(dataSourceIds = it) }
-            }
-
-            Section(stringResource(R.string.widget_config_theme))
-            Choice(
-                listOf(
-                    WidgetTheme.SYSTEM to R.string.widget_config_theme_system,
-                    WidgetTheme.LIGHT to R.string.widget_config_theme_light,
-                    WidgetTheme.DARK to R.string.widget_config_theme_dark,
-                    WidgetTheme.MATERIAL_YOU to R.string.widget_config_theme_material_you,
-                ),
-                config.theme,
-            ) { config = config.copy(theme = it) }
-
-            Section(stringResource(R.string.widget_config_opacity, config.opacity))
-            Slider(
-                value = config.opacity.toFloat(),
-                onValueChange = { config = config.copy(opacity = (it / 10).roundToInt() * 10) },
-                valueRange = 0f..100f,
-                steps = 9,
-            )
-
-            Section(stringResource(R.string.widget_config_font, config.fontScale))
-            Slider(
-                value = config.fontScale.toFloat(),
-                onValueChange = { config = config.copy(fontScale = (it / 10).roundToInt() * 10) },
-                valueRange = WidgetConfig.FONT_SCALE_RANGE.first.toFloat()..WidgetConfig.FONT_SCALE_RANGE.last.toFloat(),
-                steps = (WidgetConfig.FONT_SCALE_RANGE.last - WidgetConfig.FONT_SCALE_RANGE.first) / 10 - 1,
-            )
-
-            if (kind == Kind.MONTH) {
-                Section(stringResource(R.string.widget_config_lanes))
-                Choice(
-                    WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
-                    config.maxPerCell,
-                ) { config = config.copy(maxPerCell = it) }
-
-                Section(stringResource(R.string.widget_config_spacing))
-                Choice(
-                    listOf(
-                        LineSpacing.COMPACT to R.string.widget_config_spacing_compact,
-                        LineSpacing.NORMAL to R.string.widget_config_spacing_normal,
-                        LineSpacing.WIDE to R.string.widget_config_spacing_wide,
-                    ),
-                    config.lineSpacing,
-                ) { config = config.copy(lineSpacing = it) }
-            }
-
-            // WX-04·05: 월간·'달력 + 일정' 위젯 머리에 오늘 날씨(위젯별 켜기). 날씨가 보이는 설정 화면이라 출처를 둔다.
-            if (kind == Kind.MONTH || kind == Kind.SPLIT) {
-                Row(Modifier.toggleRow(config.showWeather) { config = config.copy(showWeather = it) }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.widget_config_weather))
-                        Text(
-                            stringResource(if (data.settings.weatherEnabled) R.string.widget_config_weather_note else R.string.widget_config_weather_off),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = config.showWeather, onCheckedChange = null)
-                }
-                if (config.showWeather) WeatherAttribution()
-            }
-            if (kind in CALENDAR_KINDS) {
-                Row(Modifier.toggleRow(config.hideDone) { config = config.copy(hideDone = it) }, verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.widget_config_hide_done), Modifier.weight(1f))
-                    Switch(checked = config.hideDone, onCheckedChange = null)
-                }
-            }
-            // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
-            if (kind == Kind.LEDGER || tabbed) {
-                Row(Modifier.toggleRow(config.hideAmounts) { config = config.copy(hideAmounts = it) }, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.widget_config_hide_amounts))
-                        Text(
-                            stringResource(R.string.widget_config_hide_amounts_note),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = config.hideAmounts, onCheckedChange = null)
-                }
-            }
-
-            Button(
-                onClick = {
-                    scope.launch {
-                        deps.widgetConfigs().save(config)
-                        val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(appWidgetId)
-                        // 통합 위젯(WG-11)도 월 미리보기·설정을 쓰고, 다시 그릴 때는 제 종류로 그린다.
-                        WidgetKinds.update(this@WidgetConfigActivity, glanceId)
-                        onSaved()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.widget_config_save)) }
         }
     }
 
-    private data class Loaded(
-        val settings: AppSettings,
-        val events: List<CalendarEvent>,
-        val sources: List<DataSourceEntity>,
-        val ledger: LedgerBoard? = null,
-        val ddays: List<Dday> = emptyList(),
-        val views: List<com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity> = emptyList(),
-    )
-
-    @OptIn(ExperimentalGlanceRemoteViewsApi::class)
+    /**
+     * 내용 탭: 위젯이 가리킬 대상(디데이·보기·배치)과 일정 DB 고르기. 통합 위젯(WG-11)은 탭마다 적용 범위가 달라 '일정 탭' 아래에 DB를 둔다.
+     */
     @Composable
-    private fun Preview(data: Loaded, config: WidgetConfig, size: DpSize) {
+    private fun ContentSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        TargetSettings(data, config, onChange)
+        if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_calendar))
+        if (kind in CALENDAR_KINDS) {
+            ConfigSection(stringResource(R.string.widget_config_sources))
+            SourcePicker(data.sources, config.dataSourceIds) { onChange(config.copy(dataSourceIds = it)) }
+        }
+    }
+
+    /**
+     * 모양 탭: 테마·투명도·글자 크기와 위젯 종류별 표시 방식. 통합 위젯(WG-11)은 탭마다 적용 범위가 달라 '모든 탭'(습관 탭은 이것만 따름)·'일정 탭'·'가계부 탭'으로 나눠 보인다.
+     */
+    @Composable
+    private fun LookSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        if (tabbed) {
+            ConfigSection(stringResource(R.string.widget_config_tab_all))
+            ConfigNote(stringResource(R.string.widget_config_tab_all_note))
+        }
+        AppearanceSettings(config, onChange)
+        if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_calendar))
+        CalendarSettings(data, config, onChange)
+        if (tabbed) ConfigSection(stringResource(R.string.widget_config_tab_ledger))
+        // LD-06: 가계부 위젯·통합 위젯은 금액을 가릴 수 있다(●●●, 막대만).
+        if (kind == ConfigKind.LEDGER || tabbed) {
+            SwitchRow(
+                stringResource(R.string.widget_config_hide_amounts), config.hideAmounts, note = stringResource(R.string.widget_config_hide_amounts_note),
+            ) { onChange(config.copy(hideAmounts = it)) }
+        }
+    }
+
+    /** 위젯이 가리킬 대상: 디데이(DD-03·04, 고르지 않으면 가장 가까운 것)와 노션 보기(VW-04, 앱 설정의 '보기 추가'로 등록한 것). */
+    @Composable
+    private fun TargetSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        if (kind == ConfigKind.DDAY) {
+            ConfigSection(stringResource(R.string.widget_config_dday))
+            Row(Modifier.selectableRow(config.ddayPageId == null) { onChange(config.copy(ddayPageId = null)) }, verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = config.ddayPageId == null, onClick = null)
+                Text(stringResource(R.string.widget_config_dday_nearest))
+            }
+            data.ddays.forEach { dday ->
+                Row(Modifier.selectableRow(config.ddayPageId == dday.pageId) { onChange(config.copy(ddayPageId = dday.pageId)) }, verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = config.ddayPageId == dday.pageId, onClick = null)
+                    dday.label?.let { Text(it.text, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 8.dp)) }
+                    Text(dday.title.orEmpty())
+                }
+            }
+            if (data.ddays.isEmpty()) ConfigNote(stringResource(R.string.widget_config_dday_none))
+        }
+        if (kind == ConfigKind.VIEW || kind == ConfigKind.BOOK) {
+            ConfigSection(stringResource(R.string.widget_config_view))
+            data.views.forEach { view ->
+                RadioRow(view.name.ifBlank { stringResource(R.string.widget_config_view_untitled) }, config.viewId == view.viewId) { onChange(config.copy(viewId = view.viewId)) }
+            }
+            if (data.views.isEmpty()) ConfigNote(stringResource(R.string.widget_config_view_none))
+        }
+        if (kind == ConfigKind.LAYOUT) LayoutSettings(data.views, config, onChange)
+    }
+
+    /** 일정 위젯 전용: 칸당 줄 수·줄 간격(월간·3일), 머리 날씨(월간·달력 + 일정, WX-04·05), 완료 숨김. */
+    @Composable
+    private fun CalendarSettings(data: ConfigData, config: WidgetConfig, onChange: (WidgetConfig) -> Unit) {
+        if (kind == ConfigKind.MONTH || kind == ConfigKind.THREE_DAY) {
+            ConfigSection(stringResource(R.string.widget_config_lanes))
+            ChoiceChips(
+                WidgetConfig.MAX_PER_CELL_RANGE.map { it to if (it == 0) R.string.widget_config_lanes_auto else null },
+                config.maxPerCell,
+            ) { onChange(config.copy(maxPerCell = it)) }
+
+            ConfigSection(stringResource(R.string.widget_config_spacing))
+            ChoiceChips(
+                listOf(
+                    LineSpacing.COMPACT to R.string.widget_config_spacing_compact,
+                    LineSpacing.NORMAL to R.string.widget_config_spacing_normal,
+                    LineSpacing.WIDE to R.string.widget_config_spacing_wide,
+                ),
+                config.lineSpacing,
+            ) { onChange(config.copy(lineSpacing = it)) }
+        }
+        // 날씨가 보이는 설정 화면이라 출처를 둔다.
+        if (kind == ConfigKind.MONTH || kind == ConfigKind.SPLIT || kind == ConfigKind.THREE_DAY) {
+            // 3일 위젯은 머리가 아니라 날짜마다 붙인다.
+            val days = kind == ConfigKind.THREE_DAY
+            val note = when {
+                !data.settings.weatherEnabled -> R.string.widget_config_weather_off
+                days -> R.string.widget_config_weather_days_note
+                else -> R.string.widget_config_weather_note
+            }
+            SwitchRow(
+                stringResource(if (days) R.string.widget_config_weather_days else R.string.widget_config_weather), config.showWeather,
+                note = stringResource(note),
+            ) { onChange(config.copy(showWeather = it)) }
+            if (config.showWeather) WeatherAttribution()
+        }
+        if (kind in CALENDAR_KINDS) SwitchRow(stringResource(R.string.widget_config_hide_done), config.hideDone) { onChange(config.copy(hideDone = it)) }
+    }
+
+    @Composable
+    private fun Preview(data: ConfigData, config: WidgetConfig, size: DpSize) {
         var views by remember { mutableStateOf<RemoteViews?>(null) }
         LaunchedEffect(config) {
             val today = LocalDate.now(APP_ZONE)
             views = when (kind) {
-                Kind.AGENDA -> {
+                ConfigKind.AGENDA -> {
                     val state = AgendaWidget.uiState(today, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { AgendaWidgetContent(state) }
                 }
-                Kind.SPLIT -> {
+                ConfigKind.THREE_DAY -> {
+                    // 설정 미리보기는 늘 오늘부터(넘겨 둔 사흘은 일정을 읽어 두지 않았다).
+                    val state = ThreeDayWidget.uiState(today, config.copy(timelineOffset = 0), data.events)
+                    staticRemoteViews(this@WidgetConfigActivity, size) { ThreeDayWidgetContent(state) }
+                }
+                ConfigKind.SPLIT -> {
                     val state = SplitWidget.uiState(today, data.settings, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { SplitWidgetContent(state) }
                 }
-                Kind.MONTH -> {
+                ConfigKind.MONTH -> {
                     val state = NotionCalWidget.uiState(NotionCalWidget.monthFor(config), today, data.settings, config, data.events)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { WidgetContent(state) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) {
+                        // 통합 위젯은 실제 모습대로 탭 줄과 고른 탭을 그린다(전에는 탭 줄 없이 월간만 보였다).
+                        if (!tabbed) {
+                            WidgetContent(state)
+                        } else {
+                            TabbedWidgetContent(config) { tab ->
+                                when (tab) {
+                                    WidgetTab.CALENDAR -> WidgetContent(state, framed = false)
+                                    WidgetTab.HABIT -> HabitWidgetContent(
+                                        HabitWidgetState(data.habits ?: WidgetPreviews.habitState(today).board, config, data.settings.weekStart),
+                                        framed = false, showHeader = false,
+                                    )
+                                    WidgetTab.LEDGER -> LedgerWidgetContent(
+                                        LedgerWidgetState(data.ledger ?: WidgetPreviews.ledgerState(today).board, config, holidays = data.ledgerHolidays), framed = false,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                Kind.LEDGER -> {
+                ConfigKind.LEDGER -> {
                     val board = data.ledger ?: WidgetPreviews.ledgerState(today).board
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config)) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { LedgerWidgetContent(LedgerWidgetState(board, config, holidays = data.ledgerHolidays)) }
                 }
-                Kind.VIEW -> {
+                ConfigKind.VIEW -> {
                     val state = WidgetPreviews.viewState().copy(config = config.copy(viewId = "preview"))
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) { ViewWidgetContent(state, staticRows = true) }
                 }
-                Kind.DDAY, Kind.DDAY_LIST -> {
+                ConfigKind.LAYOUT -> {
+                    val state = WidgetPreviews.layoutPreview(config, data.views.associate { it.viewId to it.name }, boards = data.boards, weekStart = data.settings.weekStart, showWeekNumbers = data.settings.showWeekNumbers)
+                    staticRemoteViews(this@WidgetConfigActivity, size) { LayoutWidgetContent(state, staticRows = true) }
+                }
+                ConfigKind.BOOK -> {
+                    val state = WidgetPreviews.bookState().copy(config = config.copy(viewId = "preview"))
+                    staticRemoteViews(this@WidgetConfigActivity, size) { BookWidgetContent(state) }
+                }
+                ConfigKind.HABIT -> {
+                    val state = WidgetPreviews.habitState(today).copy(config = config)
+                    staticRemoteViews(this@WidgetConfigActivity, size) { HabitWidgetContent(state) }
+                }
+                ConfigKind.DDAY, ConfigKind.DDAY_LIST -> {
                     val state = DdayWidgetState(data.ddays, config, today)
-                    GlanceRemoteViews().compose(this@WidgetConfigActivity, size) {
-                        if (kind == Kind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
-                    }.remoteViews
+                    staticRemoteViews(this@WidgetConfigActivity, size) {
+                        if (kind == ConfigKind.DDAY) DdayWidgetContent(state) else DdayListWidgetContent(state)
+                    }
                 }
             }
         }
-        AndroidView(
-            factory = { FrameLayout(it) },
-            update = { frame ->
-                views?.let { remote ->
-                    frame.removeAllViews()
-                    frame.addView(remote.apply(frame.context, frame))
-                }
-            },
-            modifier = Modifier.width(size.width).height(size.height),
-        )
+        RemoteViewsFrame(views, size, PREVIEW_MAX_SCREEN_FRACTION)
     }
 
     private companion object {
-        /** 일정 DB 고르기·완료 숨김을 쓰는 위젯. */
-        val CALENDAR_KINDS = setOf(Kind.MONTH, Kind.AGENDA, Kind.SPLIT)
-    }
-
-    @Composable
-    private fun Section(title: String) {
-        // 구역 제목은 먹색 굵은 글자(화면 틀에 강조색을 쓰지 않음, DESIGN.md).
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-    }
-
-    /** 라벨까지 줄 전체가 눌리게 한다(최소 높이 48dp). 안쪽 컨트롤은 onChange를 null로 둔다. */
-    private fun Modifier.toggleRow(checked: Boolean, role: Role = Role.Switch, onChange: (Boolean) -> Unit) =
-        heightIn(min = 48.dp).toggleable(value = checked, role = role, onValueChange = onChange)
-
-    private fun Modifier.selectableRow(selected: Boolean, onClick: () -> Unit) =
-        heightIn(min = 48.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-
-    @Composable
-    private fun SourcePicker(sources: List<DataSourceEntity>, selected: Set<String>, onChange: (Set<String>) -> Unit) {
-        Row(Modifier.toggleRow(selected.isEmpty(), Role.Checkbox) { if (it) onChange(emptySet()) }, verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = selected.isEmpty(), onCheckedChange = null)
-            Text(stringResource(R.string.widget_config_sources_all))
-        }
-        sources.forEach { source ->
-            val checked = source.dataSourceId in selected
-            Row(
-                Modifier.toggleRow(checked, Role.Checkbox) { on -> onChange(if (on) selected + source.dataSourceId else selected - source.dataSourceId) },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = checked, onCheckedChange = null)
-                Text(source.name)
-            }
-        }
-    }
-
-    @Composable
-    private fun <T> Choice(options: List<Pair<T, Int?>>, selected: T, onSelect: (T) -> Unit) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            options.forEach { (value, label) ->
-                FilterChip(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    label = { Text(label?.let { stringResource(it) } ?: value.toString()) },
-                )
-            }
-        }
+        /** 고정 미리보기가 차지하는 화면 높이 비율 상한(설정 목록에 나머지를 남긴다). */
+        const val PREVIEW_MAX_SCREEN_FRACTION = 0.30f
     }
 }

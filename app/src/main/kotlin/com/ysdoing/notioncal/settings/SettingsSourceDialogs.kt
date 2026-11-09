@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,14 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,82 +28,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ysdoing.notioncal.R
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.ui.semantics.Role
 import com.ysdoing.notioncal.core.data.parseIdList
 import com.ysdoing.notioncal.core.data.selectableExtraProps
-import com.ysdoing.notioncal.core.data.SourceKind
-import com.ysdoing.notioncal.core.data.sourceKind
 import com.ysdoing.notioncal.core.data.NotionColors
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material.icons.filled.Warning
 import com.ysdoing.notioncal.core.data.SchemaIssue
 import com.ysdoing.notioncal.core.data.parsePropCatalog
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import com.ysdoing.notioncal.core.designsystem.toggleRow
+import com.ysdoing.notioncal.core.designsystem.RadioRow
+import androidx.compose.runtime.remember
 
-@Composable
-internal fun SourceRow(
-    source: DataSourceEntity,
-    onToggle: (Boolean) -> Unit,
-    onChooseProps: () -> Unit,
-    onChooseColor: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    // HB-01: 습관 DB(✅ 기록·🌱 습관)는 달력에 나오지 않아 색·보기 속성 설정이 없다. 종류만 밝힌다.
-    val calendar = source.sourceKind == SourceKind.CALENDAR
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (calendar) {
-            // EX-03: 색 점을 누르면 DB 색·색 기준을 고른다(터치 영역 48dp).
-            val colorLabel = stringResource(R.string.settings_color_button, source.name)
-            IconButton(onClick = onChooseColor, modifier = Modifier.semantics { contentDescription = colorLabel }) {
-                Box(Modifier.size(18.dp).clip(CircleShape).background(Color(NotionColors.argb(source.colorHex))))
-            }
-        }
-        Column(Modifier.weight(1f).padding(start = if (calendar) 0.dp else 12.dp)) {
-            Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val kindLabel = when (source.sourceKind) {
-                SourceKind.HABIT_LOG -> R.string.settings_kind_habit_log
-                SourceKind.HABIT -> R.string.settings_kind_habit
-                SourceKind.LEDGER -> R.string.settings_kind_ledger
-                SourceKind.BUDGET -> R.string.settings_kind_budget
-                SourceKind.CATEGORY -> R.string.settings_kind_category
-                else -> null
-            }
-            kindLabel?.let {
-                Text(stringResource(it), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        // NS-09: 매핑한 속성이 사라지거나 종류가 바뀌었으면 경고(자세한 안내는 월 화면 배너).
-        if (SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }) {
-            Icon(
-                Icons.Filled.Warning,
-                contentDescription = stringResource(R.string.settings_schema_warning),
-                tint = MaterialTheme.colorScheme.error,
-            )
-        }
-        if (calendar) {
-            // EX-03·EX-11: 색 점만으로는 찾기 어려워 글자 버튼으로도 연다(디자인 리뷰 2026-10-16).
-            TextButton(onClick = onChooseColor, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Text(stringResource(R.string.settings_color_emphasis))
-            }
-            TextButton(onClick = onChooseProps, contentPadding = PaddingValues(horizontal = 8.dp)) { Text(stringResource(R.string.settings_extra_props)) }
-        }
-        Switch(checked = source.enabled, onCheckedChange = onToggle)
-        IconButton(onClick = onDelete) {
-            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.settings_delete_database, source.name))
-        }
-    }
-}
+/** NS-09 매핑한 속성이 사라지거나 종류가 바뀌었다(이름만 바뀐 것은 제외). DB 줄 경고와 설정 탭의 문제 배지가 같이 쓴다. */
+internal fun hasSchemaProblem(source: DataSourceEntity): Boolean = SchemaIssue.parse(source.schemaIssues).any { it.kind != SchemaIssue.RENAMED }
 
 /**
  * EX-03: DB 색(20색 격자)과 일정 색 기준을 고른다. 색 속성(select)이 있는 DB만 '속성 값 색'을 고를 수 있다.
@@ -132,14 +74,9 @@ internal fun ColorDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasColorProp) {
+                    // 줄 전체 48dp 눌림 영역(designsystem 규칙, UX-02). 날 selectable은 라디오 높이(약 24dp)뿐이었다.
                     listOf(true to R.string.settings_color_by_option, false to R.string.settings_color_by_database).forEach { (value, label) ->
-                        Row(
-                            Modifier.fillMaxWidth().selectable(selected = useOptions == value, role = Role.RadioButton) { useOptions = value },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(selected = useOptions == value, onClick = null)
-                            Text(stringResource(label), Modifier.padding(start = 8.dp))
-                        }
+                        RadioRow(stringResource(label), selected = useOptions == value) { useOptions = value }
                     }
                 }
                 Text(
@@ -153,10 +90,10 @@ internal fun ColorDialog(
                             val selected = color.equals(hex, ignoreCase = true)
                             Box(
                                 Modifier
-                                    .size(44.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .selectable(selected = selected, role = Role.RadioButton) { hex = color }
-                                    .semantics { contentDescription = color },
+                                    .semantics { contentDescription = NotionColors.nameKo(color) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Box(Modifier.size(32.dp).clip(CircleShape).background(Color(NotionColors.argb(color))), contentAlignment = Alignment.Center) {
@@ -198,7 +135,8 @@ private fun EmphasisPicker(
     onProp: (String?) -> Unit,
     onOptions: (List<String>) -> Unit,
 ) {
-    val props = parsePropCatalog(source.propCatalog).filter { it.type in EMPHASIS_TYPES && it.options.isNotEmpty() }
+    // 속성 목록 JSON은 대화상자를 열 때 한 번만 읽는다(칩을 누를 때마다 다시 읽지 않게).
+    val props = remember(source.propCatalog) { parsePropCatalog(source.propCatalog).filter { it.type in EMPHASIS_TYPES && it.options.isNotEmpty() } }
     HorizontalDivider()
     Text(stringResource(R.string.settings_emphasis_title), style = MaterialTheme.typography.titleSmall)
     Text(
@@ -235,7 +173,7 @@ private val EMPHASIS_TYPES = setOf("select", "multi_select", "status")
 /** EX-07: 편집 화면에 보여 줄 속성 고르기. 목록은 동기화 때 받아 둔 스키마(Room)에서 읽는다. */
 @Composable
 internal fun ExtraPropsDialog(source: DataSourceEntity, onSave: (List<String>) -> Unit, onDismiss: () -> Unit) {
-    val candidates = source.selectableExtraProps()
+    val candidates = remember(source.propCatalog, source.titlePropId, source.datePropId, source.donePropId, source.colorPropId) { source.selectableExtraProps() }
     var chosen by rememberSaveable(source.dataSourceId) { mutableStateOf(parseIdList(source.extraPropIds)) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -249,7 +187,7 @@ internal fun ExtraPropsDialog(source: DataSourceEntity, onSave: (List<String>) -
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .toggleable(value = prop.id in chosen, role = Role.Checkbox) { on ->
+                                .toggleRow(prop.id in chosen, Role.Checkbox) { on -> // 줄 전체 48dp(UX-02)
                                     chosen = if (on) chosen + prop.id else chosen - prop.id
                                 },
                             verticalAlignment = Alignment.CenterVertically,

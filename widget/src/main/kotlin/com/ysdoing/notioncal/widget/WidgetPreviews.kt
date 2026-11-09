@@ -3,9 +3,14 @@ package com.ysdoing.notioncal.widget
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.widget.RemoteViews
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceRemoteViews
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
@@ -23,6 +28,9 @@ import com.ysdoing.notioncal.core.data.ledger.LedgerTx
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitStats
 import com.ysdoing.notioncal.core.data.habit.HabitSummary
+import com.ysdoing.notioncal.core.data.view.LayoutMode
+import com.ysdoing.notioncal.core.data.view.ViewBoard
+import com.ysdoing.notioncal.core.data.view.WidgetLayout
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -37,7 +45,7 @@ object WidgetPreviews {
     val MONTH_SIZE = DpSize(358.dp, 380.dp)
     val AGENDA_SIZE = DpSize(358.dp, 152.dp)
     val SPLIT_SIZE = DpSize(358.dp, 168.dp)
-    val HABIT_SIZE = DpSize(358.dp, 168.dp)
+    val HABIT_SIZE = DpSize(358.dp, 216.dp)
 
     private const val TAG = "NotionCalWidget"
 
@@ -63,6 +71,17 @@ object WidgetPreviews {
 
     fun agendaState(today: LocalDate = LocalDate.now(APP_ZONE)): AgendaUiState =
         AgendaWidget.uiState(today, WidgetConfig(0), sampleEvents(today))
+
+    fun threeDayState(today: LocalDate = LocalDate.now(APP_ZONE)): WidgetUiState =
+        ThreeDayWidget.uiState(today, WidgetConfig(0), sampleEvents(today) + threeDayExtras(today))
+
+    /** 3일 위젯은 칸이 넓어 하루 일정 몇 개를 더 보인다(시간 칩·여러 날 막대·완료). */
+    private fun threeDayExtras(today: LocalDate): List<CalendarEvent> = listOf(
+        sample("31", "점심 약속", today, time = LocalTime.of(12, 30), color = "#0F7B6C"),
+        sample("32", "치과", today.plusDays(1), time = LocalTime.of(9, 0), color = "#6940A5"),
+        sample("33", "워크숍", today.plusDays(1), end = today.plusDays(2), color = "#D9730D"),
+        sample("34", "장보기", today.plusDays(2), time = LocalTime.of(19, 0), color = "#E03E3E", done = true),
+    )
 
     fun splitState(today: LocalDate = LocalDate.now(APP_ZONE)): SplitUiState =
         SplitWidget.uiState(today, AppSettings(weekStart = DayOfWeek.SUNDAY), WidgetConfig(0), sampleEvents(today))
@@ -109,12 +128,47 @@ object WidgetPreviews {
     }
 
     /** 예시 보기(VW-03). 개인 데이터가 아니다. */
-    fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
+    internal fun viewState(now: Long = System.currentTimeMillis()): ViewWidgetState {
         val rows = listOf("장보기" to "집", "보고서 제출" to "일", "운동" to "건강").mapIndexed { i, (title, tag) ->
             com.ysdoing.notioncal.core.data.view.ViewRow("preview-$i", "", listOf(title, tag, "10/2${i + 1}"))
         }
         val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "할 일", "table", listOf("이름", "분류", "날짜"), rows, now, null)
         return ViewWidgetState(board, WidgetConfig(0, viewId = "preview"), now)
+    }
+
+    /** 노션 위젯(WL-01) 미리보기: 예시 보기 둘을 탭으로(개인 데이터가 아니다). */
+    internal fun layoutState(now: Long = System.currentTimeMillis()): LayoutWidgetState {
+        val layout = WidgetLayout(LayoutMode.TABS).add("preview")!!.add("preview-2")!!
+        return layoutPreview(WidgetConfig(0, layoutJson = WidgetLayout.encode(layout)), mapOf("preview" to "할 일", "preview-2" to "독서"), now)
+    }
+
+    /**
+     * 설정 화면 미리보기: 고른 배치 그대로, 칸마다 예시 행을 담되 이름은 등록한 보기 이름이다([names]에 없으면 이름 없는 보기).
+     * 집계 타일은 값이 있어야 뜻이 있어 [boards](등록한 보기의 실제 행, 사용자 본인의 설정 화면이라 보여도 된다)로 계산하고, 칸도 있으면 같은 행을 쓴다.
+     */
+    internal fun layoutPreview(
+        config: WidgetConfig,
+        names: Map<String, String>,
+        now: Long = System.currentTimeMillis(),
+        boards: Map<String, ViewBoard?> = emptyMap(),
+        weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+        showWeekNumbers: Boolean = false,
+    ): LayoutWidgetState {
+        val layout = WidgetLayout.parse(config.layoutJson)
+        val sample = viewState(now).board!!
+        // 같은 보기는 칸이든 타일이든 같은 행을 쓴다(실제 행이 없으면 칸만 예시 행).
+        val panes = layout.items.associate { it.viewId to (boards[it.viewId] ?: sample.copy(viewId = it.viewId, name = names[it.viewId].orEmpty())) }
+        val tiles = layout.tiles.mapNotNull { tile -> boards[tile.viewId]?.let { tile.viewId to it } }.toMap()
+        return LayoutWidgetState(config, layout, tiles + panes, now, weekStart, CalendarInfo(weekStart, showWeekNumbers))
+    }
+
+    /** 책 위젯 미리보기: 예시 책(개인 기록 아님)과 읽은 비율. 표지 이미지는 쓰지 않고 제목 타일로 그린다. */
+    internal fun bookState(now: Long = System.currentTimeMillis()): BookWidgetState {
+        val rows = listOf("예시 책 하나" to 0.35f, "예시 책 둘" to 0.8f).mapIndexed { i, (title, progress) ->
+            com.ysdoing.notioncal.core.data.view.ViewRow("preview-book-$i", "", listOf(title), "", progress)
+        }
+        val board = com.ysdoing.notioncal.core.data.view.ViewBoard("preview", "읽는 중", "gallery", listOf("제목"), rows, now, null)
+        return BookWidgetState(board, WidgetConfig(0, viewId = "preview"), Covers.EMPTY, now)
     }
 
     /**
@@ -124,19 +178,21 @@ object WidgetPreviews {
     suspend fun publish(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return true
         val manager = GlanceAppWidgetManager(context)
-        val results = listOf(
-            runCatching { manager.setWidgetPreviews(NotionCalWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(AgendaWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(SplitWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(HabitWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(TabbedWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(LedgerWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdaySmallWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdayWideWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(DdayListWidgetReceiver::class) }.getOrNull(),
-            runCatching { manager.setWidgetPreviews(ViewWidgetReceiver::class) }.getOrNull(),
-        )
+        val results = AllWidgets.RECEIVERS.map { receiver ->
+            runCatching { manager.setWidgetPreviews(receiver.kotlin) }
+                .onFailure { Log.w(TAG, "위젯 미리보기 게시 실패: ${receiver.simpleName}", it) }
+                .getOrNull()
+        }
         Log.d(TAG, "위젯 미리보기 게시: $results")
         return results.all { it == GlanceAppWidgetManager.SET_WIDGET_PREVIEWS_RESULT_SUCCESS }
     }
+
 }
+
+/**
+ * 위젯을 View에 바로 적용할 RemoteViews로 그린다(앱의 위젯 설정 미리보기, 위젯 고르기 미리보기 그림). 이 경로는 LazyColumn 행이
+ * 그려지지 않으므로 목록을 고정 Column으로 그린다([LocalStaticLists]).
+ */
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
+internal suspend fun staticRemoteViews(context: Context, size: DpSize, content: @Composable () -> Unit): RemoteViews =
+    GlanceRemoteViews().compose(context, size) { CompositionLocalProvider(LocalStaticLists provides true) { content() } }.remoteViews

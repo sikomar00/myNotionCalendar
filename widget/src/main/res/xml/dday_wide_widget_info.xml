@@ -11,7 +11,7 @@
     android:minHeight="40dp"
     android:minResizeWidth="40dp"
     android:minResizeHeight="40dp"
-    android:previewLayout="@layout/widget_preview_dday"
+    android:previewImage="@drawable/widget_preview_dday_wide"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="2"
     android:targetCellHeight="1"

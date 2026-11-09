@@ -92,6 +92,11 @@ class DatabaseRecoveryTest {
         val registered = com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = "이름", syncedAt = 800, lastError = "Network")
         db.viewDao().upsert(registered)
         db.viewDao().replace(registered, listOf(com.ysdoing.notioncal.core.data.db.ViewRowEntity("v1", 0, "p1", "u", "첫째")))
+        // M3 위젯에서 바꿨지만 아직 노션에 보내지 않은 보기 행 바꿈도 앱 상태라 남는다(아웃박스와 같다).
+        db.viewDao().enqueue(
+            com.ysdoing.notioncal.core.data.db.ViewRowEntity("v1", 0, "p1", "u", "첫째", "{}"),
+            com.ysdoing.notioncal.core.data.db.ViewWriteEntity(viewId = "v1", pageId = "p1", dataSourceId = "ds", propId = "dn", propType = "checkbox", value = "true", createdAt = 2),
+        )
         db.eventDao().upsert(listOf(event("p-synced", 0), event("local-new", 1)))
         db.outboxDao().insert(
             OutboxEntity(pageId = "local-new", dataSourceId = "ds", op = "CREATE", changes = """{"title":"x"}""",
@@ -153,6 +158,7 @@ class DatabaseRecoveryTest {
             assertEquals(0L, view.syncedAt)
             assertNull(view.lastError)
             assertTrue(db.viewDao().rows("v1").isEmpty())
+            assertEquals("p1", db.viewDao().firstWrite()!!.pageId) // 보내지 않은 바꿈은 남는다
 
             assertNull(db.eventDao().get("p-synced")) // 캐시는 비워짐
             assertEquals(1, db.eventDao().get("local-new")!!.pendingOps) // 미전송 일정은 남음

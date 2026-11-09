@@ -211,6 +211,18 @@ fun EventEntity.valuesFor(change: EventChange) = EventChange(
         val current = parseExtraValues(extraValues)
         wanted.keys.associateWith { current[it] ?: PropValue() }
     },
+    // 가계부 값도 담아야 노션이 거부했을 때 되돌린다('실제로 전환'이 거부돼도 앱만 바뀐 채 남았다). 빈 글자는 applying이 비우는 뜻이다.
+    // shortcut: 금액·타입은 '비움'을 나타낼 값이 없어, 비어 있던 칸에 넣은 값이 거부되면 그대로 남는다(앱은 금액을 비우는 입력이 없다).
+    ledger = change.ledger?.let { tx ->
+        LedgerValue(
+            amount = amount.takeIf { tx.amount != null },
+            flow = flow.takeIf { tx.flow != null },
+            category = category.orEmpty().takeIf { tx.category != null },
+            time = txTime.orEmpty().takeIf { tx.time != null },
+            planned = planned.takeIf { tx.planned != null },
+            manual = manual.takeIf { tx.manual != null },
+        )
+    },
 )
 
 /** 일정에 변경을 적용한다. select 색은 DB의 옵션 목록에서 찾는다. */

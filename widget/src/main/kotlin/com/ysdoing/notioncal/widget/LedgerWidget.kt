@@ -19,6 +19,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
@@ -46,6 +47,7 @@ import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.ledger.DayMoney
+import com.ysdoing.notioncal.core.data.ledger.LEDGER_RECENT_WEEKS
 import com.ysdoing.notioncal.core.data.ledger.LedgerBoard
 import com.ysdoing.notioncal.core.data.ledger.MoneyFormat
 import kotlinx.coroutines.flow.first
@@ -53,9 +55,17 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
+import com.ysdoing.notioncal.core.data.calendar.GRID_DAYS
 
 /** LD-03 가계부 위젯 한 개가 그릴 것. Room에서 읽은 값만 담는다. */
-data class LedgerWidgetState(val board: LedgerBoard, val config: WidgetConfig)
+/** [sync]는 마지막 동기화 결과: 실패면 머리에 경고 아이콘 + 글자로 알린다(WS-3, 색만으로 알리지 않음). */
+data class LedgerWidgetState(
+    val board: LedgerBoard,
+    val config: WidgetConfig,
+    val sync: WidgetSync = WidgetSync(),
+    /** EX-02 그린 날짜의 공휴일 이름(다른 달력 위젯과 같게 빨간 날짜·낭독). */
+    val holidays: Map<LocalDate, String> = emptyMap(),
+)
 
 /** 크기 단계: 6주가 들어가면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주(4×2는 보통 1~2주). */
 enum class LedgerWidgetMode { LARGE, COMPACT }
@@ -72,7 +82,12 @@ data class LedgerMetrics(
     val headerHeight: Dp,
     val lineHeight: Dp,
     val weekdayHeight: Dp,
+    /** 한 주 전체 높이(주 합계 줄 + 날짜 칸). */
     val cellHeight: Dp,
+    /** LD-15 주 합계 줄 높이. 칸에 남는 높이가 없으면 0(줄을 그리지 않는다). */
+    val weekTotalHeight: Dp,
+    /** 지출과 수입이 둘 다 있는 날에 두 줄로 보일 수 있는가(남는 높이가 있을 때만). */
+    val twoAmounts: Boolean,
     val contentWidth: Dp,
     val rows: Int,
     val showSummary: Boolean,
@@ -82,12 +97,13 @@ data class LedgerMetrics(
     val dateFontSp: Float,
     val amountFontSp: Float,
 ) {
+    /** 날짜 칸 높이: 주 합계 줄을 뺀 나머지. */
+    val dayHeight: Dp get() = cellHeight - weekTotalHeight
+
     companion object {
         val PADDING_H = 8.dp
         val PADDING_V = 4.dp
         val BAR = 6.dp
-        /** LD-07 머리줄 '+' 버튼 너비(누르기 쉬운 폭). */
-        val ADD_WIDTH = 40.dp
 
         fun of(size: DpSize, config: WidgetConfig, systemFontScale: Float): LedgerMetrics {
             val scale = config.fontScale / 100f
@@ -112,15 +128,22 @@ data class LedgerMetrics(
             if (content(summary, weekdays) < cellNeeded) summary = false
             if (content(summary, weekdays) < cellNeeded) weekdays = false
             val fit = (content(summary, weekdays) / cellNeeded).toInt().coerceIn(1, 6)
-            val rows = if (mode == LedgerWidgetMode.LARGE && fit == 6) 6 else minOf(fit, 5)
+            val rows = if (mode == LedgerWidgetMode.LARGE && fit == 6) 6 else minOf(fit, LEDGER_RECENT_WEEKS.toInt())
             if (rows < 6) mode = LedgerWidgetMode.COMPACT
             val cell = maxOf(cellNeeded, content(summary, weekdays) / rows)
+            // 기존 배치를 줄이지 않고, 칸에 남는 높이가 있을 때만 주 합계 줄 → 두 번째 금액 줄 순으로 쓴다(LD-15).
+            val spare = cell - cellNeeded
+            val amountLine = box(amount)
+            // 주 합계는 6주 그리드에서만: 주 합계는 이 달 날짜분만 세어(weekMoney) 최근 몇 주를 보이는 작은 위젯의 지난달 주는 0으로 보인다.
+            val weekTotal = if (rows == 6 && spare >= amountLine) amountLine else 0.dp
             return LedgerMetrics(
                 mode = mode,
                 headerHeight = headerHeight,
                 lineHeight = line,
                 weekdayHeight = weekday,
                 cellHeight = cell,
+                weekTotalHeight = weekTotal,
+                twoAmounts = spare - weekTotal >= amountLine,
                 contentWidth = size.width - PADDING_H * 2,
                 rows = rows,
                 showSummary = summary,
@@ -161,18 +184,29 @@ class LedgerWidget : GlanceAppWidget() {
 
 /** 가계부 위젯과 통합 위젯(💰 탭)이 함께 쓰는 세션. 첫 프레임부터 내용이 보이도록 초기값을 먼저 읽는다. */
 internal object LedgerSession {
-    suspend fun load(deps: WidgetDependencies): LedgerBoard {
+    /** 첫 프레임에 그릴 보드와 공휴일(공휴일도 미리 읽어 첫 화면부터 빨간 날짜가 깜빡이지 않게). */
+    class Initial(val board: LedgerBoard, val holidays: Map<LocalDate, String>)
+
+    suspend fun load(deps: WidgetDependencies): Initial {
         val today = LocalDate.now(APP_ZONE)
-        return deps.ledger().observeBoard(YearMonth.from(today), today).first()
+        val board = deps.ledger().observeBoard(YearMonth.from(today), today).first()
+        val (from, to) = drawnDays(board)
+        return Initial(board, deps.holidays().observe(from, to).first())
     }
 
+    /** 그리는 날짜 범위: 6주 그리드와, 작은 위젯이 그리는 최근 몇 주. */
+    fun drawnDays(board: LedgerBoard): Pair<LocalDate, LocalDate> =
+        minOf(board.gridStart, board.summary.weekStart.minusWeeks(LEDGER_RECENT_WEEKS - 1)) to board.gridStart.plusDays(GRID_DAYS - 1)
+
     @Composable
-    fun Content(deps: WidgetDependencies, initial: LedgerBoard, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
-        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4).
-        val today = LocalDate.now(APP_ZONE)
-        val board by remember(today) { deps.ledger().observeBoard(YearMonth.from(today), today) }
-            .collectAsState(initial.takeIf { it.today == today } ?: initial)
-        LedgerWidgetContent(LedgerWidgetState(board, config), fontScale, framed)
+    fun Content(deps: WidgetDependencies, initial: Initial, config: WidgetConfig, fontScale: Float, framed: Boolean = true) {
+        // 그릴 때마다 오늘을 다시 계산한다(PRD §7-4). 자정에 살아 있는 세션도 다시 그리게 관찰하는 오늘(WidgetToday).
+        val today = widgetToday()
+        val board = rememberLatest(today, initial.board) { deps.ledger().observeBoard(YearMonth.from(today), today) }
+        val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(WidgetSync())
+        val days = drawnDays(board)
+        val holidays = rememberLatest(days, initial.holidays) { deps.holidays().observe(days.first, days.second) }
+        LedgerWidgetContent(LedgerWidgetState(board, config, sync, holidays), fontScale, framed)
     }
 }
 
@@ -182,6 +216,12 @@ internal fun ledgerTabIntent(context: Context): Intent =
         .setData("notioncal://tab/ledger".toUri())
         .putExtra(AppIntents.EXTRA_TAB, AppIntents.TAB_LEDGER)
         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
+/** 그날 항목이 있는 날: 💰 탭에서 그 날짜의 거래 목록을 연다. 날짜마다 data URI를 달리해 PendingIntent가 서로 덮어쓰지 않게 한다. */
+internal fun ledgerDayIntent(context: Context, date: LocalDate): Intent =
+    ledgerTabIntent(context)
+        .setData("notioncal://tab/ledger/$date".toUri())
+        .putExtra(AppIntents.EXTRA_LEDGER_DATE, date.toString())
 
 /**
  * LD-07 입력 시트 인텐트. :widget은 :feature:ledger에 의존할 수 없어 action 문자열로 연다.
@@ -212,6 +252,16 @@ fun LedgerWidgetContent(
     } else {
         GlanceModifier.fillMaxSize()
     }
+    if (!board.registered) {
+        // 거래내역 DB를 등록하지 않았으면 '0원'과 빈 달력 대신 안내한다(습관 위젯과 같은 모양). 머리의 +도 뺀다: 저장이 NO_LEDGER로 실패한다.
+        Column(outer.padding(horizontal = LedgerMetrics.PADDING_H, vertical = LedgerMetrics.PADDING_V)) {
+            WidgetEmpty(
+                R.drawable.ic_widget_wallet, context.getString(R.string.ledger_widget_empty), palette, metrics.headerFontSp,
+                ctaText = context.getString(R.string.ledger_widget_empty_cta), ctaAction = actionStartActivity(ledgerTabIntent(context)), ctaTag = "ledgerEmpty",
+            )
+        }
+        return
+    }
     // 자식: 위쪽 묶음 1 + 요일 1 + 주 줄 최대 6 = 8개(Glance 10개 제한).
     Column(outer.padding(horizontal = LedgerMetrics.PADDING_H, vertical = LedgerMetrics.PADDING_V)) {
         Column(GlanceModifier.fillMaxWidth()) {
@@ -226,24 +276,36 @@ fun LedgerWidgetContent(
                     style = TextStyle(color = palette.text, fontSize = metrics.headerFontSp.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
-                Text(
-                    text = s.asOf?.let { context.getString(R.string.ledger_widget_as_of, it.monthValue, it.dayOfMonth) }
-                        ?: context.getString(R.string.ledger_widget_as_of_none),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
-                    maxLines = 1,
-                )
-                val add = context.getString(R.string.ledger_widget_add)
-                Box(
-                    GlanceModifier.width(LedgerMetrics.ADD_WIDTH).height(metrics.headerHeight)
-                        .clickable(actionStartActivity(ledgerInputIntent(context, board.today)))
-                        .semantics {
-                            contentDescription = add
-                            testTag = "ledgerAdd"
+                if (state.sync.failed) {
+                    // 실패하면 '기준일' 자리에 경고 아이콘 + 글자. 자리를 바꿔 쓰므로 줄 높이·칸 수는 그대로다.
+                    WidgetStatusLine(
+                        context.getString(R.string.widget_sync_error_short), error = true, palette = palette, fontSp = metrics.smallFontSp,
+                        modifier = GlanceModifier.semantics {
+                            contentDescription = context.getString(R.string.widget_sync_error)
+                            testTag = "syncError"
                         },
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    WidgetIcon(R.drawable.ic_widget_add, palette.accent, (metrics.headerHeight * 0.7f).coerceAtMost(24.dp))
+                    )
+                } else {
+                    Text(
+                        text = s.asOf?.let { context.getString(R.string.ledger_widget_as_of, it.monthValue, it.dayOfMonth) }
+                            ?: context.getString(R.string.ledger_widget_as_of_none),
+                        style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp),
+                        maxLines = 1,
+                    )
                 }
+                // NS-06 새로고침: 다른 위젯과 같은 자리(+ 앞)·같은 폭 기준.
+                if (LocalSize.current.width >= REFRESH_MIN_WIDTH) {
+                    WidgetIconButton(
+                        R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), palette,
+                        visual = (metrics.headerHeight - 2.dp).coerceAtMost(28.dp), height = metrics.headerHeight,
+                    )
+                }
+                // LD-07 입력: 공통 채운 버튼(눌림 폭 48dp, 높이는 머리줄 그대로).
+                WidgetIconButton(
+                    R.drawable.ic_widget_add, context.getString(R.string.ledger_widget_add), "ledgerAdd",
+                    actionStartActivity(ledgerInputIntent(context, board.today)), palette,
+                    style = IconButtonStyle.FILLED, visual = (metrics.headerHeight - 2.dp).coerceAtMost(28.dp), height = metrics.headerHeight,
+                )
             }
             if (metrics.showSummary) {
                 // 예정·수입·예산을 가운뎃점 대신 사이를 띄운 세 덩이로(DESIGN.md). 자식 5개(Glance 10개 제한 안).
@@ -259,10 +321,12 @@ fun LedgerWidgetContent(
         if (metrics.showWeekdays) {
             Row(GlanceModifier.fillMaxWidth().height(metrics.weekdayHeight)) {
                 repeat(7) { i ->
+                    val day = board.weekStart.plus(i.toLong())
                     Text(
-                        text = board.weekStart.plus(i.toLong()).getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
+                        text = day.getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
                         modifier = GlanceModifier.defaultWeight(),
-                        style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
+                        // 월간·분할과 같이 일·토 색.
+                        style = TextStyle(color = palette.dayColor(day), fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
                         maxLines = 1,
                     )
                 }
@@ -271,12 +335,27 @@ fun LedgerWidgetContent(
         // 6주면 달력 그리드, 아니면 이번 주가 맨 아래인 최근 몇 주.
         val firstDay = if (metrics.rows == 6) board.gridStart else s.weekStart.minusWeeks(metrics.rows - 1L)
         repeat(metrics.rows) { week ->
-            Row(GlanceModifier.fillMaxWidth().height(metrics.cellHeight)) {
-                repeat(7) { col ->
-                    val date = firstDay.plusDays(week * 7L + col)
-                    DayCell(date, board, s.days[date] ?: DayMoney(), metrics, palette, hidden)
+            val weekFirst = firstDay.plusDays(week * 7L)
+            if (metrics.weekTotalHeight > 0.dp) {
+                // 한 주 = 합계 줄 + 날짜 칸 줄(자식 2개). 위쪽 자식은 8개 그대로라 Glance 10개 제한 안이다.
+                Column(GlanceModifier.fillMaxWidth().height(metrics.cellHeight)) {
+                    WeekTotals(s.weekMoney(weekFirst), metrics, palette, hidden)
+                    DayRow(weekFirst, state, metrics, palette)
                 }
+            } else {
+                DayRow(weekFirst, state, metrics, palette)
             }
+        }
+    }
+}
+
+/** 한 주의 날짜 칸 일곱 개. */
+@Composable
+private fun DayRow(weekFirst: LocalDate, state: LedgerWidgetState, metrics: LedgerMetrics, palette: WidgetPalette) {
+    Row(GlanceModifier.fillMaxWidth().height(metrics.dayHeight)) {
+        repeat(7) { col ->
+            val date = weekFirst.plusDays(col.toLong())
+            DayCell(date, state, state.board.summary.days[date] ?: DayMoney(), metrics, palette)
         }
     }
 }
@@ -292,6 +371,46 @@ private fun summaryParts(context: Context, board: LedgerBoard, hidden: Boolean):
         context.getString(R.string.ledger_widget_income, MoneyFormat.short(s.monthIncome, hidden)),
         budget,
     )
+}
+
+/** LD-15 주 합계 줄(뱅크샐러드식): 그 주 수입(초록 '+')과 지출(파랑 '-')을 오른쪽 끝에. 금액을 숨기면 낭독에서도 뺀다(LD-06). */
+@Composable
+private fun WeekTotals(money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette, hidden: Boolean) {
+    // 거래가 없는 주는 자리만 두고 낭독 대상으로 만들지 않는다(앱 화면과 같다).
+    if (money.spend == 0L && money.income == 0L) {
+        Spacer(GlanceModifier.fillMaxWidth().height(metrics.weekTotalHeight))
+        return
+    }
+    val context = LocalContext.current
+    val description = if (hidden) {
+        context.getString(R.string.ledger_widget_week_total_hidden)
+    } else {
+        context.getString(R.string.ledger_widget_week_total, MoneyFormat.full(money.spend), MoneyFormat.full(money.income))
+    }
+    Row(
+        GlanceModifier.fillMaxWidth().height(metrics.weekTotalHeight).semantics {
+            contentDescription = description
+            testTag = "ledgerWeekTotal"
+        },
+        horizontalAlignment = Alignment.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (money.income != 0L) {
+            Text(
+                text = MoneyFormat.signed(money.income, hidden),
+                style = TextStyle(color = palette.income, fontSize = metrics.amountFontSp.sp),
+                maxLines = 1,
+            )
+        }
+        if (money.spend != 0L) {
+            Text(
+                text = MoneyFormat.signed(-money.spend, hidden),
+                modifier = GlanceModifier.padding(start = 6.dp),
+                style = TextStyle(color = palette.expense, fontSize = metrics.amountFontSp.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1,
+            )
+        }
+    }
 }
 
 /** LD-04 주 예산 줄과 막대. 넘으면 경고색 + '초과' 글자. 금액을 숨겨도 막대는 남긴다(LD-06). */
@@ -324,26 +443,32 @@ private fun WeekLine(board: LedgerBoard, metrics: LedgerMetrics, palette: Widget
 }
 
 /**
- * LD-03 하루 칸: 지난 날·오늘은 지출(파랑 '-'), 앞날은 예정(흐리게 + 밑줄 '-'), 지출이 없고 수입이 있으면 초록 '+'.
+ * LD-03 하루 칸: 지난 날·오늘은 지출(파랑 '-'), 앞날은 예정(흐리게 + 밑줄 '-'), 수입은 초록 '+'(지출과 함께일 때는 높이가 남아야 두 줄).
  * 지출 '-'·파랑은 사용자 요구(2026-10-19). 환불이 더 큰 날은 파랑 '+'.
  */
 @Composable
 private fun androidx.glance.layout.RowScope.DayCell(
-    date: LocalDate, board: LedgerBoard, money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette, hidden: Boolean,
+    date: LocalDate, state: LedgerWidgetState, money: DayMoney, metrics: LedgerMetrics, palette: WidgetPalette,
 ) {
     val context = LocalContext.current
+    val board = state.board
+    val hidden = state.config.hideAmounts
+    val holiday = state.holidays[date]
     val future = date.isAfter(board.today)
     val amount = if (future) money.planned else money.spend
     val inMonth = YearMonth.from(date) == board.month
     val description = listOfNotNull(
         context.getString(R.string.ledger_widget_day, date.monthValue, date.dayOfMonth),
+        holiday,
         amount.takeIf { it != 0L && !hidden }?.let {
             context.getString(if (future) R.string.ledger_widget_day_planned else R.string.ledger_widget_day_spend, MoneyFormat.full(it))
         },
         money.income.takeIf { it != 0L && !hidden }?.let { context.getString(R.string.ledger_widget_day_income, MoneyFormat.full(it)) },
     ).joinToString(", ")
+    // 거래가 있는 날은 무엇이 있었는지 보러 누른다(월간 위젯의 날짜 탭과 같은 뜻). 💰 탭 목록과 같은 기준이라 지난 예정·환불로 0이 된 날도 목록을 연다.
+    val open = if (board.summary.entries[date].isNullOrEmpty()) ledgerInputIntent(context, date) else ledgerDayIntent(context, date)
     Column(
-        GlanceModifier.defaultWeight().height(metrics.cellHeight).clickable(actionStartActivity(ledgerInputIntent(context, date))).semantics {
+        GlanceModifier.defaultWeight().height(metrics.dayHeight).clickable(actionStartActivity(open)).semantics {
             contentDescription = description
             testTag = "ledgerDay"
         },
@@ -352,7 +477,7 @@ private fun androidx.glance.layout.RowScope.DayCell(
         val isToday = date == board.today
         // 오늘은 칠한 네모(DESIGN.md 원칙 3). 월·분할 위젯과 같은 모양.
         Box(
-            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(6.dp).padding(horizontal = 4.dp) else GlanceModifier,
+            modifier = if (isToday) GlanceModifier.background(palette.todayBackground).cornerRadius(WidgetShape.TODAY).padding(horizontal = 4.dp) else GlanceModifier,
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -360,8 +485,9 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 style = TextStyle(
                     color = when {
                         isToday -> palette.todayText
-                        inMonth -> palette.text
-                        else -> palette.outside
+                        !inMonth -> palette.outside
+                        holiday != null -> palette.holiday // 월간·분할 위젯과 같은 순서
+                        else -> palette.dayColor(date.dayOfWeek)
                     },
                     fontSize = metrics.dateFontSp.sp,
                     fontWeight = if (isToday) FontWeight.Bold else null,
@@ -369,8 +495,8 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 maxLines = 1,
             )
         }
-        when {
-            amount != 0L -> Text(
+        if (amount != 0L) {
+            Text(
                 text = MoneyFormat.signed(-amount, hidden),
                 style = TextStyle(
                     color = if (future) palette.subtle else palette.expense,
@@ -380,7 +506,10 @@ private fun androidx.glance.layout.RowScope.DayCell(
                 ),
                 maxLines = 1,
             )
-            money.income != 0L -> Text(
+        }
+        // 수입은 지출이 없는 날 또는 높이가 남을 때(두 줄) 지출 아래에 보인다.
+        if (money.income != 0L && (amount == 0L || metrics.twoAmounts)) {
+            Text(
                 text = MoneyFormat.signed(money.income, hidden),
                 style = TextStyle(color = palette.income, fontSize = metrics.amountFontSp.sp),
                 maxLines = 1,

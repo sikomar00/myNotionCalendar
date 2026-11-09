@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -58,6 +59,8 @@ import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.APP_ZONE
 import com.ysdoing.notioncal.core.data.AppIntents
 import com.ysdoing.notioncal.core.data.SettingsRepository
+import com.ysdoing.notioncal.core.designsystem.ReportDirty
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
 import com.ysdoing.notioncal.core.data.ledger.Flow
 import com.ysdoing.notioncal.core.data.ledger.LedgerAddResult
 import com.ysdoing.notioncal.core.data.ledger.LedgerRepository
@@ -73,6 +76,8 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 import javax.inject.Inject
+import java.time.Clock
+import com.ysdoing.notioncal.core.data.observeToday
 
 /** LD-07 빠른 입력 열기(위젯 '+'·날짜 탭, 💰 탭). 날짜마다 data URI를 달리해 PendingIntent가 서로 덮지 않게 한다. */
 fun ledgerInputIntent(context: Context, date: LocalDate): Intent =
@@ -114,14 +119,19 @@ fun LedgerInputContent(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
     noLedger: Boolean = false,
+    /** ED-04: 금액이나 내용을 적다 만 것이 있는지. */
+    onDirtyChange: (Boolean) -> Unit = {},
 ) {
     var amountText by rememberSaveable { mutableStateOf("") }
     var flow by rememberSaveable { mutableStateOf(Flow.OUT) }
     var picked by rememberSaveable(categories) { mutableStateOf(categories.firstOrNull()) }
     var title by rememberSaveable { mutableStateOf("") }
+    ReportDirty(amountText.isNotBlank() || title.isNotBlank(), onDirtyChange)
     val amount = amountText.filter(Char::isDigit).toLongOrNull() ?: 0L
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // 대분류는 지금 고른 지출·수입으로 읽는다. 화면을 돌려 다시 만들어져도 되살린 '수입'에 지출 대분류가 붙지 않게.
+    LaunchedEffect(Unit) { onFlowChange(flow) }
 
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
@@ -188,21 +198,29 @@ class LedgerInputActivity : ComponentActivity() {
     @Inject
     lateinit var settings: SettingsRepository
 
+    @Inject
+    lateinit var clock: Clock
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val today = LocalDate.now(APP_ZONE)
-        val date = intent.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
+        val opened = LocalDate.now(clock.withZone(APP_ZONE))
+        val date = intent.getStringExtra(AppIntents.EXTRA_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: opened
         setContent {
+            // 열어 둔 채 자정을 넘기면 '예정·앱입력' 꼬리표를 새 날로(저장은 저장할 때의 오늘로 판정하므로 둘이 같아야 한다).
+            val today by remember { observeToday(clock) }.collectAsStateWithLifecycle(opened)
             val dynamicColor by remember { settings.settings.map { it.dynamicColor } }.collectAsStateWithLifecycle(false)
             NotionCalTheme(dynamicColor) {
                 val viewModel: LedgerInputViewModel = hiltViewModel()
                 val categories by viewModel.categories.collectAsStateWithLifecycle()
                 val result by viewModel.result.collectAsStateWithLifecycle()
-                LaunchedEffect(Unit) { viewModel.loadCategories(Flow.OUT) }
                 LaunchedEffect(result) { if (result == LedgerAddResult.SAVED) finish() }
+                // ED-04: 금액이나 내용을 적다 만 채로 바깥 누르기·뒤로 가기로 닫으면 '변경을 버릴까요?'를 먼저 묻는다('취소'는 바로 닫는다).
+                val guard = rememberDiscardGuard(onClose = ::finish)
+                val requestClose = { if (guard.mayClose()) finish() }
+                BackHandler(onBack = requestClose)
                 Box(
-                    Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { finish() },
+                    Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { requestClose() },
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     Surface(
@@ -220,6 +238,7 @@ class LedgerInputActivity : ComponentActivity() {
                             onCancel = ::finish,
                             modifier = Modifier.navigationBarsPadding().padding(top = 8.dp),
                             noLedger = result == LedgerAddResult.NO_LEDGER,
+                            onDirtyChange = { guard.dirty = it },
                         )
                     }
                 }

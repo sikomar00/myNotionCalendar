@@ -35,6 +35,9 @@ object DesignTokens {
         const val EXPENSE = 0xFF1565C0
         /** 가계부 수입 금액(노션 초록, 5.4:1). */
         const val INCOME = 0xFF0F7B6C
+        /** 일요일·공휴일 글자(흰 바탕 5.6:1)와 토요일 글자(5.8:1). 달력·위젯·습관이 같이 쓴다(부록 A-15). */
+        const val SUNDAY = 0xFFC62828
+        const val SATURDAY = 0xFF1565C0
     }
 
     object Dark {
@@ -55,5 +58,8 @@ object DesignTokens {
         const val ERROR = 0xFFFF6B6B
         const val EXPENSE = 0xFF5B9BF8
         const val INCOME = 0xFF4DAB9A
+        /** 일요일·공휴일 글자(#191919 위 6.3:1)와 토요일 글자(6.3:1). */
+        const val SUNDAY = 0xFFFF6B6B
+        const val SATURDAY = 0xFF5B9BF8
     }
 }

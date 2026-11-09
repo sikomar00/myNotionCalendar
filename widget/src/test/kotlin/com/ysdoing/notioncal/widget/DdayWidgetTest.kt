@@ -15,6 +15,7 @@ import androidx.glance.appwidget.testing.unit.hasStartActivityClickAction
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasContentDescriptionEqualTo
 import androidx.glance.testing.unit.hasTestTag
+import androidx.glance.testing.unit.hasText
 import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.WidgetConfig
@@ -134,7 +135,20 @@ class DdayWidgetTest {
         setContext(context)
         setAppWidgetSize(list)
         provideComposable { DdayListWidgetContent(DdayWidgetState(emptyList(), WidgetConfig(1), today), systemFontScale = 1f) }
-        onNode(hasTextEqualTo("고정한 디데이가 없습니다. +를 눌러 고정하세요")).assertExists()
+        // 목록 높이가 낮으면(2×2) 한 줄로 줄고 그 줄이 행동 버튼이 된다. 문구에 안내와 행동이 함께 들어간다.
+        onNode(hasText("고정한 디데이가 없습니다")).assertExists()
+        onNode(hasTestTag("ddayEmpty")).assert(hasStartActivityClickAction(ddayScreenIntent(context)))
+    }
+
+    @Test
+    fun headerAndEmptyTextHonourTheSystemFontCap() {
+        // 시스템 글꼴 2.0에서도 위젯 글자는 상한 1.3배까지만 커진다(고정 sp가 상한을 우회하던 문제).
+        assertEquals(1f, ddaySpFactor(1f), 0.001f)
+        assertEquals(1f, ddaySpFactor(1.3f), 0.001f)
+        assertEquals(1.3f / 2f, ddaySpFactor(2f), 0.001f)
+        val m = DdayListMetrics.of(WidgetConfig(1), 2f)
+        assertEquals(13f * 1.3f / 2f, m.headerSp, 0.001f)
+        assertEquals(12f * 1.3f / 2f, m.emptySp, 0.001f)
     }
 
     private suspend fun render(size: DpSize, content: @Composable () -> Unit) {

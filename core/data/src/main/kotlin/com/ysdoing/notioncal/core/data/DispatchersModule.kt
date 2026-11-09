@@ -28,6 +28,9 @@ import kotlinx.coroutines.withContext
 import java.time.Clock
 import javax.inject.Qualifier
 import javax.inject.Singleton
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.emptyPreferences
+import android.util.Log
 
 /** DB·네트워크·JSON 파싱은 이 디스패처에서만 돌린다(PF-03). 테스트에서는 교체한다. */
 @Qualifier
@@ -109,6 +112,11 @@ object DataModule {
         @ApplicationContext context: Context,
         @IoDispatcher io: CoroutineDispatcher,
     ): DataStore<Preferences> = PreferenceDataStoreFactory.create(
+        // 파일이 깨지면 읽을 때마다 예외라 앱 시작(주기 동기화 설정 읽기)에서 계속 죽었다. 기본 설정으로 다시 시작한다.
+        corruptionHandler = ReplaceFileCorruptionHandler { e ->
+            Log.w("DataModule", "설정 파일이 깨져 기본값으로 다시 시작합니다(${e.javaClass.name})")
+            emptyPreferences()
+        },
         scope = CoroutineScope(io + SupervisorJob()),
         produceFile = { context.preferencesDataStoreFile("settings") },
     )
@@ -120,6 +128,11 @@ object DataModule {
         @IoDispatcher io: CoroutineDispatcher,
     ): SecretStore = SecretStore(
         dataStore = PreferenceDataStoreFactory.create(
+            // 깨진 파일은 비운다: 토큰을 다시 넣어야 하지만 앱이 계속 죽는 것보다 낫다.
+            corruptionHandler = ReplaceFileCorruptionHandler { e ->
+                Log.w("DataModule", "비밀 저장소 파일이 깨져 비웁니다(노션 연결을 다시 해야 함, ${e.javaClass.name})")
+                emptyPreferences()
+            },
             scope = CoroutineScope(io + SupervisorJob()),
             produceFile = { context.preferencesDataStoreFile(SecretStore.FILE_NAME) },
         ),

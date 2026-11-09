@@ -19,6 +19,9 @@ data class RichTextDto(
     @SerialName("plain_text") val plainText: String = "",
 )
 
+/** 노션 제목(서식 글자 조각들)을 한 줄 글자로. 노션 제목 앞뒤에 빈칸이 붙어 오는 일이 있어(실기기 확인) 자른다. */
+fun List<RichTextDto>.plainTitle(): String = joinToString("") { it.plainText }.trim()
+
 @Serializable
 data class DataSourceRefDto(
     val id: String,
@@ -30,6 +33,8 @@ data class DataSourceRefDto(
 data class ParentRefDto(
     val type: String = "",
     @SerialName("page_id") val pageId: String? = null,
+    /** 검색 결과의 data source가 속한 DB. */
+    @SerialName("database_id") val databaseId: String? = null,
 )
 
 @Serializable
@@ -100,7 +105,30 @@ data class PropertySchemaDto(
     val status: StatusSchemaDto? = null,
     @SerialName("multi_select") val multiSelect: SelectSchemaDto? = null,
     val relation: RelationSchemaDto? = null,
+    /** CN-02: 스키마 전체 저장용(숫자 형식·수식·롤업·ID 설정). 위젯·편집 시트가 속성을 알려고 쓴다. */
+    val number: NumberSchemaDto? = null,
+    val formula: FormulaSchemaDto? = null,
+    val rollup: RollupSchemaDto? = null,
+    @SerialName("unique_id") val uniqueId: UniqueIdSchemaDto? = null,
 )
+
+@Serializable
+data class NumberSchemaDto(val format: String? = null)
+
+@Serializable
+data class FormulaSchemaDto(val expression: String? = null)
+
+@Serializable
+data class RollupSchemaDto(
+    @SerialName("relation_property_name") val relationPropertyName: String? = null,
+    @SerialName("relation_property_id") val relationPropertyId: String? = null,
+    @SerialName("rollup_property_name") val rollupPropertyName: String? = null,
+    @SerialName("rollup_property_id") val rollupPropertyId: String? = null,
+    val function: String? = null,
+)
+
+@Serializable
+data class UniqueIdSchemaDto(val prefix: String? = null)
 
 @Serializable
 data class DataSourceDto(
@@ -119,6 +147,8 @@ data class PageDto(
     val properties: JsonObject = JsonObject(emptyMap()),
     /** 소속 data source(DD-01: 캐시에 없는 고정 일정을 받을 때 어느 DB 매핑을 쓸지). */
     val parent: PageParentDto? = null,
+    /** 노션 페이지 표지(`{"type":"external"|"file", …}`, 없으면 null). 갤러리 카드의 표지 출처 중 하나다(Phase 12d). */
+    val cover: JsonObject? = null,
 )
 
 @Serializable
@@ -138,6 +168,33 @@ data class QueryResponseDto(
     @SerialName("next_cursor") val nextCursor: String? = null,
     @SerialName("has_more") val hasMore: Boolean = false,
     @SerialName("request_status") val requestStatus: RequestStatusDto? = null,
+)
+
+/** POST v1/search: 이 연결에 공유된 data source만(2025-09-03부터 DB 대신 data source로 찾는다). */
+@Serializable
+data class SearchRequestDto(
+    val filter: SearchFilterDto = SearchFilterDto(),
+    @SerialName("start_cursor") val startCursor: String? = null,
+    @SerialName("page_size") val pageSize: Int = 100,
+)
+
+@Serializable
+data class SearchFilterDto(val property: String = "object", val value: String = "data_source")
+
+@Serializable
+data class SearchResponseDto(
+    val results: List<SearchResultDto> = emptyList(),
+    @SerialName("next_cursor") val nextCursor: String? = null,
+    @SerialName("has_more") val hasMore: Boolean = false,
+)
+
+/** 검색 결과 한 줄. 앱은 id·제목·부모 DB만 쓴다(칸이 없어도 깨지지 않게 기본값). */
+@Serializable
+data class SearchResultDto(
+    val id: String,
+    val title: List<RichTextDto> = emptyList(),
+    val parent: ParentRefDto? = null,
+    @SerialName("in_trash") val inTrash: Boolean = false,
 )
 
 @Serializable

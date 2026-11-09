@@ -12,8 +12,8 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** 아웃박스 작업 종류. */
-enum class OutboxOp { CREATE, UPDATE, TRASH }
+/** 아웃박스 작업 종류. [CANCEL_CREATE]는 보내다 끊긴 생성을 지운 것이다(노션에 만들어졌으면 찾아 휴지통으로). */
+enum class OutboxOp { CREATE, UPDATE, TRASH, CANCEL_CREATE }
 
 /**
  * 화면(퀵 시트·날짜 시트)이 쓰는 유일한 쓰기 입구(PRD §7-1, NS-04).
@@ -51,9 +51,11 @@ class EventWriter @Inject constructor(
     }
 
     /** WI-05: 바뀐 필드만 보낸다. 아직 생성이 전송되지 않은 일정이면 생성 작업에 합친다. */
-    suspend fun update(pageId: String, change: EventChange) {
+    suspend fun update(tempOrRealId: String, change: EventChange) {
         if (change.isEmpty) return
         val updated = db.withTransaction {
+            // 거래 안에서 푼다: 생성 완료(이름 바꿈 + 별칭 기록)와 겹치면 그 거래가 끝난 뒤에 풀어 옛 임시 id로 놓치지 않는다.
+            val pageId = CreatedPageIds.resolve(tempOrRealId)
             val current = events.get(pageId) ?: return@withTransaction false
             val options = parseColorOptions(db.dataSourceDao().get(current.dataSourceId)?.colorOptions)
             val pendingCreate = outbox.all().firstOrNull { it.pageId == pageId && it.op == OutboxOp.CREATE.name }
@@ -76,12 +78,13 @@ class EventWriter @Inject constructor(
     suspend fun setDone(pageId: String, done: Boolean) = update(pageId, EventChange(done = done))
 
     /** NS-04: 노션에서는 휴지통 이동만 한다. 아직 생성되지 않은 일정이면 생성 작업까지 지운다. */
-    suspend fun trash(pageId: String) {
+    suspend fun trash(tempOrRealId: String) {
         val trashed = db.withTransaction {
+            val pageId = CreatedPageIds.resolve(tempOrRealId) // update와 같은 까닭으로 거래 안에서 푼다
             val current = events.get(pageId) ?: return@withTransaction false
             events.delete(listOf(pageId))
             if (pageId.startsWith(TEMP_PREFIX)) {
-                outbox.deleteForPage(pageId)
+                cancelCreate(pageId)
             } else {
                 val snapshot = OutboxJson.encodeToString(EventSnapshot.serializer(), current.snapshot())
                 outbox.insert(
@@ -94,6 +97,15 @@ class EventWriter @Inject constructor(
             true
         }
         if (trashed) afterWrite()
+    }
+
+    /**
+     * 아직 노션 id가 없는 일정을 지운다. 보낸 적 없는 생성은 작업만 지우면 된다. 한 번이라도 보냈다면(응답 전에 끊김) 노션에 이미 만들어졌을 수 있어,
+     * 지우면 다음 동기화에 되살아난다. 그래서 작업을 [OutboxOp.CANCEL_CREATE]로 바꿔 처리기가 찾아 휴지통으로 보내게 한다.
+     */
+    private suspend fun cancelCreate(pageId: String) {
+        val create = outbox.all().firstOrNull { it.pageId == pageId && it.op == OutboxOp.CREATE.name }
+        if (create != null && create.attempts > 0) outbox.update(create.copy(op = OutboxOp.CANCEL_CREATE.name)) else outbox.deleteForPage(pageId)
     }
 
     private fun row(pageId: String, dataSourceId: String, op: OutboxOp, change: EventChange, base: EventChange?, baseLastEdited: Long?) =

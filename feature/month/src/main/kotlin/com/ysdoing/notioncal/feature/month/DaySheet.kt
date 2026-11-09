@@ -6,16 +6,18 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.ysdoing.notioncal.core.designsystem.rememberDiscardGuard
+import com.ysdoing.notioncal.core.designsystem.rememberGuardedSheetState
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetContent
 import com.ysdoing.notioncal.feature.quicksheet.QuickSheetStart
-import androidx.compose.ui.Modifier
 
 /**
  * MV-04 날짜 시트: 그날 목록에서 체크·편집·추가. 위젯 퀵 시트와 같은 [QuickSheetContent]를 쓴다.
- * 앱 안에서는 날짜를 훑어보는 경우가 많아 키보드를 자동으로 띄우지 않는다.
+ * 앱 안에서는 날짜를 훑어보는 경우가 많아 키보드를 자동으로 띄우지 않는다. 다만 새 일정(+ 버튼)은 바로 입력하므로 띄운다.
+ * ED-04: 고치거나 적다 만 내용이 있으면 아래로 밀기·바깥 누르기·뒤로 가기 어느 쪽으로 닫아도 '변경을 버릴까요?'를 먼저 묻는다(보기 행 시트와 같다).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,18 +27,20 @@ fun DaySheet(start: QuickSheetStart, onDismiss: () -> Unit) {
     //    않았다. → 높이를 화면의 85%로 고정해 처음부터 그 높이로 열고, 넘치는 일정은 시트 안에서 스크롤한다.
     // 2) 시트 창은 내비게이션 바 높이를 첫 프레임에 0으로 받는다. → 메인 창에서 읽은 값을 스크롤 내용 맨 아래 여백으로 준다.
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val guard = rememberDiscardGuard(onClose = onDismiss)
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        onDismissRequest = { if (guard.mayClose()) onDismiss() },
+        sheetState = rememberGuardedSheetState(guard),
         contentWindowInsets = { WindowInsets(0) },
     ) {
         QuickSheetContent(
             start = start,
             viewModel = hiltViewModel(key = "day-sheet"),
             onFinished = onDismiss,
-            autoFocus = false,
+            autoFocus = start is QuickSheetStart.Add,
             bottomInset = navBottom,
             modifier = Modifier.fillMaxHeight(SHEET_HEIGHT),
+            onDirtyChange = { guard.dirty = it },
         )
     }
 }

@@ -1,6 +1,8 @@
 package com.ysdoing.notioncal.core.data.db
 
 import androidx.room.Dao
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
+import com.ysdoing.notioncal.core.data.SYNC_LOG_VIEWS
 import androidx.room.OnConflictStrategy
 import androidx.room.Insert
 import androidx.room.Query
@@ -76,6 +78,10 @@ interface EventDao {
         """,
     )
     suspend fun pageIdsInRange(dataSourceId: String, from: LocalDate, to: LocalDate): List<String>
+
+    /** 해당 DB의 로컬 일정 중 가장 이른 시작일(보낼 쓰기가 있는 일정 제외). 날짜는 ISO 글자라 MIN이 날짜 순서다. */
+    @Query("SELECT MIN(startDate) FROM events WHERE dataSourceId = :dataSourceId AND pendingOps = 0")
+    suspend fun earliestStart(dataSourceId: String): LocalDate?
 
     /** §12 대조('노션과 비교'): [pageIdsInRange]와 같은 범위의 일정 전체. */
     @Query(
@@ -187,13 +193,17 @@ interface SyncLogDao {
     @Insert
     suspend fun insert(entry: SyncLogEntity)
 
-    @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT 1")
+    /**
+     * 일정 동기화의 마지막 결과(위젯·앱 배너·설정의 '동기화 오류'). 아웃박스·보기 기록은 뺀다: 보기 동기화는 매번 OK로 남아
+     * 바로 앞의 일정 동기화 오류를 늘 덮어 오류가 보이지 않았다.
+     */
+    @Query("SELECT * FROM sync_log WHERE trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatest(): Flow<SyncLogEntity?>
 
-    @Query("SELECT * FROM sync_log WHERE result != 'ERROR' ORDER BY at DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM sync_log WHERE result != 'ERROR' AND trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestSuccess(): Flow<SyncLogEntity?>
 
-    @Query("SELECT * FROM sync_log WHERE result != 'OK' ORDER BY at DESC, id DESC LIMIT 1")
+    @Query("SELECT * FROM sync_log WHERE result != 'OK' AND trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestFailure(): Flow<SyncLogEntity?>
 
     @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT :limit")

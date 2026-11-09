@@ -11,6 +11,7 @@ import androidx.glance.testing.unit.hasTextEqualTo
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.WidgetConfig
+import com.ysdoing.notioncal.core.data.calendar.weekNumber
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,8 +36,8 @@ class SplitWidgetTest {
     fun weekNumbersFollowWeekStart() {
         // 2026년 10월 달력(일요일 시작)의 여섯 주: 참고한 노션 캘린더 위젯과 같은 40~45주.
         val rows = (0 until 6).map { LocalDate.of(2026, 9, 27).plusWeeks(it.toLong()) }
-        assertEquals(listOf(40, 41, 42, 43, 44, 45), rows.map { SplitWidget.weekNumber(it, DayOfWeek.SUNDAY) })
-        assertEquals(1, SplitWidget.weekNumber(LocalDate.of(2025, 12, 28), DayOfWeek.SUNDAY)) // 1월 1일이 든 주
+        assertEquals(listOf(40, 41, 42, 43, 44, 45), rows.map { weekNumber(it, DayOfWeek.SUNDAY) })
+        assertEquals(1, weekNumber(LocalDate.of(2025, 12, 28), DayOfWeek.SUNDAY)) // 1월 1일이 든 주
     }
 
     @Test

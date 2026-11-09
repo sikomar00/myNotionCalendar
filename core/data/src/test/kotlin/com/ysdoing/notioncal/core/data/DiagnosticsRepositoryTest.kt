@@ -126,4 +126,40 @@ class DiagnosticsRepositoryTest {
         assertFalse(text.contains("치과 검진"))
         assertFalse(text.contains(fakeToken))
     }
+
+    @Test
+    fun outboxAndViewLogLinesDoNotChangeTheLastSyncShownInHeaders() = runTest {
+        // 아웃박스·보기 주기 줄(PF-11 요청 수)은 '마지막 동기화' 시각과 '마지막 실패'를 바꾸지 않는다. 진단 목록에는 남는다.
+        seed()
+        db.syncLogDao().insert(SyncLogEntity(at = 9_000, trigger = SYNC_LOG_OUTBOX, result = "OK", durationMs = 10, pulled = 0, pushed = 2, error = null, requests = 6))
+        db.syncLogDao().insert(SyncLogEntity(at = 9_500, trigger = SYNC_LOG_VIEWS, result = "ERROR", durationMs = 10, pulled = 0, pushed = 0, error = "Network", requests = 3))
+        val d = repo.sync.first()
+        assertEquals(1_000L, d.lastSuccess!!.at) // 일정 동기화의 마지막 성공 그대로
+        assertEquals("Unauthorized", d.lastFailure!!.error) // 일정 동기화의 마지막 실패 그대로
+        val text = repo.report(header = emptyList(), sections = emptyList())
+        assertTrue(text.contains("OUTBOX") && text.contains("요청 6"))
+    }
+
+    /** 위젯·앱 배너의 '동기화 오류': 일정 동기화가 실패한 뒤 보기·아웃박스가 OK를 남겨도 오류가 덮이지 않는다. */
+    @Test
+    fun aViewOrOutboxSuccessDoesNotHideTheLastSyncError() = runTest {
+        seed() // 마지막 일정 동기화가 Unauthorized로 실패했다
+        db.syncLogDao().insert(SyncLogEntity(at = 4_000, trigger = SYNC_LOG_VIEWS, result = "OK", durationMs = 10, pulled = 0, pushed = 0, error = null))
+        db.syncLogDao().insert(SyncLogEntity(at = 5_000, trigger = SYNC_LOG_OUTBOX, result = "OK", durationMs = 10, pulled = 0, pushed = 1, error = null))
+        val latest = SyncStatusRepository(db.syncLogDao()).latest.first()!!
+        assertEquals(listOf("ERROR", "Unauthorized"), listOf(latest.result, latest.error))
+    }
+
+    @Test
+    fun reportMasksConflictValuesOfEveryPropertyNotOnlyTheTitle() = runTest {
+        // 보기 쓰기 충돌은 속성 값(이름·전화·메일 등)을 'PROP:<이름>'으로 남긴다. 내보내는 글에는 그 값이 나가지 않는다(SEC-02).
+        seed()
+        db.conflictDao().insert(
+            ConflictEntity(pageId = "p1", title = "병원 예약", field = "PROP:Phone", localValue = "010-1234-5678", remoteValue = "010-9999-0000", kind = "CONFLICT", at = 2_600),
+        )
+        val text = repo.report(header = emptyList(), sections = emptyList())
+        assertTrue(text.contains("PROP:Phone"))
+        assertFalse(text.contains("010-1234-5678"))
+        assertFalse(text.contains("010-9999-0000"))
+    }
 }

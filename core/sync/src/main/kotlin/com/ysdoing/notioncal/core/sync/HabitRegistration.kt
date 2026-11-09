@@ -168,7 +168,8 @@ internal fun habitRows(
         undoneOption = null,
         colorPropId = null,
         sortPropId = null,
-        enabled = existingHabit?.enabled ?: true,
+        // 켜진 기록 DB가 쓰는 🌱는 켠다: 꺼 둔 🌱를 다른 기록 DB로 등록하면 꺼진 채 남아 습관이 보이지 않았다(🌱는 따로 켤 카드가 없다).
+        enabled = logRow.enabled || existingHabit?.enabled ?: true,
         lastSyncAt = existingHabit?.lastSyncAt?.takeUnless { habitChanged },
         lastFullSyncAt = existingHabit?.lastFullSyncAt?.takeUnless { habitChanged },
         position = existingHabit?.position ?: (nextPosition + 1),

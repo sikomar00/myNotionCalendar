@@ -219,4 +219,46 @@ class LedgerMathTest {
         val best = (0 until 5).minOf { kotlin.system.measureTimeMillis { summary(rows, today = d(31)) } }
         assertTrue("월 합계 ${best}ms", best < 50)
     }
+
+    // LD-15: 주 합계는 이 달의 날만, 무지출은 반영 기준일까지만.
+    @Test
+    fun weekMoneyCountsOnlyDaysOfThisMonth() {
+        val s = summary(
+            export15() + tx(d(9, 30), "10:00", Flow.OUT, "식비", "전달 마지막 날", -7_000) + tx(d(10, 2), "10:00", Flow.OUT, "식비", "이달 첫 주", -3_000),
+            today = d(18),
+        )
+        // 9/27(일) 주: 9/30은 지난달이라 빼고 10/2만 센다.
+        assertEquals(3_000L, s.weekMoney(d(9, 27)).spend)
+        // 10/11 주(11~17): 16·17일 합. 환불이 낀 17일은 25,900, 16일은 14,300.
+        assertEquals(14_300L + 25_900L, s.weekMoney(d(11)).spend)
+        assertEquals(2_500_000L, s.weekMoney(d(11)).income)
+    }
+
+    @Test
+    fun noSpendDaysStopAtAsOfAndSkipSpendDays() {
+        val none = summary(export15(), today = d(25)).noSpendDays!! // 반영 기준일 10/18, 오늘은 10/25
+        assertTrue(d(1) in none && d(15) in none) // 거래가 없는 이른 날
+        assertTrue(d(16) !in none && d(17) !in none && d(18) !in none) // 지출한 날
+        assertTrue(d(19) !in none && d(25) !in none) // 아직 가져오지 않은 날은 세지 않는다
+        assertEquals(15, none.size) // 10/1~15
+    }
+
+    @Test
+    fun noSpendDaysAreUnknownWithoutDataInThatMonth() {
+        assertNull(summary(emptyList(), today = d(18)).noSpendDays) // 가져온 거래가 없다
+        // 데이터는 10월부터인데 9월을 보면: 9월 전체를 무지출로 세지 않는다(알 수 없음).
+        assertNull(summary(export15(), today = d(9, 20)).noSpendDays)
+    }
+
+    @Test
+    fun noSpendDaysDoNotCountTodayOrLater() {
+        // 오늘(10/15)은 아직 끝나지 않았으니 어제(10/14)까지만 센다.
+        assertEquals(d(14), summary(export15(), today = d(15)).noSpendDays!!.max())
+    }
+
+    @Test
+    fun spendEveryDayGivesZeroNotUnknown() {
+        val rows = (1..17).map { tx(d(it), "12:00", Flow.OUT, "식비", "밥$it", -1_000) }
+        assertEquals(emptyList<LocalDate>(), summary(rows, today = d(18)).noSpendDays)
+    }
 }

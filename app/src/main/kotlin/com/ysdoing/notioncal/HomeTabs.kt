@@ -1,5 +1,6 @@
 package com.ysdoing.notioncal
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -36,6 +37,8 @@ fun HomeTabs(
     ledger: @Composable () -> Unit,
 ) {
     val holder = rememberSaveableStateHolder()
+    // 습관·가계부 탭에서 뒤로 가면 앱을 닫지 않고 시작 탭(달력)으로 먼저 돌아간다(Material 하단 탭 규칙).
+    BackHandler(enabled = tab != HomeTab.CALENDAR) { onTabChange(HomeTab.CALENDAR) }
     Scaffold(
         bottomBar = {
             NavigationBar {

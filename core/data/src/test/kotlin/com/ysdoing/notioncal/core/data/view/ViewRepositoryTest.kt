@@ -59,6 +59,85 @@ class ViewRepositoryTest {
     }
 
     @Test
+    fun takenDatesAreTheFirstDateColumnsRowDatesPlusNewItemsStillWaitingToBeSent() = runTest {
+        // Phase 11h 하루 한 줄: 이미 받은 행의 날짜와, 노션에 아직 만들러 보내지 않은 새 항목의 날짜를 함께 안다.
+        val sep = VIEW_CELL_SEPARATOR
+        val columns = listOf(ViewColumn("t", "이름", "title"), ViewColumn("d", "날짜", "date"), ViewColumn("e", "마감", "date"))
+        fun day(iso: String) = kotlinx.serialization.json.JsonObject(mapOf("start" to kotlinx.serialization.json.JsonPrimitive(iso)))
+        seed(
+            ViewSnapshotEntity("v1", "ds", "습관", "table", columns = "이름", syncedAt = 5, columnInfo = ViewJson.encodeColumns(columns)),
+            listOf(
+                ViewRowEntity("v1", 0, "p1", "u1", "a${sep}", ViewJson.encodeTyped(mapOf("d" to day("2026-11-04"), "e" to day("2026-12-25")))),
+                ViewRowEntity("v1", 1, "p2", "u2", "b${sep}", ViewJson.encodeTyped(mapOf("d" to day("2026-11-03T09:00:00+09:00")))), // 시각이 든 날짜는 그날로
+                ViewRowEntity("v1", 2, "p3", "u3", "c${sep}", ""), // 날짜가 없는 행
+            ),
+        )
+        val clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-05T00:00:00Z"), java.time.ZoneOffset.UTC)
+        ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock).create("v1", "오늘", java.time.LocalDate.of(2026, 11, 5))
+        val board = repo().observe("v1").first()!!
+        // 첫 날짜 열(d)만 센다(마감 e는 새 항목의 날짜가 아니다)
+        assertEquals(setOf("2026-11-04", "2026-11-03", "2026-11-05"), board.takenDates().map { it.toString() }.toSet())
+        assertEquals(setOf(java.time.LocalDate.of(2026, 11, 5)), board.pendingCreateDates)
+    }
+
+    @Test
+    fun theDateColumnPrefersTheCalendarsDatePropertyAndEveryUseFollowsIt() {
+        fun day(iso: String) = kotlinx.serialization.json.JsonObject(mapOf("start" to kotlinx.serialization.json.JsonPrimitive(iso)))
+        val first = ViewColumn("d1", "작성일", "date")
+        val calendarDate = ViewColumn("d2", "예정일", "date", role = ViewColumn.ROLE_DATE) // 보기에서 숨겼어도 date_property_id의 열
+        val rows = listOf(ViewRow("p", "", emptyList(), typed = mapOf("d1" to day("2026-11-01"), "d2" to day("2026-12-25"))))
+        val board = ViewBoard("v", "일정", "calendar", emptyList(), rows, 1, null, columnInfo = listOf(ViewColumn("t", "이름", "title"), first, calendarDate))
+        assertEquals("d2", board.dateColumn!!.id)
+        assertEquals(setOf(java.time.LocalDate.of(2026, 12, 25)), board.takenDates()) // 하루 한 줄 가드도 같은 열을 본다
+        assertTrue(board.hasDateColumn)
+        // 역할이 없으면(옛 스냅샷) 첫 날짜 열
+        assertEquals("d1", board.copy(columnInfo = listOf(first, calendarDate.copy(role = ""))).dateColumn!!.id)
+        // 차트·필터를 위해 담아 둔 숨은 날짜 열은 새 항목의 날짜 열이 아니다(폴백에서 뺀다)
+        val title = ViewColumn("t", "이름", "title")
+        assertNull(board.copy(columnInfo = listOf(title, first.copy(role = ViewColumn.ROLE_CHART))).dateColumn)
+        assertNull(board.copy(columnInfo = listOf(title, first.copy(role = ViewColumn.ROLE_FILTER))).dateColumn)
+        assertEquals("d3", board.copy(columnInfo = listOf(title, first.copy(role = ViewColumn.ROLE_CHART), first.copy(id = "d3"))).dateColumn!!.id) // 역할 없는 날짜 열이 있으면 그것
+        // 날짜 열이 하나도 없으면 없다. 날짜가 아닌 열에 달린 역할은 무시한다.
+        assertNull(board.copy(columnInfo = listOf(ViewColumn("t", "이름", "title"), ViewColumn("n", "금액", "number", role = ViewColumn.ROLE_DATE))).dateColumn)
+        assertEquals(false, board.copy(columnInfo = emptyList()).hasDateColumn)
+    }
+
+    @Test
+    fun aViewWithoutADateColumnHasNoTakenDays() = runTest {
+        seed(ViewSnapshotEntity("v1", "ds", "메모", "table", columns = "이름", syncedAt = 5, columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title")))), emptyList())
+        assertEquals(emptySet<java.time.LocalDate>(), repo().observe("v1").first()!!.takenDates())
+    }
+
+    @Test
+    fun theBoardKnowsWhichWritesAreStillInTheirUndoWindow() = runTest {
+        // Phase 11c: 지연 중인 쓰기의 전송 시각을 위젯이 알아 '되돌리기' 줄을 그린다. 지난 시각은 세지 않는다.
+        val sep = VIEW_CELL_SEPARATOR
+        seed(ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = "이름${sep}완료", syncedAt = 5, columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title"), ViewColumn("dn", "완료", "checkbox")))), listOf(ViewRowEntity("v1", 0, "p1", "u1", "첫째${sep}", ViewJson.encodeTyped(mapOf("dn" to kotlinx.serialization.json.JsonPrimitive(false))))))
+        val clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-04T00:00:00Z"), java.time.ZoneOffset.UTC)
+        ViewWriter(db.viewDao(), db.eventDao(), { }, { }, clock).toggle("v1", "p1", "dn", sendDelayMs = ViewWriter.UNDO_WINDOW_MS)
+        val board = repo().observe("v1").first()!!
+        assertEquals(listOf(clock.millis() + 4_000), board.pendingSendAfter)
+        assertEquals(setOf("p1"), board.pendingPageIds) // 바꾸고 아직 안 보낸 행(필터에서 빠지는 중인지 가린다)
+        assertEquals(1, board.undoableAt(clock.millis() + 3_999))
+        assertEquals(0, board.undoableAt(clock.millis() + 4_000)) // 시각이 되면 보낼 쓰기라 되돌릴 수 없다
+    }
+
+    @Test
+    fun rowsExposeTheirTypedValuesAndTheViewItsConfigAndCompleteness() = runTest {
+        // Phase 11a: 칩 색·보드 그룹은 글자가 아니라 원래 값(옵션 ID)과 보기 설정이 필요하다.
+        val typed = ViewJson.encodeTyped(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)))
+        seed(
+            ViewSnapshotEntity("v1", "ds", "보드", "board", columns = "이름", syncedAt = 5, viewConfig = """{"group_by":{"property_id":"st"}}""", rowsComplete = false),
+            listOf(ViewRowEntity("v1", 0, "p1", "u1", "첫째", typed), ViewRowEntity("v1", 1, "p2", "u2", "둘째")),
+        )
+        val board = repo().observe("v1").first()!!
+        assertEquals(mapOf("st" to kotlinx.serialization.json.JsonPrimitive("o2"), "dn" to kotlinx.serialization.json.JsonPrimitive(true)), board.rows[0].typed)
+        assertEquals(emptyMap<String, kotlinx.serialization.json.JsonElement>(), board.rows[1].typed) // 값을 모르면 빈 맵
+        assertEquals(listOf("""{"group_by":{"property_id":"st"}}""", false), listOf(board.viewConfig, board.rowsComplete))
+        assertEquals("", board.filterJson)
+    }
+
+    @Test
     fun unknownViewIsNull() = runTest { assertNull(repo().observe("nope").first()) }
 
     @Test
@@ -79,5 +158,30 @@ class ViewRepositoryTest {
         assertEquals(emptyList<String>(), db.viewDao().all().map { it.viewId })
         assertEquals(0, db.viewDao().rows("v1").size)
         assertEquals(1, widgetUpdates)
+    }
+
+    @Test
+    fun boardKnowsWhichColumnsCanBeTapped() = runTest {
+        val sep = VIEW_CELL_SEPARATOR
+        val info = ViewJson.encodeColumns(
+            listOf(ViewColumn("t", "이름", "title"), ViewColumn("dn", "완료", "checkbox"), ViewColumn("pg", "쪽수", "number"), ViewColumn("st", "상태", "status", listOf(ViewChoice("a", "하나"), ViewChoice("b", "둘")))),
+        )
+        seed(
+            ViewSnapshotEntity("v1", "ds", "할 일", "table", columns = listOf("이름", "완료", "쪽수", "상태", "메모").joinToString(sep), columnInfo = info),
+            listOf(ViewRowEntity("v1", 0, "p1", "u", "a${sep}${sep}1${sep}x${sep}m")),
+        )
+        val board = repo().observe("v1").first()!!
+        assertEquals(listOf(null, "checkbox", null, "status", null), (0..4).map { board.tappableAt(it)?.type }) // 제목·숫자·메모는 눌러 바꾸지 않는다
+        assertEquals("dn", board.tappableAt(1)!!.id)
+    }
+
+    @Test
+    fun boardKnowsWhetherItCanCreateAndHasADateColumn() = runTest {
+        val withTitle = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title"), ViewColumn("d", "날짜", "date")))
+        seed(ViewSnapshotEntity("v1", "ds", "a", "table", columns = "이름", columnInfo = withTitle), emptyList())
+        seed(ViewSnapshotEntity("v2", "ds", "b", "table", columns = "이름"), emptyList()) // 아직 쓰기 정보를 받지 못함
+        seed(ViewSnapshotEntity("v3", "ds", "c", "board", columns = "이름", columnInfo = ViewJson.encodeColumns(listOf(ViewColumn("t", "이름", "title")))), emptyList())
+        assertEquals(listOf(true, false, true), listOf("v1", "v2", "v3").map { repo().observe(it).first()!!.canCreate })
+        assertEquals(listOf(true, false, false), listOf("v1", "v2", "v3").map { repo().observe(it).first()!!.hasDateColumn })
     }
 }

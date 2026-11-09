@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.habit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.AppHealth
+import com.ysdoing.notioncal.core.data.observeToday
 import com.ysdoing.notioncal.core.data.habit.HabitBoard
 import com.ysdoing.notioncal.core.data.habit.HabitRepository
 import com.ysdoing.notioncal.core.data.habit.ToggleResult
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -27,8 +29,14 @@ import javax.inject.Inject
 class HabitViewModel @Inject constructor(
     private val habits: HabitRepository,
     private val health: AppHealth,
+    clock: Clock,
 ) : ViewModel() {
     private val today = MutableStateFlow(habits.today())
+
+    init {
+        // 켜 둔 채 자정을 넘기면 '오늘' 칸을 옮긴다(그대로면 누를 때 어제로 기록된다).
+        viewModelScope.launch { observeToday(clock).collect { today.value = it } }
+    }
 
     /** null이면 아직 읽는 중. */
     val board: StateFlow<HabitBoard?> = today

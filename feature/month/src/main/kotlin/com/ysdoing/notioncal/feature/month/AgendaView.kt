@@ -217,7 +217,7 @@ private fun AgendaEventRow(event: CalendarEvent, continues: Boolean, onEventClic
         Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
             Text(
                 event.title,
-                modifier = Modifier.emphasisPill(event).alpha(if (event.done) 0.55f else 1f),
+                modifier = Modifier.emphasisPill(event).alpha(barTextAlpha(event)),
                 fontSize = scaled(15.sp, textScale),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

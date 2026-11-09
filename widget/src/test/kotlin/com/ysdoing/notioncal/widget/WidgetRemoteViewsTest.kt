@@ -78,6 +78,37 @@ class WidgetRemoteViewsTest {
     }
 
     @Test
+    fun denseMonthStaysFarBelowTheBinderLimit() = runTest(timeout = 3.minutes) {
+        // 주 타일(2026-11-03)·머리 버튼 모양이 바뀌었다. 주 타일은 View를 늘리지 않아야 한다(칸마다 깔면 Glance View 개수 한도 초과). RemoteViews는 Binder(약 1MB, 프로세스 공용)로 넘어가므로 가장 큰 경우도 여유를 둔다.
+        for (size in listOf(large, huge)) {
+            val remoteViews = GlanceRemoteViews().compose(context, size) { WidgetContent(WidgetSamples.state(WidgetSamples.dense, WidgetConfig(1, maxPerCell = 6))) }.remoteViews
+            val parcel = android.os.Parcel.obtain()
+            remoteViews.writeToParcel(parcel, 0)
+            val bytes = parcel.dataSize()
+            parcel.recycle()
+            println("MONTH_PARCEL ${size.width}x${size.height} = $bytes bytes")
+            org.junit.Assert.assertTrue("$size RemoteViews $bytes bytes", bytes < 400_000)
+        }
+    }
+
+    // 6주 42칸 모두에 서로 다른 일정 6개: 크고 칸당 줄이 많은 설정에서도 줄을 줄여 Glance 뷰 한도(500)에 들어와야 한다(넘으면 위젯이 오류 화면).
+    private val saturated = (0 until 42).flatMap { d ->
+        (0 until 6).map { n -> WidgetSamples.event("s$d-$n", java.time.LocalDate.of(2026, 9, 27).plusDays(d.toLong()).toString(), title = "일정 $d-$n") }
+    }
+
+    @Test
+    fun aSaturatedMonthStillFitsGlancesViewLimitInEverySetting() = runTest(timeout = 3.minutes) {
+        val failures = mutableListOf<String>()
+        for (size in listOf(large, huge, DpSize(358.dp, 640.dp))) {
+            for (font in listOf(70, 100, 150)) {
+                val ids = glanceIdsUsed(renderView(size, WidgetSamples.state(saturated, WidgetConfig(1, fontScale = font, maxPerCell = 6))))
+                if (ids > GLANCE_VIEW_ID_BUDGET) failures += "${size.width}x${size.height} font=$font uses $ids view ids"
+            }
+        }
+        org.junit.Assert.assertTrue(failures.joinToString(System.lineSeparator()), failures.isEmpty())
+    }
+
+    @Test
     fun screenshotMaterialYou() = runTest {
         renderView(large, WidgetSamples.state(config = WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU)))
             .captureRoboImage("src/test/screenshots/widget_material_you.png")
@@ -124,6 +155,24 @@ class WidgetRemoteViewsTest {
         for (size in listOf(DpSize(250.dp, 110.dp), DpSize(358.dp, 152.dp), DpSize(358.dp, 380.dp), huge)) {
             for (config in configs) renderView(size) { SplitWidgetContent(splitState(config, WidgetSamples.dense + WidgetSamples.events)) }
         }
+    }
+
+    /**
+     * 매일 쓰는 일정·가계부 위젯: 머리 새로고침이 + 앞, 가계부 요일·날짜는 일·토 색, 오늘은 칠한 네모(종합 진단 2단계).
+     * Robolectric은 목록(LazyColumn) 칸을 그리지 않아 일정 목록·습관 위젯 몸통은 이미지로 볼 수 없다.
+     */
+    @Test
+    fun screenshotDailyWidgets() = runTest(timeout = 2.minutes) {
+        val wide = DpSize(358.dp, 152.dp)
+        renderView(wide) { AgendaWidgetContent(AgendaWidget.uiState(WidgetSamples.today, WidgetConfig(1), WidgetSamples.events), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/agenda_4x2.png")
+        renderView(LedgerWidgetTest.LARGE) { LedgerWidgetContent(LedgerWidgetTest.state(), systemFontScale = 1f) }
+            .captureRoboImage("src/test/screenshots/ledger_4x4.png")
+        // 통합 탭: 탭 줄이 아래(2026-11-08).
+        val tabbed = WidgetConfig(1, selectedTab = com.ysdoing.notioncal.core.data.WidgetTab.LEDGER)
+        renderView(LedgerWidgetTest.LARGE) {
+            TabbedWidgetContent(tabbed, systemFontScale = 1f) { LedgerWidgetContent(LedgerWidgetState(LedgerWidgetTest.board(), tabbed), systemFontScale = 1f, framed = false) }
+        }.captureRoboImage("src/test/screenshots/tabbed_ledger_4x4.png")
     }
 
     @Test

@@ -69,8 +69,8 @@
 
     <string name="diag_section_debug">디버그 메뉴</string>
 
-    <string name="battery_guide_title">위젯이 노션 변경을 늦게 받을 수 있어요</string>
-    <string name="battery_guide_body">이 앱이 배터리 최적화 대상입니다. 삼성 기기는 백그라운드 동기화를 강하게 막으니, 배터리 최적화에서 \'제한 없음\'으로 바꾸고 절전 앱 목록에서 빼 주세요. 자세한 상태는 설정 → 진단에서 볼 수 있습니다.</string>
+    <string name="battery_guide_title">위젯이 노션 변경을 늦게 받을 수 있습니다</string>
+    <string name="battery_guide_body">이 앱이 배터리 최적화 대상입니다. 삼성 기기는 백그라운드 동기화를 강하게 막으니, 배터리 최적화에서 \'제한 없음\'으로 바꾸고 절전 앱 목록에서 빼세요. 자세한 상태는 설정 → 진단에서 볼 수 있습니다.</string>
     <string name="battery_guide_open">설정 열기</string>
     <string name="battery_guide_dismiss">다시 보지 않기</string>
 </resources>

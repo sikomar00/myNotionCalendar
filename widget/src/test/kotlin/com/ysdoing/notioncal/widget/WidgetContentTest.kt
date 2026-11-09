@@ -1,8 +1,13 @@
 package com.ysdoing.notioncal.widget
 
+import android.app.Activity
 import android.content.Context
+import android.view.View
+import android.widget.FrameLayout
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
+import androidx.glance.appwidget.GlanceRemoteViews
 import androidx.glance.appwidget.testing.unit.runGlanceAppWidgetUnitTest
 import androidx.glance.testing.unit.hasClickAction
 import androidx.glance.testing.unit.hasTestTag
@@ -11,14 +16,21 @@ import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.CalendarEvent
 import com.ysdoing.notioncal.core.data.WidgetConfig
 import com.ysdoing.notioncal.core.data.calendar.gridStart
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import java.time.DayOfWeek
 import java.time.LocalDate
+import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** WS-03 크기 단계별 구성과 WI-04 버튼을 Glance 단위 테스트로 확인한다. */
+@OptIn(ExperimentalGlanceRemoteViewsApi::class)
 @RunWith(RobolectricTestRunner::class)
 class WidgetContentTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -121,5 +133,25 @@ class WidgetContentTest {
         WidgetSamples.state().copy(holidays = mapOf(LocalDate.of(2026, 10, 9) to "한글날")),
     ) {
         onNode(androidx.glance.testing.unit.hasContentDescriptionEqualTo("10월 9일, 한글날, 일정 0개")).assertExists()
+    }
+
+    /** UX-02: 높이만 낮은 4×2(358×152, '작음')도 머리 버튼 눌림 폭이 48dp다. 폭이 좁은 2×2만 작은 글자 버튼 예외. */
+    @Test
+    fun wideButShortMonthKeepsFullTapWidthOnHeaderButtons() = runTest(timeout = 2.minutes) {
+        val tap = (48 * context.resources.displayMetrics.density).roundToInt()
+        assertEquals(tap, addButtonWidth(DpSize(358.dp, 152.dp)))
+        assertTrue(addButtonWidth(DpSize(110.dp, 110.dp)) < tap)
+    }
+
+    private suspend fun addButtonWidth(size: DpSize): Int {
+        val remoteViews = GlanceRemoteViews().compose(context, size) { WidgetContent(WidgetSamples.state()) }.remoteViews
+        val activity = Robolectric.buildActivity(Activity::class.java).create().get()
+        val frame = FrameLayout(activity)
+        frame.addView(remoteViews.apply(activity, frame))
+        val spec = { dp: Float -> View.MeasureSpec.makeMeasureSpec((dp * context.resources.displayMetrics.density).roundToInt(), View.MeasureSpec.EXACTLY) }
+        frame.measure(spec(size.width.value), spec(size.height.value))
+        val found = ArrayList<View>()
+        frame.findViewsWithText(found, context.getString(R.string.widget_add), View.FIND_VIEWS_WITH_CONTENT_DESCRIPTION)
+        return found.single().measuredWidth
     }
 }

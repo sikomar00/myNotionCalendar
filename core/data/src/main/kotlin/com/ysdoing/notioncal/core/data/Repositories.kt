@@ -8,8 +8,12 @@ import com.ysdoing.notioncal.core.data.db.EventRow
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.data.db.SyncLogDao
 import com.ysdoing.notioncal.core.data.db.SyncLogEntity
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -41,6 +45,9 @@ data class CalendarEvent(
     val showsEmphasis: Boolean get() = emphasized && !done
 
     val lastDate: LocalDate get() = endDate ?: startDate
+
+    /** [date]가 이 일정이 걸친 날(시작일~끝날)인가. */
+    fun occursOn(date: LocalDate): Boolean = !startDate.isAfter(date) && !lastDate.isBefore(date)
     val isMultiDay: Boolean get() = endDate != null && endDate.isAfter(startDate)
 }
 
@@ -111,11 +118,23 @@ class EditableEventRepository @Inject constructor(
     private val eventDao: EventDao,
     private val dataSourceDao: DataSourceDao,
 ) {
-    fun observe(pageId: String): Flow<EditableEvent?> =
-        combine(eventDao.observe(pageId), dataSourceDao.observeAll()) { event, sources ->
+    /**
+     * 새 일정을 편집하는 사이 생성이 노션에 가 id가 바뀌어도 같은 일정을 계속 낸다([CreatedPageIds]). 편집 폼은 id에 입력을 묶어 두므로
+     * 처음 연 id 그대로 내고, id가 바뀌는 순간 잠깐 지나가는 '없음'은 건너뛴다(폼이 닫혀 입력이 사라지지 않게).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observe(pageId: String): Flow<EditableEvent?> {
+        val events = CreatedPageIds.observe(pageId).flatMapLatest { id ->
+            if (id == pageId) {
+                eventDao.observe(id).filter { it != null || CreatedPageIds.resolve(pageId) == pageId } // 이름이 바뀌어 사라진 임시 행
+            } else {
+                eventDao.observe(id).dropWhile { it == null } // 진짜 행이 보이기 전의 '없음'만 건너뛰고, 그 뒤 지워지면 알린다
+            }
+        }
+        return combine(events, dataSourceDao.observeAll()) { event, sources ->
             val source = event?.let { e -> sources.firstOrNull { it.dataSourceId == e.dataSourceId } } ?: return@combine null
             EditableEvent(
-                event = EventRow(event, source.colorHex, source.useOptionColors).toCalendarEvent(),
+                event = EventRow(event.copy(pageId = pageId), source.colorHex, source.useOptionColors).toCalendarEvent(),
                 colorOptionId = event.colorOptionId,
                 colorOptions = parseColorOptions(source.colorOptions),
                 dataSourceName = source.name,
@@ -125,6 +144,7 @@ class EditableEventRepository @Inject constructor(
                 titleHasMention = event.titleHasMention,
             )
         }
+    }
 }
 
 @Singleton
@@ -142,17 +162,24 @@ class DataSourceRepository @Inject constructor(
 
     /** HB-01: 습관 기록과 🌱 습관은 한 쌍이라 함께 켜고 끈다. */
     suspend fun setEnabled(id: String, enabled: Boolean) {
-        db.withTransaction { pairOf(id).forEach { dataSourceDao.setEnabled(it, enabled) } }
+        // 켤 때는 🌱도 늘 켠다. 끌 때는 그 🌱를 쓰는 다른 기록 DB가 켜져 있으면 🌱는 둔다(🌱는 따로 켜고 끌 카드가 없다).
+        db.withTransaction { pairOf(id) { other -> !enabled && other.enabled }.forEach { dataSourceDao.setEnabled(it, enabled) } }
         widgetRefresher.requestUpdate()
     }
 
-    /** [id]와 짝(✅ 습관 기록 ↔ 🌱 습관, 거래내역 ↔ 예산·카테고리 마스터)의 ID. 일정 DB면 자기 자신만. */
-    private suspend fun pairOf(id: String): List<String> {
+    /**
+     * [id]와 짝(✅ 습관 기록 ↔ 🌱 습관, 거래내역 ↔ 예산·카테고리 마스터)의 ID. 일정 DB면 자기 자신만.
+     * 🌱는 [keptBy]가 참인 다른 기록 DB가 함께 쓰면 짝에서 뺀다: 기록 DB 둘이 한 🌱를 쓰면 한쪽을 끄거나 지울 때 다른 쪽의 습관까지 사라졌다.
+     */
+    private suspend fun pairOf(id: String, keptBy: (DataSourceEntity) -> Boolean = { true }): List<String> {
         val source = dataSourceDao.get(id) ?: return listOf(id)
         return when (source.sourceKind) {
-            SourceKind.HABIT_LOG -> listOfNotNull(id, source.linkDataSourceId)
+            SourceKind.HABIT_LOG -> listOf(id) + listOfNotNull(
+                source.linkDataSourceId?.takeIf { habit -> dataSourceDao.linkedTo(habit).none { it.dataSourceId != id && keptBy(it) } },
+            )
             SourceKind.HABIT, SourceKind.LEDGER -> listOf(id) + dataSourceDao.linkedTo(id).map { it.dataSourceId }
-            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.let { pairOf(it) } ?: listOf(id)
+            // 거래내역이 이미 지워졌으면(짝 잃음) 자기 자신만: 그래야 설정에서 따로 끄고 지울 수 있다.
+            SourceKind.BUDGET, SourceKind.CATEGORY -> source.linkDataSourceId?.takeIf { dataSourceDao.get(it) != null }?.let { pairOf(it) } ?: listOf(id)
             else -> listOf(id)
         }
     }
@@ -178,6 +205,13 @@ class DataSourceRepository @Inject constructor(
 
     suspend fun setExtraProps(id: String, propIds: List<String>) {
         dataSourceDao.setExtraPropIds(id, encodeIdList(propIds))
+    }
+
+    /** 다시 연결로 쓰지 않게 된 🌱([habitId])를, 이제 아무 기록 DB도 가리키지 않을 때만 지운다(설정에 홀로 남아 계속 동기화됐다). 지웠으면 true. */
+    suspend fun deleteOrphanHabit(habitId: String): Boolean {
+        if (dataSourceDao.linkedTo(habitId).isNotEmpty()) return false
+        delete(habitId)
+        return true
     }
 
     /** 등록을 지우면 그 DB의 로컬 일정(습관 기록·습관 캐시 포함)도 지운다. 습관 짝은 함께 지운다. 노션 원본은 건드리지 않는다. */

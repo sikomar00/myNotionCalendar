@@ -11,14 +11,18 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.ysdoing.notioncal.core.data.calendar.CalendarView
 import com.ysdoing.notioncal.core.data.calendar.CalendarZoom
 import com.ysdoing.notioncal.core.data.calendar.EventFilter
+import com.ysdoing.notioncal.core.data.recipe.PendingRecipe
+import com.ysdoing.notioncal.core.data.recipe.PendingRecipes
 import com.ysdoing.notioncal.core.data.reminders.ReminderRules
 import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
 import com.ysdoing.notioncal.core.data.weather.WeatherPlace
 import java.time.DayOfWeek
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,8 +31,8 @@ data class AppSettings(
     val weekStart: DayOfWeek = DayOfWeek.SUNDAY,
     /** MV-05 완료 항목 숨김. 기본은 취소선으로 표시(PRD §15). */
     val hideDone: Boolean = false,
-    /** NS-06 주기 동기화 간격(15·30·60분). PRD §15 기본 15분. */
-    val syncIntervalMinutes: Int = 15,
+    /** NS-06 주기 동기화 간격(15·30·60분). 기본 30분(2026-11-02 사용자 결정, PRD §15). */
+    val syncIntervalMinutes: Int = AppSettings.DEFAULT_SYNC_INTERVAL,
     /** WI-02 퀵 추가 기본 DB. null이면 첫 번째로 켠 DB. */
     val defaultDataSourceId: String? = null,
     /** S25-03 첫 실행 절전 안내 카드를 닫았는지. */
@@ -43,6 +47,8 @@ data class AppSettings(
     val hiddenOptionKeys: Set<String> = emptySet(),
     /** S25-10 Material You(배경화면 색) 사용. 기본 끔. */
     val dynamicColor: Boolean = false,
+    /** 앱 월 화면 왼쪽 주차 열(주 시작 요일 설정을 따른 주 번호). 기본 끔. */
+    val showWeekNumbers: Boolean = false,
     /** EX-02 공휴일 표시(폰의 공휴일 캘린더, READ_CALENDAR). 권한을 받으면 켠다. */
     val showHolidays: Boolean = false,
     /** EX-02 공휴일을 마지막으로 읽어 온 시각(epoch ms). 앱 열기 때 하루 한 번 다시 읽는다. */
@@ -67,11 +73,15 @@ data class AppSettings(
     val weatherPlace: WeatherPlace? = null,
     /** WX-03 월 보기에서 예보가 있는 모든 칸에 아이콘(기본은 오늘 칸만). */
     val weatherMonthCellIcons: Boolean = false,
+    /** ST-05 설정에서 마지막으로 본 카테고리. 아직 없으면 null(첫 실행은 연결). */
+    val lastSettingsTab: SettingsTab? = null,
 ) {
     val filter: EventFilter get() = EventFilter(hiddenSourceIds, hiddenOptionKeys, hideDone)
 
     companion object {
         val SYNC_INTERVALS = listOf(15, 30, 60)
+        /** 2026-11-02 사용자 결정: 주기 동기화는 30분(배터리와 최신성의 균형). 사용자가 고른 값이 있으면 그대로 둔다. */
+        const val DEFAULT_SYNC_INTERVAL = 30
     }
 }
 
@@ -85,14 +95,16 @@ class SettingsRepository @Inject constructor(
             AppSettings(
                 weekStart = prefs[WEEK_START]?.let { runCatching { DayOfWeek.valueOf(it) }.getOrNull() } ?: DayOfWeek.SUNDAY,
                 hideDone = prefs[HIDE_DONE] ?: false,
-                syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: 15,
+                syncIntervalMinutes = prefs[SYNC_INTERVAL]?.takeIf { it in AppSettings.SYNC_INTERVALS } ?: AppSettings.DEFAULT_SYNC_INTERVAL,
                 defaultDataSourceId = prefs[DEFAULT_SOURCE],
                 batteryGuideDismissed = prefs[BATTERY_GUIDE_DISMISSED] ?: false,
                 zoomPercent = (prefs[ZOOM_PERCENT] ?: CalendarZoom.DEFAULT).coerceIn(CalendarZoom.MIN, CalendarZoom.MAX),
                 hiddenSourceIds = prefs[HIDDEN_SOURCES].orEmpty(),
                 dynamicColor = prefs[DYNAMIC_COLOR] ?: false,
+                showWeekNumbers = prefs[SHOW_WEEK_NUMBERS] ?: false,
                 showHolidays = prefs[SHOW_HOLIDAYS] ?: false,
                 holidaysRefreshedAt = prefs[HOLIDAYS_REFRESHED_AT] ?: 0,
+                lastSettingsTab = SettingsTab.fromId(prefs[SETTINGS_TAB]),
                 remindersEnabled = prefs[REMINDERS_ENABLED] ?: false,
                 reminderRules = ReminderRules(
                     timedMinutes = prefs[TIMED_REMINDERS]?.let { saved ->
@@ -163,6 +175,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[DYNAMIC_COLOR] = enabled }
     }
 
+    suspend fun setShowWeekNumbers(show: Boolean) {
+        dataStore.edit { it[SHOW_WEEK_NUMBERS] = show }
+    }
+
     suspend fun setShowHolidays(show: Boolean) {
         dataStore.edit { it[SHOW_HOLIDAYS] = show }
         widgetRefresher.requestUpdate()
@@ -190,6 +206,40 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setRemindersHandledUntil(at: Long) {
         dataStore.edit { it[REMINDERS_HANDLED_UNTIL] = at }
+    }
+
+    /** Phase 11h: 핀(홈 화면에 놓기)을 요청한 레시피 구성을 위젯 번호가 정해질 때까지 보관한다. */
+    suspend fun setPendingRecipe(pending: PendingRecipe) {
+        dataStore.edit { it[PENDING_RECIPE] = PendingRecipes.encode(pending) }
+    }
+
+    /** 대기 레시피를 지우지 않고 읽는다(설정 화면이 시작 구성을 보려고. 화면이 다시 만들어져도 같은 구성이 보인다). */
+    suspend fun pendingRecipe(): PendingRecipe? = PendingRecipes.decode(dataStore.data.first()[PENDING_RECIPE])
+
+    /** 대기 레시피를 꺼내며 지운다(한 번의 갱신이라 핀 콜백과 설정 화면 중 먼저 온 쪽만 갖는다). 없거나 깨졌으면 null. */
+    suspend fun takePendingRecipe(): PendingRecipe? {
+        var taken: PendingRecipe? = null
+        dataStore.edit { prefs ->
+            taken = PendingRecipes.decode(prefs[PENDING_RECIPE])
+            prefs.remove(PENDING_RECIPE)
+        }
+        return taken
+    }
+
+    /**
+     * 위젯의 넘긴 달·사흘을 마지막으로 오늘로 되돌린 날(서울). 처음이면 null.
+     * 자정 알람이 오지 않는 경우(폰이 꺼진 채 자정, 시계를 손으로 넘김)에도 다음 방송에서 날짜가 바뀐 것을 알아채려고 쓴다.
+     * 위젯이 다시 받을 값이 아니라 [AppSettings]에 두지 않는다.
+     */
+    suspend fun widgetOffsetsDay(): LocalDate? = dataStore.data.first()[WIDGET_OFFSETS_DAY]?.let(LocalDate::ofEpochDay)
+
+    /** 되돌리기에 성공한 뒤에만 적는다(실패하면 다음 방송에서 다시 시도한다). */
+    suspend fun setWidgetOffsetsDay(day: LocalDate) {
+        dataStore.edit { it[WIDGET_OFFSETS_DAY] = day.toEpochDay() }
+    }
+
+    suspend fun setLastSettingsTab(tab: SettingsTab) {
+        dataStore.edit { it[SETTINGS_TAB] = tab.id }
     }
 
     suspend fun setWidgetPreviewsVersion(version: Int) {
@@ -245,14 +295,18 @@ class SettingsRepository @Inject constructor(
         val HIDDEN_OPTIONS = stringSetPreferencesKey("hidden_option_keys")
         // 2026-10-16 앱 정체성(노션 문서 색)을 기본으로 하면서 키를 바꿨다. 예전 키(dynamic_color, 기본 켬)의 값은 읽지 않는다.
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_v2")
+        val SHOW_WEEK_NUMBERS = booleanPreferencesKey("show_week_numbers")
         val SHOW_HOLIDAYS = booleanPreferencesKey("show_holidays")
         val HOLIDAYS_REFRESHED_AT = longPreferencesKey("holidays_refreshed_at")
+        val SETTINGS_TAB = stringPreferencesKey("settings_tab")
+        val PENDING_RECIPE = stringPreferencesKey("pending_recipe")
         val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val TIMED_REMINDERS = stringPreferencesKey("timed_reminder_minutes")
         val ALL_DAY_REMINDER_MINUTE = intPreferencesKey("all_day_reminder_minute")
         val ALL_DAY_REMINDER_DAY_BEFORE = booleanPreferencesKey("all_day_reminder_day_before")
         val REMINDERS_HANDLED_UNTIL = longPreferencesKey("reminders_handled_until")
         val WIDGET_PREVIEWS_VERSION = intPreferencesKey("widget_previews_version")
+        val WIDGET_OFFSETS_DAY = longPreferencesKey("widget_offsets_day")
         val SEEN_APP_UPDATE_AT = longPreferencesKey("seen_app_update_at")
         val DDAY_REMOVED_NOTICE = stringSetPreferencesKey("dday_removed_notice")
         val WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")

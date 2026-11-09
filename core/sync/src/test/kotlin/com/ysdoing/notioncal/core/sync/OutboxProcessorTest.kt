@@ -4,19 +4,25 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.DateValue
+import com.ysdoing.notioncal.core.data.EditableEventRepository
 import com.ysdoing.notioncal.core.data.EventChange
 import com.ysdoing.notioncal.core.data.EventWriter
+import com.ysdoing.notioncal.core.data.OutboxOp
+import kotlinx.coroutines.flow.first
 import com.ysdoing.notioncal.core.data.OutboxRequester
 import com.ysdoing.notioncal.core.data.PropValue
 import com.ysdoing.notioncal.core.data.parseExtraValues
 import com.ysdoing.notioncal.core.data.parsePropCatalog
 import com.ysdoing.notioncal.core.data.SelectValue
+import com.ysdoing.notioncal.core.data.SYNC_LOG_OUTBOX
 import com.ysdoing.notioncal.core.data.SyncTrigger
 import com.ysdoing.notioncal.core.data.WidgetRefresher
 import com.ysdoing.notioncal.core.data.db.DataSourceEntity
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
 import com.ysdoing.notioncal.core.notion.NotionError
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -47,8 +53,10 @@ class OutboxProcessorTest {
     private val notion = FakeNotionStore { now }
     private lateinit var writer: EventWriter
 
-    private fun processor() = OutboxProcessor(notion, notion, db, clock, WidgetRefresher.None, UnconfinedTestDispatcher())
-    private fun engine() = NotionSyncEngine(notion, db, clock, UnconfinedTestDispatcher(), WidgetRefresher.None)
+    /** 가짜 노션은 HTTP를 거치지 않아, 호출마다 계수기를 올려 주기당 요청 수 기록(PF-11)을 시험한다. */
+    private val requests = RequestCounter()
+    private fun processor() = OutboxProcessor(notion, notion, db, clock, WidgetRefresher.None, UnconfinedTestDispatcher(), requests)
+    private fun engine() = NotionSyncEngine(notion, db, clock, UnconfinedTestDispatcher(), WidgetRefresher.None, requests = requests)
 
     @Before
     fun setUp() {
@@ -224,6 +232,340 @@ class OutboxProcessorTest {
         assertNull(db.eventDao().get(tempId))
         val created = notion.pages.values.single { it.title == "영어 스터디 복습" }
         assertEquals(created.id, db.eventDao().get(created.id)!!.pageId)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun deletingACreateThatTimedOutTrashesThePageNotionAlreadyMade() = runTest {
+        // 생성이 시간 초과로 끝났지만 노션은 만들었다. 그 일정을 지우면 작업을 지우지 않고 찾아서 휴지통으로 보낸다(다음 동기화에 되살아나지 않게).
+        seeded()
+        val tempId = writer.create("ds", "지울 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        writer.trash(tempId)
+        assertEquals(OutboxOp.CANCEL_CREATE.name, db.outboxDao().all().single().op)
+
+        tick(30)
+        processor().process()
+
+        val made = notion.pages.values.single { it.title == "지울 일정" }
+        assertTrue(made.inTrash)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertNull(db.eventDao().get(made.id))
+        assertNull(db.eventDao().get(tempId))
+    }
+
+    @Test
+    fun deletingAnInterruptedCreateNeverTrashesAnotherEventWithTheSameTitleAndDate() = runTest {
+        // 같은 '커피'(10/20)를 하나 만들어 받아 두고, 1분 안에 또 만들었는데 노션에 닿기 전에 끊겼다. 둘째를 지워도 첫째는 남는다.
+        seeded()
+        writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        processor().process()
+        val first = notion.pages.values.single { it.title == "커피" }
+        val second = writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        var calls = 0
+        notion.onCall = { if (++calls == 2) throw com.ysdoing.notioncal.core.notion.NotionException(NotionError.Network) } // 스키마 다음, 생성 요청이 끊김
+        processor().process()
+        notion.onCall = null
+        writer.trash(second)
+        assertEquals(OutboxOp.CANCEL_CREATE.name, db.outboxDao().all().single().op)
+
+        processor().process()
+
+        assertFalse(notion.pages.getValue(first.id).inTrash)
+        assertEquals("커피", db.eventDao().get(first.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aRateLimitedCreateIsNotTreatedAsPossiblyCreated() = runTest {
+        // 429는 노션이 받기 전에 거절한 것이라 만들어지지 않았다: 시도를 세지 않아 다음에 '끊긴 생성 찾기'로 앞 기록을 고르지 않는다.
+        seeded()
+        writer.create("ds", "커피", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        var calls = 0
+        notion.onCall = { if (++calls == 2) throw com.ysdoing.notioncal.core.notion.NotionException(NotionError.RateLimited) }
+        processor().process()
+        assertEquals(0, db.outboxDao().all().single().attempts)
+    }
+
+    @Test
+    fun aTrashedPageThatSyncPutBackIsRemovedOnceTheTrashIsSent() = runTest {
+        // 지운 뒤 휴지통을 보내기 전에 동기화가 옛 페이지를 다시 넣었더라도, 휴지통을 보내면 로컬에서도 지운다(다음 대조까지 보이지 않게).
+        seeded()
+        val old = db.eventDao().get("p1")!!
+        writer.trash("p1")
+        db.eventDao().upsert(listOf(old))
+        processor().process()
+        assertTrue(notion.pages.getValue("p1").inTrash)
+        assertNull(db.eventDao().get("p1"))
+    }
+
+    @Test
+    fun writesAreSentInTheOrderTheyWereMadeEvenIfTheClockWentBack() = runTest {
+        // 시계를 한 시간 되돌린 뒤 같은 칸을 다시 고쳤다: 나중 바꿈이 마지막에 나가 노션에 남는다.
+        seeded()
+        writer.update("p1", EventChange(title = "첫 고침"))
+        now = now.minusSeconds(3_600)
+        writer.update("p1", EventChange(title = "둘째 고침"))
+        processor().process()
+        assertEquals("둘째 고침", notion.pages.getValue("p1").title)
+    }
+
+    @Test
+    fun aSheetOpenedOnANewEventKeepsWorkingAfterItGetsItsNotionId() = runTest {
+        // 새 일정의 편집 시트를 연 채 생성이 노션에 가 id가 바뀌었다: 같은 시트에서 고친 내용이 진짜 페이지로 간다.
+        seeded()
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        processor().process()
+        val realId = notion.pages.values.single { it.title == "새 일정" }.id
+
+        val opened = EditableEventRepository(db.eventDao(), db.dataSourceDao()).observe(tempId).first()
+        assertEquals(tempId, opened!!.event.pageId) // 시트의 입력이 묶인 id는 그대로다
+        writer.update(tempId, EventChange(title = "고친 새 일정"))
+        processor().process()
+
+        assertEquals("고친 새 일정", notion.pages.getValue(realId).title)
+        assertEquals("고친 새 일정", db.eventDao().get(realId)!!.title)
+    }
+
+    // --- SY-08(Phase 10-1): 아웃박스 결함 3건. 각각 고치기 전에 실패하는 시험이다.
+
+    @Test
+    fun editThenTrashLeavesNoLocalRowBehind() = runTest {
+        // ① 편집을 보낸 뒤 이어서 삭제하면, 편집 응답이 지운 일정을 다시 로컬에 되살리지 않는다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        writer.trash("p1")
+
+        processor().process()
+
+        assertNull(db.eventDao().get("p1"))
+        assertTrue(notion.pages.getValue("p1").inTrash)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aCreateInterruptedByCancellationDoesNotDuplicate() = runTest {
+        // ② 워커 중단(코루틴 취소)으로 생성 응답을 못 받아도 다음 실행이 먼저 찾아보고, 노션에 페이지가 1개만 생긴다.
+        seeded()
+        val tempId = writer.create("ds", "취소된 생성", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        assertEquals(1, db.outboxDao().all().single().attempts) // 보냈을 수 있으니 시도로 센다
+
+        tick(30)
+        processor().process()
+
+        assertEquals(1, notion.pages.values.count { it.title == "취소된 생성" })
+        assertNull(db.eventDao().get(tempId))
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anEditDuringAnInFlightCreateIsNotLost() = runTest {
+        // ③ 생성 요청을 보내는 사이 고친 내용은 생성 응답 뒤에 이어서 노션에 보낸다(합쳐진 행이 옛 내용으로 지워지지 않는다).
+        seeded()
+        val tempId = writer.create("ds", "처음 제목", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { writer.update(tempId, EventChange(title = "고친 제목")) }
+
+        processor().process()
+
+        val created = notion.pages.values.single { it.title == "고친 제목" || it.title == "처음 제목" }
+        assertEquals("고친 제목", created.title)
+        assertEquals("고친 제목", db.eventDao().get(created.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aRetriedCreateDoesNotAdoptAPageAnotherLocalEventAlreadyOwns() = runTest {
+        // 같은 제목으로 둘을 만들었고 둘째가 끊긴 뒤 재시도하면, 이미 첫째 일정이 맡은 페이지를 찾아 쓰지 않는다(키 충돌로 큐가 막힘).
+        seeded()
+        val first = writer.create("ds", "운동 반복", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        val second = writer.create("ds", "운동 반복", DateValue.allDay(LocalDate.of(2026, 10, 21)))
+        notion.afterCreate = { notion.afterCreate = { throw CancellationException("worker stopped") } } // 둘째 생성 뒤에 끊긴다
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        tick(30)
+
+        processor().process()
+
+        assertEquals(2, notion.pages.values.count { it.title == "운동 반복" })
+        assertNull(db.eventDao().get(first))
+        assertNull(db.eventDao().get(second))
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anEditMadeBetweenAnInterruptedCreateAndItsRetryReachesTheAdoptedPage() = runTest {
+        // 끊긴 생성을 재시도해 이미 만들어진 페이지를 찾아 쓸 때, 그 사이 합쳐진 편집도 그 페이지에 보낸다.
+        seeded()
+        val tempId = writer.create("ds", "원래 제목", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        writer.setDone(tempId, true) // 생성 작업에 합쳐진다
+        tick(30)
+
+        processor().process()
+
+        val page = notion.pages.values.single { it.title == "원래 제목" }
+        assertTrue(page.done)
+        assertTrue(db.eventDao().get(page.id)!!.done)
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aRejectedDuplicateLookupNeverDecidesTheFateOfTheCreate() = runTest {
+        // 중복 확인 조회를 노션이 400으로 거부해도 사용자의 새 일정을 '거부됨'으로 지우지 않는다.
+        seeded()
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process() // 시간 초과: 시도 1회
+        notion.queryError = NotionError.Validation("validation_error")
+        tick(30)
+
+        processor().process()
+
+        assertTrue(conflicts().none { it.kind == "REJECTED" })
+        // 알려진 절충(shortcut): 조회가 거부되면 이미 만들어진 페이지를 못 찾아 하나 더 만든다. 사용자의 새 일정을 잃는 것보다 낫다고 보았다.
+        assertEquals(2, notion.pages.values.count { it.title == "새 일정" })
+        assertNull(db.eventDao().get(tempId)) // 임시 ID는 진짜 페이지로 바뀌었다
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun aRenameBetweenAttemptsStillFindsTheInterruptedCreate() = runTest {
+        // 끊긴 생성 뒤 재시도 전에 로컬에서 제목을 고쳐도, 처음 보낸 제목으로 찾아 쓰고 새 제목은 이어서 보낸다(중복 없음).
+        seeded()
+        val tempId = writer.create("ds", "원래 이름", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.afterCreate = { throw CancellationException("worker stopped") }
+        try {
+            processor().process()
+        } catch (_: CancellationException) {
+            // 워커가 멈췄다.
+        }
+        writer.update(tempId, EventChange(title = "바뀐 이름"))
+        tick(30)
+
+        processor().process()
+
+        val page = notion.pages.values.single { it.title == "바뀐 이름" || it.title == "원래 이름" }
+        assertEquals("바뀐 이름", page.title)
+        assertEquals("바뀐 이름", db.eventDao().get(page.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+        assertTrue(conflicts().isEmpty())
+    }
+
+    @Test
+    fun aPageThatSyncAlreadyPulledIsAdoptedNotDuplicated() = runTest {
+        // 끊긴 생성 뒤 같은 워커 실행의 읽기 동기화가 만들어진 페이지를 받아 뒀어도, 재시도가 그 페이지를 쓰고 하나 더 만들지 않는다.
+        seeded()
+        val tempId = writer.create("ds", "동기화가 먼저 받음", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        tick()
+        engine().sync(SyncTrigger.PERIODIC)
+        tick()
+        val pulled = notion.pages.values.single { it.title == "동기화가 먼저 받음" }
+        assertEquals("동기화가 먼저 받음", db.eventDao().get(pulled.id)!!.title) // 읽기가 이미 받아 뒀다
+
+        processor().process()
+
+        assertEquals(1, notion.pages.values.count { it.title == "동기화가 먼저 받음" })
+        assertNull(db.eventDao().get(tempId))
+        assertEquals("동기화가 먼저 받음", db.eventDao().get(pulled.id)!!.title)
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anAdoptedCreateDoesNotClobberANewerNotionEdit() = runTest {
+        // 끊긴 생성을 찾아 쓸 때, 그 사이 노션에서 고친 값(완료)을 처음 보낸 값으로 되돌려 덮지 않는다.
+        seeded()
+        writer.create("ds", "찾아 쓸 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        notion.createTimesOutAfterCreating = true
+        processor().process()
+        val page = notion.pages.values.single { it.title == "찾아 쓸 일정" }
+        notion.editRemotely(page.id) { done = true }
+        tick(30)
+
+        processor().process()
+
+        assertTrue(notion.pages.getValue(page.id).done)
+        assertTrue(conflicts().isEmpty())
+        assertTrue(db.outboxDao().all().isEmpty())
+    }
+
+    @Test
+    fun anOutboxCycleLogsHowManyItSentAndHowManyRequestsItUsed() = runTest {
+        // PF-11·SY-04: 아웃박스 주기도 sync_log에 한 줄(보낸 수, 요청 수)을 남긴다. 헤더의 '마지막 동기화'는 이 줄로 바뀌지 않는다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        notion.onCall = { requests.hit() } // 가짜 노션의 호출을 계수기에 올린다
+        val before = requests.total
+
+        processor().process()
+
+        val log = db.syncLogDao().recent(1).single()
+        assertEquals(SYNC_LOG_OUTBOX, log.trigger)
+        assertEquals(listOf(1, "OK"), listOf(log.pushed, log.result))
+        assertEquals((requests.total - before).toInt(), log.requests)
+        assertTrue(log.requests > 0)
+    }
+
+    @Test
+    fun aReadSyncCycleLogsItsRequestCountToo() = runTest {
+        seeded()
+        notion.onCall = { requests.hit() }
+        val before = requests.total
+
+        engine().sync(SyncTrigger.PERIODIC)
+
+        val log = db.syncLogDao().recent(1).single()
+        assertEquals("PERIODIC", log.trigger)
+        assertEquals((requests.total - before).toInt(), log.requests)
+        assertTrue(log.requests > 0)
+    }
+
+    @Test
+    fun theOutcomeNamesTheSentPagesSoTheirViewsCanBeRefreshed() = runTest {
+        // SY-06: 보낸 페이지(생성은 만들어진 진짜 id)가 든 보기를 다시 받으려고 결과가 보낸 페이지를 알려 준다.
+        seeded()
+        writer.update("p1", EventChange(title = "고침"))
+        val tempId = writer.create("ds", "새 일정", DateValue.allDay(LocalDate.of(2026, 10, 20)))
+        writer.trash("p2")
+
+        val outcome = processor().process()
+
+        val created = notion.pages.values.single { it.title == "새 일정" }.id
+        assertEquals(setOf("p1", created, "p2"), outcome.sentPageIds)
+        assertTrue(tempId !in outcome.sentPageIds)
+        assertEquals(setOf("ds"), outcome.createdInSources) // 만든 페이지는 아직 어느 보기에도 없어 소스로 보기를 찾는다
+    }
+
+    @Test
+    fun aRetriedUpdateThatNotionAlreadyAppliedIsNotAConflict() = runTest {
+        // 워커가 멈추기 전에 노션이 이미 받은 편집을 재시도하면, 노션 값이 내 값과 같으니 충돌이 아니다.
+        seeded()
+        writer.update("p1", EventChange(title = "새 제목"))
+        notion.editRemotely("p1") { title = "새 제목" } // 노션은 이미 받았다
+        tick()
+
+        processor().process()
+
+        assertTrue(conflicts().isEmpty())
+        assertEquals("새 제목", db.eventDao().get("p1")!!.title)
         assertTrue(db.outboxDao().all().isEmpty())
     }
 

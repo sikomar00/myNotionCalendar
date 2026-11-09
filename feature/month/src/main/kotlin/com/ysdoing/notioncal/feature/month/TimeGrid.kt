@@ -36,6 +36,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -120,7 +121,14 @@ fun TimeGrid(
                             .offset(x = GUTTER + cellWidth * col)
                             .width(cellWidth)
                             .fillMaxHeight()
-                            .semantics { contentDescription = description }
+                            // 손가락은 pointerInput으로 받고, TalkBack 두 번 탭도 같은 날짜 시트를 열게 onClick을 둔다(월 그리드와 같게).
+                            .semantics {
+                                contentDescription = description
+                                onClick {
+                                    onDayClick(date)
+                                    true
+                                }
+                            }
                             .pointerInput(date) { detectTapGestures { onDayClick(date) } },
                     ) {
                         Box(Modifier.width(0.5.dp).fillMaxHeight().background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))

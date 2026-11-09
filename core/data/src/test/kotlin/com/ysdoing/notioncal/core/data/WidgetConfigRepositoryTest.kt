@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -29,6 +33,19 @@ class WidgetConfigRepositoryTest {
     @After
     fun tearDown() = db.close()
 
+    /** 위젯 버튼이 겹쳐 눌려도(빠른 ›› 두 번, › 직후 탭 바꾸기) 한쪽 저장이 다른 쪽을 덮지 않는다. */
+    @Test
+    fun overlappingWidgetTapsAllCount() = runTest {
+        withContext(Dispatchers.Default) {
+            val taps = (1..20).map { async { repo.shiftMonth(1, +1) } } + async { repo.selectTab(1, WidgetTab.LEDGER) } +
+                (1..5).map { async { repo.shiftTimeline(1, -1) } } + async { repo.setViewPage(1, 3) }
+            taps.awaitAll()
+        }
+        val config = repo.get(1)
+        assertEquals(listOf(20, -5, 3), listOf(config.monthOffset, config.timelineOffset, config.viewPage))
+        assertEquals(WidgetTab.LEDGER, config.selectedTab)
+    }
+
     @Test
     fun monthNavigationIsPerWidget() = runTest {
         repo.save(WidgetConfig(1, theme = WidgetTheme.DARK, fontScale = 120))
@@ -48,6 +65,40 @@ class WidgetConfigRepositoryTest {
     }
 
     @Test
+    fun timelineNavigationIsSeparateFromTheMonthAndPerWidget() = runTest {
+        // 한 위젯에 캘린더(달)와 타임라인(주·달)이 함께 있어도 서로의 이동량을 건드리지 않는다.
+        repo.save(WidgetConfig(1, monthOffset = 3, theme = WidgetTheme.DARK))
+        repo.shiftTimeline(1, +1)
+        repo.shiftTimeline(1, +1)
+        repo.shiftTimeline(2, -1)
+        assertEquals(listOf(3, 2), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset))
+        assertEquals(WidgetTheme.DARK, repo.get(1).theme) // 다른 설정은 그대로
+        assertEquals(-1, repo.get(2).timelineOffset)
+
+        repo.shiftMonth(1, +1)
+        assertEquals(listOf(4, 2), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset)) // 달 이동은 타임라인을 안 움직인다
+        repo.resetTimeline(1)
+        assertEquals(listOf(4, 0), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset)) // 타임라인 오늘은 달을 안 되돌린다
+        repo.shiftTimeline(1, +3)
+        repo.resetMonth(1)
+        assertEquals(listOf(0, 3), listOf(repo.get(1).monthOffset, repo.get(1).timelineOffset))
+    }
+
+    @Test
+    fun aNewDayBringsEveryParkedWidgetBackToTodayAndKeepsTheRest() = runTest {
+        repo.save(WidgetConfig(1, monthOffset = 2, theme = WidgetTheme.DARK, lastTab = 3))
+        repo.save(WidgetConfig(2, timelineOffset = -1))
+        repo.save(WidgetConfig(3, fontScale = 120))
+
+        assertEquals(2, repo.resetAllOffsets()) // 넘겨 둔 두 위젯만 바뀐다
+
+        assertEquals(listOf(0, 0), listOf(repo.get(1).monthOffset, repo.get(2).timelineOffset))
+        assertEquals(listOf(WidgetTheme.DARK, 3), listOf(repo.get(1).theme, repo.get(1).lastTab)) // 다른 설정은 그대로
+        assertEquals(120, repo.get(3).fontScale)
+        assertEquals(0, repo.resetAllOffsets())
+    }
+
+    @Test
     fun valuesAreClampedAndSetsRoundTrip() = runTest {
         repo.save(WidgetConfig(3, dataSourceIds = setOf("b", "a"), fontScale = 999, maxPerCell = 42, opacity = -5))
         val saved = repo.get(3)
@@ -55,6 +106,58 @@ class WidgetConfigRepositoryTest {
         assertEquals(150, saved.fontScale)
         assertEquals(6, saved.maxPerCell)
         assertEquals(0, saved.opacity)
+    }
+
+    /** Phase 11c IX-03·AD-05: 숫자 ± 단계값과 프리셋 목록은 위젯마다 저장되고, 잘못된 단계값(0·음수·NaN)은 1로 읽는다. */
+    @Test
+    fun numberStepAndPresetsRoundTripAndABadStepFallsBackToOne() = runTest {
+        repo.save(WidgetConfig(4, numberStep = 5.0, presetsJson = "[{\"name\":\"점심\"}]"))
+        assertEquals(5.0, repo.get(4).numberStep, 0.0)
+        assertEquals("[{\"name\":\"점심\"}]", repo.get(4).presetsJson)
+        listOf(0.0, -2.0, Double.NaN).forEach { bad ->
+            repo.save(WidgetConfig(5, numberStep = bad))
+            assertEquals(1.0, repo.get(5).numberStep, 0.0)
+        }
+    }
+
+    /** Phase 11d WL-02: 배치(보기 목록·탭 이름·비율)와 마지막으로 본 탭 번호는 위젯마다 저장된다. 탭 번호는 0 아래로 읽지 않는다. */
+    @Test
+    fun layoutAndLastTabRoundTripPerWidgetAndANegativeTabReadsAsZero() = runTest {
+        repo.save(WidgetConfig(6, layoutJson = "{\"mode\":\"TABS\"}", lastTab = 3))
+        repo.save(WidgetConfig(7, layoutJson = "{\"mode\":\"SECTIONS\"}", lastTab = -2))
+        assertEquals(listOf("{\"mode\":\"TABS\"}", 3), listOf(repo.get(6).layoutJson, repo.get(6).lastTab))
+        assertEquals(listOf("{\"mode\":\"SECTIONS\"}", 0), listOf(repo.get(7).layoutJson, repo.get(7).lastTab))
+    }
+
+    /** Phase 11g AD-02: 입력 양식은 위젯마다 저장되고 다른 설정을 저장해도 남는다. */
+    @Test
+    fun formJsonRoundTripsPerWidgetAndSurvivesOtherSaves() = runTest {
+        repo.save(WidgetConfig(8, formJson = "{\"v1\":{}}"))
+        repo.save(WidgetConfig(9))
+        repo.save(repo.get(8).copy(theme = WidgetTheme.DARK))
+        assertEquals("{\"v1\":{}}", repo.get(8).formJson)
+        assertEquals("", repo.get(9).formJson)
+    }
+
+    /** Phase 12c IX-07: 액션 버튼 목록은 위젯마다 저장되고 다른 설정을 저장해도 남는다. */
+    @Test
+    fun actionsJsonRoundTripsPerWidgetAndSurvivesOtherSaves() = runTest {
+        repo.save(WidgetConfig(10, actionsJson = "[{\"id\":\"a1\"}]"))
+        repo.save(WidgetConfig(11))
+        repo.save(repo.get(10).copy(theme = WidgetTheme.DARK))
+        assertEquals("[{\"id\":\"a1\"}]", repo.get(10).actionsJson)
+        assertEquals("", repo.get(11).actionsJson)
+    }
+
+    /** WL-02: 탭을 누르면 그 위젯의 탭 번호만 바뀌고 나머지 설정·다른 위젯은 그대로다. */
+    @Test
+    fun selectingALayoutTabKeepsTheRestAndOtherWidgets() = runTest {
+        repo.save(WidgetConfig(6, viewId = "v", lastTab = 1))
+        repo.save(WidgetConfig(7, lastTab = 2))
+        repo.selectLayoutTab(6, 4)
+        repo.selectLayoutTab(7, -3)
+        assertEquals(listOf("v", 4), listOf(repo.get(6).viewId, repo.get(6).lastTab))
+        assertEquals(0, repo.get(7).lastTab)
     }
 
     /** WG-11: 고른 탭은 위젯마다 따로이고, 달 이동·설정 저장(행 전체 upsert) 뒤에도 남는다. */

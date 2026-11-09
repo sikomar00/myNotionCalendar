@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.feature.ledger
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -26,11 +27,13 @@ class LedgerInputTest {
     private val today = LocalDate.of(2026, 10, 19)
     private val saved = mutableListOf<List<Any?>>()
 
+    private val loaded = mutableListOf<Flow>()
+
     private fun show(date: LocalDate = today, categories: List<String> = listOf("식비", "교통", "카페/간식")) {
         compose.setContent {
             MaterialTheme {
                 LedgerInputContent(
-                    date = date, today = today, categories = categories, onFlowChange = {},
+                    date = date, today = today, categories = categories, onFlowChange = { loaded += it },
                     onSave = { amount, flow, category, title -> saved += listOf(amount, flow, category, title) }, onCancel = {},
                 )
             }
@@ -65,5 +68,20 @@ class LedgerInputTest {
         compose.onNodeWithText("저장").performClick()
         assertEquals(Flow.IN, saved.single()[1])
         compose.onNodeWithText("예정").assertExists()
+    }
+
+    /** 화면을 돌려 시트가 다시 만들어져도 되살린 '수입'의 대분류를 읽는다(지출 대분류로 수입을 저장하지 않게). */
+    @Test
+    fun recreatedSheetLoadsCategoriesOfTheRestoredFlow() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            MaterialTheme {
+                LedgerInputContent(date = today, today = today, categories = listOf("월급"), onFlowChange = { loaded += it }, onSave = { _, _, _, _ -> }, onCancel = {})
+            }
+        }
+        compose.onNodeWithText("수입").performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+        assertEquals(listOf(Flow.OUT, Flow.IN, Flow.IN), loaded) // 처음 열 때 지출, 수입을 누름, 다시 만들어진 뒤 수입
     }
 }

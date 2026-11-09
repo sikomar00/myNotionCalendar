@@ -1,11 +1,17 @@
 package com.ysdoing.notioncal.feature.quicksheet
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.StateRestorationTester
@@ -15,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -210,6 +217,47 @@ class QuickSheetUiTest {
         assertEquals("p1" to true, toggled)
     }
 
+    // --- Phase 11b 부록 A 회귀 시험
+
+    @Test
+    fun addFormKeepsItsTitleLabelWhileTyping() {
+        // A-9: placeholder만 쓰면 입력하는 순간 무슨 칸인지 사라진다. 보이는 label이 남아야 한다.
+        compose.setContent { MaterialTheme { AddForm(day, listOf(source), "ds", autoFocus = false, onAdd = {}) } }
+        compose.onNodeWithText("제목").performTextInput("회의")
+        compose.onNodeWithText("제목").assertExists()
+    }
+
+    @Test
+    fun dayListHasNoScrollOfItsOwn() {
+        // A-10: 시트가 이미 스크롤하므로 목록 안에서 다시 스크롤하지 않는다. 일정이 많아도 모두 목록에 있다.
+        val many = (1..30).map { event("p$it", "일정 $it") }
+        compose.setContent { MaterialTheme { DayList(many, onToggle = { _, _ -> }, onOpen = {}) } }
+        compose.onAllNodes(hasScrollAction()).assertCountEquals(0)
+        compose.onNodeWithText("일정 30").assertExists()
+    }
+
+    @Test
+    fun numberAndUrlFieldsAreNamedByTheirLabel() {
+        // A-11: 속성 이름이 입력칸의 label이어야 낭독이 칸과 이어진다(따로 쓴 글자는 입력칸이 아니다).
+        var saved: EventChange? = null
+        compose.setContent { MaterialTheme { EventEditorForm(extraItem, onSave = { saved = it }, onDelete = {}) } }
+        compose.onNodeWithText("Cost").performTextInput("5")
+        compose.onNodeWithText("URL").performTextInput("https://a.example")
+        compose.onNodeWithText("저장").performClick()
+        assertEquals(setOf("cOs", "uRl"), saved!!.props!!.keys)
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-xxhdpi", fontScale = 2.0f)
+    fun editorButtonsAreAllReachableAtTheLargestFont() {
+        // A-7·UX-04: 저장은 폭 전체, 열기·삭제는 아래 줄에서 줄바꿈한다. 글꼴 2.0에서도 셋 다 닿는다.
+        val item = EditableEvent(event("p1", "영어 스터디"), null, emptyList(), "Calendar")
+        compose.setContent {
+            MaterialTheme { Column(Modifier.verticalScroll(rememberScrollState())) { EventEditorForm(item, onSave = {}, onDelete = {}) } }
+        }
+        listOf("저장", "노션에서 열기", "삭제").forEach { compose.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
+    }
+
     @Test
     fun addFormSurvivesProcessRecreation() {
         // PF-06: 활동 유지 안 함·프로세스 회수 뒤에도 입력 중인 제목과 시간이 남는다.
@@ -259,9 +307,12 @@ class QuickSheetUiTest {
         val v = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(16, 30)))
         assertEquals(day.atTime(15, 0).atZone(APP_ZONE).toInstant().toEpochMilli(), v.startTime)
         assertEquals(90 * 60_000L, v.endTime!! - v.startTime!!)
-        // 종료가 시작보다 이르면 1시간으로 맞춘다.
-        val fixed = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(14, 0)))
-        assertEquals(3_600_000L, fixed.endTime!! - fixed.startTime!!)
+        // 종료가 시작보다 이르면 자정을 넘겨 다음 날 끝난다(23:00–01:00은 2시간). 같으면 1시간으로 맞춘다.
+        val overnight = dateValueOf(day, TimeRange(LocalTime.of(23, 0), LocalTime.of(1, 0)))
+        assertEquals(2 * 3_600_000L, overnight.endTime!! - overnight.startTime!!)
+        assertEquals(day.plusDays(1).toString(), overnight.endDate)
+        val same = dateValueOf(day, TimeRange(LocalTime.of(15, 0), LocalTime.of(15, 0)))
+        assertEquals(3_600_000L, same.endTime!! - same.startTime!!)
         assertEquals("2026-10-13", dateValueOf(day, null).startDate)
         assertNull(dateValueOf(day, null).startTime)
     }

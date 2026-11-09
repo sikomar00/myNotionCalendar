@@ -5,6 +5,12 @@ plugins {
     alias(libs.plugins.notioncal.android.compose)
     alias(libs.plugins.notioncal.hilt)
     alias(libs.plugins.androidx.baselineprofile)
+    alias(libs.plugins.roborazzi)
+}
+
+// 설정 화면 기준 이미지는 저장소에 두고 verifyRoborazziDebug로 비교한다.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
 
 // PF-04: Sentry DSN은 저장소에 넣지 않는다. local.properties의 sentry.dsn이 없으면 수집을 끈 채로 빌드된다.
@@ -22,8 +28,8 @@ android {
 
     defaultConfig {
         applicationId = "com.ysdoing.notioncal"
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 10
+        versionName = "0.9.0"
         buildConfigField("String", "SENTRY_DSN", "\"$sentryDsn\"")
     }
 
@@ -51,6 +57,7 @@ dependencies {
     implementation(project(":feature:ledger"))
     implementation(project(":feature:month"))
     implementation(project(":feature:quicksheet"))
+    implementation(project(":feature:viewer"))
     implementation(project(":widget"))
 
     implementation(libs.androidx.core.ktx)
@@ -73,5 +80,7 @@ dependencies {
     testImplementation(libs.room.testing)
     testImplementation(libs.datastore.preferences)
     testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
     debugImplementation(libs.compose.ui.test.manifest)
 }

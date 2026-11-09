@@ -211,6 +211,34 @@ class NotionSyncEngineTest {
         assertEquals(setOf("a"), local().keys)
     }
 
+    /** 범위(±2개월) 밖이 된 지난 일정도 노션에서 지우면 하루 1회 전체 대조에서 정리한다(지난 달 가계부 합계에 남지 않게). 노션에 있는 것은 남긴다. */
+    @Test
+    fun fullReconcileAlsoRemovesOldEventsTrashedInNotion() = runTest {
+        register()
+        remote.put("old-trashed", "지난 거래", "2026-10-12")
+        remote.put("old-kept", "남을 거래", "2026-10-13")
+        engine().sync(SyncTrigger.APP_OPEN)
+
+        now = Instant.parse("2027-01-20T03:00:00Z") // 석 달 뒤: 보이는 범위는 2026-11-01부터
+        remote.trash("old-trashed")
+        engine().sync(SyncTrigger.PERIODIC)
+
+        assertEquals(setOf("old-kept"), local().keys)
+    }
+
+    /** 시계를 앞당긴 채 동기화했다가 되돌리면 기록한 대조 시각이 미래다: 하루 1회 대조가 멈추지 않고 바로 돈다. */
+    @Test
+    fun aFullReconcileTimeInTheFutureDoesNotStopReconciling() = runTest {
+        register()
+        remote.put("trashed", "지울 항목", "2026-10-11")
+        now = Instant.parse("2026-10-20T03:00:00Z") // 일주일 앞당긴 시계
+        engine().sync(SyncTrigger.PERIODIC)
+        now = Instant.parse("2026-10-13T03:00:00Z") // 시계를 바로잡음
+        remote.trash("trashed")
+        engine().sync(SyncTrigger.PERIODIC) // 주기 동기화는 대조할 때일 때만 지운 것을 찾는다
+        assertTrue(local().isEmpty())
+    }
+
     @Test
     fun noRegisteredSourcesWritesNoLog() = runTest {
         engine().sync(SyncTrigger.APP_OPEN)

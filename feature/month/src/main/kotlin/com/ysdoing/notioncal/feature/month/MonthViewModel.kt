@@ -3,6 +3,7 @@ package com.ysdoing.notioncal.feature.month
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ysdoing.notioncal.core.data.APP_ZONE
+import com.ysdoing.notioncal.core.data.observeToday
 import com.ysdoing.notioncal.core.data.AppHealth
 import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.CalendarEvent
@@ -97,8 +98,12 @@ class MonthViewModel @Inject constructor(
 
     private val _today = MutableStateFlow(today())
 
-    /** 앱이 다시 보일 때마다 다시 계산한다(PRD §7-4, 자정을 넘겨 열어 둔 경우). */
+    /** 앱이 다시 보일 때마다, 그리고 켜 둔 채 자정을 넘기면 다시 계산한다(PRD §7-4). */
     val today: StateFlow<LocalDate> = _today.asStateFlow()
+
+    init {
+        viewModelScope.launch { observeToday(clock).collect { _today.value = it } }
+    }
 
     val settings: StateFlow<AppSettings?> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)

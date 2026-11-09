@@ -165,21 +165,27 @@ private fun schemaMessage(dbName: String, issue: SchemaIssue): String {
     }
 }
 
+/**
+ * 배너 버튼이 여는 설정. ST-04: 인증 오류는 연결, 공유 안 됨은 데이터베이스, 첫 안내(DB 없음)는 카테고리 없이 열어 앱이 고른다
+ * (토큰이 없으면 연결, 있으면 데이터베이스).
+ */
+internal data class BannerActions(val onOpenSettings: () -> Unit, val onOpenConnection: () -> Unit, val onOpenDatabase: () -> Unit)
+
 /** PF-05: 인증·공유 오류여도 화면 내용은 그대로 두고 안내만 띄운다. 로그인 화면으로 강제 이동하지 않는다. */
 @Composable
-internal fun Banner(header: SyncHeader, onOpenSettings: () -> Unit) {
-    val message = when {
-        !header.hasSources -> null
-        header.lastError == "Unauthorized" -> R.string.month_banner_auth
-        header.lastError == "NotShared" -> R.string.month_banner_not_shared
-        else -> null
+internal fun Banner(header: SyncHeader, actions: BannerActions) {
+    val (message, onOpen) = when {
+        !header.hasSources -> null to actions.onOpenSettings
+        header.lastError == "Unauthorized" -> R.string.month_banner_auth to actions.onOpenConnection
+        header.lastError == "NotShared" -> R.string.month_banner_not_shared to actions.onOpenDatabase
+        else -> null to actions.onOpenSettings
     }
     if (!header.hasSources) {
         Card(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
             Column(Modifier.padding(16.dp)) {
                 Text(stringResource(R.string.month_onboarding_title), style = MaterialTheme.typography.titleMedium)
                 Text(stringResource(R.string.month_onboarding_body), style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.month_banner_action)) }
+                TextButton(onClick = actions.onOpenSettings) { Text(stringResource(R.string.month_banner_action)) }
             }
         }
     } else if (message != null) {
@@ -189,7 +195,7 @@ internal fun Banner(header: SyncHeader, onOpenSettings: () -> Unit) {
         ) {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Text(stringResource(message), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
-                TextButton(onClick = onOpenSettings) { Text(stringResource(R.string.month_banner_action)) }
+                TextButton(onClick = onOpen) { Text(stringResource(R.string.month_banner_action)) }
             }
         }
     }

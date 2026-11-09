@@ -150,6 +150,31 @@ class EventDaoTest {
         assertEquals("c1", db.eventDao().get("c1")!!.pageId)
     }
 
+    /** 기록 DB 둘이 한 🌱를 함께 쓰면, 한쪽을 지우거나 꺼도 🌱와 그 습관은 남는다(다른 기록 DB가 쓴다). 마지막 기록 DB를 지우면 함께 지운다. */
+    @Test
+    fun aHabitDatabaseSharedByTwoLogsStaysUntilTheLastLogGoes() = runTest {
+        db.dataSourceDao().upsert(source("log-a", kind = SourceKind.HABIT_LOG, link = "habits"))
+        db.dataSourceDao().upsert(source("log-b", kind = SourceKind.HABIT_LOG, link = "habits"))
+        db.dataSourceDao().upsert(source("habits", kind = SourceKind.HABIT))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+
+        repository.setEnabled("log-a", false)
+        assertEquals(true, db.dataSourceDao().get("habits")!!.enabled)
+        repository.setEnabled("log-b", false) // 둘 다 끄면 🌱도 끈다
+        assertEquals(false, db.dataSourceDao().get("habits")!!.enabled)
+        repository.setEnabled("log-a", true) // 하나라도 켜면 🌱도 켠다
+        assertEquals(true, db.dataSourceDao().get("habits")!!.enabled)
+        // 다시 연결로 쓰지 않게 된 🌱는 아무도 가리키지 않을 때만 지운다.
+        assertEquals(false, repository.deleteOrphanHabit("habits"))
+        repository.delete("log-a")
+        assertEquals("habits", db.dataSourceDao().get("habits")?.dataSourceId)
+        repository.delete("log-b")
+        assertEquals(null, db.dataSourceDao().get("habits"))
+        db.dataSourceDao().upsert(source("lonely", kind = SourceKind.HABIT))
+        assertEquals(true, repository.deleteOrphanHabit("lonely"))
+        assertEquals(null, db.dataSourceDao().get("lonely"))
+    }
+
     /** LD-01: 거래내역·예산·카테고리 마스터는 한 묶음으로 켜고 끄고 지운다(어느 쪽에서 해도). 예산·카테고리 캐시도 지운다. */
     @Test
     fun ledgerTrioIsToggledAndDeletedTogether() = runTest {
@@ -167,5 +192,16 @@ class EventDaoTest {
         assertEquals(listOf(null, null, null), listOf("ledger", "budget", "category").map { db.dataSourceDao().get(it) })
         assertEquals(emptyList<Any>(), db.ledgerDao().observeBudgets().first())
         assertEquals("cal", db.dataSourceDao().get("cal")!!.dataSourceId)
+    }
+
+    /** 거래내역을 잃은 예산(설정에 혼자 카드로 보인다)도 따로 끄고 지울 수 있다. */
+    @Test
+    fun anOrphanBudgetCanBeToggledAndDeletedOnItsOwn() = runTest {
+        db.dataSourceDao().upsert(source("budget", kind = SourceKind.BUDGET, link = "gone"))
+        val repository = DataSourceRepository(db, db.dataSourceDao(), db.eventDao(), WidgetRefresher.None)
+        repository.setEnabled("budget", false)
+        assertEquals(false, db.dataSourceDao().get("budget")!!.enabled)
+        repository.delete("budget")
+        assertEquals(null, db.dataSourceDao().get("budget"))
     }
 }

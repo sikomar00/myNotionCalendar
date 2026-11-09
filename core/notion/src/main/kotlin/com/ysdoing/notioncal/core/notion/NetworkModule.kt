@@ -2,6 +2,7 @@ package com.ysdoing.notioncal.core.notion
 
 import com.ysdoing.notioncal.core.notion.http.NotionHeadersInterceptor
 import com.ysdoing.notioncal.core.notion.http.RateLimitInterceptor
+import com.ysdoing.notioncal.core.notion.http.RequestCounter
 import com.ysdoing.notioncal.core.notion.http.RetryInterceptor
 import com.ysdoing.notioncal.core.notion.http.SocketTagInterceptor
 import com.ysdoing.notioncal.core.notion.http.TokenBucket
@@ -38,8 +39,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideNotionApi(tokenProvider: TokenProvider, json: Json): NotionApi =
-        createNotionApi(NotionApiConfig.BASE_URL.toHttpUrl(), tokenProvider, json)
+    fun provideRequestCounter(): RequestCounter = RequestCounter()
+
+    @Provides
+    @Singleton
+    fun provideNotionApi(tokenProvider: TokenProvider, json: Json, counter: RequestCounter): NotionApi =
+        createNotionApi(NotionApiConfig.BASE_URL.toHttpUrl(), tokenProvider, json, counter = counter)
 }
 
 val NotionJson: Json = Json {
@@ -52,7 +57,7 @@ val NotionJson: Json = Json {
 const val NOTION_SOCKET_TAG = 0x4E01
 
 /**
- * 인터셉터 순서: 소켓 태그 → 헤더 → 재시도 → 속도 제한(재시도마다 토큰을 소비). 테스트에서도 같은 구성을 쓴다.
+ * 인터셉터 순서: 소켓 태그 → 헤더 → 재시도 → 속도 제한(재시도마다 토큰을 소비) → 요청 계수(PF-11, 실제로 나가는 시도마다 하나). 테스트에서도 같은 구성을 쓴다.
  * [socketTag]가 null이면 태그를 붙이지 않는다(android.net 없이 도는 JVM 단위 테스트용).
  */
 fun createNotionApi(
@@ -62,6 +67,7 @@ fun createNotionApi(
     retry: RetryInterceptor = RetryInterceptor(),
     bucket: TokenBucket = TokenBucket(),
     socketTag: Int? = NOTION_SOCKET_TAG,
+    counter: RequestCounter = RequestCounter(),
 ): NotionApi {
     val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -72,6 +78,7 @@ fun createNotionApi(
         .addInterceptor(NotionHeadersInterceptor(tokenProvider))
         .addInterceptor(retry)
         .addInterceptor(RateLimitInterceptor(bucket))
+        .addInterceptor(counter.interceptor)
         .build()
     return Retrofit.Builder()
         .baseUrl(baseUrl)

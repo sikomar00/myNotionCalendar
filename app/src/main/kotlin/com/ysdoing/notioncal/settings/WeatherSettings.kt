@@ -10,7 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,7 +23,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,7 +31,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -46,6 +43,7 @@ import com.ysdoing.notioncal.core.data.AppSettings
 import com.ysdoing.notioncal.core.data.weather.Region
 import com.ysdoing.notioncal.core.data.weather.WeatherLocationMode
 import com.ysdoing.notioncal.core.data.weather.WeatherStatus
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.designsystem.WeatherAttribution
 import java.time.format.DateTimeFormatter
 
@@ -85,19 +83,12 @@ fun WeatherSection(settings: AppSettings, status: WeatherStatus, actions: Weathe
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.settings_weather))
-                Text(stringResource(R.string.settings_weather_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(
-                checked = settings.weatherEnabled,
-                onCheckedChange = { on ->
-                    actions.onEnable(on)
-                    if (on && settings.weatherPlace == null) picking = true // 위치를 먼저 고른다
-                },
-                modifier = Modifier.testTag("weatherSwitch"),
-            )
+        SwitchRow(
+            stringResource(R.string.settings_weather), settings.weatherEnabled,
+            modifier = Modifier.testTag("weatherSwitch"), note = stringResource(R.string.settings_weather_note),
+        ) { on ->
+            actions.onEnable(on)
+            if (on && settings.weatherPlace == null) picking = true // 위치를 먼저 고른다
         }
         if (!settings.weatherEnabled) return@Column
 
@@ -130,10 +121,7 @@ fun WeatherSection(settings: AppSettings, status: WeatherStatus, actions: Weathe
         if (settings.weatherLocationMode == WeatherLocationMode.REGION) {
             OutlinedButton(onClick = { picking = true }) { Text(stringResource(R.string.settings_weather_pick_region)) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings_weather_month_cells), Modifier.weight(1f))
-            Switch(checked = settings.weatherMonthCellIcons, onCheckedChange = actions.onMonthCells)
-        }
+        SwitchRow(stringResource(R.string.settings_weather_month_cells), settings.weatherMonthCellIcons, onChange = actions.onMonthCells)
         status.fetchedAt?.let {
             Text(
                 stringResource(R.string.settings_weather_fetched, it.atZone(APP_ZONE).format(fetchedFormat)),

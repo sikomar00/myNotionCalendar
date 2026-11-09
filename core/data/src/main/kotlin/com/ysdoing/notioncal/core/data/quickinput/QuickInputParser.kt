@@ -98,7 +98,8 @@ object QuickInputParser {
     private val timeRange = Regex("$TIME${TILDE}$TIME$UNTIL$PARTICLE")
     private val timeSingle = Regex("$TIME$PARTICLE")
 
-    fun parse(input: String, today: LocalDate): QuickInput {
+    /** [withTime]이 거짓이면 시각은 찾지 않는다(시각 낱말이 제목에 남는다). 날짜만 쓰는 보기 시트가 쓴다. */
+    fun parse(input: String, today: LocalDate, withTime: Boolean = true): QuickInput {
         var text = " ${input.trim()} "
         var date: LocalDate? = null
         var endDate: LocalDate? = null
@@ -114,7 +115,7 @@ object QuickInputParser {
 
         var start: LocalTime? = null
         var end: LocalTime? = null
-        val range = timeRange.find(text)
+        val range = timeRange.takeIf { withTime }?.find(text)
         if (range != null) {
             val g = range.groupValues
             val s = time(g[1], g[2], g[3], g[4], g[5])
@@ -126,7 +127,7 @@ object QuickInputParser {
             }
         }
         if (start == null) {
-            val single = timeSingle.find(text)
+            val single = timeSingle.takeIf { withTime }?.find(text)
             if (single != null) {
                 val g = single.groupValues
                 time(g[1], g[2], g[3], g[4], g[5])?.let {

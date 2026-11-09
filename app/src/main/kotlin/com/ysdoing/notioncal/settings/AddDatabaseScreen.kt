@@ -36,6 +36,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,14 +57,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ysdoing.notioncal.R
 import com.ysdoing.notioncal.core.data.NotionColors
+import com.ysdoing.notioncal.core.designsystem.SwitchRow
 import com.ysdoing.notioncal.core.notion.NotionError
 import com.ysdoing.notioncal.core.sync.CompanionInspection
 import com.ysdoing.notioncal.core.sync.CompanionResult
 import com.ysdoing.notioncal.core.sync.DatabaseInspection
 import com.ysdoing.notioncal.core.sync.LedgerProblem
 import com.ysdoing.notioncal.core.sync.LedgerSuggester
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Switch
 import androidx.compose.ui.Alignment
 import com.ysdoing.notioncal.core.sync.MappingChoice
 import com.ysdoing.notioncal.core.sync.PropertyOption
@@ -83,11 +83,14 @@ fun AddDatabaseRoute(
         if (ui.inspection == null && !ui.loading) viewModel.inspect(db, ds)
     }
     LaunchedEffect(ui.registered) { if (ui.registered) onDone() }
+    // NS-02: 새로 더할 때는 링크 대신 고를 수 있게 공유된 DB 목록을 한 번 받는다(다시 연결은 이미 DB가 정해져 있다).
+    LaunchedEffect(reconnect) { if (reconnect == null && ui.shared.databases == null) viewModel.loadShared() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.add_db_title)) },
+                // 다시 연결(설정 카드 '속성 연결'·월 화면 경고)은 새로 더하는 것이 아니라 같은 DB의 속성을 다시 고르는 화면이다.
+                title = { Text(stringResource(if (reconnect != null) R.string.settings_reconnect else R.string.add_db_title)) },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
@@ -100,6 +103,20 @@ fun AddDatabaseRoute(
             Modifier.padding(padding).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // DB를 고른 뒤에는 목록을 접어 속성 고르기가 바로 보이게 한다.
+            if (reconnect == null && ui.inspection == null) {
+                SharedDatabaseList(
+                    ui.shared,
+                    // 조회하는 동안에는 다른 줄을 누를 수 없다(늦게 온 응답이 고른 DB를 덮어쓰지 않게).
+                    enabled = !ui.loading,
+                    onPick = { database ->
+                        link = database.databaseId
+                        viewModel.pick(database)
+                    },
+                    onRetry = viewModel::loadShared,
+                )
+                SubSection(stringResource(R.string.add_db_or_link))
+            }
             OutlinedTextField(
                 value = link,
                 onValueChange = { link = it },
@@ -119,6 +136,12 @@ fun AddDatabaseRoute(
 
             val inspection = ui.inspection ?: return@Column
             Text(inspection.name, style = MaterialTheme.typography.titleLarge)
+            if (reconnect == null && ui.shared.databases != null) {
+                TextButton(onClick = {
+                    link = ""
+                    viewModel.backToList()
+                }) { Text(stringResource(R.string.add_db_pick_again)) }
+            }
             if (inspection.dataSources.size > 1) {
                 PropertyDropdown(
                     label = stringResource(R.string.add_db_data_source),
@@ -183,6 +206,9 @@ fun AddDatabaseRoute(
 
             Text(stringResource(R.string.add_db_color), style = MaterialTheme.typography.titleSmall)
             ColorChoices(ui.colorHex, viewModel::setColor)
+            if (ui.kindLost) {
+                Text(stringResource(if (ui.kindUnavailable) R.string.add_db_kind_lost else R.string.add_db_kind_locked), color = MaterialTheme.colorScheme.error)
+            }
             Button(onClick = viewModel::register, enabled = ui.canRegister, modifier = Modifier.fillMaxWidth()) {
                 Text(
                     stringResource(
@@ -317,17 +343,7 @@ private fun LedgerFields(ui: AddDatabaseUi, inspection: DatabaseInspection, view
             allowNone = false,
         ) { it?.let(viewModel::setBudgetGroup) }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.add_db_ledger_spend_negative))
-            Text(
-                stringResource(R.string.add_db_ledger_spend_negative_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = part.spendNegative, onCheckedChange = viewModel::setSpendNegative)
-    }
+    SwitchRow(stringResource(R.string.add_db_ledger_spend_negative), part.spendNegative, note = stringResource(R.string.add_db_ledger_spend_negative_note), onChange = viewModel::setSpendNegative)
 }
 
 /** 예산·카테고리 마스터 한 줄: 찾았으면 이름, 못 찾았으면 링크 칸 + 조회. */
@@ -360,7 +376,7 @@ private fun CompanionRow(label: String, found: CompanionInspection?, error: Comp
 @Composable
 private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        NotionColors.palette.forEach { (name, hex) ->
+        NotionColors.palette.forEach { (_, hex) ->
             val selected = colorHex == hex
             // 눈에 보이는 원은 36dp, 누르는 영역은 48dp.
             Box(
@@ -368,7 +384,7 @@ private fun ColorChoices(colorHex: String, onSelect: (String) -> Unit) {
                     .size(48.dp)
                     .clip(CircleShape)
                     .selectable(selected = selected, role = Role.RadioButton) { onSelect(hex) }
-                    .semantics { contentDescription = name },
+                    .semantics { contentDescription = NotionColors.nameKo(hex) },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
