@@ -86,7 +86,8 @@ fun AddDatabaseRoute(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.add_db_title)) },
+                // 다시 연결(설정 카드 '속성 연결'·월 화면 경고)은 새로 더하는 것이 아니라 같은 DB의 속성을 다시 고르는 화면이다.
+                title = { Text(stringResource(if (reconnect != null) R.string.settings_reconnect else R.string.add_db_title)) },
                 navigationIcon = {
                     IconButton(onClick = onDone) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
