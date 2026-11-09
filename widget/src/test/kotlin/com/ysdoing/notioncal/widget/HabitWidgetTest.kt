@@ -122,6 +122,16 @@ class HabitWidgetTest {
         }
     }
 
+    /** WG-07: 동기화가 실패하면 습관 위젯도 머리 부제로 알린다(전에는 아무 표시가 없었다). */
+    @Test
+    fun aFailedSyncIsShownInTheHeader() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
+        setContext(context)
+        setAppWidgetSize(MEDIUM)
+        provideComposable { HabitWidgetContent(state().copy(sync = WidgetSync(failed = true)), systemFontScale = 1f) }
+        // 오늘 진행도는 남기고 오류를 덧붙인다.
+        onNode(hasTextEqualTo(context.getString(R.string.habit_widget_subtitle, board().doneToday, 5) + " · " + context.getString(R.string.widget_sync_error_short))).assertExists()
+    }
+
     @Test
     fun emptyBoardExplainsRegistration() = runGlanceAppWidgetUnitTest(timeout = 60.seconds) {
         setContext(context)

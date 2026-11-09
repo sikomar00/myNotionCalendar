@@ -102,10 +102,12 @@ internal fun MonthGrass(state: HabitWidgetState, metrics: HabitMetrics, palette:
     ) {
         Row(GlanceModifier.fillMaxWidth().height(metrics.dayLabelHeight)) {
             repeat(7) { i ->
+                val day = state.weekStart.plus(i.toLong())
                 Text(
-                    text = state.weekStart.plus(i.toLong()).getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
+                    text = day.getDisplayName(JavaTextStyle.NARROW, Locale.KOREAN),
                     modifier = GlanceModifier.defaultWeight(),
-                    style = TextStyle(color = palette.subtle, fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
+                    // 다른 위젯의 요일 줄과 같게 일·토 색.
+                    style = TextStyle(color = palette.dayColor(day), fontSize = metrics.smallFontSp.sp, textAlign = TextAlign.Center),
                     maxLines = 1,
                 )
             }

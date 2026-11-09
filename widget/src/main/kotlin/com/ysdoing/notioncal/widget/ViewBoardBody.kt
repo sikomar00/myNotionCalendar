@@ -122,9 +122,7 @@ class BoardPageAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val page = parameters[PageKey] ?: return
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
-        val configs = WidgetDependencies.from(context).widgetConfigs()
-        val current = configs.get(appWidgetId)
-        configs.save(current.copy(viewPage = page.coerceAtLeast(0)))
+        WidgetDependencies.from(context).widgetConfigs().setViewPage(appWidgetId, page)
         WidgetKinds.update(context, glanceId)
     }
 

@@ -4,7 +4,10 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.updateAll
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 /**
@@ -12,20 +15,23 @@ import kotlinx.coroutines.flow.first
  * 디데이 위젯(DD-03~05), 노션 위젯(WL-01)을 함께 다룬다. 자정 갱신(WG-03)도 여기를 거쳐 디데이 숫자가 바뀐다.
  */
 object AllWidgets {
+    /** 종류마다 따로 다시 그린다: 한 종류가 실패해도(예외) 뒤의 종류는 그리고, 자정 처리의 알람 다시 걸기까지 간다. 취소는 그대로 던진다. */
     suspend fun updateAll(context: Context) {
-        NotionCalWidget().updateAll(context)
-        AgendaWidget().updateAll(context)
-        SplitWidget().updateAll(context)
-        ThreeDayWidget().updateAll(context)
-        HabitWidget().updateAll(context)
-        TabbedWidget().updateAll(context)
-        LedgerWidget().updateAll(context)
-        DdayWidget().updateAll(context)
-        DdayListWidget().updateAll(context)
-        ViewWidget().updateAll(context)
-        LayoutWidget().updateAll(context)
-        BookWidget().updateAll(context)
+        WIDGETS.forEach { make ->
+            try {
+                make().updateAll(context)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(GlanceWidgetRefresher.TAG, "위젯 다시 그리기 실패", e) // 그리기 오류(뷰 한도 등)는 스택이 있어야 찾는다
+            }
+        }
     }
+
+    private val WIDGETS: List<() -> GlanceAppWidget> = listOf(
+        ::NotionCalWidget, ::AgendaWidget, ::SplitWidget, ::ThreeDayWidget, ::HabitWidget, ::TabbedWidget, ::LedgerWidget,
+        ::DdayWidget, ::DdayListWidget, ::ViewWidget, ::LayoutWidget, ::BookWidget,
+    )
 
     /** 홈 화면에 남은 위젯이 하나라도 있는지(자정 알람을 끌지 정할 때). */
     fun anyPlaced(context: Context): Boolean {

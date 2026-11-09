@@ -3,6 +3,8 @@ package com.ysdoing.notioncal.core.data.db
 import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Upsert
@@ -70,6 +72,26 @@ interface WidgetConfigDao {
 
     @Query("DELETE FROM widget_configs WHERE appWidgetId IN (:ids)")
     suspend fun delete(ids: List<Int>)
+
+    /** 행이 없을 때만 넣는다(한 열만 바꾸는 쿼리 앞에 부른다). */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfMissing(config: WidgetConfigEntity)
+
+    // 위젯 버튼은 한 열만 바꾼다. 행을 읽어 통째로 다시 쓰면 빠르게 두 번 누르거나 탭·달 이동이 겹칠 때 한쪽 저장이 사라졌다.
+    @Query("UPDATE widget_configs SET monthOffset = CASE WHEN :reset THEN 0 ELSE monthOffset + :delta END WHERE appWidgetId = :id")
+    suspend fun moveMonth(id: Int, delta: Int, reset: Boolean)
+
+    @Query("UPDATE widget_configs SET timelineOffset = CASE WHEN :reset THEN 0 ELSE timelineOffset + :delta END WHERE appWidgetId = :id")
+    suspend fun moveTimeline(id: Int, delta: Int, reset: Boolean)
+
+    @Query("UPDATE widget_configs SET selectedTab = :tab WHERE appWidgetId = :id")
+    suspend fun setSelectedTab(id: Int, tab: String)
+
+    @Query("UPDATE widget_configs SET lastTab = :index WHERE appWidgetId = :id")
+    suspend fun setLastTab(id: Int, index: Int)
+
+    @Query("UPDATE widget_configs SET viewPage = :page WHERE appWidgetId = :id")
+    suspend fun setViewPage(id: Int, page: Int)
 
     /** 넘겨 둔 달·타임라인 창을 모든 위젯에서 오늘로 되돌린다. 되돌린 위젯 수. */
     @Query("UPDATE widget_configs SET monthOffset = 0, timelineOffset = 0 WHERE monthOffset != 0 OR timelineOffset != 0")

@@ -190,17 +190,18 @@ private fun Header(state: WidgetUiState, metrics: WidgetMetrics, palette: Widget
                 todayWeather(state)?.let { WeatherChip(it, state.weather.stale, palette, metrics.chipFontSp, showTemps = metrics.mode == WidgetMode.LARGE) }
             }
         }
-        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
-        HeaderButton(
-            R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
-            actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette, IconButtonStyle.FILLED,
-        )
+        // 순서는 3일 위젯과 같게 [새로고침][‹][›][+]: 나란히 두어도 ‹ ›와 +의 자리가 엇갈리지 않고, + 앞에 새로고침(다른 위젯과 같은 규칙).
         // NS-06 위젯 새로고침: 동기화를 요청만 한다(위젯 코드는 네트워크를 부르지 않음). 48dp 버튼 4개가 들어가는 큼에서만 보인다.
         if (metrics.mode == WidgetMode.LARGE) {
             HeaderButton(R.drawable.ic_widget_refresh, context.getString(R.string.widget_refresh), "refresh", actionRunCallback<RefreshAction>(), metrics, palette)
         }
         HeaderButton(R.drawable.ic_widget_prev, context.getString(R.string.widget_prev), "prev", navAction(-1), metrics, palette)
         HeaderButton(R.drawable.ic_widget_next, context.getString(R.string.widget_next), "next", navAction(+1), metrics, palette)
+        // WI-02 퀵 추가: 오늘 날짜로 입력칸이 열린다.
+        HeaderButton(
+            R.drawable.ic_widget_add, context.getString(R.string.widget_add), "add",
+            actionStartActivity(quickSheetIntent(context, AppIntents.MODE_ADD, state.today)), metrics, palette, IconButtonStyle.FILLED,
+        )
     }
 }
 
@@ -233,15 +234,14 @@ internal fun SyncBadge(sync: WidgetSync, today: LocalDate, fontSp: Float, palett
         )
     }
     if (sync.failed) {
-        Text(
-            text = "●",
+        // 빨간 점(색만)이 아니라 다른 위젯의 오류 줄과 같은 경고 모양으로 알린다(A11Y-03). 머리 폭이 좁아 글자는 붙이지 않는다.
+        // 낭독은 '동기화 오류'만: 제목을 누르면 앱이 아니라 오늘로 가는 경우가 있어 '눌러서 앱 열기'는 틀렸다.
+        Box(
             modifier = GlanceModifier.padding(start = 4.dp).semantics {
-                contentDescription = context.getString(R.string.widget_sync_error)
+                contentDescription = context.getString(R.string.widget_sync_error_short)
                 testTag = "syncError"
             },
-            style = TextStyle(color = palette.error, fontSize = fontSp.sp),
-            maxLines = 1,
-        )
+        ) { WidgetIcon(R.drawable.ic_widget_warning, palette.error, (fontSp * 1.15f).dp) }
     }
 }
 

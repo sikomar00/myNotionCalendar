@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.ysdoing.notioncal.core.data.db.NotionCalDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -28,6 +32,19 @@ class WidgetConfigRepositoryTest {
 
     @After
     fun tearDown() = db.close()
+
+    /** 위젯 버튼이 겹쳐 눌려도(빠른 ›› 두 번, › 직후 탭 바꾸기) 한쪽 저장이 다른 쪽을 덮지 않는다. */
+    @Test
+    fun overlappingWidgetTapsAllCount() = runTest {
+        withContext(Dispatchers.Default) {
+            val taps = (1..20).map { async { repo.shiftMonth(1, +1) } } + async { repo.selectTab(1, WidgetTab.LEDGER) } +
+                (1..5).map { async { repo.shiftTimeline(1, -1) } } + async { repo.setViewPage(1, 3) }
+            taps.awaitAll()
+        }
+        val config = repo.get(1)
+        assertEquals(listOf(20, -5, 3), listOf(config.monthOffset, config.timelineOffset, config.viewPage))
+        assertEquals(WidgetTab.LEDGER, config.selectedTab)
+    }
 
     @Test
     fun monthNavigationIsPerWidget() = runTest {

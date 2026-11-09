@@ -66,6 +66,8 @@ data class HabitWidgetState(
     val config: WidgetConfig,
     /** 이번 달 잔디의 요일 줄(MV-01 주 시작). */
     val weekStart: DayOfWeek,
+    /** WG-07: 마지막 동기화 실패를 머리 부제로(일정·3일 위젯과 같은 문구). */
+    val sync: WidgetSync = WidgetSync(),
 )
 
 /** HB-03 크기 단계: 2×2 오늘 체크만 / 4×2 7일 / 4×4 7일 + 이번 달 잔디. */
@@ -201,7 +203,8 @@ internal object HabitSession {
         val board by remember(today) { deps.habits().observeBoard(today) }
             .collectAsState(if (initial.board.today == today) initial.board else HabitBoard(today, emptyList()))
         val weekStart by remember { deps.settings().settings }.collectAsState(null)
-        HabitWidgetContent(HabitWidgetState(board, config, weekStart?.weekStart ?: initial.weekStart), fontScale, framed, showHeader)
+        val sync by remember { WidgetSync.observe(deps.syncStatus()) }.collectAsState(WidgetSync())
+        HabitWidgetContent(HabitWidgetState(board, config, weekStart?.weekStart ?: initial.weekStart, sync), fontScale, framed, showHeader)
     }
 }
 
@@ -224,7 +227,7 @@ fun HabitWidgetContent(
     }
     val board = state.board
     Column(outer.padding(horizontal = HabitMetrics.PADDING_H, vertical = HabitMetrics.PADDING_V)) {
-        if (showHeader) HabitHeader(board, metrics, palette)
+        if (showHeader) HabitHeader(board, state.sync.failed, metrics, palette)
         if (showHeader && metrics.mode == HabitWidgetMode.LARGE && board.habits.isNotEmpty()) HabitHero(board, metrics, palette)
         if (board.habits.isEmpty()) {
             WidgetEmpty(
@@ -257,12 +260,16 @@ internal fun habitTabIntent(context: Context): Intent =
 
 /** 머리: 새싹 아이콘 + '습관' + 오늘 n/m 완료. 제목을 누르면 습관 탭, 4×2 이상은 새로고침 버튼. */
 @Composable
-private fun HabitHeader(board: HabitBoard, metrics: HabitMetrics, palette: WidgetPalette) {
+private fun HabitHeader(board: HabitBoard, syncFailed: Boolean, metrics: HabitMetrics, palette: WidgetPalette) {
     val context = LocalContext.current
     WidgetHeader(
         icon = R.drawable.ic_widget_habit,
         title = context.getString(R.string.habit_widget_label_short),
-        subtitle = board.habits.takeIf { it.isNotEmpty() }?.let { context.getString(R.string.habit_widget_subtitle, board.doneToday, it.size) },
+        // 동기화가 실패하면 부제에 함께 알린다(일정·3일 위젯과 같은 문구). 오늘 진행도는 지우지 않는다: 체크는 그대로 쌓였다가 연결되면 보낸다.
+        subtitle = listOfNotNull(
+            board.habits.takeIf { it.isNotEmpty() }?.let { context.getString(R.string.habit_widget_subtitle, board.doneToday, it.size) },
+            context.getString(R.string.widget_sync_error_short).takeIf { syncFailed },
+        ).joinToString(" · ").ifEmpty { null },
         palette = palette,
         height = metrics.headerHeight,
         titleSp = metrics.headerFontSp,

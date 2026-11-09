@@ -126,31 +126,34 @@ class WidgetConfigRepository @Inject constructor(private val dao: WidgetConfigDa
     suspend fun save(config: WidgetConfig) = dao.upsert(config.toEntity())
 
     /** WI-04: 이전(-1)·다음(+1) 달. */
-    suspend fun shiftMonth(appWidgetId: Int, delta: Int) {
-        val current = get(appWidgetId)
-        save(current.copy(monthOffset = current.monthOffset + delta))
-    }
+    suspend fun shiftMonth(appWidgetId: Int, delta: Int) = withRow(appWidgetId) { dao.moveMonth(appWidgetId, delta, reset = false) }
 
     /** WI-04: 오늘 버튼. */
-    suspend fun resetMonth(appWidgetId: Int) = save(get(appWidgetId).copy(monthOffset = 0))
+    suspend fun resetMonth(appWidgetId: Int) = withRow(appWidgetId) { dao.moveMonth(appWidgetId, 0, reset = true) }
 
     /** 타임라인(VR-TML)의 이전(-1)·다음(+1) 창. 캘린더의 달 이동과 따로 저장해 한 위젯에 둘이 있어도 서로 움직이지 않는다. */
-    suspend fun shiftTimeline(appWidgetId: Int, delta: Int) {
-        val current = get(appWidgetId)
-        save(current.copy(timelineOffset = current.timelineOffset + delta))
-    }
+    suspend fun shiftTimeline(appWidgetId: Int, delta: Int) = withRow(appWidgetId) { dao.moveTimeline(appWidgetId, delta, reset = false) }
 
     /** 타임라인의 오늘 버튼. */
-    suspend fun resetTimeline(appWidgetId: Int) = save(get(appWidgetId).copy(timelineOffset = 0))
+    suspend fun resetTimeline(appWidgetId: Int) = withRow(appWidgetId) { dao.moveTimeline(appWidgetId, 0, reset = true) }
+
+    /** 보드 위젯의 ‹ ›: 첫 열 위치. */
+    suspend fun setViewPage(appWidgetId: Int, page: Int) = withRow(appWidgetId) { dao.setViewPage(appWidgetId, page.coerceAtLeast(0)) }
+
+    /** 위젯 버튼의 저장: 행이 없으면 기본 행을 넣고 그 열만 바꾼다(두 문장 모두 하나씩 원자적이라 겹쳐 눌러도 서로 덮지 않는다). */
+    private suspend fun withRow(appWidgetId: Int, update: suspend () -> Unit) {
+        dao.insertIfMissing(WidgetConfig(appWidgetId).toEntity())
+        update()
+    }
 
     /** 날짜가 바뀌면 넘겨 둔 달·타임라인 창을 모든 위젯에서 오늘로 되돌린다(다음 날에는 오늘이 보이게). */
     suspend fun resetAllOffsets(): Int = dao.resetOffsets()
 
     /** WG-11: 통합 위젯의 탭. 위젯마다 따로 저장한다. */
-    suspend fun selectTab(appWidgetId: Int, tab: WidgetTab) = save(get(appWidgetId).copy(selectedTab = tab))
+    suspend fun selectTab(appWidgetId: Int, tab: WidgetTab) = withRow(appWidgetId) { dao.setSelectedTab(appWidgetId, tab.name) }
 
     /** Phase 11d WL-02: 노션 위젯의 마지막으로 본 탭 번호. 위젯마다 따로 저장한다. */
-    suspend fun selectLayoutTab(appWidgetId: Int, index: Int) = save(get(appWidgetId).copy(lastTab = index.coerceAtLeast(0)))
+    suspend fun selectLayoutTab(appWidgetId: Int, index: Int) = withRow(appWidgetId) { dao.setLastTab(appWidgetId, index.coerceAtLeast(0)) }
 
     suspend fun delete(appWidgetIds: List<Int>) = dao.delete(appWidgetIds)
 }
