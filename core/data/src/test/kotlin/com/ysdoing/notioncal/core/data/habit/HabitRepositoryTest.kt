@@ -146,6 +146,17 @@ class HabitRepositoryTest {
         assertEquals(1, db.outboxDao().all().size)
     }
 
+    /** 시작 전 날에는 기록을 만들지 않는다. 그날 이미 있는 기록(노션에서 만든 것)은 지울 수 있다. */
+    @Test
+    fun daysBeforeTheHabitStartsCannotBeChecked() = runTest {
+        db.habitDao().insert(listOf(HabitEntity("h-new", "habits", "새 습관", null, 7, true, today.minusDays(2), 3.0)))
+        val repo = repository()
+        assertEquals(ToggleResult.OUT_OF_RANGE, repo.toggle("h-new", today.minusDays(3)))
+        assertTrue(db.outboxDao().all().isEmpty())
+        db.eventDao().upsert(listOf(log("r-early", "h-new", today.minusDays(4))))
+        assertEquals(ToggleResult.UNCHECKED, repo.toggle("h-new", today.minusDays(4)))
+    }
+
     /** 검증 메모 10: 기록 DB의 '습관' 속성이 relation이 아니게 되면 연결 없는 기록을 만들지 않는다. */
     @Test
     fun brokenLinkPropertyBlocksCheck() = runTest {

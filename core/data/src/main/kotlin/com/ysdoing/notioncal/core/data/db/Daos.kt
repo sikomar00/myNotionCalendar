@@ -189,7 +189,11 @@ interface SyncLogDao {
     @Insert
     suspend fun insert(entry: SyncLogEntity)
 
-    @Query("SELECT * FROM sync_log ORDER BY at DESC, id DESC LIMIT 1")
+    /**
+     * 일정 동기화의 마지막 결과(위젯·앱 배너·설정의 '동기화 오류'). 아웃박스·보기 기록은 뺀다: 보기 동기화는 매번 OK로 남아
+     * 바로 앞의 일정 동기화 오류를 늘 덮어 오류가 보이지 않았다.
+     */
+    @Query("SELECT * FROM sync_log WHERE trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatest(): Flow<SyncLogEntity?>
 
     @Query("SELECT * FROM sync_log WHERE result != 'ERROR' AND trigger NOT IN ('$SYNC_LOG_OUTBOX', '$SYNC_LOG_VIEWS') ORDER BY at DESC, id DESC LIMIT 1")

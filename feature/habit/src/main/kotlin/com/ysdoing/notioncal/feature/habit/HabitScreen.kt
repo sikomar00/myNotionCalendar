@@ -193,7 +193,8 @@ private fun DayCell(name: String, mark: DayMark, isToday: Boolean, highlight: Bo
     Column(
         modifier
             .heightIn(min = 56.dp)
-            .toggleable(value = mark.done, role = Role.Checkbox, onValueChange = { onToggle() })
+            // 시작 전 빈 날은 기록할 수 없다(HabitRepository.toggle도 막는다). 그날 기록이 있으면 지울 수 있게 둔다.
+            .toggleable(value = mark.done, enabled = mark.done || !mark.beforeStart, role = Role.Checkbox, onValueChange = { onToggle() })
             .semantics { contentDescription = description }
             .testTag(if (isToday) "habitToday" else "habitDay"),
         horizontalAlignment = Alignment.CenterHorizontally,

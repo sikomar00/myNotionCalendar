@@ -365,15 +365,16 @@ private fun DayCell(habitId: String, habitName: String, mark: DayMark, isToday: 
     } else {
         context.getString(R.string.habit_widget_date, mark.date.monthValue, mark.date.dayOfMonth, mark.date.dayOfWeek.getDisplayName(JavaTextStyle.SHORT, Locale.KOREAN))
     }
-    val description = listOf(habitName, day, context.getString(if (mark.done) R.string.habit_widget_done else R.string.habit_widget_not_done)).joinToString(", ")
+    // 시작 전 빈칸은 누를 수 없고 '안 함'으로 읽지 않는다(누르면 시작 전 날에 기록이 생겼다). 그날 기록이 있으면 지울 수 있게 둔다.
+    val tappable = mark.done || !mark.beforeStart
+    val status = if (tappable) context.getString(if (mark.done) R.string.habit_widget_done else R.string.habit_widget_not_done) else null
+    val description = listOfNotNull(habitName, day, status).joinToString(", ")
+    val cell = GlanceModifier.width(metrics.cellWidth).height(metrics.rowHeight)
     val action = actionRunCallback<HabitToggleAction>(
         actionParametersOf(HabitToggleAction.HabitKey to habitId, HabitToggleAction.DayKey to mark.date.toEpochDay()),
     )
     Box(
-        modifier = GlanceModifier
-            .width(metrics.cellWidth)
-            .height(metrics.rowHeight)
-            .clickable(action)
+        modifier = (if (tappable) cell.clickable(action) else cell)
             .semantics {
                 contentDescription = description
                 testTag = if (isToday) "habitToday" else "habitCell"

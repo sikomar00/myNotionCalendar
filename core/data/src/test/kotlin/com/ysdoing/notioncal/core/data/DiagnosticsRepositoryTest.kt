@@ -140,6 +140,16 @@ class DiagnosticsRepositoryTest {
         assertTrue(text.contains("OUTBOX") && text.contains("요청 6"))
     }
 
+    /** 위젯·앱 배너의 '동기화 오류': 일정 동기화가 실패한 뒤 보기·아웃박스가 OK를 남겨도 오류가 덮이지 않는다. */
+    @Test
+    fun aViewOrOutboxSuccessDoesNotHideTheLastSyncError() = runTest {
+        seed() // 마지막 일정 동기화가 Unauthorized로 실패했다
+        db.syncLogDao().insert(SyncLogEntity(at = 4_000, trigger = SYNC_LOG_VIEWS, result = "OK", durationMs = 10, pulled = 0, pushed = 0, error = null))
+        db.syncLogDao().insert(SyncLogEntity(at = 5_000, trigger = SYNC_LOG_OUTBOX, result = "OK", durationMs = 10, pulled = 0, pushed = 1, error = null))
+        val latest = SyncStatusRepository(db.syncLogDao()).latest.first()!!
+        assertEquals(listOf("ERROR", "Unauthorized"), listOf(latest.result, latest.error))
+    }
+
     @Test
     fun reportMasksConflictValuesOfEveryPropertyNotOnlyTheTitle() = runTest {
         // 보기 쓰기 충돌은 속성 값(이름·전화·메일 등)을 'PROP:<이름>'으로 남긴다. 내보내는 글에는 그 값이 나가지 않는다(SEC-02).

@@ -85,6 +85,8 @@ class HabitRepository @Inject constructor(
             return ToggleResult.UNCHECKED
         }
         val habit = db.habitDao().get(habitId) ?: return ToggleResult.BLOCKED
+        // 시작 전 날은 기록을 만들지 않는다(위젯은 그 칸을 누를 수 없게 그리지만, 그리는 사이 시작일이 바뀔 수 있다). 있는 기록을 지우는 것은 위에서 막지 않는다.
+        if (habit.startDate?.let(date::isBefore) == true) return ToggleResult.OUT_OF_RANGE
         val logSource = db.dataSourceDao().linkedTo(habit.dataSourceId).firstOrNull { it.enabled } ?: return ToggleResult.BLOCKED
         val linkBroken = SchemaIssue.parse(logSource.schemaIssues).any { it.role == SchemaIssue.LINK && it.kind != SchemaIssue.RENAMED }
         if (logSource.linkPropId == null || linkBroken) return ToggleResult.BLOCKED

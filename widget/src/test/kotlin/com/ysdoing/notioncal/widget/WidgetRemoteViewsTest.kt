@@ -91,6 +91,23 @@ class WidgetRemoteViewsTest {
         }
     }
 
+    // 6주 42칸 모두에 서로 다른 일정 6개: 크고 칸당 줄이 많은 설정에서도 줄을 줄여 Glance 뷰 한도(500)에 들어와야 한다(넘으면 위젯이 오류 화면).
+    private val saturated = (0 until 42).flatMap { d ->
+        (0 until 6).map { n -> WidgetSamples.event("s$d-$n", java.time.LocalDate.of(2026, 9, 27).plusDays(d.toLong()).toString(), title = "일정 $d-$n") }
+    }
+
+    @Test
+    fun aSaturatedMonthStillFitsGlancesViewLimitInEverySetting() = runTest(timeout = 3.minutes) {
+        val failures = mutableListOf<String>()
+        for (size in listOf(large, huge, DpSize(358.dp, 640.dp))) {
+            for (font in listOf(70, 100, 150)) {
+                val ids = glanceIdsUsed(renderView(size, WidgetSamples.state(saturated, WidgetConfig(1, fontScale = font, maxPerCell = 6))))
+                if (ids > GLANCE_VIEW_ID_BUDGET) failures += "${size.width}x${size.height} font=$font uses $ids view ids"
+            }
+        }
+        org.junit.Assert.assertTrue(failures.joinToString(System.lineSeparator()), failures.isEmpty())
+    }
+
     @Test
     fun screenshotMaterialYou() = runTest {
         renderView(large, WidgetSamples.state(config = WidgetConfig(1, theme = WidgetTheme.MATERIAL_YOU)))

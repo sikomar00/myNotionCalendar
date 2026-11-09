@@ -107,9 +107,11 @@ fun WidgetContent(
     framed: Boolean = true,
 ) {
     val context = LocalContext.current
-    val metrics = WidgetMetrics.of(LocalSize.current, state.config, systemFontScale, state.showWeekNumbers)
-    val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val start = gridStart(state.month, state.weekStart)
+    val weeks = (0 until 6).map { start.plusWeeks(it.toLong()) }
+    // 크고 일정이 빽빽한 달은 Glance 뷰 한도(500개)를 넘어 위젯이 오류 화면이 된다. 보기 캘린더처럼 넘칠 듯하면 칸당 줄 수를 줄인다.
+    val metrics = fitLanes(weeks, state.events, WidgetMetrics.of(LocalSize.current, state.config, systemFontScale, state.showWeekNumbers))
+    val palette = WidgetPalette.of(state.config.theme, state.config.opacity, context)
     val outer = if (framed) {
         GlanceModifier.fillMaxSize().appWidgetBackground().cornerRadius(android.R.dimen.system_app_widget_background_radius).background(palette.background)
     } else {
@@ -119,9 +121,9 @@ fun WidgetContent(
     Column(modifier = outer.padding(WidgetMetrics.PADDING)) {
         Header(state, metrics, palette)
         WeekdayRow(state.weekStart, metrics, palette)
-        repeat(6) { week ->
+        weeks.forEach { weekStart ->
             WeekRow(
-                weekStart = start.plusWeeks(week.toLong()),
+                weekStart = weekStart,
                 state = state,
                 metrics = metrics,
                 palette = palette,
