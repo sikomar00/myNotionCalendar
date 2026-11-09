@@ -211,6 +211,21 @@ class NotionSyncEngineTest {
         assertEquals(setOf("a"), local().keys)
     }
 
+    /** 범위(±2개월) 밖이 된 지난 일정도 노션에서 지우면 하루 1회 전체 대조에서 정리한다(지난 달 가계부 합계에 남지 않게). 노션에 있는 것은 남긴다. */
+    @Test
+    fun fullReconcileAlsoRemovesOldEventsTrashedInNotion() = runTest {
+        register()
+        remote.put("old-trashed", "지난 거래", "2026-10-12")
+        remote.put("old-kept", "남을 거래", "2026-10-13")
+        engine().sync(SyncTrigger.APP_OPEN)
+
+        now = Instant.parse("2027-01-20T03:00:00Z") // 석 달 뒤: 보이는 범위는 2026-11-01부터
+        remote.trash("old-trashed")
+        engine().sync(SyncTrigger.PERIODIC)
+
+        assertEquals(setOf("old-kept"), local().keys)
+    }
+
     @Test
     fun noRegisteredSourcesWritesNoLog() = runTest {
         engine().sync(SyncTrigger.APP_OPEN)

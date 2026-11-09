@@ -177,6 +177,7 @@ class NotionSyncEngine @Inject constructor(
         if (fullDue) {
             val (from, to) = if (kind == SourceKind.HABIT_LOG) habitLogRange(source, today) else fullRange(today)
             pulled += reconcile(source, mapping.datePropId, mapper, from, to)
+            if (kind != SourceKind.HABIT_LOG) olderRange(source, from, today)?.let { (oldFrom, oldTo) -> pulled += reconcile(source, mapping.datePropId, mapper, oldFrom, oldTo) }
             sources.setLastFullSyncAt(source.dataSourceId, now.toEpochMilli())
         } else if (trigger == SyncTrigger.APP_OPEN || trigger == SyncTrigger.PULL_TO_REFRESH) {
             val month = YearMonth.from(today)
@@ -296,6 +297,19 @@ class NotionSyncEngine @Inject constructor(
         return minOf(earliest, today) to today
     }
 
+    /**
+     * 하루 1회 전체 대조에서 보이는 범위(±2개월) 앞, 로컬에 남은 지난 일정의 범위(최대 [OLDER_MONTHS]개월 전까지). 그 일정은 노션에서
+     * 지워도 대조가 보지 않아 남았다(지난 달 가계부 합계에 남음). 범위 밖 로컬 행을 그냥 지우지 않는 것은 달을 넘길 때 그 달을 다시 받는
+     * 코드가 없어 지난 달 화면이 비고, 고정한 디데이가 '노션에서 삭제됨'으로 잘못 풀리기 때문이다.
+     * 보이는 범위와 따로 대조해, 여기서 1만 건 제한에 걸려도 보이는 범위의 삭제 감지는 그대로 돈다. 상한을 둬 아주 오래된 행 하나(고정한
+     * 옛 디데이 등)가 하루 조회를 수년치로 늘리지 않게 한다. shortcut: 상한보다 오래된 행과 +2개월 뒤의 행은 여전히 대조하지 않는다.
+     */
+    private suspend fun olderRange(source: DataSourceEntity, from: LocalDate, today: LocalDate): Pair<LocalDate, LocalDate>? {
+        val earliest = events.earliestStart(source.dataSourceId)?.takeIf { it.isBefore(from) } ?: return null
+        val oldFrom = maxOf(earliest, today.minusMonths(OLDER_MONTHS))
+        return if (oldFrom.isBefore(from)) oldFrom to from.minusDays(1) else null
+    }
+
     /** [from]~[to] 범위를 조회해 upsert하고, 로컬에만 남은 항목은 단건 재조회로 확인한 뒤 정리한다. */
     private suspend fun reconcile(source: DataSourceEntity, datePropId: String, mapper: NotionPageMapper, from: LocalDate, to: LocalDate): Int {
         val queryFrom = from.minusDays(LOOKBACK_DAYS)
@@ -330,6 +344,9 @@ class NotionSyncEngine @Inject constructor(
     companion object {
         const val RANGE_MONTHS = 2L
         const val LOOKBACK_DAYS = 31L
+
+        /** 보이는 범위 앞의 지난 일정을 대조하는 최대 기간(개월). */
+        const val OLDER_MONTHS = 12L
         val INCREMENTAL_OVERLAP: Duration = Duration.ofMinutes(2)
         val FULL_RECONCILE_INTERVAL: Duration = Duration.ofHours(24)
 

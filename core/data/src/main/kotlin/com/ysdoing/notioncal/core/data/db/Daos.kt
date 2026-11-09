@@ -79,6 +79,10 @@ interface EventDao {
     )
     suspend fun pageIdsInRange(dataSourceId: String, from: LocalDate, to: LocalDate): List<String>
 
+    /** 해당 DB의 로컬 일정 중 가장 이른 시작일(보낼 쓰기가 있는 일정 제외). 날짜는 ISO 글자라 MIN이 날짜 순서다. */
+    @Query("SELECT MIN(startDate) FROM events WHERE dataSourceId = :dataSourceId AND pendingOps = 0")
+    suspend fun earliestStart(dataSourceId: String): LocalDate?
+
     /** §12 대조('노션과 비교'): [pageIdsInRange]와 같은 범위의 일정 전체. */
     @Query(
         """
