@@ -168,10 +168,19 @@ class NotionClient @Inject constructor(
     override suspend fun updatePage(pageId: String, properties: JsonObject): PageDto =
         call { api.updatePage(pageId, UpdatePageDto(properties = properties)) }
 
+    /**
+     * 휴지통으로 보낸다. 이미 없으면(404) null이고 목적은 이룬 것이다. 400으로 거부되면 이미 휴지통인지 다시 읽어 본다:
+     * 응답이 끊겨 다시 보낸 휴지통 요청을 노션이 '이미 보관됨'으로 거부하면, 처리기가 거부로 보고 지운 일정을 되살렸다
+     * (노션이 이 경우 400을 주는지는 확인하지 못해 읽어서 판단한다). 아직 휴지통이 아니면 원래 오류를 그대로 던진다.
+     */
     override suspend fun trashPage(pageId: String): PageDto? = try {
         call { api.updatePage(pageId, UpdatePageDto(inTrash = true)) }
     } catch (e: NotionException) {
-        if (e.error == NotionError.NotShared) null else throw e
+        when {
+            e.error == NotionError.NotShared -> null
+            e.error is NotionError.Validation -> pageOrNull(pageId)?.takeIf { !it.inTrash }?.let { throw e }
+            else -> throw e
+        }
     }
 
     override suspend fun queryAll(dataSourceId: String, filter: JsonObject?): QueryResult {

@@ -22,6 +22,7 @@ import java.text.Collator
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.ysdoing.notioncal.core.data.DataSourceRepository
 
 /** 연결 테스트 결과(NS-01). */
 sealed interface ConnectionResult {
@@ -102,6 +103,7 @@ class ConnectionService @Inject constructor(
     private val dataSourceDao: DataSourceDao,
     private val scheduler: SyncScheduler,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val dataSources: DataSourceRepository,
 ) {
     suspend fun hasToken(): Boolean = withContext(io) { !secretStore.token().isNullOrBlank() }
 
@@ -328,18 +330,21 @@ class ConnectionService @Inject constructor(
     /** HB-01: ✅ 습관 기록과 🌱 습관을 한 쌍으로 저장하고 두 DB 모두 동기화를 요청한다(습관을 먼저). */
     suspend fun registerHabit(log: DatabaseInspection, logChoice: HabitLogChoice, habit: HabitInspection, habitChoice: HabitChoice, colorHex: String) =
         withContext(io) {
+            val existingLog = dataSourceDao.get(log.dataSourceId)
             val (logRow, habitRow) = habitRows(
                 log = HabitTarget(log.dataSourceId, log.databaseId, log.name),
                 logChoice = logChoice,
                 habit = habit.target,
                 habitChoice = habitChoice,
                 colorHex = colorHex,
-                existingLog = dataSourceDao.get(log.dataSourceId),
+                existingLog = existingLog,
                 existingHabit = dataSourceDao.get(habit.target.dataSourceId),
                 nextPosition = dataSourceDao.nextPosition(),
             )
             dataSourceDao.upsert(logRow)
             dataSourceDao.upsert(habitRow)
+            // 다른 🌱로 다시 연결했으면, 이제 아무 기록 DB도 가리키지 않는 옛 🌱를 지운다(설정에 홀로 남아 계속 동기화됐다).
+            existingLog?.linkDataSourceId?.takeIf { it != habitRow.dataSourceId }?.let { dataSources.deleteOrphanHabit(it) }
             scheduler.request(SyncTrigger.APP_OPEN, habitRow.dataSourceId)
             scheduler.request(SyncTrigger.APP_OPEN, logRow.dataSourceId)
         }

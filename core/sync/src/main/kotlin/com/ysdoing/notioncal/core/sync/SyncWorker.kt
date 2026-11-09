@@ -56,16 +56,23 @@ class SyncWorker @AssistedInject constructor(
         val trigger = inputData.getString(KEY_TRIGGER)?.let { runCatching { SyncTrigger.valueOf(it) }.getOrNull() }
             ?: SyncTrigger.APP_OPEN
         // 보내지 않은 쓰기를 먼저 보낸 뒤 읽는다. 실패해도 읽기는 진행한다(작업은 남아 다음에 다시 보낸다).
-        continueOnFailure(syncLog, clock) { outbox.process() }
+        val sent = continueOnFailure(syncLog, clock) { outbox.process() }
         // M3: 위젯에서 바꾼 보기 행도 읽기 전에 보낸다(읽기가 노션의 이전 값으로 덮지 않게).
         val writeOutcome = continueOnFailure(syncLog, clock) { viewWrites.process() }
-        val outcome = engine.sync(trigger, inputData.getString(KEY_DATA_SOURCE))
+        val onlySource = inputData.getString(KEY_DATA_SOURCE)
+        val outcome = engine.sync(trigger, onlySource)
         // EX-08 시험: 폰 캘린더 미러가 켜져 있으면(디버그 메뉴) 새 일정으로 다시 맞춘다.
         mirror.refreshIfEnabled()
         // VW-01: 등록한 노션 보기 스냅샷도 같은 주기에 맞춘다(실패해도 위 결과에 영향 없음).
         val viewsStartedAt = clock.millis()
         val viewsBefore = requests.total
-        views.syncAll()
+        // DB 하나만 맞추는 요청(등록 직후)이면 그 DB의 보기와, 이 실행에서 보낸 일정이 든 보기만 받는다(OutboxWorker와 같은 규칙).
+        // 전에는 거래내역 등록 한 번에 모든 보기를 세 번 받았다.
+        if (onlySource != null) {
+            views.syncContaining(sent?.sentPageIds.orEmpty(), sent?.createdInSources.orEmpty() + onlySource)
+        } else {
+            views.syncAll()
+        }
         // PF-11: 보기 주기의 요청 수를 남긴다(보기 수 × 쪽 수만큼 늘어난다). 실패는 보기마다 view_snapshots에 남아 여기서는 OK로 적는다.
         syncLog.record(
             SyncLogEntity(

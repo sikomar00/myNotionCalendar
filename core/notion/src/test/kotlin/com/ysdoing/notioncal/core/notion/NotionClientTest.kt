@@ -216,6 +216,19 @@ class NotionClientTest {
         assertNull(client.trashPage("gone"))
     }
 
+    /** 다시 보낸 휴지통 요청이 400이어도 이미 휴지통이면 성공이다(지운 일정을 되살리지 않게). 휴지통이 아니면 그 400을 그대로 던진다. */
+    @Test
+    fun aRejectedTrashOfAPageAlreadyInTheTrashCountsAsDone() = runTest {
+        server.enqueue(error(400, "validation_error"))
+        server.enqueue(ok("""{"id":"p1","in_trash":true,"last_edited_time":"2026-10-13T03:00:00.000Z","properties":{}}"""))
+        assertNull(client.trashPage("p1"))
+
+        server.enqueue(error(400, "validation_error"))
+        server.enqueue(ok("""{"id":"p2","in_trash":false,"last_edited_time":"2026-10-13T03:00:00.000Z","properties":{}}"""))
+        val error = runCatching { client.trashPage("p2") }.exceptionOrNull() as NotionException
+        assertTrue(error.error is NotionError.Validation)
+    }
+
     /** LD-01: 거래내역 DB의 부모 페이지와 그 페이지의 자식 DB(예산·카테고리 마스터)를 찾는다. 자식 목록은 끝까지 넘긴다. */
     @Test
     fun parentPageAndChildDatabases() = runTest {
