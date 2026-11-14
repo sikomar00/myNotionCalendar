@@ -380,8 +380,30 @@ class MigrationTest {
         try {
             assertEquals(listOf("p1"), db.ddayDao().all().map { it.pageId })
             val view = com.ysdoing.notioncal.core.data.db.ViewSnapshotEntity("v1", "ds1", "할 일", "table")
+            db.viewDao().upsert(view)
             db.viewDao().replace(view, listOf(com.ysdoing.notioncal.core.data.db.ViewRowEntity("v1", 0, "pg", "https://n", "a")))
             assertEquals(listOf("pg"), db.viewDao().rows("v1").map { it.pageId })
+        } finally {
+            db.close()
+        }
+    }
+
+    /** v12 → v13(보기 위젯 연결): 기존 위젯은 보기 없음(null)이고 보기를 연결할 수 있다. */
+    @Test
+    fun v12ToV13AddsWidgetViewId() = runTest {
+        helper.createDatabase(12).use { db ->
+            db.execSQL(
+                """INSERT INTO widget_configs (appWidgetId, monthOffset, dataSourceIds, theme, opacity, fontScale, maxPerCell,
+                   lineSpacing, hideDone, showPhoneCal, selectedTab, hideAmounts, showWeather) VALUES (9, 0, '', 'DARK', 80, 100, 0, 'NORMAL', 0, 0, 'CALENDAR', 0, 0)""",
+            )
+        }
+        helper.runMigrationsAndValidate(13).close()
+        val db = Room.databaseBuilder(context, NotionCalDatabase::class.java, dbFile.absolutePath).allowMainThreadQueries().build()
+        try {
+            val dao = db.widgetConfigDao()
+            assertEquals(null, dao.get(9)!!.viewId)
+            dao.upsert(dao.get(9)!!.copy(viewId = "v1"))
+            assertEquals("v1", dao.get(9)!!.viewId)
         } finally {
             db.close()
         }

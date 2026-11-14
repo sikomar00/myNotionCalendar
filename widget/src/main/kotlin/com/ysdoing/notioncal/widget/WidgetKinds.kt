@@ -19,6 +19,7 @@ internal object WidgetKinds {
         LedgerWidgetReceiver::class.java.name -> LedgerWidget()
         DdaySmallWidgetReceiver::class.java.name, DdayWideWidgetReceiver::class.java.name -> DdayWidget()
         DdayListWidgetReceiver::class.java.name -> DdayListWidget()
+        ViewWidgetReceiver::class.java.name -> ViewWidget()
         else -> NotionCalWidget()
     }
 

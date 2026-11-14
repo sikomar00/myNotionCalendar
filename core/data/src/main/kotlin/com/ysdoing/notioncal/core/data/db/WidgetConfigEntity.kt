@@ -37,6 +37,8 @@ data class WidgetConfigEntity(
     val ddayPageId: String? = null,
     /** WX-04 머리에 오늘 날씨(v11). */
     @ColumnInfo(defaultValue = "0") val showWeather: Boolean = false,
+    /** VW-04 보기 위젯이 보여 줄 등록한 보기(v13). */
+    val viewId: String? = null,
 )
 
 @Dao

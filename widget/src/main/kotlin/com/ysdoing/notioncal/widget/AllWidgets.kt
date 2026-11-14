@@ -19,6 +19,7 @@ object AllWidgets {
         LedgerWidget().updateAll(context)
         DdayWidget().updateAll(context)
         DdayListWidget().updateAll(context)
+        ViewWidget().updateAll(context)
     }
 
     /** 홈 화면에 남은 위젯이 하나라도 있는지(자정 알람을 끌지 정할 때). */
@@ -28,7 +29,7 @@ object AllWidgets {
         return listOf(
             NotionCalWidgetReceiver::class.java, AgendaWidgetReceiver::class.java, SplitWidgetReceiver::class.java,
             HabitWidgetReceiver::class.java, TabbedWidgetReceiver::class.java, LedgerWidgetReceiver::class.java,
-            DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java,
+            DdaySmallWidgetReceiver::class.java, DdayWideWidgetReceiver::class.java, DdayListWidgetReceiver::class.java, ViewWidgetReceiver::class.java,
         ).any { receiver ->
             manager.getAppWidgetIds(ComponentName(context, receiver)).isNotEmpty()
         }
